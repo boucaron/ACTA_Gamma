@@ -9,7 +9,7 @@ A small, stateless LLM execution engine for versioned skills, reproducible analy
 ACTA Gamma treats an LLM as a single controlled action in a larger deterministic flow.
 
 ```text
-Context + Skill Revision + Model
+Context + Skill + Model
               │
               ▼
          One LLM Call
@@ -43,7 +43,7 @@ The engine controls the execution. The LLM does not orchestrate itself, maintain
                  └──────┬───────┘
                         │
                  ┌──────▼───────┐
-                 │    Model     │
+                 │  Model @ N   │
                  └──────┬───────┘
                         │
                  ┌──────▼───────┐

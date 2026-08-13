@@ -14,7 +14,6 @@ The engine decides:
 
 * what context is provided;
 * which skill is executed;
-* which revision of that skill is used;
 * which model performs the action;
 * how the result is validated;
 * what is persisted;
@@ -261,6 +260,6 @@ ACTA Gamma is deliberately not:
 
 It is a small execution layer around a simple primitive:
 
-> **Run this versioned skill, against this context, using this model, once.**
+> **Run this skill, against this context, using this model, once.**
 
 Everything else can be built around that primitive.
