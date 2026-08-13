@@ -205,13 +205,11 @@ CREATE TABLE skill_folders (
     UNIQUE(parent_id, name),
     FOREIGN KEY(parent_id) REFERENCES skill_folders(id) ON DELETE CASCADE
 );
-
 CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
 
 -- ============================================================
 -- Skills
 -- ============================================================
--- Skills now holds the current versioned data
 CREATE TABLE skills (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
@@ -226,10 +224,15 @@ CREATE TABLE skills (
     FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
 );
 
--- Journal mirrors the versioned columns
+-- ============================================================
+-- Skill Revisions
+-- ============================================================
 CREATE TABLE skill_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     skill_id        INTEGER NOT NULL,
+    folder_id       INTEGER,
+    name            TEXT NOT NULL,
+    description     TEXT,
     revision        INTEGER NOT NULL,
     prompt_template TEXT NOT NULL,
     output_schema   TEXT,
@@ -243,29 +246,37 @@ CREATE TABLE skill_revisions (
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill ON skill_revisions(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill_rev ON skill_revisions(skill_id, revision);
 
-DROP TRIGGER IF EXISTS skills_insert_revision;
+DROP TRIGGER IF EXISTS skills_create_initial_revision;
+DROP TRIGGER IF EXISTS skills_update_revision;
 DROP TRIGGER IF EXISTS skills_set_current;
 
 CREATE TRIGGER skills_create_initial_revision
 AFTER INSERT ON skills
 BEGIN
   INSERT INTO skill_revisions(
-    skill_id, revision, prompt_template, output_schema, created_at, updated_at
+    skill_id, revision, folder_id, name, description, prompt_template, output_schema, created_at, updated_at
   ) VALUES (
-    NEW.id, 1, NEW.prompt_template, NEW.output_schema, datetime('now'), datetime('now')
+    NEW.id, 1, NEW.folder_id, NEW.name, NEW.description, NEW.prompt_template, NEW.output_schema,
+    datetime('now'), datetime('now')
   );
 END;
 
 CREATE TRIGGER skills_update_revision
-AFTER UPDATE OF prompt_template, output_schema ON skills
-WHEN NEW.prompt_template IS NOT OLD.prompt_template
+AFTER UPDATE OF folder_id, name, description, prompt_template, output_schema ON skills
+WHEN NEW.folder_id IS NOT OLD.folder_id
+   OR NEW.name IS NOT OLD.name
+   OR IFNULL(NEW.description,'') IS NOT IFNULL(OLD.description,'')
+   OR NEW.prompt_template IS NOT OLD.prompt_template
    OR IFNULL(NEW.output_schema,'') IS NOT IFNULL(OLD.output_schema,'')
 BEGIN
   INSERT INTO skill_revisions(
-    skill_id, revision, prompt_template, output_schema, created_at, updated_at
+    skill_id, revision, folder_id, name, description, prompt_template, output_schema, created_at, updated_at
   ) VALUES (
     NEW.id,
-    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,
+    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0) + 1,
+    NEW.folder_id,
+    NEW.name,
+    NEW.description,
     NEW.prompt_template,
     NEW.output_schema,
     datetime('now'),
@@ -276,9 +287,8 @@ END;
 CREATE TRIGGER skills_set_current
 AFTER INSERT ON skill_revisions
 BEGIN
-  UPDATE skills SET current_revision = NEW.revision WHERE id = NEW.skill_id;
+  UPDATE skills SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.skill_id;
 END;
-
 
 
 
