@@ -79,7 +79,6 @@ The engine should treat the backend as an interchangeable implementation.
 -- ============================================================
 -- Model Folders
 -- ============================================================
-
 CREATE TABLE model_folders (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
@@ -88,19 +87,14 @@ CREATE TABLE model_folders (
     updated_at      TEXT,
     deleted_at      TEXT,
     UNIQUE(parent_id, name),
-    FOREIGN KEY(parent_id) REFERENCES model_folders(id)
+    FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
 );
 
-
-CREATE INDEX idx_model_folders_parent
-    ON model_folders(parent_id);
-FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
-FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
+CREATE INDEX idx_model_folders_parent ON model_folders(parent_id);
 
 -- ============================================================
 -- Models / LLM endpoints
 -- ============================================================
-
 CREATE TABLE models (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
@@ -112,22 +106,17 @@ CREATE TABLE models (
     created_at      TEXT NOT NULL,
     updated_at       TEXT,
     deleted_at      TEXT,
-    FOREIGN KEY(folder_id) REFERENCES model_folders(id),
-    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE
+    FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
 );
 
-
-CREATE INDEX idx_models_folder
-    ON models(folder_id);
+CREATE INDEX idx_models_folder ON models(folder_id);
 CREATE UNIQUE INDEX uq_models_folder_name ON models(folder_id, name);
 CREATE INDEX IF NOT EXISTS idx_models_name ON models(name);
 CREATE INDEX IF NOT EXISTS idx_models_deleted ON models(deleted_at);
 
-
 -- ============================================================
 -- Model History
 -- ============================================================
-
 CREATE TABLE model_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     model_id        INTEGER NOT NULL,
@@ -140,13 +129,12 @@ CREATE TABLE model_revisions (
     updated_at      TEXT,
     deleted_at      TEXT,
     UNIQUE(model_id, revision),
-    FOREIGN KEY(model_id) REFERENCES models(id),
-    FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT
+    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_model_revisions_model
-    ON model_revisions(model_id);
+CREATE INDEX idx_model_revisions_model ON model_revisions(model_id);
 CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(created_at);
+
 ```
 
 
@@ -158,7 +146,6 @@ Ok basically you have a skill folder, a skill, skill revisions
 -- ============================================================
 -- Skill Folders
 -- ============================================================
-
 CREATE TABLE skill_folders (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
@@ -167,20 +154,14 @@ CREATE TABLE skill_folders (
     updated_at      TEXT,
     deleted_at      TEXT,
     UNIQUE(parent_id, name),
-    FOREIGN KEY(parent_id) REFERENCES skill_folders(id),
-    FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
+    FOREIGN KEY(parent_id) REFERENCES skill_folders(id) ON DELETE CASCADE
 );
 
-
-CREATE INDEX idx_skill_folders_parent
-    ON skill_folders(parent_id);
-CREATE UNIQUE INDEX uq_skills_folder_name ON skills(folder_id, name);
-
+CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
 
 -- ============================================================
 -- Skills
 -- ============================================================
-
 CREATE TABLE skills (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
@@ -189,13 +170,10 @@ CREATE TABLE skills (
     created_at      TEXT NOT NULL,
     updated_at      TEXT,
     deleted_at      TEXT,
-    FOREIGN KEY(folder_id) REFERENCES skill_folders(id),
-    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
+    FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
 );
 
-
-CREATE INDEX idx_skills_folder
-    ON skills(folder_id);
+CREATE INDEX idx_skills_folder ON skills(folder_id);
 CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
 CREATE INDEX IF NOT EXISTS idx_skills_deleted ON skills(deleted_at);
 
@@ -209,8 +187,7 @@ CREATE TABLE skill_revisions (
     updated_at      TEXT,
     deleted_at      TEXT,
     UNIQUE(skill_id, revision),
-    FOREIGN KEY(skill_id) REFERENCES skills(id),
-    FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT
+    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill ON skill_revisions(skill_id);
@@ -257,7 +234,6 @@ Later, if large contexts become inconvenient to store directly, the storage impl
 
 
 ```sql
-
 -- ============================================================
 -- Contexts
 -- ============================================================
@@ -267,13 +243,11 @@ CREATE TABLE contexts (
     content         TEXT NOT NULL,
     content_hash    TEXT NOT NULL,
     metadata        TEXT,
-    created_at      TEXT NOT NULL,
-    FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT
+    created_at      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_contexts_type ON contexts(type);
 CREATE INDEX IF NOT EXISTS idx_contexts_created ON contexts(created_at);
-
 ```
 
 ## Executions
@@ -380,7 +354,6 @@ A link is done to the parent from where it comes.
 -- ============================================================
 -- Executions
 -- ============================================================
-
 CREATE TABLE executions (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     context_id          INTEGER NOT NULL,
@@ -398,36 +371,30 @@ CREATE TABLE executions (
     FOREIGN KEY(context_id) REFERENCES contexts(id),
     FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id),
     FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id),
-    FOREIGN KEY(parent_execution_id) REFERENCES executions(id),
-    FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL,
-    FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
+    FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL
 );
 
-
-CREATE INDEX idx_executions_parent
-    ON executions(parent_execution_id);
+CREATE INDEX idx_executions_parent ON executions(parent_execution_id);
 CREATE INDEX IF NOT EXISTS idx_executions_context ON executions(context_id);
 CREATE INDEX IF NOT EXISTS idx_executions_skill_rev ON executions(skill_revision_id);
 CREATE INDEX IF NOT EXISTS idx_executions_model_rev ON executions(model_revision_id);
 CREATE INDEX IF NOT EXISTS idx_executions_status_created ON executions(status, created_at);
-CREATE INDEX IF NOT EXISTS idx_executions_parent ON executions(parent_execution_id);
 CREATE INDEX IF NOT EXISTS idx_executions_completed ON executions(completed_at);
-
 
 -- ============================================================
 -- Execution events
 -- ============================================================
-
 CREATE TABLE execution_logs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     execution_id    INTEGER NOT NULL,
-    level           TEXT NOT NULL, -- debug, info, warn, error
-    event           TEXT NOT NULL, -- custom
+    level           TEXT NOT NULL,
+    event           TEXT NOT NULL,
     message         TEXT,
-    metadata        TEXT, -- custom
+    metadata        TEXT,
     created_at      TEXT NOT NULL,
-    FOREIGN KEY(execution_id) REFERENCES executions(id)
+    FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
 );
+
 CREATE INDEX IF NOT EXISTS idx_execution_logs_execution ON execution_logs(execution_id);
 CREATE INDEX IF NOT EXISTS idx_execution_logs_created ON execution_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_execution_logs_event ON execution_logs(event, execution_id);
