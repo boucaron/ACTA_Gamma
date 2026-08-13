@@ -124,7 +124,7 @@ CREATE TABLE model_revisions (
     updated_at      TEXT,
     deleted_at      TEXT,
     UNIQUE(model_id, revision),
-    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE
+    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE SET NULL
 );
 CREATE INDEX idx_model_revisions_model ON model_revisions(model_id);
 CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(created_at);
@@ -176,6 +176,29 @@ BEGIN
     datetime('now')
   );
 END;
+
+DROP TRIGGER IF EXISTS models_delete_revision;
+CREATE TRIGGER models_delete_revision
+BEFORE DELETE ON models
+BEGIN
+  INSERT INTO model_revisions(
+    model_id, revision, folder_id, name, backend, base_url, model, configuration,
+    created_at, updated_at, deleted_at
+  ) VALUES (
+    OLD.id,
+    COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = OLD.id),0) + 1,
+    OLD.folder_id,
+    OLD.name,
+    OLD.backend,
+    OLD.base_url,
+    OLD.model,
+    OLD.configuration,
+    datetime('now'),
+    datetime('now'),
+    datetime('now')
+  );
+END;
+
 
 CREATE TRIGGER models_set_current
 AFTER INSERT ON model_revisions
@@ -240,7 +263,7 @@ CREATE TABLE skill_revisions (
     updated_at      TEXT,
     deleted_at      TEXT,
     UNIQUE(skill_id, revision),
-    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
+    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill ON skill_revisions(skill_id);
@@ -279,6 +302,27 @@ BEGIN
     NEW.description,
     NEW.prompt_template,
     NEW.output_schema,
+    datetime('now'),
+    datetime('now')
+  );
+END;
+
+DROP TRIGGER IF EXISTS skills_delete_revision;
+CREATE TRIGGER skills_delete_revision
+BEFORE DELETE ON skills
+BEGIN
+  INSERT INTO skill_revisions(
+    skill_id, revision, folder_id, name, description, prompt_template, output_schema,
+    created_at, updated_at, deleted_at
+  ) VALUES (
+    OLD.id,
+    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = OLD.id),0) + 1,
+    OLD.folder_id,
+    OLD.name,
+    OLD.description,
+    OLD.prompt_template,
+    OLD.output_schema,
+    datetime('now'),
     datetime('now'),
     datetime('now')
   );
@@ -461,9 +505,10 @@ CREATE TABLE executions (
     prompt              TEXT,
     raw_response        TEXT,
     result              TEXT,
-    status              TEXT NOT NULL CHECK(status IN ('pending','running','completed','failed')),
+    status              TEXT NOT NULL DEFAULT 'pending' 
+                         CHECK(status IN ('pending','running','completed','failed')),
     error               TEXT,
-    created_at          TEXT NOT NULL,
+    created_at          TEXT NOT NULL DEFAULT datetime('now'),
     started_at          TEXT,
     completed_at        TEXT,
     parent_execution_id INTEGER,
@@ -479,6 +524,7 @@ CREATE INDEX IF NOT EXISTS idx_executions_skill_rev ON executions(skill_revision
 CREATE INDEX IF NOT EXISTS idx_executions_model_rev ON executions(model_revision_id);
 CREATE INDEX IF NOT EXISTS idx_executions_status_created ON executions(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_executions_completed ON executions(completed_at);
+CREATE INDEX idx_executions_model_skill_context ON executions(model_revision_id, skill_revision_id, context_id);
 
 -- ============================================================
 -- Execution events
@@ -490,7 +536,7 @@ CREATE TABLE execution_logs (
     event           TEXT NOT NULL,
     message         TEXT,
     metadata        TEXT,
-    created_at      TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT datetime('now'),
     FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
 );
 
