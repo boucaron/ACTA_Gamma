@@ -81,16 +81,14 @@ The engine should treat the backend as an interchangeable implementation.
 -- ============================================================
 
 CREATE TABLE model_folders (
-    id              TEXT PRIMARY KEY,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
-    parent_id       TEXT,
+    parent_id       INTEGER,
     created_at      TEXT NOT NULL,
-
-    UNIQUE (parent_id, name),
-
-    FOREIGN KEY (parent_id)
-        REFERENCES model_folders(id)
+    UNIQUE(parent_id, name),
+    FOREIGN KEY(parent_id) REFERENCES model_folders(id)
 );
+
 
 CREATE INDEX idx_model_folders_parent
     ON model_folders(parent_id);
@@ -100,18 +98,17 @@ CREATE INDEX idx_model_folders_parent
 -- ============================================================
 
 CREATE TABLE models (
-    id              TEXT PRIMARY KEY,
-    folder_id       TEXT,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_id       INTEGER,
     name            TEXT NOT NULL,
     backend         TEXT NOT NULL,
     base_url        TEXT NOT NULL,
     model           TEXT NOT NULL,
     configuration   TEXT,
     created_at      TEXT NOT NULL,
-
-    FOREIGN KEY (folder_id)
-        REFERENCES model_folders(id)
+    FOREIGN KEY(folder_id) REFERENCES model_folders(id)
 );
+
 
 CREATE INDEX idx_models_folder
     ON models(folder_id);
@@ -122,20 +119,15 @@ CREATE INDEX idx_models_folder
 
 CREATE TABLE model_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    model_id        TEXT NOT NULL,
+    model_id        INTEGER NOT NULL,
     revision        INTEGER NOT NULL,
-
     backend         TEXT NOT NULL,
     base_url        TEXT NOT NULL,
     model           TEXT NOT NULL,
     configuration   TEXT,
-
     created_at      TEXT NOT NULL,
-
-    UNIQUE (model_id, revision),
-
-    FOREIGN KEY (model_id)
-        REFERENCES models(id)
+    UNIQUE(model_id, revision),
+    FOREIGN KEY(model_id) REFERENCES models(id)
 );
 
 CREATE INDEX idx_model_revisions_model
@@ -153,16 +145,14 @@ Ok basically you have a skill folder, a skill, skill revisions
 -- ============================================================
 
 CREATE TABLE skill_folders (
-    id              TEXT PRIMARY KEY,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
-    parent_id       TEXT,
+    parent_id       INTEGER,
     created_at      TEXT NOT NULL,
-
-    UNIQUE (parent_id, name),
-
-    FOREIGN KEY (parent_id)
-        REFERENCES skill_folders(id)
+    UNIQUE(parent_id, name),
+    FOREIGN KEY(parent_id) REFERENCES skill_folders(id)
 );
+
 
 CREATE INDEX idx_skill_folders_parent
     ON skill_folders(parent_id);
@@ -172,32 +162,29 @@ CREATE INDEX idx_skill_folders_parent
 -- ============================================================
 
 CREATE TABLE skills (
-    id              TEXT PRIMARY KEY,
-    folder_id       TEXT,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_id       INTEGER,
     name            TEXT NOT NULL UNIQUE,
     description     TEXT,
     created_at      TEXT NOT NULL,
-
-    FOREIGN KEY (folder_id)
-        REFERENCES skill_folders(id)
+    FOREIGN KEY(folder_id) REFERENCES skill_folders(id)
 );
+
 
 CREATE INDEX idx_skills_folder
     ON skills(folder_id);
 
-CREATE TABLE skill_revisions (
+CCREATE TABLE skill_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    skill_id        TEXT NOT NULL,
+    skill_id        INTEGER NOT NULL,
     revision        INTEGER NOT NULL,
     prompt_template TEXT NOT NULL,
     output_schema   TEXT,
     created_at      TEXT NOT NULL,
-
-    UNIQUE (skill_id, revision),
-
-    FOREIGN KEY (skill_id)
-        REFERENCES skills(id)
+    UNIQUE(skill_id, revision),
+    FOREIGN KEY(skill_id) REFERENCES skills(id)
 );
+
 ```
 
 ## Contexts
@@ -243,15 +230,15 @@ Later, if large contexts become inconvenient to store directly, the storage impl
 -- ============================================================
 -- Contexts
 -- ============================================================
-
 CREATE TABLE contexts (
-    id              TEXT PRIMARY KEY,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
     type            TEXT NOT NULL,
     content         TEXT NOT NULL,
     content_hash    TEXT NOT NULL UNIQUE,
     metadata        TEXT,
     created_at      TEXT NOT NULL
 );
+
 ```
 
 ## Executions
@@ -360,37 +347,24 @@ A link is done to the parent from where it comes.
 -- ============================================================
 
 CREATE TABLE executions (
-    id                  TEXT PRIMARY KEY,
-
-    context_id          TEXT NOT NULL,
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    context_id          INTEGER NOT NULL,
     skill_revision_id   INTEGER NOT NULL,
-    model_revision_id   INTEGER NOT NULL,
-
+    model_revision_id  INTEGER NOT NULL,
     prompt              TEXT,
     raw_response        TEXT,
     result              TEXT,
-
-    status              TEXT NOT NULL
-        CHECK (status IN ('pending', 'running', 'completed', 'failed')),
-
+    status              TEXT NOT NULL CHECK(status IN ('pending','running','completed','failed')),
     error               TEXT,
-
     started_at          TEXT,
     completed_at        TEXT,
-    parent_execution_id TEXT,
-
-    FOREIGN KEY (context_id)
-        REFERENCES contexts(id),
-
-    FOREIGN KEY (skill_revision_id)
-        REFERENCES skill_revisions(id),
-
-    FOREIGN KEY (model_revision_id)
-        REFERENCES model_revisions(id),
-
-    FOREIGN KEY (parent_execution_id)
-        REFERENCES executions(id)
+    parent_execution_id INTEGER,
+    FOREIGN KEY(context_id) REFERENCES contexts(id),
+    FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id),
+    FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id),
+    FOREIGN KEY(parent_execution_id) REFERENCES executions(id)
 );
+
 
 CREATE INDEX idx_executions_parent
     ON executions(parent_execution_id);
@@ -401,20 +375,14 @@ CREATE INDEX idx_executions_parent
 
 CREATE TABLE execution_logs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    execution_id    TEXT NOT NULL,
-
+    execution_id    INTEGER NOT NULL,
     level           TEXT NOT NULL,
     event           TEXT NOT NULL,
     message         TEXT,
     metadata        TEXT,
-
     created_at      TEXT NOT NULL,
-
-    FOREIGN KEY (execution_id)
-        REFERENCES executions(id)
+    FOREIGN KEY(execution_id) REFERENCES executions(id)
 );
-
-
 
 ```
 
