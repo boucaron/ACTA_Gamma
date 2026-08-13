@@ -349,6 +349,10 @@ The execution stores:
 
 This makes the execution self-describing and protects the audit trail if prompt-resolution behavior changes later.
 
+### Replay ?
+It is possible to replay a job, it creates a new job with the same parameters by defaults, or you can use another model
+A link is done to the parent from where it comes.
+
 
 ```sql
 -- ============================================================
@@ -373,6 +377,7 @@ CREATE TABLE executions (
 
     started_at          TEXT,
     completed_at        TEXT,
+    parent_execution_id TEXT,
 
     FOREIGN KEY (context_id)
         REFERENCES contexts(id),
@@ -381,8 +386,14 @@ CREATE TABLE executions (
         REFERENCES skill_revisions(id),
 
     FOREIGN KEY (model_revision_id)
-        REFERENCES model_revisions(id)
+        REFERENCES model_revisions(id),
+
+    FOREIGN KEY (parent_execution_id)
+        REFERENCES executions(id)
 );
+
+CREATE INDEX idx_executions_parent
+    ON executions(parent_execution_id);
 
 -- ============================================================
 -- Execution events
@@ -402,6 +413,8 @@ CREATE TABLE execution_logs (
     FOREIGN KEY (execution_id)
         REFERENCES executions(id)
 );
+
+
 
 ```
 
