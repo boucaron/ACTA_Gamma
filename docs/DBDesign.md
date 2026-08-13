@@ -2,8 +2,170 @@
 
 This is a deliberately small first-pass schema. The goal is to model the core execution primitive without prematurely introducing datasets, workflows, providers, or other higher-level concepts.
 
+## The core model
+
+The important relationship is deliberately small:
+
+```text
+┌───────────┐
+│  Context  │
+└─────┬─────┘
+      │
+      │
+      ▼
+┌───────────────┐
+│   Execution   │◄──── Skill Revision
+└───────┬───────┘             ▲
+        │                     │
+        │                     │
+        ▼                     │
+      Model ──────────────────┘
+```
+
+More precisely:
+
+```text
+Context
+   +
+Skill Revision
+   +
+Model
+   │
+   ▼
+Execution
+   │
+   ├── prompt
+   ├── raw response
+   ├── validated result
+   ├── status
+   ├── error
+   └── logs
+```
+
+What do we have is simple:
+- Models (folder, model, model revisions)
+- Skills (folder, skill, skill revisions)
+- Context (context data full self content => for the poc no attachment)
+- Execution (auditable execution: given a model, skill, context, generate the output)
+
+
+
+## Models
+
+The `models` table represents the configuration needed to invoke an LLM.
+
+For the initial llama.cpp setup:
+
+```text
+backend  = openai-compatible
+base_url = http://localhost:8080/v1
+model    = qwen3-...
+```
+
+`configuration` can contain backend-specific JSON without forcing those details into the core schema.
+
+For example:
+
+```json
+{
+  "temperature": 0,
+  "max_tokens": 4096
+}
+```
+
+The engine should treat the backend as an interchangeable implementation.
+
 ```sql
-PRAGMA foreign_keys = ON;
+-- ============================================================
+-- Model Folders
+-- ============================================================
+
+CREATE TABLE model_folders (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    parent_id       TEXT,
+    created_at      TEXT NOT NULL,
+
+    UNIQUE (parent_id, name),
+
+    FOREIGN KEY (parent_id)
+        REFERENCES model_folders(id)
+);
+
+CREATE INDEX idx_model_folders_parent
+    ON model_folders(parent_id);
+
+-- ============================================================
+-- Models / LLM endpoints
+-- ============================================================
+
+CREATE TABLE models (
+    id              TEXT PRIMARY KEY,
+    folder_id       TEXT,
+    name            TEXT NOT NULL,
+    backend         TEXT NOT NULL,
+    base_url        TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    configuration   TEXT,
+    created_at      TEXT NOT NULL,
+
+    FOREIGN KEY (folder_id)
+        REFERENCES model_folders(id)
+);
+
+CREATE INDEX idx_models_folder
+    ON models(folder_id);
+
+-- ============================================================
+-- Model History
+-- ============================================================
+
+CREATE TABLE model_revisions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_id        TEXT NOT NULL,
+    revision        INTEGER NOT NULL,
+
+    backend         TEXT NOT NULL,
+    base_url        TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    configuration   TEXT,
+
+    created_at      TEXT NOT NULL,
+
+    UNIQUE (model_id, revision),
+
+    FOREIGN KEY (model_id)
+        REFERENCES models(id)
+);
+
+CREATE INDEX idx_model_revisions_model
+    ON model_revisions(model_id);
+```
+
+
+## Skills
+Ok basically you have a skill folder, a skill, skill revisions
+
+
+```sql
+-- ============================================================
+-- Skill Folders
+-- ============================================================
+
+CREATE TABLE skill_folders (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    parent_id       TEXT,
+    created_at      TEXT NOT NULL,
+
+    UNIQUE (parent_id, name),
+
+    FOREIGN KEY (parent_id)
+        REFERENCES skill_folders(id)
+);
+
+CREATE INDEX idx_skill_folders_parent
+    ON skill_folders(parent_id);
 
 -- ============================================================
 -- Skills
@@ -11,10 +173,17 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE skills (
     id              TEXT PRIMARY KEY,
+    folder_id       TEXT,
     name            TEXT NOT NULL UNIQUE,
     description     TEXT,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+
+    FOREIGN KEY (folder_id)
+        REFERENCES skill_folders(id)
 );
+
+CREATE INDEX idx_skills_folder
+    ON skills(folder_id);
 
 CREATE TABLE skill_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +198,47 @@ CREATE TABLE skill_revisions (
     FOREIGN KEY (skill_id)
         REFERENCES skills(id)
 );
+```
+
+## Contexts
+
+Just a bunch of data to feed the LLM, for the initial part it is content, a type 
+No attachment, no image for the start, pure text.
+
+For the POC, I'd keep the actual content in SQLite:
+
+```text
+contexts
+├── id
+├── type
+├── content
+├── content_hash
+├── metadata
+└── created_at
+```
+
+`type` remains generic.
+
+Examples:
+
+```text
+text
+document
+code
+json
+review
+incident
+custom
+```
+
+The engine does not need to interpret these.
+
+`content_hash` gives you stable identity and allows deduplication.
+
+Later, if large contexts become inconvenient to store directly, the storage implementation can evolve toward content-addressed blobs or external references without changing the conceptual model.
+
+
+```sql
 
 -- ============================================================
 -- Contexts
@@ -42,21 +252,49 @@ CREATE TABLE contexts (
     metadata        TEXT,
     created_at      TEXT NOT NULL
 );
+```
 
--- ============================================================
--- Models / LLM endpoints
--- ============================================================
+## Executions
 
-CREATE TABLE models (
-    id              TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    backend         TEXT NOT NULL,
-    base_url        TEXT NOT NULL,
-    model           TEXT NOT NULL,
-    configuration   TEXT,
-    created_at      TEXT NOT NULL
-);
 
+### Status
+
+Keep the initial status vocabulary small:
+
+```text
+pending
+running
+completed
+failed
+```
+
+A failed execution remains in the database.
+
+That is important because failures are part of the experiment history.
+
+
+### Logs
+
+`execution_logs` is intentionally different from application logging.
+
+It records meaningful execution events:
+
+```text
+execution_started
+context_loaded
+prompt_resolved
+llm_request
+llm_response
+validation_started
+validation_failed
+execution_completed
+execution_failed
+```
+
+This makes the UI able to display a timeline without parsing application log files.
+
+
+```sql
 -- ============================================================
 -- Executions
 -- ============================================================
@@ -114,68 +352,8 @@ CREATE TABLE execution_logs (
         REFERENCES executions(id)
 );
 
--- ============================================================
--- Useful indexes
--- ============================================================
-
-CREATE INDEX idx_skill_revisions_skill
-    ON skill_revisions(skill_id);
-
-CREATE INDEX idx_executions_context
-    ON executions(context_id);
-
-CREATE INDEX idx_executions_skill
-    ON executions(skill_revision_id);
-
-CREATE INDEX idx_executions_model
-    ON executions(model_id);
-
-CREATE INDEX idx_executions_created
-    ON executions(started_at);
-
-CREATE INDEX idx_execution_logs_execution
-    ON execution_logs(execution_id);
 ```
 
-## The core model
-
-The important relationship is deliberately small:
-
-```text
-┌───────────┐
-│  Context  │
-└─────┬─────┘
-      │
-      │
-      ▼
-┌───────────────┐
-│   Execution   │◄──── Skill Revision
-└───────┬───────┘             ▲
-        │                     │
-        │                     │
-        ▼                     │
-      Model ──────────────────┘
-```
-
-More precisely:
-
-```text
-Context
-   +
-Skill Revision
-   +
-Model
-   │
-   ▼
-Execution
-   │
-   ├── prompt
-   ├── raw response
-   ├── validated result
-   ├── status
-   ├── error
-   └── logs
-```
 
 ## Why keep `raw_response` and `result` separate?
 
@@ -225,99 +403,7 @@ The execution stores:
 
 This makes the execution self-describing and protects the audit trail if prompt-resolution behavior changes later.
 
-## Contexts
 
-For the POC, I'd keep the actual content in SQLite:
-
-```text
-contexts
-├── id
-├── type
-├── content
-├── content_hash
-├── metadata
-└── created_at
-```
-
-`type` remains generic.
-
-Examples:
-
-```text
-text
-document
-code
-json
-review
-incident
-custom
-```
-
-The engine does not need to interpret these.
-
-`content_hash` gives you stable identity and allows deduplication.
-
-Later, if large contexts become inconvenient to store directly, the storage implementation can evolve toward content-addressed blobs or external references without changing the conceptual model.
-
-## Models
-
-The `models` table represents the configuration needed to invoke an LLM.
-
-For the initial llama.cpp setup:
-
-```text
-backend  = openai-compatible
-base_url = http://localhost:8080/v1
-model    = qwen3-...
-```
-
-`configuration` can contain backend-specific JSON without forcing those details into the core schema.
-
-For example:
-
-```json
-{
-  "temperature": 0,
-  "max_tokens": 4096
-}
-```
-
-The engine should treat the backend as an interchangeable implementation.
-
-## Status
-
-Keep the initial status vocabulary small:
-
-```text
-pending
-running
-completed
-failed
-```
-
-A failed execution remains in the database.
-
-That is important because failures are part of the experiment history.
-
-## Logs
-
-`execution_logs` is intentionally different from application logging.
-
-It records meaningful execution events:
-
-```text
-execution_started
-context_loaded
-prompt_resolved
-llm_request
-llm_response
-validation_started
-validation_failed
-execution_completed
-execution_failed
-```
-
-This makes the UI able to display a timeline without parsing application log files.
 
 ## Things deliberately missing
 
