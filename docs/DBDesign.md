@@ -85,6 +85,8 @@ CREATE TABLE model_folders (
     name            TEXT NOT NULL,
     parent_id       INTEGER,
     created_at      TEXT NOT NULL,
+    updated_at      TEXT,
+    deleted_at      TEXT,
     UNIQUE(parent_id, name),
     FOREIGN KEY(parent_id) REFERENCES model_folders(id)
 );
@@ -92,6 +94,8 @@ CREATE TABLE model_folders (
 
 CREATE INDEX idx_model_folders_parent
     ON model_folders(parent_id);
+FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
+FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
 
 -- ============================================================
 -- Models / LLM endpoints
@@ -106,12 +110,19 @@ CREATE TABLE models (
     model           TEXT NOT NULL,
     configuration   TEXT,
     created_at      TEXT NOT NULL,
-    FOREIGN KEY(folder_id) REFERENCES model_folders(id)
+    updated_at       TEXT,
+    deleted_at      TEXT,
+    FOREIGN KEY(folder_id) REFERENCES model_folders(id),
+    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE
 );
 
 
 CREATE INDEX idx_models_folder
     ON models(folder_id);
+CREATE UNIQUE INDEX uq_models_folder_name ON models(folder_id, name);
+CREATE INDEX IF NOT EXISTS idx_models_name ON models(name);
+CREATE INDEX IF NOT EXISTS idx_models_deleted ON models(deleted_at);
+
 
 -- ============================================================
 -- Model History
@@ -126,12 +137,16 @@ CREATE TABLE model_revisions (
     model           TEXT NOT NULL,
     configuration   TEXT,
     created_at      TEXT NOT NULL,
+    updated_at      TEXT,
+    deleted_at      TEXT,
     UNIQUE(model_id, revision),
-    FOREIGN KEY(model_id) REFERENCES models(id)
+    FOREIGN KEY(model_id) REFERENCES models(id),
+    FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_model_revisions_model
     ON model_revisions(model_id);
+CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(created_at);
 ```
 
 
@@ -149,13 +164,18 @@ CREATE TABLE skill_folders (
     name            TEXT NOT NULL,
     parent_id       INTEGER,
     created_at      TEXT NOT NULL,
+    updated_at      TEXT,
+    deleted_at      TEXT,
     UNIQUE(parent_id, name),
-    FOREIGN KEY(parent_id) REFERENCES skill_folders(id)
+    FOREIGN KEY(parent_id) REFERENCES skill_folders(id),
+    FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
 );
 
 
 CREATE INDEX idx_skill_folders_parent
     ON skill_folders(parent_id);
+CREATE UNIQUE INDEX uq_skills_folder_name ON skills(folder_id, name);
+
 
 -- ============================================================
 -- Skills
@@ -164,26 +184,37 @@ CREATE INDEX idx_skill_folders_parent
 CREATE TABLE skills (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
-    name            TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL,
     description     TEXT,
     created_at      TEXT NOT NULL,
-    FOREIGN KEY(folder_id) REFERENCES skill_folders(id)
+    updated_at      TEXT,
+    deleted_at      TEXT,
+    FOREIGN KEY(folder_id) REFERENCES skill_folders(id),
+    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
 );
 
 
 CREATE INDEX idx_skills_folder
     ON skills(folder_id);
+CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
+CREATE INDEX IF NOT EXISTS idx_skills_deleted ON skills(deleted_at);
 
-CCREATE TABLE skill_revisions (
+CREATE TABLE skill_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     skill_id        INTEGER NOT NULL,
     revision        INTEGER NOT NULL,
     prompt_template TEXT NOT NULL,
     output_schema   TEXT,
     created_at      TEXT NOT NULL,
+    updated_at      TEXT,
+    deleted_at      TEXT,
     UNIQUE(skill_id, revision),
-    FOREIGN KEY(skill_id) REFERENCES skills(id)
+    FOREIGN KEY(skill_id) REFERENCES skills(id),
+    FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill ON skill_revisions(skill_id);
+CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill_rev ON skill_revisions(skill_id, revision);
 
 ```
 
@@ -234,10 +265,14 @@ CREATE TABLE contexts (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     type            TEXT NOT NULL,
     content         TEXT NOT NULL,
-    content_hash    TEXT NOT NULL UNIQUE,
+    content_hash    TEXT NOT NULL,
     metadata        TEXT,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX IF NOT EXISTS idx_contexts_type ON contexts(type);
+CREATE INDEX IF NOT EXISTS idx_contexts_created ON contexts(created_at);
 
 ```
 
@@ -350,24 +385,34 @@ CREATE TABLE executions (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     context_id          INTEGER NOT NULL,
     skill_revision_id   INTEGER NOT NULL,
-    model_revision_id  INTEGER NOT NULL,
+    model_revision_id   INTEGER NOT NULL,
     prompt              TEXT,
     raw_response        TEXT,
     result              TEXT,
     status              TEXT NOT NULL CHECK(status IN ('pending','running','completed','failed')),
     error               TEXT,
+    created_at          TEXT NOT NULL,
     started_at          TEXT,
     completed_at        TEXT,
     parent_execution_id INTEGER,
     FOREIGN KEY(context_id) REFERENCES contexts(id),
     FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id),
     FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id),
-    FOREIGN KEY(parent_execution_id) REFERENCES executions(id)
+    FOREIGN KEY(parent_execution_id) REFERENCES executions(id),
+    FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL,
+    FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
 );
 
 
 CREATE INDEX idx_executions_parent
     ON executions(parent_execution_id);
+CREATE INDEX IF NOT EXISTS idx_executions_context ON executions(context_id);
+CREATE INDEX IF NOT EXISTS idx_executions_skill_rev ON executions(skill_revision_id);
+CREATE INDEX IF NOT EXISTS idx_executions_model_rev ON executions(model_revision_id);
+CREATE INDEX IF NOT EXISTS idx_executions_status_created ON executions(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_executions_parent ON executions(parent_execution_id);
+CREATE INDEX IF NOT EXISTS idx_executions_completed ON executions(completed_at);
+
 
 -- ============================================================
 -- Execution events
@@ -376,13 +421,16 @@ CREATE INDEX idx_executions_parent
 CREATE TABLE execution_logs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     execution_id    INTEGER NOT NULL,
-    level           TEXT NOT NULL,
-    event           TEXT NOT NULL,
+    level           TEXT NOT NULL, -- debug, info, warn, error
+    event           TEXT NOT NULL, -- custom
     message         TEXT,
-    metadata        TEXT,
+    metadata        TEXT, -- custom
     created_at      TEXT NOT NULL,
     FOREIGN KEY(execution_id) REFERENCES executions(id)
 );
+CREATE INDEX IF NOT EXISTS idx_execution_logs_execution ON execution_logs(execution_id);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_created ON execution_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_event ON execution_logs(event, execution_id);
 
 ```
 
