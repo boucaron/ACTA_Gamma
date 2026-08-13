@@ -256,6 +256,13 @@ CREATE TABLE contexts (
 
 ## Executions
 
+This is where we put the things together, an execution is a given:
+- model
+- skill
+- context
+
+The execution has a status (pending, running, completed, failed).
+There is an additional table to store the execution_logs ==> not the app logs.
 
 ### Status
 
@@ -292,6 +299,55 @@ execution_failed
 ```
 
 This makes the UI able to display a timeline without parsing application log files.
+
+
+### Why keep `raw_response` and `result` separate?
+
+This is important for auditability.
+
+A model can return something that cannot be parsed or validated.
+
+```text
+LLM
+ │
+ ▼
+raw_response
+ │
+ ▼
+parse / validate
+ │
+ ├── success ──► result
+ │
+ └── failure ──► error
+```
+
+The original response should survive the validation failure.
+
+That means an unsuccessful execution can still be inspected.
+
+### Why store the prompt?
+
+The skill revision contains the template, but the actual execution has a **resolved prompt**.
+
+For example:
+
+```text
+Skill revision:
+
+"Analyze the following context for security issues:
+
+{{ context }}"
+```
+
+The execution stores:
+
+```text
+"Analyze the following context for security issues:
+
+<actual context>"
+```
+
+This makes the execution self-describing and protects the audit trail if prompt-resolution behavior changes later.
 
 
 ```sql
@@ -353,56 +409,6 @@ CREATE TABLE execution_logs (
 );
 
 ```
-
-
-## Why keep `raw_response` and `result` separate?
-
-This is important for auditability.
-
-A model can return something that cannot be parsed or validated.
-
-```text
-LLM
- │
- ▼
-raw_response
- │
- ▼
-parse / validate
- │
- ├── success ──► result
- │
- └── failure ──► error
-```
-
-The original response should survive the validation failure.
-
-That means an unsuccessful execution can still be inspected.
-
-## Why store the prompt?
-
-The skill revision contains the template, but the actual execution has a **resolved prompt**.
-
-For example:
-
-```text
-Skill revision:
-
-"Analyze the following context for security issues:
-
-{{ context }}"
-```
-
-The execution stores:
-
-```text
-"Analyze the following context for security issues:
-
-<actual context>"
-```
-
-This makes the execution self-describing and protects the audit trail if prompt-resolution behavior changes later.
-
 
 
 ## Things deliberately missing
