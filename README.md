@@ -1,5 +1,7 @@
 # ACTA Gamma
 
+![Logo](assets/logo.jpg)
+
 **LLMs as actions, not agents.**
 
 A small, stateless LLM execution engine for versioned skills, reproducible analysis, and model benchmarking.
