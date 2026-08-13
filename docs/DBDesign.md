@@ -76,9 +76,7 @@ For example:
 The engine should treat the backend as an interchangeable implementation.
 
 ```sql
--- ============================================================
 -- Model Folders
--- ============================================================
 CREATE TABLE model_folders (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
@@ -89,12 +87,9 @@ CREATE TABLE model_folders (
     UNIQUE(parent_id, name),
     FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
 );
-
 CREATE INDEX idx_model_folders_parent ON model_folders(parent_id);
 
--- ============================================================
--- Models / LLM endpoints
--- ============================================================
+-- Models
 CREATE TABLE models (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
@@ -109,19 +104,18 @@ CREATE TABLE models (
     deleted_at      TEXT,
     FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
 );
-
 CREATE INDEX idx_models_folder ON models(folder_id);
 CREATE UNIQUE INDEX uq_models_folder_name ON models(folder_id, name);
 CREATE INDEX IF NOT EXISTS idx_models_name ON models(name);
 CREATE INDEX IF NOT EXISTS idx_models_deleted ON models(deleted_at);
 
--- ============================================================
--- Model History
--- ============================================================
+-- Model History - snapshot of immutable state
 CREATE TABLE model_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     model_id        INTEGER NOT NULL,
     revision        INTEGER NOT NULL,
+    folder_id       INTEGER,
+    name            TEXT NOT NULL,
     backend         TEXT NOT NULL,
     base_url        TEXT NOT NULL,
     model           TEXT NOT NULL,
@@ -132,22 +126,23 @@ CREATE TABLE model_revisions (
     UNIQUE(model_id, revision),
     FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE
 );
-
 CREATE INDEX idx_model_revisions_model ON model_revisions(model_id);
 CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(created_at);
 
--- MODELS
-DROP TRIGGER IF EXISTS models_insert_revision;
+DROP TRIGGER IF EXISTS models_create_initial_revision;
+DROP TRIGGER IF EXISTS models_update_revision;
 DROP TRIGGER IF EXISTS models_set_current;
 
 CREATE TRIGGER models_create_initial_revision
 AFTER INSERT ON models
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, backend, base_url, model, configuration, created_at, updated_at
+    model_id, revision, folder_id, name, backend, base_url, model, configuration, created_at, updated_at
   ) VALUES (
     NEW.id,
     1,
+    NEW.folder_id,
+    NEW.name,
     NEW.backend,
     NEW.base_url,
     NEW.model,
@@ -158,17 +153,21 @@ BEGIN
 END;
 
 CREATE TRIGGER models_update_revision
-AFTER UPDATE OF backend, base_url, model, configuration ON models
-WHEN NEW.backend IS NOT OLD.backend
+AFTER UPDATE OF folder_id, name, backend, base_url, model, configuration ON models
+WHEN NEW.folder_id IS NOT OLD.folder_id
+   OR NEW.name IS NOT OLD.name
+   OR NEW.backend IS NOT OLD.backend
    OR NEW.base_url IS NOT OLD.base_url
    OR NEW.model IS NOT OLD.model
    OR IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, backend, base_url, model, configuration, created_at, updated_at
+    model_id, revision, folder_id, name, backend, base_url, model, configuration, created_at, updated_at
   ) VALUES (
     NEW.id,
     COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0) + 1,
+    NEW.folder_id,
+    NEW.name,
     NEW.backend,
     NEW.base_url,
     NEW.model,
@@ -181,7 +180,7 @@ END;
 CREATE TRIGGER models_set_current
 AFTER INSERT ON model_revisions
 BEGIN
-  UPDATE models SET current_revision = NEW.revision WHERE id = NEW.model_id;
+  UPDATE models SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.model_id;
 END;
 
 
