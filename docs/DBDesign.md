@@ -19,7 +19,7 @@ The important relationship is deliberately small:
         │                     │
         │                     │
         ▼                     │
-      Model ──────────────────┘
+      Model Revision ─────────┘
 ```
 
 More precisely:
@@ -29,7 +29,7 @@ Context
    +
 Skill Revision
    +
-Model
+Model Revision
    │
    ▼
 Execution
@@ -257,8 +257,8 @@ CREATE TABLE contexts (
 ## Executions
 
 This is where we put the things together, an execution is a given:
-- model
-- skill
+- model revision
+- skill revision
 - context
 
 The execution has a status (pending, running, completed, failed).
@@ -360,20 +360,15 @@ CREATE TABLE executions (
 
     context_id          TEXT NOT NULL,
     skill_revision_id   INTEGER NOT NULL,
-    model_id            TEXT NOT NULL,
+    model_revision_id   INTEGER NOT NULL,
 
-    -- Exact prompt sent to the model
     prompt              TEXT,
-
-    -- What the backend actually returned
     raw_response        TEXT,
-
-    -- Parsed / validated response
     result              TEXT,
 
-    status              TEXT NOT NULL,
+    status              TEXT NOT NULL
+        CHECK (status IN ('pending', 'running', 'completed', 'failed')),
 
-    -- Structured error information
     error               TEXT,
 
     started_at          TEXT,
@@ -385,8 +380,8 @@ CREATE TABLE executions (
     FOREIGN KEY (skill_revision_id)
         REFERENCES skill_revisions(id),
 
-    FOREIGN KEY (model_id)
-        REFERENCES models(id)
+    FOREIGN KEY (model_revision_id)
+        REFERENCES model_revisions(id)
 );
 
 -- ============================================================
