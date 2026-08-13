@@ -103,6 +103,7 @@ CREATE TABLE models (
     base_url        TEXT NOT NULL,
     model           TEXT NOT NULL,
     configuration   TEXT,
+    current_revision INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL,
     updated_at       TEXT,
     deleted_at      TEXT,
@@ -134,6 +135,31 @@ CREATE TABLE model_revisions (
 
 CREATE INDEX idx_model_revisions_model ON model_revisions(model_id);
 CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(created_at);
+
+CREATE TRIGGER models_insert_revision
+AFTER UPDATE ON models
+BEGIN
+  INSERT INTO model_revisions(
+    model_id, revision, backend, base_url, model, configuration, created_at, updated_at
+  ) VALUES (
+    NEW.id,
+    COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0) + 1,
+    NEW.backend,
+    NEW.base_url,
+    NEW.model,
+    NEW.configuration,
+    datetime('now'),
+    datetime('now')
+  );
+END;
+
+CREATE TRIGGER models_set_current
+AFTER INSERT ON model_revisions
+WHEN NEW.model_id IN (SELECT id FROM models)
+BEGIN
+  UPDATE models SET current_revision = NEW.revision WHERE id = NEW.model_id;
+END;
+
 
 ```
 
@@ -167,6 +193,7 @@ CREATE TABLE skills (
     folder_id       INTEGER,
     name            TEXT NOT NULL,
     description     TEXT,
+    current_revision INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL,
     updated_at      TEXT,
     deleted_at      TEXT,
@@ -192,6 +219,30 @@ CREATE TABLE skill_revisions (
 
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill ON skill_revisions(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill_rev ON skill_revisions(skill_id, revision);
+
+
+CREATE TRIGGER skills_insert_revision
+AFTER UPDATE ON skills
+BEGIN
+  INSERT INTO skill_revisions(
+    skill_id, revision, prompt_template, output_schema, created_at, updated_at
+  ) VALUES (
+    NEW.id,
+    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0) + 1,
+    -- prompt_template / output_schema must be supplied by application before UPDATE
+    NULL,
+    NULL,
+    datetime('now'),
+    datetime('now')
+  );
+END;
+
+CREATE TRIGGER skills_set_current
+AFTER INSERT ON skill_revisions
+WHEN NEW.skill_id IN (SELECT id FROM skills)
+BEGIN
+  UPDATE skills SET current_revision = NEW.revision WHERE id = NEW.skill_id;
+END;
 
 ```
 
@@ -368,10 +419,10 @@ CREATE TABLE executions (
     started_at          TEXT,
     completed_at        TEXT,
     parent_execution_id INTEGER,
-    FOREIGN KEY(context_id) REFERENCES contexts(id),
-    FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id),
-    FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id),
-    FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL
+    FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT,
+    FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT,
+    FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT,
+    FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL;
 );
 
 CREATE INDEX idx_executions_parent ON executions(parent_execution_id);
@@ -387,7 +438,7 @@ CREATE INDEX IF NOT EXISTS idx_executions_completed ON executions(completed_at);
 CREATE TABLE execution_logs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     execution_id    INTEGER NOT NULL,
-    level           TEXT NOT NULL,
+    level TEXT NOT NULL CHECK(level IN ('debug','info','warn','error')),
     event           TEXT NOT NULL,
     message         TEXT,
     metadata        TEXT,
