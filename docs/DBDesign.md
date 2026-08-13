@@ -136,8 +136,33 @@ CREATE TABLE model_revisions (
 CREATE INDEX idx_model_revisions_model ON model_revisions(model_id);
 CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(created_at);
 
-CREATE TRIGGER models_insert_revision
-AFTER UPDATE ON models
+-- MODELS
+DROP TRIGGER IF EXISTS models_insert_revision;
+DROP TRIGGER IF EXISTS models_set_current;
+
+CREATE TRIGGER models_create_initial_revision
+AFTER INSERT ON models
+BEGIN
+  INSERT INTO model_revisions(
+    model_id, revision, backend, base_url, model, configuration, created_at, updated_at
+  ) VALUES (
+    NEW.id,
+    1,
+    NEW.backend,
+    NEW.base_url,
+    NEW.model,
+    NEW.configuration,
+    datetime('now'),
+    datetime('now')
+  );
+END;
+
+CREATE TRIGGER models_update_revision
+AFTER UPDATE OF backend, base_url, model, configuration ON models
+WHEN NEW.backend IS NOT OLD.backend
+   OR NEW.base_url IS NOT OLD.base_url
+   OR NEW.model IS NOT OLD.model
+   OR IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
 BEGIN
   INSERT INTO model_revisions(
     model_id, revision, backend, base_url, model, configuration, created_at, updated_at
@@ -155,7 +180,6 @@ END;
 
 CREATE TRIGGER models_set_current
 AFTER INSERT ON model_revisions
-WHEN NEW.model_id IN (SELECT id FROM models)
 BEGIN
   UPDATE models SET current_revision = NEW.revision WHERE id = NEW.model_id;
 END;
@@ -188,11 +212,14 @@ CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
 -- ============================================================
 -- Skills
 -- ============================================================
+-- Skills now holds the current versioned data
 CREATE TABLE skills (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
     name            TEXT NOT NULL,
     description     TEXT,
+    prompt_template TEXT NOT NULL,
+    output_schema   TEXT,
     current_revision INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL,
     updated_at      TEXT,
@@ -200,10 +227,7 @@ CREATE TABLE skills (
     FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_skills_folder ON skills(folder_id);
-CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
-CREATE INDEX IF NOT EXISTS idx_skills_deleted ON skills(deleted_at);
-
+-- Journal mirrors the versioned columns
 CREATE TABLE skill_revisions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     skill_id        INTEGER NOT NULL,
@@ -220,18 +244,31 @@ CREATE TABLE skill_revisions (
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill ON skill_revisions(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill_rev ON skill_revisions(skill_id, revision);
 
+DROP TRIGGER IF EXISTS skills_insert_revision;
+DROP TRIGGER IF EXISTS skills_set_current;
 
-CREATE TRIGGER skills_insert_revision
-AFTER UPDATE ON skills
+CREATE TRIGGER skills_create_initial_revision
+AFTER INSERT ON skills
+BEGIN
+  INSERT INTO skill_revisions(
+    skill_id, revision, prompt_template, output_schema, created_at, updated_at
+  ) VALUES (
+    NEW.id, 1, NEW.prompt_template, NEW.output_schema, datetime('now'), datetime('now')
+  );
+END;
+
+CREATE TRIGGER skills_update_revision
+AFTER UPDATE OF prompt_template, output_schema ON skills
+WHEN NEW.prompt_template IS NOT OLD.prompt_template
+   OR IFNULL(NEW.output_schema,'') IS NOT IFNULL(OLD.output_schema,'')
 BEGIN
   INSERT INTO skill_revisions(
     skill_id, revision, prompt_template, output_schema, created_at, updated_at
   ) VALUES (
     NEW.id,
-    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0) + 1,
-    -- prompt_template / output_schema must be supplied by application before UPDATE
-    NULL,
-    NULL,
+    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,
+    NEW.prompt_template,
+    NEW.output_schema,
     datetime('now'),
     datetime('now')
   );
@@ -239,10 +276,12 @@ END;
 
 CREATE TRIGGER skills_set_current
 AFTER INSERT ON skill_revisions
-WHEN NEW.skill_id IN (SELECT id FROM skills)
 BEGIN
   UPDATE skills SET current_revision = NEW.revision WHERE id = NEW.skill_id;
 END;
+
+
+
 
 ```
 
