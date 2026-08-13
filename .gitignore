@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment & secrets
+.env
+.env.local
+*.key
+*.pem
+
+# SQLite & data
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Outputs & generated artifacts
+outputs/
+executions/
+
+# PySide6 / Qt
+*.ui~ 
+*.qmlc
+*.jsc
+*.qm
+ui_resources/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs & caches
+logs/
+*.log
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Optional: large immutable contexts
+# Uncomment if you store large context datasets in git
+# contexts/**/*.json
+# contexts/**/*.bin
+
+# Local config overrides
+config/local.yaml
