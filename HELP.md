@@ -1,26 +1,21 @@
-# Help me
+# Help Me !
 
+## Start Devel
 
-## Start Devevel
+### Deps
+C++
+Qt6: Core, Widgets, Sql
+Sqlite
+
 
 ### MinGW64
 pacman -Syu
 pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-make
 pacman -S mingw-w64-x86_64-qt6 mingw-w64-x86_64-cmake
+qmake6.exe "CONFIG+=debug" ACTA_Gamma.pro -o Makefile
+make 
 
-export MSYS2_ARG_CONV_EXCL="*"
-export CC=/mingw64/bin/x86_64-w64-mingw32-gcc
-export CXX=/mingw64/bin/x86_64-w64-mingw32-g++
-cmake -G "Unix Makefiles" \
-  -S . -B build \
-  -DCMAKE_PREFIX_PATH=/mingw64 \
-  -DCMAKE_MAKE_PROGRAM=/mingw64/bin/mingw32-make.exe \
-  -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=NEVER \
-  -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
-  -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
-  -DCMAKE_BUILD_TYPE=Debug
+### Linux
+Easy peasy
 
-  ==> or Release for the type
 
-cmake --build build -j
-./build/ACTA_Gamma.exe
