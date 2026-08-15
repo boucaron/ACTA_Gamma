@@ -1,5 +1,5 @@
 TEMPLATE = subdirs
-SUBDIRS = testContextDao testExecutionDao
+SUBDIRS = testContextDao testExecutionDao testSkillDao
 
 
 
