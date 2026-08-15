@@ -19,3 +19,9 @@ make
 Easy peasy
 
 
+### Tests
+
+cd tests
+qmake tests.pro -o Makefile
+make
+./release/test_contextdao.exe
