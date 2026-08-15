@@ -115,7 +115,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <item>
         <widget class="QTextEdit" name="outputSchemaTextEdit">
          <property name="toolTip">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Output Schema is optional and we will be added at the end of your prompt, typically it can be used to constraint the Output Schema your want for instance in JSON, or if you want an output in Markdown, or whatever matters for you&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Output Schema is optional and it will be added at the end of your prompt. &lt;/p&gt;&lt;p&gt;Typically it can be used to constraint the Output Schema your want for instance in JSON, or if you want an output in Markdown, or whatever matters for you&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
         </widget>
        </item>
