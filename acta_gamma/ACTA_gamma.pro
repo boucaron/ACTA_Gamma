@@ -1,4 +1,4 @@
-QT += widgets
+QT += widgets sql
 CONFIG += c++17 console
 TARGET = ACTA_Gamma
 TEMPLATE = app
@@ -15,7 +15,17 @@ SOURCES += \
     src/widgets/skillDialog.cpp \
     src/widgets/modelDialog.cpp \
     src/widgets/executionDialog.cpp \
-    src/widgets/contextDialog.cpp
+    src/widgets/contextDialog.cpp \
+    src/dao/baseDao.cpp \  # DAO
+    src/dao/contextDao.cpp \
+    src/dao/executionDao.cpp \
+    src/dao/executionLogDao.cpp \
+    src/dao/modelDao.cpp \
+    src/dao/modelFolderDao.cpp \
+    src/dao/modelRevisionDao.cpp \
+    src/dao/skillDao.cpp \
+    src/dao/skillFolderDao.cpp \
+    src/dao/skillRevisionDao.cpp    
 
 HEADERS += \
     src/mainWindow.h \
@@ -26,7 +36,17 @@ HEADERS += \
     src/widgets/skillDialog.h \
     src/widgets/modelDialog.h \
     src/widgets/executionDialog.h \
-    src/widgets/contextDialog.h
+    src/widgets/contextDialog.h \ # DAO
+    src/dao/baseDao.h \
+    src/dao/contextDao.h \
+    src/dao/executionDao.h \
+    src/dao/executionLogDao.h \
+    src/dao/modelDao.h \
+    src/dao/modelFolderDao.h \
+    src/dao/modelRevisionDao.h \
+    src/dao/skillDao.h \
+    src/dao/skillFolderDao.h \
+    src/dao/skillRevisionDao.h
 
 FORMS += \
     ui/skillDialog.ui \
