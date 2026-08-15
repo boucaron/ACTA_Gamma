@@ -7,23 +7,26 @@ RESOURCES += assets.qrc
 
 SOURCES += \
     src/main.cpp \
-    src/mainwindow.cpp \
-    src/widgets/skillpanel.cpp \
-    src/widgets/modelpanel.cpp \
-    src/widgets/contextpanel.cpp \
-    src/widgets/executionpanel.cpp \
-    src/widgets/skillDialog.cpp 
+    src/mainWindow.cpp \
+    src/widgets/skillPanel.cpp \
+    src/widgets/modelPanel.cpp \
+    src/widgets/contextPanel.cpp \
+    src/widgets/executionPanel.cpp \
+    src/widgets/skillDialog.cpp \
+    src/widgets/modelDialog.cpp
 
 HEADERS += \
-    src/mainwindow.h \
-    src/widgets/skillpanel.h \
-    src/widgets/modelpanel.h \
-    src/widgets/contextpanel.h \
-    src/widgets/executionpanel.h \
-    src/widgets/skillDialog.h
+    src/mainWindow.h \
+    src/widgets/skillPanel.h \
+    src/widgets/modelPanel.h \
+    src/widgets/contextPanel.h \
+    src/widgets/executionPanel.h \
+    src/widgets/skillDialog.h \
+    src/widgets/modelDialog.h
 
 FORMS += \
-    ui/skillDialog.ui
+    ui/skillDialog.ui \
+    ui/modelDialog.ui \
 
 DISTFILES +=
 

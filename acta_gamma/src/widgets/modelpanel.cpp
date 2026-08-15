@@ -1,4 +1,4 @@
-#include "modelpanel.h"
+#include "modelPanel.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QComboBox>

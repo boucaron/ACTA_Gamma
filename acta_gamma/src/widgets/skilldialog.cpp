@@ -1,4 +1,4 @@
-#include "skilldialog.h"
+#include "skillDialog.h"
 #include "ui_skillDialog.h"
 
 SkillDialog::SkillDialog(QWidget *parent)
