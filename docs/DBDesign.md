@@ -94,6 +94,7 @@ CREATE TABLE models (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id       INTEGER,
     name            TEXT NOT NULL,
+    description     TEXT NOT NULL,
     backend         TEXT NOT NULL,
     base_url        TEXT NOT NULL,
     model           TEXT NOT NULL,
@@ -116,6 +117,7 @@ CREATE TABLE model_revisions (
     revision        INTEGER NOT NULL,
     folder_id       INTEGER,
     name            TEXT NOT NULL,
+    description     TEXT NOT NULL,
     backend         TEXT NOT NULL,
     base_url        TEXT NOT NULL,
     model           TEXT NOT NULL,
@@ -137,12 +139,13 @@ CREATE TRIGGER models_create_initial_revision
 AFTER INSERT ON models
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, folder_id, name, backend, base_url, model, configuration, created_at, updated_at
+    model_id, revision, folder_id, name, description, backend, base_url, model, configuration, created_at, updated_at
   ) VALUES (
     NEW.id,
     1,
     NEW.folder_id,
     NEW.name,
+    NEW.description,
     NEW.backend,
     NEW.base_url,
     NEW.model,
@@ -153,21 +156,23 @@ BEGIN
 END;
 
 CREATE TRIGGER models_update_revision
-AFTER UPDATE OF folder_id, name, backend, base_url, model, configuration ON models
+AFTER UPDATE OF folder_id, name, description, backend, base_url, model, configuration ON models
 WHEN NEW.folder_id IS NOT OLD.folder_id
    OR NEW.name IS NOT OLD.name
+   OR NEW.description IS NOT OLD.description
    OR NEW.backend IS NOT OLD.backend
    OR NEW.base_url IS NOT OLD.base_url
    OR NEW.model IS NOT OLD.model
    OR IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, folder_id, name, backend, base_url, model, configuration, created_at, updated_at
+    model_id, revision, folder_id, name, description, backend, base_url, model, configuration, created_at, updated_at
   ) VALUES (
     NEW.id,
     COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0) + 1,
     NEW.folder_id,
     NEW.name,
+    NEW.description,
     NEW.backend,
     NEW.base_url,
     NEW.model,
@@ -182,13 +187,14 @@ CREATE TRIGGER models_delete_revision
 BEFORE DELETE ON models
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, folder_id, name, backend, base_url, model, configuration,
+    model_id, revision, folder_id, name, description, backend, base_url, model, configuration,
     created_at, updated_at, deleted_at
   ) VALUES (
     OLD.id,
     COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = OLD.id),0) + 1,
     OLD.folder_id,
     OLD.name,
+    OLD.description,
     OLD.backend,
     OLD.base_url,
     OLD.model,
@@ -220,7 +226,7 @@ Ok basically you have a skill folder, a skill, skill revisions
 -- ============================================================
 CREATE TABLE skill_folders (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    name            TEXT NOT NULL,
+    name            TEXT NOT NULL,    
     parent_id       INTEGER,
     created_at      TEXT NOT NULL,
     updated_at      TEXT,
