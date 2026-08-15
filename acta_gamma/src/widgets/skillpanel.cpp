@@ -1,10 +1,10 @@
-#include "skillpanel.h"
+#include "skillPanel.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QComboBox>
 #include <QPushButton>
 
-#include "skilldialog.h"
+#include "skillDialog.h"
 
 SkillPanel::SkillPanel(QWidget *parent) : QWidget(parent)
 {
