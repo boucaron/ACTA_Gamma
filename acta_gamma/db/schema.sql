@@ -1,0 +1,189 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE model_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    parent_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    deleted_at TEXT,
+    UNIQUE(parent_id, name),
+    FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_model_folders_parent ON model_folders(parent_id);
+
+CREATE TABLE models (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    backend TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    model TEXT NOT NULL,
+    configuration TEXT,
+    current_revision INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    deleted_at TEXT,
+    FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_models_folder ON models(folder_id);
+CREATE UNIQUE INDEX uq_models_folder_name ON models(folder_id, name);
+
+CREATE TABLE model_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_id INTEGER NOT NULL,
+    revision INTEGER NOT NULL,
+    folder_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    backend TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    model TEXT NOT NULL,
+    configuration TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    deleted_at TEXT,
+    UNIQUE(model_id, revision),
+    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE SET NULL
+);
+
+DROP TRIGGER IF EXISTS models_create_initial_revision;
+CREATE TRIGGER models_create_initial_revision AFTER INSERT ON models BEGIN
+  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at)
+  VALUES (NEW.id,1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'));
+END;
+
+DROP TRIGGER IF EXISTS models_update_revision;
+CREATE TRIGGER models_update_revision AFTER UPDATE OF folder_id,name,description,backend,base_url,model,configuration ON models
+WHEN NEW.folder_id IS NOT OLD.folder_id OR NEW.name IS NOT OLD.name OR NEW.description IS NOT OLD.description OR NEW.backend IS NOT OLD.backend OR NEW.base_url IS NOT OLD.base_url OR NEW.model IS NOT OLD.model OR IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
+BEGIN
+  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at)
+  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'));
+END;
+
+DROP TRIGGER IF EXISTS models_delete_revision;
+CREATE TRIGGER models_delete_revision BEFORE DELETE ON models BEGIN
+  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at,deleted_at)
+  VALUES (OLD.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = OLD.id),0)+1,OLD.folder_id,OLD.name,OLD.description,OLD.backend,OLD.base_url,OLD.model,OLD.configuration,datetime('now'),datetime('now'),datetime('now'));
+END;
+
+CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions BEGIN
+  UPDATE models SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.model_id;
+END;
+
+CREATE TABLE skill_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    parent_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    deleted_at TEXT,
+    UNIQUE(parent_id, name),
+    FOREIGN KEY(parent_id) REFERENCES skill_folders(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
+
+CREATE TABLE skills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    prompt_template TEXT NOT NULL,
+    output_schema TEXT,
+    current_revision INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    deleted_at TEXT,
+    FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
+);
+
+CREATE TABLE skill_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_id INTEGER NOT NULL,
+    folder_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    revision INTEGER NOT NULL,
+    prompt_template TEXT NOT NULL,
+    output_schema TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    deleted_at TEXT,
+    UNIQUE(skill_id, revision),
+    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE SET NULL
+);
+
+DROP TRIGGER IF EXISTS skills_create_initial_revision;
+CREATE TRIGGER skills_create_initial_revision AFTER INSERT ON skills BEGIN
+  INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at)
+  VALUES (NEW.id,1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'));
+END;
+
+DROP TRIGGER IF EXISTS skills_update_revision;
+CREATE TRIGGER skills_update_revision AFTER UPDATE OF folder_id,name,description,prompt_template,output_schema ON skills
+WHEN NEW.folder_id IS NOT OLD.folder_id OR NEW.name IS NOT OLD.name OR IFNULL(NEW.description,'') IS NOT IFNULL(OLD.description,'') OR NEW.prompt_template IS NOT OLD.prompt_template OR IFNULL(NEW.output_schema,'') IS NOT IFNULL(OLD.output_schema,'')
+BEGIN
+  INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at)
+  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'));
+END;
+
+DROP TRIGGER IF EXISTS skills_delete_revision;
+CREATE TRIGGER skills_delete_revision BEFORE DELETE ON skills BEGIN
+  INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at,deleted_at)
+  VALUES (OLD.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = OLD.id),0)+1,OLD.folder_id,OLD.name,OLD.description,OLD.prompt_template,OLD.output_schema,datetime('now'),datetime('now'),datetime('now'));
+END;
+
+CREATE TRIGGER skills_set_current AFTER INSERT ON skill_revisions BEGIN
+  UPDATE skills SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.skill_id;
+END;
+
+CREATE TABLE contexts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    metadata TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE executions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    context_id INTEGER NOT NULL,
+    skill_revision_id INTEGER NOT NULL,
+    model_revision_id INTEGER NOT NULL,
+    prompt TEXT,
+    raw_response TEXT,
+    result TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed')),
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TEXT,
+    completed_at TEXT,
+    parent_execution_id INTEGER,
+    FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT,
+    FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT,
+    FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT,
+    FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_executions_parent ON executions(parent_execution_id);
+CREATE INDEX IF NOT EXISTS idx_executions_context ON executions(context_id);
+CREATE INDEX IF NOT EXISTS idx_executions_skill_rev ON executions(skill_revision_id);
+CREATE INDEX IF NOT EXISTS idx_executions_model_rev ON executions(model_revision_id);
+CREATE INDEX IF NOT EXISTS idx_executions_status_created ON executions(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_executions_completed ON executions(completed_at);
+CREATE INDEX idx_executions_model_skill_context ON executions(model_revision_id, skill_revision_id, context_id);
+
+CREATE TABLE execution_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id INTEGER NOT NULL,
+    level TEXT NOT NULL CHECK(level IN ('debug','info','warn','error')),
+    event TEXT NOT NULL,
+    message TEXT,
+    metadata TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_execution ON execution_logs(execution_id);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_created ON execution_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_event ON execution_logs(event, execution_id);
