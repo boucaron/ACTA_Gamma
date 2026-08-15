@@ -4,6 +4,8 @@
 #include <QComboBox>
 #include <QPushButton>
 
+#include "skilldialog.h"
+
 SkillPanel::SkillPanel(QWidget *parent) : QWidget(parent)
 {
     auto *lay = new QVBoxLayout(this);
@@ -15,4 +17,17 @@ SkillPanel::SkillPanel(QWidget *parent) : QWidget(parent)
 
     loadBtn = new QPushButton("Load Skill");
     lay->addWidget(loadBtn);
+
+
+    // callback
+    connect(loadBtn, &QPushButton::clicked, this, &SkillPanel::onLoadBtnClicked);
+}
+
+
+void SkillPanel::onLoadBtnClicked()
+{
+    SkillDialog dlg(this);
+    if(dlg.exec() == QDialog::Accepted){
+      // TODO
+    }
 }
