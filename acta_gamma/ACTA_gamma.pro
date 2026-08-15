@@ -3,6 +3,8 @@ CONFIG += c++17 console
 TARGET = ACTA_Gamma
 TEMPLATE = app
 
+RESOURCES += assets.qrc
+
 SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \

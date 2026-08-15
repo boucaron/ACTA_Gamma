@@ -25,7 +25,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto header = new QWidget;
     auto h = new QHBoxLayout(header);
     QLabel *logo = new QLabel;
-    QPixmap pm("/home/admin/github/boucaron/ACTA_Gamma/assets/logo.jpg");
+    QPixmap pm(":/assets/logo.jpg");
     if(!pm.isNull()) logo->setPixmap(pm.scaledToHeight(32));
     QLabel *title = new QLabel("ACTA Gamma — LLMs as actions, not agents");
     h->addWidget(logo);
