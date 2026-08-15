@@ -14,7 +14,8 @@ SOURCES += \
     src/widgets/executionPanel.cpp \
     src/widgets/skillDialog.cpp \
     src/widgets/modelDialog.cpp \
-    src/widgets/executionDialog.cpp
+    src/widgets/executionDialog.cpp \
+    src/widgets/contextDialog.cpp
 
 HEADERS += \
     src/mainWindow.h \
@@ -24,12 +25,14 @@ HEADERS += \
     src/widgets/executionPanel.h \
     src/widgets/skillDialog.h \
     src/widgets/modelDialog.h \
-    src/widgets/executionDialog.h
+    src/widgets/executionDialog.h \
+    src/widgets/contextDialog.h
 
 FORMS += \
     ui/skillDialog.ui \
     ui/modelDialog.ui \
-    ui/executionDialog.ui
+    ui/executionDialog.ui \
+    ui/contextDialog.ui
 
 DISTFILES +=
 
