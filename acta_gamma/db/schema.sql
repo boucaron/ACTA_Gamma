@@ -7,7 +7,7 @@ CREATE TABLE model_folders (
     created_at TEXT NOT NULL,
     updated_at TEXT,
     deleted_at TEXT,    
-    FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
+    FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE RESTRICT
 );
 
 
@@ -15,7 +15,7 @@ CREATE TABLE models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id INTEGER,
     name TEXT NOT NULL,
-    description TEXT NOT NULL,
+    description TEXT,
     backend TEXT NOT NULL,
     base_url TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE models (
     created_at TEXT NOT NULL,
     updated_at TEXT,
     deleted_at TEXT,
-    FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
+    FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE RESTRICT
 );
 
 
@@ -36,7 +36,7 @@ CREATE TABLE model_revisions (
     revision INTEGER NOT NULL,
     folder_id INTEGER,
     name TEXT NOT NULL,
-    description TEXT NOT NULL,
+    description TEXT,
     backend TEXT NOT NULL,
     base_url TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -77,7 +77,9 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
-CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions BEGIN
+CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions 
+WHEN NEW.deleted_at IS NULL
+BEGIN
   UPDATE models SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.model_id;
 END;
 
@@ -139,7 +141,7 @@ END;
 
 DROP TRIGGER IF EXISTS skills_update_revision;
 CREATE TRIGGER skills_update_revision AFTER UPDATE OF folder_id,name,description,prompt_template,output_schema ON skills
-WHEN NEW.folder_id IS NOT OLD.folder_id OR NEW.name IS NOT OLD.name OR IFNULL(NEW.description,'') IS NOT IFNULL(OLD.description,'') OR NEW.prompt_template IS NOT OLD.prompt_template OR IFNULL(NEW.output_schema,'') IS NOT IFNULL(OLD.output_schema,'')
+WHEN NEW.folder_id IS NOT OLD.folder_id OR NEW.name IS NOT OLD.name OR NEW.description IS NOT OLD.description OR NEW.prompt_template IS NOT OLD.prompt_template OR NEW.output_schema IS NOT OLD.output_schema
 BEGIN
   INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at)
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'));
@@ -153,10 +155,13 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
-CREATE TRIGGER skills_set_current AFTER INSERT ON skill_revisions BEGIN
+CREATE TRIGGER skills_set_current AFTER INSERT ON skill_revisions 
+WHEN NEW.deleted_at IS NULL
+BEGIN
   UPDATE skills SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.skill_id;
 END;
 
+-- immutable
 CREATE TABLE contexts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL,
@@ -185,13 +190,13 @@ CREATE TABLE executions (
     FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT,
     FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL
 );
-CREATE INDEX idx_executions_parent ON executions(parent_execution_id);
+CREATE INDEX IF NOT EXISTS idx_executions_parent ON executions(parent_execution_id);
 CREATE INDEX IF NOT EXISTS idx_executions_context ON executions(context_id);
 CREATE INDEX IF NOT EXISTS idx_executions_skill_rev ON executions(skill_revision_id);
 CREATE INDEX IF NOT EXISTS idx_executions_model_rev ON executions(model_revision_id);
 CREATE INDEX IF NOT EXISTS idx_executions_status_created ON executions(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_executions_completed ON executions(completed_at);
-CREATE INDEX idx_executions_model_skill_context ON executions(model_revision_id, skill_revision_id, context_id);
+CREATE INDEX IF NOT EXISTS idx_executions_model_skill_context ON executions(model_revision_id, skill_revision_id, context_id);
 
 CREATE TABLE execution_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
