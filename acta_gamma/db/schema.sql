@@ -18,7 +18,7 @@ CREATE TABLE models (
     name TEXT NOT NULL,
     description TEXT,
     backend TEXT NOT NULL,
-    base_url TEXT NOT NULL,
+    base_url TEXT,
     model_identifier TEXT NOT NULL,
     configuration TEXT,
     current_revision INTEGER NOT NULL DEFAULT 0,
@@ -39,7 +39,7 @@ CREATE TABLE model_revisions (
     name TEXT NOT NULL,
     description TEXT,
     backend TEXT NOT NULL,
-    base_url TEXT NOT NULL,
+    base_url TEXT,
     model_identifier TEXT NOT NULL,
     configuration TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -55,6 +55,7 @@ CREATE UNIQUE INDEX uq_models_root ON models(name) WHERE folder_id IS NULL;
 CREATE UNIQUE INDEX uq_models_child ON models(folder_id, name) WHERE folder_id IS NOT NULL;
 CREATE UNIQUE INDEX uq_model_folders_root ON model_folders(name) WHERE parent_id IS NULL;
 CREATE UNIQUE INDEX uq_model_folders_child ON model_folders(parent_id, name) WHERE parent_id IS NOT NULL;
+CREATE INDEX idx_model_revisions_live ON model_revisions(model_id, revision) WHERE deleted_at IS NULL;
 
 DROP TRIGGER IF EXISTS models_create_initial_revision;
 CREATE TRIGGER models_create_initial_revision AFTER INSERT ON models BEGIN
@@ -65,6 +66,7 @@ END;
 DROP TRIGGER IF EXISTS models_update_revision;
 CREATE TRIGGER models_update_revision AFTER UPDATE OF folder_id,name,description,backend,base_url,model_identifier,configuration ON models
 WHEN OLD.deleted_at IS NULL AND (
+  NEW.deleted_at IS NULL AND (
     NEW.folder_id IS NOT OLD.folder_id OR
     NEW.name IS NOT OLD.name OR
     NEW.description IS NOT OLD.description OR
@@ -72,7 +74,7 @@ WHEN OLD.deleted_at IS NULL AND (
     NEW.base_url IS NOT OLD.base_url OR
     NEW.model_identifier IS NOT OLD.model_identifier OR
     NEW.configuration IS NOT OLD.configuration
-)
+))
 BEGIN
   INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model_identifier,configuration,created_at,updated_at)
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model_identifier,NEW.configuration,datetime('now'),datetime('now'));
@@ -87,6 +89,7 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model_identifier,NEW.configuration,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
+DROP TRIGGER IF EXISTS models_set_current;
 CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions 
 WHEN NEW.deleted_at IS NULL
 BEGIN
@@ -134,13 +137,13 @@ CREATE TABLE skill_revisions (
     FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE RESTRICT
 );
 
-
+CREATE INDEX idx_skills_folder ON skills(folder_id);
 CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
 CREATE UNIQUE INDEX uq_skill_folders_root ON skill_folders(name) WHERE parent_id IS NULL;
 CREATE UNIQUE INDEX uq_skill_folders_child ON skill_folders(parent_id, name) WHERE parent_id IS NOT NULL;
 CREATE UNIQUE INDEX uq_skills_root ON skills(name) WHERE folder_id IS NULL;
 CREATE UNIQUE INDEX uq_skills_child ON skills(folder_id, name) WHERE folder_id IS NOT NULL;
-
+CREATE INDEX idx_skill_revisions_live ON skill_revisions(skill_id, revision) WHERE deleted_at IS NULL;
 
 
 DROP TRIGGER IF EXISTS skills_create_initial_revision;
@@ -152,12 +155,13 @@ END;
 DROP TRIGGER IF EXISTS skills_update_revision;
 CREATE TRIGGER skills_update_revision AFTER UPDATE OF folder_id,name,description,prompt_template,output_schema ON skills
 WHEN OLD.deleted_at IS NULL AND (
+  NEW.deleted_at IS NULL AND (
     NEW.folder_id IS NOT OLD.folder_id OR
     NEW.name IS NOT OLD.name OR
     NEW.description IS NOT OLD.description OR
     NEW.prompt_template IS NOT OLD.prompt_template OR
     NEW.output_schema IS NOT OLD.output_schema
-)
+))
 BEGIN
   INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at)
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'));
@@ -172,6 +176,7 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
+DROP TRIGGER IF EXISTS skills_set_current;
 CREATE TRIGGER skills_set_current AFTER INSERT ON skill_revisions 
 WHEN NEW.deleted_at IS NULL
 BEGIN
