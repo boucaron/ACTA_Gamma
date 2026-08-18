@@ -1,4 +1,5 @@
 PRAGMA foreign_keys = ON;
+PRAGMA journal_mode=WAL;
 
 CREATE TABLE model_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +19,7 @@ CREATE TABLE models (
     description TEXT,
     backend TEXT NOT NULL,
     base_url TEXT NOT NULL,
-    model TEXT NOT NULL,
+    model_identifier TEXT NOT NULL,
     configuration TEXT,
     current_revision INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -39,7 +40,7 @@ CREATE TABLE model_revisions (
     description TEXT,
     backend TEXT NOT NULL,
     base_url TEXT NOT NULL,
-    model TEXT NOT NULL,
+    model_identifier TEXT NOT NULL,
     configuration TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
@@ -57,24 +58,24 @@ CREATE UNIQUE INDEX uq_model_folders_child ON model_folders(parent_id, name) WHE
 
 DROP TRIGGER IF EXISTS models_create_initial_revision;
 CREATE TRIGGER models_create_initial_revision AFTER INSERT ON models BEGIN
-  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at)
-  VALUES (NEW.id,1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'));
+  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model_identifier,configuration,created_at,updated_at)
+  VALUES (NEW.id,1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model_identifier,NEW.configuration,datetime('now'),datetime('now'));
 END;
 
 DROP TRIGGER IF EXISTS models_update_revision;
-CREATE TRIGGER models_update_revision AFTER UPDATE OF folder_id,name,description,backend,base_url,model,configuration ON models
+CREATE TRIGGER models_update_revision AFTER UPDATE OF folder_id,name,description,backend,base_url,model_identifier,configuration ON models
 WHEN OLD.deleted_at IS NULL AND (
     NEW.folder_id IS NOT OLD.folder_id OR
     NEW.name IS NOT OLD.name OR
     NEW.description IS NOT OLD.description OR
     NEW.backend IS NOT OLD.backend OR
     NEW.base_url IS NOT OLD.base_url OR
-    NEW.model IS NOT OLD.model OR
-    IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
+    NEW.model_identifier IS NOT OLD.model_identifier OR
+    NEW.configuration IS NOT OLD.configuration
 )
 BEGIN
-  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at)
-  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'));
+  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model_identifier,configuration,created_at,updated_at)
+  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model_identifier,NEW.configuration,datetime('now'),datetime('now'));
 END;
 
 
@@ -82,8 +83,8 @@ DROP TRIGGER IF EXISTS models_soft_delete_revision;
 CREATE TRIGGER models_soft_delete_revision AFTER UPDATE OF deleted_at ON models
 WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
 BEGIN
-  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at,deleted_at)
-  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'),NEW.deleted_at);
+  INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model_identifier,configuration,created_at,updated_at,deleted_at)
+  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model_identifier,NEW.configuration,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
 CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions 
