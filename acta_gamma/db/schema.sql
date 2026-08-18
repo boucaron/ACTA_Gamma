@@ -4,7 +4,7 @@ CREATE TABLE model_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     parent_id INTEGER,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,    
     FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE RESTRICT
@@ -21,7 +21,7 @@ CREATE TABLE models (
     model TEXT NOT NULL,
     configuration TEXT,
     current_revision INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,
     FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE RESTRICT
@@ -41,7 +41,7 @@ CREATE TABLE model_revisions (
     base_url TEXT NOT NULL,
     model TEXT NOT NULL,
     configuration TEXT,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,
     UNIQUE(model_id, revision),
@@ -63,11 +63,20 @@ END;
 
 DROP TRIGGER IF EXISTS models_update_revision;
 CREATE TRIGGER models_update_revision AFTER UPDATE OF folder_id,name,description,backend,base_url,model,configuration ON models
-WHEN NEW.folder_id IS NOT OLD.folder_id OR NEW.name IS NOT OLD.name OR NEW.description IS NOT OLD.description OR NEW.backend IS NOT OLD.backend OR NEW.base_url IS NOT OLD.base_url OR NEW.model IS NOT OLD.model OR IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
+WHEN OLD.deleted_at IS NULL AND (
+    NEW.folder_id IS NOT OLD.folder_id OR
+    NEW.name IS NOT OLD.name OR
+    NEW.description IS NOT OLD.description OR
+    NEW.backend IS NOT OLD.backend OR
+    NEW.base_url IS NOT OLD.base_url OR
+    NEW.model IS NOT OLD.model OR
+    IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
+)
 BEGIN
   INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at)
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'));
 END;
+
 
 DROP TRIGGER IF EXISTS models_soft_delete_revision;
 CREATE TRIGGER models_soft_delete_revision AFTER UPDATE OF deleted_at ON models
@@ -87,7 +96,7 @@ CREATE TABLE skill_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     parent_id INTEGER,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,  
     FOREIGN KEY(parent_id) REFERENCES skill_folders(id) ON DELETE RESTRICT
@@ -102,7 +111,7 @@ CREATE TABLE skills (
     prompt_template TEXT NOT NULL,
     output_schema TEXT,
     current_revision INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,
     FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE RESTRICT
@@ -117,7 +126,7 @@ CREATE TABLE skill_revisions (
     revision INTEGER NOT NULL,
     prompt_template TEXT NOT NULL,
     output_schema TEXT,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,
     UNIQUE(skill_id, revision),
@@ -141,11 +150,18 @@ END;
 
 DROP TRIGGER IF EXISTS skills_update_revision;
 CREATE TRIGGER skills_update_revision AFTER UPDATE OF folder_id,name,description,prompt_template,output_schema ON skills
-WHEN NEW.folder_id IS NOT OLD.folder_id OR NEW.name IS NOT OLD.name OR NEW.description IS NOT OLD.description OR NEW.prompt_template IS NOT OLD.prompt_template OR NEW.output_schema IS NOT OLD.output_schema
+WHEN OLD.deleted_at IS NULL AND (
+    NEW.folder_id IS NOT OLD.folder_id OR
+    NEW.name IS NOT OLD.name OR
+    NEW.description IS NOT OLD.description OR
+    NEW.prompt_template IS NOT OLD.prompt_template OR
+    NEW.output_schema IS NOT OLD.output_schema
+)
 BEGIN
   INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at)
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'));
 END;
+
 
 DROP TRIGGER IF EXISTS skills_soft_delete_revision;
 CREATE TRIGGER skills_soft_delete_revision AFTER UPDATE OF deleted_at ON skills
@@ -162,13 +178,15 @@ BEGIN
 END;
 
 -- immutable
+-- content_hash not used for dedup only a small check
+-- type not yet enforced, not a design decision for the moment
 CREATE TABLE contexts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL,
     content TEXT NOT NULL,
-    content_hash TEXT NOT NULL,
+    content_hash TEXT,
     metadata TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE executions (
