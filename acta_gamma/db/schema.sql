@@ -6,11 +6,10 @@ CREATE TABLE model_folders (
     parent_id INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT,
-    deleted_at TEXT,
-    UNIQUE(parent_id, name),
+    deleted_at TEXT,    
     FOREIGN KEY(parent_id) REFERENCES model_folders(id) ON DELETE CASCADE
 );
-CREATE INDEX idx_model_folders_parent ON model_folders(parent_id);
+
 
 CREATE TABLE models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,8 +26,9 @@ CREATE TABLE models (
     deleted_at TEXT,
     FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
 );
-CREATE INDEX idx_models_folder ON models(folder_id);
-CREATE UNIQUE INDEX uq_models_folder_name ON models(folder_id, name);
+
+
+
 
 CREATE TABLE model_revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,8 +45,15 @@ CREATE TABLE model_revisions (
     updated_at TEXT,
     deleted_at TEXT,
     UNIQUE(model_id, revision),
-    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE SET NULL
+    FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX idx_model_folders_parent ON model_folders(parent_id);
+CREATE INDEX idx_models_folder ON models(folder_id);
+CREATE UNIQUE INDEX uq_models_root ON models(name) WHERE folder_id IS NULL;
+CREATE UNIQUE INDEX uq_models_child ON models(folder_id, name) WHERE folder_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_model_folders_root ON model_folders(name) WHERE parent_id IS NULL;
+CREATE UNIQUE INDEX uq_model_folders_child ON model_folders(parent_id, name) WHERE parent_id IS NOT NULL;
 
 DROP TRIGGER IF EXISTS models_create_initial_revision;
 CREATE TRIGGER models_create_initial_revision AFTER INSERT ON models BEGIN
@@ -62,10 +69,12 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'));
 END;
 
-DROP TRIGGER IF EXISTS models_delete_revision;
-CREATE TRIGGER models_delete_revision BEFORE DELETE ON models BEGIN
+DROP TRIGGER IF EXISTS models_soft_delete_revision;
+CREATE TRIGGER models_soft_delete_revision AFTER UPDATE OF deleted_at ON models
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+BEGIN
   INSERT INTO model_revisions(model_id,revision,folder_id,name,description,backend,base_url,model,configuration,created_at,updated_at,deleted_at)
-  VALUES (OLD.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = OLD.id),0)+1,OLD.folder_id,OLD.name,OLD.description,OLD.backend,OLD.base_url,OLD.model,OLD.configuration,datetime('now'),datetime('now'),datetime('now'));
+  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model,NEW.configuration,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
 CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions BEGIN
@@ -78,11 +87,10 @@ CREATE TABLE skill_folders (
     parent_id INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT,
-    deleted_at TEXT,
-    UNIQUE(parent_id, name),
-    FOREIGN KEY(parent_id) REFERENCES skill_folders(id) ON DELETE CASCADE
+    deleted_at TEXT,  
+    FOREIGN KEY(parent_id) REFERENCES skill_folders(id) ON DELETE RESTRICT
 );
-CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
+
 
 CREATE TABLE skills (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,7 +103,7 @@ CREATE TABLE skills (
     created_at TEXT NOT NULL,
     updated_at TEXT,
     deleted_at TEXT,
-    FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE SET NULL
+    FOREIGN KEY(folder_id) REFERENCES skill_folders(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE skill_revisions (
@@ -111,8 +119,17 @@ CREATE TABLE skill_revisions (
     updated_at TEXT,
     deleted_at TEXT,
     UNIQUE(skill_id, revision),
-    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE SET NULL
+    FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE RESTRICT
 );
+
+
+CREATE INDEX idx_skill_folders_parent ON skill_folders(parent_id);
+CREATE UNIQUE INDEX uq_skill_folders_root ON skill_folders(name) WHERE parent_id IS NULL;
+CREATE UNIQUE INDEX uq_skill_folders_child ON skill_folders(parent_id, name) WHERE parent_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_skills_root ON skills(name) WHERE folder_id IS NULL;
+CREATE UNIQUE INDEX uq_skills_child ON skills(folder_id, name) WHERE folder_id IS NOT NULL;
+
+
 
 DROP TRIGGER IF EXISTS skills_create_initial_revision;
 CREATE TRIGGER skills_create_initial_revision AFTER INSERT ON skills BEGIN
@@ -128,10 +145,12 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'));
 END;
 
-DROP TRIGGER IF EXISTS skills_delete_revision;
-CREATE TRIGGER skills_delete_revision BEFORE DELETE ON skills BEGIN
+DROP TRIGGER IF EXISTS skills_soft_delete_revision;
+CREATE TRIGGER skills_soft_delete_revision AFTER UPDATE OF deleted_at ON skills
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+BEGIN
   INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at,deleted_at)
-  VALUES (OLD.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = OLD.id),0)+1,OLD.folder_id,OLD.name,OLD.description,OLD.prompt_template,OLD.output_schema,datetime('now'),datetime('now'),datetime('now'));
+  VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
 CREATE TRIGGER skills_set_current AFTER INSERT ON skill_revisions BEGIN
