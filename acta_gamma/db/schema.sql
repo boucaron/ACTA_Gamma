@@ -190,10 +190,19 @@ CREATE TABLE contexts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL,
     content TEXT NOT NULL,
-    content_hash TEXT,
+    content_hash TEXT NOT NULL,
     metadata TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+
+DROP TRIGGER IF EXISTS contexts_immutable;
+CREATE TRIGGER contexts_immutable 
+BEFORE UPDATE ON contexts 
+BEGIN 
+  SELECT RAISE(ABORT, 'contexts are immutable'); 
+END;
+
 
 CREATE TABLE executions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
