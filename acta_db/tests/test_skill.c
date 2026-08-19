@@ -32,7 +32,7 @@ static int sk_create_folder(db_t *db, const char *name, int parent_id) {
 static int sk_count_revisions(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t *revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
     if (revs) {
         acta_db_skill_revision_list_free(revs, count);
     }
@@ -43,15 +43,15 @@ static int sk_count_revisions(db_t *db, int skill_id) {
 static int sk_latest_revision(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t *revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
     if (!revs || count == 0) {
         if (revs) acta_db_skill_revision_list_free(revs, count);
         return 0;
     }
     int max_rev = 0;
     for (int i = 0; i < count; i++) {
-        if (revs[i].revision > max_rev) {
-            max_rev = revs[i].revision;
+        if (revs[i]->revision > max_rev) {
+            max_rev = revs[i]->revision;
         }
     }
     acta_db_skill_revision_list_free(revs, count);
@@ -62,18 +62,18 @@ static int sk_latest_revision(db_t *db, int skill_id) {
 static int sk_latest_rev_deleted(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t *revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
     if (!revs || count == 0) {
         if (revs) acta_db_skill_revision_list_free(revs, count);
         return 0;
     }
     int max_idx = 0;
     for (int i = 1; i < count; i++) {
-        if (revs[i].revision > revs[max_idx].revision) {
+        if (revs[i]->revision > revs[max_idx]->revision) {
             max_idx = i;
         }
     }
-    int result = (revs[max_idx].deleted_at != NULL);
+    int result = (revs[max_idx]->deleted_at != NULL);
     acta_db_skill_revision_list_free(revs, count);
     return result;
 }
@@ -806,9 +806,6 @@ static void test_sk_move_to_deleted_folder(void) {
 
     test_db_teardown(db, path);
 }
-
-/* ---------- 7.31: move — deleted target folder (folder_id = 0 always valid) ---------- */
-/* (Not needed — 0 is root and always exists. Covered by 7.27.) */
 
 /* ---------- runner ---------- */
 void run_skill_tests(void) {

@@ -208,10 +208,10 @@ static void test_integration_skill_lifecycle(void) {
 
     /* Revision 1 */
     int err = 0, rev_count = 0;
-    skill_revision_t *revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
-    TEST_ASSERT_EQ_INT(revs[0].revision, 1);
+    TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
     acta_db_skill_revision_list_free(revs, rev_count);
 
     /* Update → revision 2 */
@@ -239,7 +239,7 @@ static void test_integration_skill_lifecycle(void) {
     revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 3);
-    TEST_ASSERT(revs[2].deleted_at != NULL);
+    TEST_ASSERT(revs[2]->deleted_at != NULL);
     acta_db_skill_revision_list_free(revs, rev_count);
 
     TEST_ASSERT_NULL(acta_db_skill_get_live(db, skill_id));
@@ -654,7 +654,7 @@ static void test_integration_memory_leak_sweep(void) {
       acta_db_model_revision_list_free(r, n); }
 
     /* list-and-free: skill revisions */
-    { int n = 0, err = 0; skill_revision_t *r = acta_db_skill_revision_list_by_skill(db, sid, &n, &err);
+    { int n = 0, err = 0; skill_revision_t **r = acta_db_skill_revision_list_by_skill(db, sid, &n, &err);
       acta_db_skill_revision_list_free(r, n); }
 
     /* list-and-free: model folders */
@@ -732,6 +732,7 @@ static void test_integration_null_safety(void) {
     /* skill revision */
     TEST_ASSERT_NULL(acta_db_skill_revision_get(NULL, 1, NULL));
     TEST_ASSERT_NULL(acta_db_skill_revision_get_by_skill_and_rev(NULL, 1, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_revision_get_latest(NULL, 1, NULL));
     TEST_ASSERT_NULL(acta_db_skill_revision_list_by_skill(NULL, 1, NULL, NULL));
     acta_db_skill_revision_free(NULL);
     acta_db_skill_revision_list_free(NULL, 0);
