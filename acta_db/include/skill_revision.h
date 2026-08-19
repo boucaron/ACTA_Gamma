@@ -21,12 +21,13 @@ typedef struct {
     char   *deleted_at;
 } skill_revision_t;
 
-skill_revision_t *acta_db_skill_revision_get(db_t *db, int id);
-skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(db_t *db, int skill_id, int revision);
-skill_revision_t *acta_db_skill_revision_list_by_skill(db_t *db, int skill_id, int *out_count);
+skill_revision_t *acta_db_skill_revision_get(db_t *db, int id, int *out_err);
+skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(db_t *db, int skill_id, int revision, int *out_err);
+skill_revision_t *acta_db_skill_revision_list_by_skill(db_t *db, int skill_id, int *out_count, int *out_err);
 void              acta_db_skill_revision_free(skill_revision_t *r);
 void              acta_db_skill_revision_list_free(skill_revision_t *items, int count);
-skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id);
+skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id, int *out_err);
+
 #ifdef __cplusplus
 }
 #endif

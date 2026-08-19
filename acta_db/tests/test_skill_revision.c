@@ -2,6 +2,7 @@
 
 #include "test_common.h"
 #include "skill_revision.h"
+#include "skill.h"
 
 /* Short helper to keep test bodies readable (skill create has many params) */
 static int sr_create_skill(db_t *db, const char *name) {
@@ -15,7 +16,7 @@ static int sr_create_skill(db_t *db, const char *name) {
 
     int id = 0;
     int rc = acta_db_skill_create(db, &s, &id);
-    return (rc == 0) ? id : -1;
+    return (rc == ACTA_DB_OK) ? id : -1;
 }
 
 static int sr_update_skill(db_t *db, int skill_id, const char *name) {
@@ -42,13 +43,17 @@ static void test_sr_get_existing(void) {
     TEST_ASSERT(skill_id > 0);
 
     /* Grab rev 1 by (skill_id, 1), then fetch by its row id */
-    skill_revision_t *rev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    int err = 0;
+    skill_revision_t *rev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, &err);
     TEST_ASSERT_NOT_NULL(rev);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     int rev_id = rev->id;
     acta_db_skill_revision_free(rev);
 
-    skill_revision_t *by_id = acta_db_skill_revision_get(db, rev_id);
+    err = 0;
+    skill_revision_t *by_id = acta_db_skill_revision_get(db, rev_id, &err);
     TEST_ASSERT_NOT_NULL(by_id);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(by_id->id, rev_id);
     TEST_ASSERT_EQ_INT(by_id->skill_id, skill_id);
     TEST_ASSERT_EQ_INT(by_id->revision, 1);
@@ -66,8 +71,10 @@ static void test_sr_get_nonexistent(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    skill_revision_t *rev = acta_db_skill_revision_get(db, 999999);
+    int err = 0;
+    skill_revision_t *rev = acta_db_skill_revision_get(db, 999999, &err);
     TEST_ASSERT_NULL(rev);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
@@ -83,10 +90,12 @@ static void test_sr_get_by_skill_rev_existing(void) {
     TEST_ASSERT(skill_id > 0);
 
     int rc = sr_update_skill(db, skill_id, "Updated");
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
-    skill_revision_t *rev2 = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 2);
+    int err = 0;
+    skill_revision_t *rev2 = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 2, &err);
     TEST_ASSERT_NOT_NULL(rev2);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev2->skill_id, skill_id);
     TEST_ASSERT_EQ_INT(rev2->revision, 2);
     TEST_ASSERT_EQ_STR(rev2->name, "Updated");
@@ -105,8 +114,10 @@ static void test_sr_get_by_skill_rev_missing(void) {
     int skill_id = sr_create_skill(db, "RevSkill84");
     TEST_ASSERT(skill_id > 0);
 
-    skill_revision_t *rev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 99);
+    int err = 0;
+    skill_revision_t *rev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 99, &err);
     TEST_ASSERT_NULL(rev);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
@@ -124,8 +135,10 @@ static void test_sr_list_multiple(void) {
     sr_update_skill(db, skill_id, "v3");
 
     int count = 0;
-    skill_revision_t *items = acta_db_skill_revision_list_by_skill(db, skill_id, &count);
+    int err = 0;
+    skill_revision_t *items = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
     for (int i = 0; i < count; i++) {
         TEST_ASSERT_EQ_INT(items[i].skill_id, skill_id);
@@ -147,11 +160,13 @@ static void test_sr_list_includes_deleted(void) {
     sr_update_skill(db, skill_id, "v2");
 
     int rc = acta_db_skill_soft_delete(db, skill_id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int count = 0;
-    skill_revision_t *items = acta_db_skill_revision_list_by_skill(db, skill_id, &count);
+    int err = 0;
+    skill_revision_t *items = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     /* 3 rows: rev1 (create), rev2 (update), rev3 (delete) */
     TEST_ASSERT_EQ_INT(count, 3);
 
@@ -172,8 +187,10 @@ static void test_sr_free_valid(void) {
     int skill_id = sr_create_skill(db, "RevSkill87");
     TEST_ASSERT(skill_id > 0);
 
-    skill_revision_t *rev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    int err = 0;
+    skill_revision_t *rev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, &err);
     TEST_ASSERT_NOT_NULL(rev);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     acta_db_skill_revision_free(rev);
 
     test_db_teardown(db, path);
@@ -196,7 +213,10 @@ static void test_sr_list_free_valid(void) {
     sr_update_skill(db, skill_id, "v3");
 
     int count = 0;
-    skill_revision_t *items = acta_db_skill_revision_list_by_skill(db, skill_id, &count);
+    int err = 0;
+    skill_revision_t *items = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_skill_revision_list_free(items, count);
 
@@ -215,8 +235,10 @@ static void test_sr_get_latest_multiple(void) {
     sr_update_skill(db, skill_id, "v2");
     sr_update_skill(db, skill_id, "v3");
 
-    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, skill_id);
+    int err = 0;
+    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, skill_id, &err);
     TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(latest->skill_id, skill_id);
     TEST_ASSERT_EQ_INT(latest->revision, 3);
     TEST_ASSERT_EQ_STR(latest->name, "v3");
@@ -235,8 +257,10 @@ static void test_sr_get_latest_single(void) {
     int skill_id = sr_create_skill(db, "RevSkill89");
     TEST_ASSERT(skill_id > 0);
 
-    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, skill_id);
+    int err = 0;
+    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, skill_id, &err);
     TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(latest->skill_id, skill_id);
     TEST_ASSERT_EQ_INT(latest->revision, 1);
     TEST_ASSERT_EQ_STR(latest->name, "RevSkill89");
@@ -252,8 +276,10 @@ static void test_sr_get_latest_nonexistent(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, 999999);
+    int err = 0;
+    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, 999999, &err);
     TEST_ASSERT_NULL(latest);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }

@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "skill.h"
+#include "db.h"
 
 static skill_t *row_to_skill(sqlite3_stmt *stmt) {
     skill_t *s = calloc(1, sizeof(skill_t));
@@ -31,19 +32,20 @@ static skill_folder_t *row_to_skill_folder(sqlite3_stmt *stmt) {
 /* ---------- skill_folder ---------- */
 
 int acta_db_skill_folder_create(db_t *db, const char *name, int parent_id, int *out_id) {
-    if (!db || !name || !out_id) return -1;
+    if (!db || !name || !out_id) return ACTA_DB_ERR_INVALID;
     const char *sql = "INSERT INTO skill_folders (name, parent_id) VALUES (?, ?);";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
     sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT);
     if (parent_id == 0) sqlite3_bind_null(stmt, 2);
     else sqlite3_bind_int(stmt, 2, parent_id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return 0;
+    return ACTA_DB_OK;
 }
 
 skill_folder_t *acta_db_skill_folder_get(db_t *db, int id) {
@@ -59,24 +61,26 @@ skill_folder_t *acta_db_skill_folder_get(db_t *db, int id) {
 }
 
 int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name) {
-    if (!db || !new_name) return -1;
+    if (!db || !new_name) return ACTA_DB_ERR_INVALID;
     const char *sql = "UPDATE skill_folders SET name = ?, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
     sqlite3_bind_text(stmt, 1, new_name, -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 2, id);
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 int acta_db_skill_folder_soft_delete(db_t *db, int id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
 
     /* Reject if folder has live children */
     sqlite3_stmt *check;
     const char *check_sql = "SELECT COUNT(*) FROM skill_folders WHERE parent_id = ? AND deleted_at IS NULL;";
-    if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(check, 1, id);
     int child_count = 0;
     if (sqlite3_step(check) == SQLITE_ROW) {
@@ -84,18 +88,18 @@ int acta_db_skill_folder_soft_delete(db_t *db, int id) {
     }
     sqlite3_finalize(check);
 
-    if (child_count > 0) return -1;
+    if (child_count > 0) return ACTA_DB_ERR_INVALID;
 
     /* Proceed with soft delete */
     const char *sql = "UPDATE skill_folders SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
-
 
 skill_folder_t *acta_db_skill_folder_list_children(db_t *db, int parent_id, int *out_count) {
     if (!db || !out_count) return NULL;
@@ -160,15 +164,16 @@ void acta_db_skill_folder_list_free(skill_folder_t *items, int count) {
     free(items);
 }
 
-
 /* ---------- skill_t ---------- */
 
 int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
-    if (!db || !s || !s->name || !s->prompt_template || !out_id) return -1;
+    if (!db || !s || !s->name || !s->prompt_template || !out_id)
+        return ACTA_DB_ERR_INVALID;
     const char *sql =
         "INSERT INTO skills (folder_id, name, description, prompt_template, output_schema) VALUES (?, ?, ?, ?, ?);";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
 
     if (s->folder_id == 0) sqlite3_bind_null(stmt, 1);
     else sqlite3_bind_int(stmt, 1, s->folder_id);
@@ -181,9 +186,9 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return 0;
+    return ACTA_DB_OK;
 }
 
 skill_t *acta_db_skill_get(db_t *db, int id) {
@@ -213,11 +218,12 @@ skill_t *acta_db_skill_get_live(db_t *db, int id) {
 }
 
 int acta_db_skill_update(db_t *db, const skill_t *s) {
-    if (!db || !s) return -1;
+    if (!db || !s) return ACTA_DB_ERR_INVALID;
     const char *sql =
         "UPDATE skills SET folder_id=?, name=?, description=?, prompt_template=?, output_schema=?, updated_at=datetime('now') WHERE id=? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
 
     if (s->folder_id == 0) sqlite3_bind_null(stmt, 1);
     else sqlite3_bind_int(stmt, 1, s->folder_id);
@@ -231,18 +237,19 @@ int acta_db_skill_update(db_t *db, const skill_t *s) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 int acta_db_skill_soft_delete(db_t *db, int id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
     const char *sql = "UPDATE skills SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 skill_t *acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count) {
@@ -294,33 +301,36 @@ skill_t *acta_db_skill_list_all(db_t *db, int *out_count) {
 }
 
 int acta_db_skill_restore(db_t *db, int id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
     const char *sql = "UPDATE skills SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NOT NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
 
     /* Validate target folder exists and is live */
     if (folder_id != 0) {
         sqlite3_stmt *check;
         const char *check_sql = "SELECT 1 FROM skill_folders WHERE id = ? AND deleted_at IS NULL;";
-        if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK) return -1;
+        if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
         sqlite3_bind_int(check, 1, folder_id);
         int found = (sqlite3_step(check) == SQLITE_ROW);
         sqlite3_finalize(check);
-        if (!found) return -1;
+        if (!found) return ACTA_DB_ERR_NOT_FOUND;
     }
 
     const char *sql = "UPDATE skills SET folder_id = ?, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
 
     if (folder_id == 0) sqlite3_bind_null(stmt, 1);
     else sqlite3_bind_int(stmt, 1, folder_id);
@@ -328,11 +338,9 @@ int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
-    return sqlite3_changes(db->handle) > 0 ? 0 : -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    return sqlite3_changes(db->handle) > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
-
-
 
 void acta_db_skill_free(skill_t *s) {
     if (!s) return;
