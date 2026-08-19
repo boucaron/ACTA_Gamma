@@ -1,4 +1,5 @@
 #include "test_common.h"
+#include "db.h"
 
 /* ---------- 4.1: model_create — root ---------- */
 static void test_model_create_root(void) {
@@ -15,7 +16,7 @@ static void test_model_create_root(void) {
     };
     int id = 0;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     TEST_ASSERT(id > 0);
     test_db_teardown(db, path);
 }
@@ -37,7 +38,7 @@ static void test_model_create_in_folder(void) {
     };
     int id = 0;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     test_db_teardown(db, path);
 }
 
@@ -53,7 +54,7 @@ static void test_model_create_initial_revision(void) {
     acta_db_model_create(db, &m, &model_id);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, model_id, &count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, model_id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
     if (count > 0) {
         TEST_ASSERT_EQ_INT(revs[0].revision, 1);
@@ -71,7 +72,7 @@ static void test_model_create_null_name(void) {
     model_t m = { .name = NULL, .backend = "b", .model_identifier = "mid" };
     int id;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
@@ -84,7 +85,7 @@ static void test_model_create_null_backend(void) {
     model_t m = { .name = "N", .backend = NULL, .model_identifier = "mid" };
     int id;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
@@ -97,7 +98,7 @@ static void test_model_create_null_mid(void) {
     model_t m = { .name = "N", .backend = "b", .model_identifier = NULL };
     int id;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
@@ -110,7 +111,7 @@ static void test_model_create_invalid_folder(void) {
     model_t m = { .name = "N", .backend = "b", .model_identifier = "mid", .folder_id = 999999 };
     int id;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
     test_db_teardown(db, path);
 }
 
@@ -125,7 +126,7 @@ static void test_model_create_dup_root(void) {
     acta_db_model_create(db, &m, &id1);
     int id2;
     int rc = acta_db_model_create(db, &m, &id2);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
     test_db_teardown(db, path);
 }
 
@@ -142,7 +143,7 @@ static void test_model_create_dup_child(void) {
     acta_db_model_create(db, &m, &id1);
     int id2;
     int rc = acta_db_model_create(db, &m, &id2);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
     test_db_teardown(db, path);
 }
 
@@ -220,10 +221,10 @@ static void test_model_update_name(void) {
 
     model_t update = { .id = id, .name = "New", .backend = "b", .model_identifier = "mid" };
     int rc = acta_db_model_update(db, &update);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -241,9 +242,9 @@ static void test_model_update_backend(void) {
 
     model_t update = { .id = id, .name = "M", .backend = "anthropic", .model_identifier = "mid" };
     int rc = acta_db_model_update(db, &update);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -261,9 +262,9 @@ static void test_model_update_config(void) {
 
     model_t update = { .id = id, .name = "M", .backend = "b", .model_identifier = "mid", .configuration = "{\"temp\":0.5}" };
     int rc = acta_db_model_update(db, &update);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -281,9 +282,10 @@ static void test_model_update_no_change(void) {
 
     model_t update = { .id = id, .name = "M", .backend = "b", .model_identifier = "mid" };
     int rc = acta_db_model_update(db, &update);
-    /* Should succeed but NOT create a new revision */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    /* No new revision created */
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -301,12 +303,11 @@ static void test_model_update_deleted(void) {
     acta_db_model_soft_delete(db, id);
 
     model_t update = { .id = id, .name = "X", .backend = "b", .model_identifier = "mid" };
-    acta_db_model_update(db, &update);
+    int rc = acta_db_model_update(db, &update);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count);
-    /* Should NOT have created a new live revision */
-    /* count should still be 2 (initial + delete revision) */
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -322,7 +323,7 @@ static void test_model_soft_delete_happy(void) {
     int id;
     acta_db_model_create(db, &m, &id);
     int rc = acta_db_model_soft_delete(db, id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     model_t *got = acta_db_model_get(db, id);
     TEST_ASSERT_NOT_NULL(got->deleted_at);
     acta_db_model_free(got);
@@ -341,9 +342,8 @@ static void test_model_soft_delete_revision(void) {
     acta_db_model_soft_delete(db, id);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
-    /* Last revision should have deleted_at set */
     if (count >= 2) {
         TEST_ASSERT_NOT_NULL(revs[1].deleted_at);
     }
@@ -472,9 +472,8 @@ static void test_model_restore_happy(void) {
     acta_db_model_soft_delete(db, id);
 
     int rc = acta_db_model_restore(db, id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
-    /* Should be visible via get_live again */
     model_t *got = acta_db_model_get_live(db, id);
     TEST_ASSERT_NOT_NULL(got);
     TEST_ASSERT_NULL(got->deleted_at);
@@ -494,12 +493,13 @@ static void test_model_restore_already_live(void) {
     int id;
     acta_db_model_create(db, &m, &id);
 
-    /* Model is not deleted, so restore should fail (WHERE deleted_at IS NOT NULL matches nothing) */
+    /* WHERE deleted_at IS NOT NULL matches 0 rows → NOT_FOUND */
     int rc = acta_db_model_restore(db, id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 4.30: model_restore — non-existent ---------- */
 static void test_model_restore_nonexistent(void) {
@@ -509,10 +509,11 @@ static void test_model_restore_nonexistent(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int rc = acta_db_model_restore(db, 999999);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 4.31: model_restore — appears in list_all after restore ---------- */
 static void test_model_restore_in_list(void) {
@@ -559,15 +560,13 @@ static void test_model_move_to_folder_specific(void) {
     acta_db_model_create(db, &m, &id);
 
     int rc = acta_db_model_move_to_folder(db, id, f2);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
-    /* Should no longer appear in f1 */
     int count1 = 0;
     model_t *items1 = acta_db_model_list_in_folder(db, f1, &count1);
     TEST_ASSERT_EQ_INT(count1, 0);
     acta_db_model_list_free(items1, count1);
 
-    /* Should appear in f2 */
     int count2 = 0;
     model_t *items2 = acta_db_model_list_in_folder(db, f2, &count2);
     TEST_ASSERT_EQ_INT(count2, 1);
@@ -592,16 +591,14 @@ static void test_model_move_to_folder_root(void) {
     acta_db_model_create(db, &m, &id);
 
     int rc = acta_db_model_move_to_folder(db, id, 0);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
-    /* Should appear at root */
     int count = 0;
     model_t *items = acta_db_model_list_in_folder(db, 0, &count);
     TEST_ASSERT_EQ_INT(count, 1);
     TEST_ASSERT_EQ_INT(items[0].id, id);
     acta_db_model_list_free(items, count);
 
-    /* Should NOT appear in the old folder */
     count = 0;
     model_t *old = acta_db_model_list_in_folder(db, fid, &count);
     TEST_ASSERT_EQ_INT(count, 0);
@@ -626,7 +623,7 @@ static void test_model_move_deleted(void) {
     acta_db_model_soft_delete(db, id);
 
     int rc = acta_db_model_move_to_folder(db, id, fid);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
@@ -639,7 +636,7 @@ static void test_model_move_nonexistent(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int rc = acta_db_model_move_to_folder(db, 999999, 0);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
@@ -685,4 +682,3 @@ void run_model_tests(void) {
     test_model_move_deleted();
     test_model_move_nonexistent();
 }
-

@@ -253,9 +253,15 @@ int acta_db_model_update(db_t *db, const model_t *m) {
     sqlite3_bind_int(stmt, 8, m->id);
 
     int rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        return ACTA_DB_ERR_SQL;
+    }
+    int changes = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
+    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
+
 
 int acta_db_model_soft_delete(db_t *db, int id) {
     if (!db) return ACTA_DB_ERR_INVALID;
