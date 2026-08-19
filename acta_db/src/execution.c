@@ -62,7 +62,10 @@ execution_t *acta_db_execution_get(db_t *db, int id) {
 
 int acta_db_execution_start(db_t *db, int id) {
     if (!db) return -1;
-    const char *sql = "UPDATE executions SET status = 'running', started_at = datetime('now') WHERE id = ? AND status = 'pending';";
+    char sql[256];
+    snprintf(sql, sizeof(sql),
+             "UPDATE executions SET status = '%s', started_at = datetime('now') WHERE id = ? AND status = '%s';",
+             ACTA_EXEC_STATUS_RUNNING, ACTA_EXEC_STATUS_PENDING);
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
     sqlite3_bind_int(stmt, 1, id);
@@ -73,10 +76,12 @@ int acta_db_execution_start(db_t *db, int id) {
     return changes > 0 ? 0 : -1;
 }
 
-
 int acta_db_execution_complete(db_t *db, int id, const char *result) {
     if (!db) return -1;
-    const char *sql = "UPDATE executions SET status = 'completed', result = ?, completed_at = datetime('now') WHERE id = ? AND status = 'running';";
+    char sql[256];
+    snprintf(sql, sizeof(sql),
+             "UPDATE executions SET status = '%s', result = ?, completed_at = datetime('now') WHERE id = ? AND status = '%s';",
+             ACTA_EXEC_STATUS_COMPLETED, ACTA_EXEC_STATUS_RUNNING);
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
     if (result) sqlite3_bind_text(stmt, 1, result, -1, SQLITE_TRANSIENT);
@@ -91,7 +96,10 @@ int acta_db_execution_complete(db_t *db, int id, const char *result) {
 
 int acta_db_execution_fail(db_t *db, int id, const char *error) {
     if (!db) return -1;
-    const char *sql = "UPDATE executions SET status = 'failed', error = ?, completed_at = datetime('now') WHERE id = ? AND status = 'running';";
+    char sql[256];
+    snprintf(sql, sizeof(sql),
+             "UPDATE executions SET status = '%s', error = ?, completed_at = datetime('now') WHERE id = ? AND status = '%s';",
+             ACTA_EXEC_STATUS_FAILED, ACTA_EXEC_STATUS_RUNNING);
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
     if (error) sqlite3_bind_text(stmt, 1, error, -1, SQLITE_TRANSIENT);
@@ -103,7 +111,6 @@ int acta_db_execution_fail(db_t *db, int id, const char *error) {
     sqlite3_finalize(stmt);
     return changes > 0 ? 0 : -1;
 }
-
 
 int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
     if (!db) return -1;
@@ -119,7 +126,6 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
     sqlite3_finalize(stmt);
     return changes > 0 ? 0 : -1;
 }
-
 
 execution_t *acta_db_execution_list_by_status(db_t *db, const char *status, int *out_count) {
     if (!db || !status || !out_count) return NULL;
@@ -193,7 +199,6 @@ execution_t *acta_db_execution_list_by_context(db_t *db, int context_id, int *ou
     return items;
 }
 
-
 void acta_db_execution_free(execution_t *e) {
     if (!e) return;
     free(e->prompt); free(e->raw_response); free(e->result);
@@ -215,4 +220,3 @@ void acta_db_execution_list_free(execution_t *items, int count) {
     }
     free(items);
 }
-

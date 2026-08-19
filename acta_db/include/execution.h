@@ -7,6 +7,14 @@
 extern "C" {
 #endif
 
+
+/* --- String constants (execution.h) --- */
+#define ACTA_EXEC_STATUS_PENDING   "pending"
+#define ACTA_EXEC_STATUS_RUNNING   "running"
+#define ACTA_EXEC_STATUS_COMPLETED "completed"
+#define ACTA_EXEC_STATUS_FAILED    "failed"
+
+
 typedef struct {
     int     id;
     int     context_id;

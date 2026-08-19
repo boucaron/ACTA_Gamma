@@ -1,4 +1,4 @@
-/* test_execution.c — Tests for execution.h (tests 9.1 – 9.35) */
+/* test_execution.c — Tests for execution.h (tests 9.1 – 9.39) */
 
 #include "test_common.h"
 #include "execution.h"
@@ -84,7 +84,7 @@ static int exec_create(db_t *db, int ctx_id, int sr_id, int mr_id,
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
     e.prompt              = (char *)prompt;
-    e.status              = "pending";
+    e.status              = ACTA_EXEC_STATUS_PENDING;
     e.parent_execution_id = parent_id;
 
     int out_id = 0;
@@ -108,7 +108,7 @@ static void test_exec_create_happy(void) {
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
     e.prompt              = "Hello";
-    e.status              = "pending";
+    e.status              = ACTA_EXEC_STATUS_PENDING;
     e.parent_execution_id = 0;
 
     int out_id = 0;
@@ -118,7 +118,7 @@ static void test_exec_create_happy(void) {
 
     execution_t *got = acta_db_execution_get(db, out_id);
     TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_STR(got->status, "pending");
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
     acta_db_execution_free(got);
 
     test_db_teardown(db, path);
@@ -215,7 +215,7 @@ static void test_exec_create_null_prompt(void) {
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
     e.prompt              = NULL;
-    e.status              = "pending";
+    e.status              = ACTA_EXEC_STATUS_PENDING;
     e.parent_execution_id = 0;
 
     int out_id = 0;
@@ -241,7 +241,7 @@ static void test_exec_create_default_status(void) {
 
     execution_t *got = acta_db_execution_get(db, eid);
     TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_STR(got->status, "pending");
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
     TEST_ASSERT(got->started_at == NULL);
     TEST_ASSERT(got->completed_at == NULL);
     acta_db_execution_free(got);
@@ -318,7 +318,7 @@ static void test_exec_get_existing(void) {
     TEST_ASSERT_EQ_INT(got->skill_revision_id, sr_id);
     TEST_ASSERT_EQ_INT(got->model_revision_id, mr_id);
     TEST_ASSERT_EQ_STR(got->prompt, "GetPrompt");
-    TEST_ASSERT_EQ_STR(got->status, "pending");
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
     acta_db_execution_free(got);
 
     test_db_teardown(db, path);
@@ -355,7 +355,7 @@ static void test_exec_start_pending_to_running(void) {
 
     execution_t *got = acta_db_execution_get(db, eid);
     TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_STR(got->status, "running");
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_RUNNING);
     TEST_ASSERT(got->started_at != NULL);
     acta_db_execution_free(got);
 
@@ -460,7 +460,7 @@ static void test_exec_complete_running_to_completed(void) {
 
     execution_t *got = acta_db_execution_get(db, eid);
     TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_STR(got->status, "completed");
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_COMPLETED);
     TEST_ASSERT_EQ_STR(got->result, "the result");
     TEST_ASSERT(got->completed_at != NULL);
     acta_db_execution_free(got);
@@ -549,7 +549,7 @@ static void test_exec_fail_running_to_failed(void) {
 
     execution_t *got = acta_db_execution_get(db, eid);
     TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_STR(got->status, "failed");
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_FAILED);
     TEST_ASSERT_EQ_STR(got->error, "something broke");
     TEST_ASSERT(got->completed_at != NULL);
     acta_db_execution_free(got);
@@ -677,7 +677,7 @@ static void test_exec_list_by_status_pending(void) {
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, r2), 0);
 
     int count = 0;
-    execution_t *items = acta_db_execution_list_by_status(db, "pending", &count);
+    execution_t *items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &count);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_execution_list_free(items, count);
@@ -707,7 +707,7 @@ static void test_exec_list_by_status_completed(void) {
     TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "P1", 0) > 0);
 
     int count = 0;
-    execution_t *items = acta_db_execution_list_by_status(db, "completed", &count);
+    execution_t *items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_COMPLETED, &count);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_execution_list_free(items, count);
@@ -729,7 +729,7 @@ static void test_exec_list_by_status_no_match(void) {
     TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "X", 0) > 0);
 
     int count = 0;
-    execution_t *items = acta_db_execution_list_by_status(db, "failed", &count);
+    execution_t *items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_FAILED, &count);
     (void)items;
     TEST_ASSERT_EQ_INT(count, 0);
     if (items) acta_db_execution_list_free(items, count);
@@ -870,7 +870,7 @@ static void test_exec_list_free_valid(void) {
     }
 
     int count = 0;
-    execution_t *items = acta_db_execution_list_by_status(db, "pending", &count);
+    execution_t *items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &count);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_execution_list_free(items, count);
