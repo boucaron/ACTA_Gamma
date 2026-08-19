@@ -1,4 +1,5 @@
 #include "test_common.h"
+#include "db.h"
 
 /* ---------- 2.1: context_create — happy path ---------- */
 static void test_context_create_happy(void) {
@@ -15,7 +16,7 @@ static void test_context_create_happy(void) {
     };
     int id = 0;
     int rc = acta_db_context_create(db, &c, &id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     TEST_ASSERT(id > 0);
     test_db_teardown(db, path);
 }
@@ -34,7 +35,7 @@ static void test_context_create_null_type(void) {
     };
     int id = 0;
     int rc = acta_db_context_create(db, &c, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
@@ -52,7 +53,7 @@ static void test_context_create_null_content(void) {
     };
     int id = 0;
     int rc = acta_db_context_create(db, &c, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
@@ -70,11 +71,11 @@ static void test_context_create_null_hash(void) {
     };
     int id = 0;
     int rc = acta_db_context_create(db, &c, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
-/* ---------- 2.5: context_create — NULL metadata ---------- */
+/* ---------- 2.5: context_create — NULL metadata (optional) ---------- */
 static void test_context_create_null_metadata(void) {
     const char *path = "test/acta_test_ctx_nullmeta.db";
     remove(path);
@@ -89,7 +90,7 @@ static void test_context_create_null_metadata(void) {
     };
     int id = 0;
     int rc = acta_db_context_create(db, &c, &id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     TEST_ASSERT(id > 0);
     test_db_teardown(db, path);
 }
@@ -103,7 +104,7 @@ static void test_context_create_null_struct(void) {
 
     int id = 0;
     int rc = acta_db_context_create(db, NULL, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
     test_db_teardown(db, path);
 }
 
@@ -254,7 +255,7 @@ static void test_context_immutable(void) {
     char sql[256];
     snprintf(sql, sizeof(sql), "UPDATE contexts SET type='changed' WHERE id=%d;", id);
     int rc = acta_db_exec(db, sql);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
     test_db_teardown(db, path);
 }
 
@@ -277,7 +278,6 @@ static void test_context_list_all_happy(void) {
     context_t *items = acta_db_context_list_all(db, &count);
     TEST_ASSERT_EQ_INT(count, 3);
     TEST_ASSERT_NOT_NULL(items);
-    /* Verify ordered by id */
     TEST_ASSERT_EQ_INT(items[0].id, id1);
     TEST_ASSERT_EQ_INT(items[1].id, id2);
     TEST_ASSERT_EQ_INT(items[2].id, id3);
@@ -374,7 +374,6 @@ static void test_context_list_by_type_null_db(void) {
     context_t *items = acta_db_context_list_by_type(NULL, "doc", &count);
     TEST_ASSERT_NULL(items);
 }
-
 
 void run_context_tests(void) {
     fprintf(stderr, "\n=== context.h tests ===\n");

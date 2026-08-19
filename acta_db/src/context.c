@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "context.h"
+#include "db.h"
 
 static context_t *row_to_context(sqlite3_stmt *stmt) {
     context_t *c = calloc(1, sizeof(context_t));
@@ -14,11 +15,15 @@ static context_t *row_to_context(sqlite3_stmt *stmt) {
 }
 
 int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
-    if (!db || !c || !c->type || !c->content || !c->content_hash || !out_id) return -1;
+    if (!db || !c || !c->type || !c->content || !c->content_hash || !out_id)
+        return ACTA_DB_ERR_INVALID;
+
     const char *sql =
         "INSERT INTO contexts (type, content, content_hash, metadata) VALUES (?, ?, ?, ?);";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+
     sqlite3_bind_text(stmt, 1, c->type, -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 2, c->content, -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 3, c->content_hash, -1, SQLITE_TRANSIENT);
@@ -27,19 +32,26 @@ int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+
     *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return 0;
+    return ACTA_DB_OK;
 }
 
 context_t *acta_db_context_get(db_t *db, int id) {
     if (!db) return NULL;
-    const char *sql = "SELECT id, type, content, content_hash, metadata, created_at FROM contexts WHERE id = ?;";
+
+    const char *sql =
+        "SELECT id, type, content, content_hash, metadata, created_at "
+        "FROM contexts WHERE id = ?;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return NULL;
+
     sqlite3_bind_int(stmt, 1, id);
     context_t *result = NULL;
-    if (sqlite3_step(stmt) == SQLITE_ROW) result = row_to_context(stmt);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        result = row_to_context(stmt);
     sqlite3_finalize(stmt);
     return result;
 }
@@ -67,7 +79,7 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
         context_t *item = row_to_context(stmt);
         if (!item) {
             sqlite3_finalize(stmt);
-            acta_db_context_list_free(items, count);  /* clean up partial */
+            acta_db_context_list_free(items, count);
             *out_count = 0;
             return NULL;
         }
@@ -75,7 +87,7 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
         if (!tmp) {
             acta_db_context_free(item);
             sqlite3_finalize(stmt);
-            acta_db_context_list_free(items, count);  /* clean up partial */
+            acta_db_context_list_free(items, count);
             *out_count = 0;
             return NULL;
         }
@@ -171,13 +183,14 @@ context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_cou
     return items;
 }
 
-
-
-
 void acta_db_context_free(context_t *c) {
     if (!c) return;
-    free(c->type); free(c->content); free(c->content_hash);
-    free(c->metadata); free(c->created_at); free(c);
+    free(c->type);
+    free(c->content);
+    free(c->content_hash);
+    free(c->metadata);
+    free(c->created_at);
+    free(c);
 }
 
 void acta_db_context_list_free(context_t *items, int count) {
@@ -191,4 +204,3 @@ void acta_db_context_list_free(context_t *items, int count) {
     }
     free(items);
 }
-
