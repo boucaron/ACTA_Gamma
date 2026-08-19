@@ -52,7 +52,8 @@ static int exec_setup(db_t *db, int *out_ctx, int *out_sr, int *out_mr) {
     sk.output_schema   = (char *)"json";
     int skill_id = 0;
     if (acta_db_skill_create(db, &sk, &skill_id) != ACTA_DB_OK) return -1;
-    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    int err = 0;
+    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, &err);
     if (!srev) return -1;
     int sr_id = srev->id;
     acta_db_skill_revision_free(srev);
@@ -64,7 +65,7 @@ static int exec_setup(db_t *db, int *out_ctx, int *out_sr, int *out_mr) {
     m.model_identifier = (char *)"gpt-4";
     int model_id = 0;
     if (acta_db_model_create(db, &m, &model_id) != ACTA_DB_OK) return -1;
-    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1);
+    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, &err);
     if (!mrev) return -1;
     int mr_id = mrev->id;
     acta_db_model_revision_free(mrev);
@@ -74,6 +75,7 @@ static int exec_setup(db_t *db, int *out_ctx, int *out_sr, int *out_mr) {
     *out_mr  = mr_id;
     return ACTA_DB_OK;
 }
+
 
 /* Convenience: create an execution with default fields. Returns row id or -1. */
 static int exec_create(db_t *db, int ctx_id, int sr_id, int mr_id,

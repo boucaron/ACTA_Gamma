@@ -32,7 +32,7 @@ static void test_integration_model_lifecycle(void) {
 
     /* Verify initial revision exists */
     int rev_count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count);
+    model_revision_t *revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count, NULL);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT(revs != NULL);
     TEST_ASSERT_EQ_INT(revs[0].revision, 1);
@@ -55,7 +55,7 @@ static void test_integration_model_lifecycle(void) {
 
     /* Verify revision 2 was created */
     rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count);
+    revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count, NULL);
     TEST_ASSERT_EQ_INT(rev_count, 2);
     acta_db_model_revision_list_free(revs, rev_count);
 
@@ -65,7 +65,7 @@ static void test_integration_model_lifecycle(void) {
 
     /* Verify a deleted revision was created (revision 3) */
     rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count);
+    revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count, NULL);
     TEST_ASSERT_EQ_INT(rev_count, 3);
     /* The last revision should have deleted_at set */
     TEST_ASSERT(revs[2].deleted_at != NULL);
@@ -84,6 +84,8 @@ static void test_integration_skill_lifecycle(void) {
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
 
     /* Create a skill folder */
     int folder_id = 0;
@@ -107,7 +109,8 @@ static void test_integration_skill_lifecycle(void) {
 
     /* Verify initial revision */
     int rev_count = 0;
-    skill_revision_t *revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count);
+    skill_revision_t *revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT(revs != NULL);
     TEST_ASSERT_EQ_INT(revs[0].revision, 1);
@@ -126,8 +129,10 @@ static void test_integration_skill_lifecycle(void) {
     rc = acta_db_skill_update(db, &s2);
     TEST_ASSERT_EQ_INT(rc, 0);
 
+    err = 0;
     rev_count = 0;
-    revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count);
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 2);
     acta_db_skill_revision_list_free(revs, rev_count);
 
@@ -135,9 +140,12 @@ static void test_integration_skill_lifecycle(void) {
     rc = acta_db_skill_soft_delete(db, skill_id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
+    err = 0;
     rev_count = 0;
-    revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count);
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 3);
+    TEST_ASSERT(revs != NULL);
     TEST_ASSERT(revs[2].deleted_at != NULL);
     acta_db_skill_revision_list_free(revs, rev_count);
 
@@ -147,12 +155,15 @@ static void test_integration_skill_lifecycle(void) {
     test_db_teardown(db, path);
 }
 
+
 /* ---------- 11.3: Execution references revisions ---------- */
 static void test_integration_execution_references_revisions(void) {
     const char *path = "test/acta_test_int_exec_ref.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
 
     /* Create a context */
     context_t ctx;
@@ -181,7 +192,9 @@ static void test_integration_execution_references_revisions(void) {
     rc = acta_db_model_create(db, &m, &model_id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1);
+    err = 0;
+    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(mrev);
 
     /* Create a skill (auto-creates revision 1) */
@@ -197,7 +210,9 @@ static void test_integration_execution_references_revisions(void) {
     rc = acta_db_skill_create(db, &s, &skill_id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    err = 0;
+    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(srev);
 
     /* Create execution referencing revision 1 of both */
@@ -226,12 +241,15 @@ static void test_integration_execution_references_revisions(void) {
     test_db_teardown(db, path);
 }
 
+
 /* ---------- 11.4: Execution with updated revisions ---------- */
 static void test_integration_execution_updated_revisions(void) {
     const char *path = "test/acta_test_int_exec_upd_rev.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
 
     /* Context */
     context_t ctx;
@@ -242,7 +260,8 @@ static void test_integration_execution_updated_revisions(void) {
     ctx.metadata = NULL;
 
     int context_id = 0;
-    acta_db_context_create(db, &ctx, &context_id);
+    int rc = acta_db_context_create(db, &ctx, &context_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Model — create, then update to get revision 2 */
     model_t m;
@@ -256,7 +275,8 @@ static void test_integration_execution_updated_revisions(void) {
     m.configuration = NULL;
 
     int model_id = 0;
-    acta_db_model_create(db, &m, &model_id);
+    rc = acta_db_model_create(db, &m, &model_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     model_t m_upd;
     memset(&m_upd, 0, sizeof(m_upd));
@@ -268,9 +288,12 @@ static void test_integration_execution_updated_revisions(void) {
     m_upd.base_url = "https://api.openai.com";
     m_upd.model_identifier = "gpt-4";
     m_upd.configuration = NULL;
-    acta_db_model_update(db, &m_upd);
+    rc = acta_db_model_update(db, &m_upd);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
-    model_revision_t *mrev2 = acta_db_model_revision_get_by_model_and_rev(db, model_id, 2);
+    err = 0;
+    model_revision_t *mrev2 = acta_db_model_revision_get_by_model_and_rev(db, model_id, 2, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(mrev2);
 
     /* Skill — create, then update to get revision 2 */
@@ -283,7 +306,8 @@ static void test_integration_execution_updated_revisions(void) {
     s.output_schema = NULL;
 
     int skill_id = 0;
-    acta_db_skill_create(db, &s, &skill_id);
+    rc = acta_db_skill_create(db, &s, &skill_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     skill_t s_upd;
     memset(&s_upd, 0, sizeof(s_upd));
@@ -293,9 +317,12 @@ static void test_integration_execution_updated_revisions(void) {
     s_upd.description = NULL;
     s_upd.prompt_template = "v2";
     s_upd.output_schema = NULL;
-    acta_db_skill_update(db, &s_upd);
+    rc = acta_db_skill_update(db, &s_upd);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
-    skill_revision_t *srev2 = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 2);
+    err = 0;
+    skill_revision_t *srev2 = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 2, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(srev2);
 
     /* Create execution referencing revision 2 of both */
@@ -308,13 +335,15 @@ static void test_integration_execution_updated_revisions(void) {
     e.status = "pending";
 
     int exec_id = 0;
-    int rc = acta_db_execution_create(db, &e, &exec_id);
+    rc = acta_db_execution_create(db, &e, &exec_id);
     TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT(exec_id > 0);
 
     acta_db_model_revision_free(mrev2);
     acta_db_skill_revision_free(srev2);
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 11.5: Context reuse ---------- */
 static void test_integration_context_reuse(void) {
@@ -322,6 +351,8 @@ static void test_integration_context_reuse(void) {
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
 
     context_t ctx;
     memset(&ctx, 0, sizeof(ctx));
@@ -346,8 +377,13 @@ static void test_integration_context_reuse(void) {
     m.configuration = NULL;
 
     int model_id = 0;
-    acta_db_model_create(db, &m, &model_id);
-    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1);
+    rc = acta_db_model_create(db, &m, &model_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    err = 0;
+    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(mrev);
 
     /* Create a skill */
     skill_t s;
@@ -359,8 +395,13 @@ static void test_integration_context_reuse(void) {
     s.output_schema = NULL;
 
     int skill_id = 0;
-    acta_db_skill_create(db, &s, &skill_id);
-    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    rc = acta_db_skill_create(db, &s, &skill_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    err = 0;
+    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(srev);
 
     /* Create 3 executions all referencing the same context */
     int exec_ids[3];
@@ -396,12 +437,15 @@ static void test_integration_context_reuse(void) {
     test_db_teardown(db, path);
 }
 
+
 /* ---------- 11.6: Nested executions ---------- */
 static void test_integration_nested_executions(void) {
     const char *path = "test/acta_test_int_nested.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
 
     context_t ctx;
     memset(&ctx, 0, sizeof(ctx));
@@ -411,7 +455,8 @@ static void test_integration_nested_executions(void) {
     ctx.metadata = NULL;
 
     int context_id = 0;
-    acta_db_context_create(db, &ctx, &context_id);
+    int rc = acta_db_context_create(db, &ctx, &context_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     model_t m;
     memset(&m, 0, sizeof(m));
@@ -424,8 +469,13 @@ static void test_integration_nested_executions(void) {
     m.configuration = NULL;
 
     int model_id = 0;
-    acta_db_model_create(db, &m, &model_id);
-    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1);
+    rc = acta_db_model_create(db, &m, &model_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    err = 0;
+    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(mrev);
 
     skill_t s;
     memset(&s, 0, sizeof(s));
@@ -436,8 +486,13 @@ static void test_integration_nested_executions(void) {
     s.output_schema = NULL;
 
     int skill_id = 0;
-    acta_db_skill_create(db, &s, &skill_id);
-    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    rc = acta_db_skill_create(db, &s, &skill_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    err = 0;
+    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(srev);
 
     /* Create root execution */
     execution_t root;
@@ -449,7 +504,8 @@ static void test_integration_nested_executions(void) {
     root.status = "pending";
 
     int root_id = 0;
-    acta_db_execution_create(db, &root, &root_id);
+    rc = acta_db_execution_create(db, &root, &root_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Create child execution */
     execution_t child;
@@ -462,7 +518,8 @@ static void test_integration_nested_executions(void) {
     child.parent_execution_id = root_id;
 
     int child_id = 0;
-    acta_db_execution_create(db, &child, &child_id);
+    rc = acta_db_execution_create(db, &child, &child_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Create grandchild execution */
     execution_t grandchild;
@@ -475,7 +532,8 @@ static void test_integration_nested_executions(void) {
     grandchild.parent_execution_id = child_id;
 
     int grandchild_id = 0;
-    acta_db_execution_create(db, &grandchild, &grandchild_id);
+    rc = acta_db_execution_create(db, &grandchild, &grandchild_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Verify tree structure */
     int child_count = 0;
@@ -502,6 +560,7 @@ static void test_integration_nested_executions(void) {
     acta_db_skill_revision_free(srev);
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 11.7: WAL mode ---------- */
 static void test_integration_wal_mode(void) {
@@ -568,8 +627,8 @@ static void test_integration_fk_enforcement(void) {
     int skill_id = 0;
     acta_db_skill_create(db, &s, &skill_id);
 
-    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1);
-    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1);
+    model_revision_t *mrev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, NULL);
+    skill_revision_t *srev = acta_db_skill_revision_get_by_skill_and_rev(db, skill_id, 1, NULL);
 
     /* Execution with invalid context_id (999999) */
     execution_t e;
@@ -618,39 +677,42 @@ static void test_integration_fk_enforcement(void) {
 static void test_integration_concurrency_two_connections(void) {
     const char *path = "test/acta_test_int_conc.db";
     remove(path);
+
     db_t *db1 = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db1);
 
-    db_t *db2 = acta_db_open(path);
+    int errorno = 0;
+    db_t *db2 = acta_db_open(path, &errorno);
     TEST_ASSERT_NOT_NULL(db2);
+    TEST_ASSERT_EQ_INT(errorno, ACTA_DB_OK);
 
     /* Both connections should be able to write independently */
     int id1 = 0, id2 = 0;
 
     context_t ctx1;
     memset(&ctx1, 0, sizeof(ctx1));
-    ctx1.type = "conn1";
-    ctx1.content = "from_conn1";
+    ctx1.type         = "conn1";
+    ctx1.content      = "from_conn1";
     ctx1.content_hash = "conc_hash_1";
-    ctx1.metadata = NULL;
+    ctx1.metadata     = NULL;
 
     context_t ctx2;
     memset(&ctx2, 0, sizeof(ctx2));
-    ctx2.type = "conn2";
-    ctx2.content = "from_conn2";
+    ctx2.type         = "conn2";
+    ctx2.content      = "from_conn2";
     ctx2.content_hash = "conc_hash_2";
-    ctx2.metadata = NULL;
+    ctx2.metadata     = NULL;
 
     int rc1 = acta_db_context_create(db1, &ctx1, &id1);
     int rc2 = acta_db_context_create(db2, &ctx2, &id2);
 
-    TEST_ASSERT_EQ_INT(rc1, 0);
-    TEST_ASSERT_EQ_INT(rc2, 0);
+    TEST_ASSERT_EQ_INT(rc1, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rc2, ACTA_DB_OK);
 
     /* Verify both rows are visible from both connections */
-    context_t *got1 = acta_db_context_get(db1, id1);
+    context_t *got1          = acta_db_context_get(db1, id1);
     context_t *got1_from_db2 = acta_db_context_get(db2, id1);
-    context_t *got2 = acta_db_context_get(db2, id2);
+    context_t *got2          = acta_db_context_get(db2, id2);
     context_t *got2_from_db1 = acta_db_context_get(db1, id2);
 
     TEST_ASSERT_NOT_NULL(got1);
@@ -669,6 +731,7 @@ static void test_integration_concurrency_two_connections(void) {
     acta_db_close(db2);
     test_db_teardown(db1, path);
 }
+
 
 /* ---------- 11.10: Large content ---------- */
 static void test_integration_large_content(void) {
@@ -769,7 +832,7 @@ static void test_integration_memory_leak_sweep(void) {
     acta_db_model_free(mg);
 
     /* Create and free a model revision */
-    model_revision_t *mr = acta_db_model_revision_get_by_model_and_rev(db, mid, 1);
+    model_revision_t *mr = acta_db_model_revision_get_by_model_and_rev(db, mid, 1, NULL);
     acta_db_model_revision_free(mr);
 
     /* Create and free a skill */
@@ -786,7 +849,7 @@ static void test_integration_memory_leak_sweep(void) {
     acta_db_skill_free(sg);
 
     /* Create and free a skill revision */
-    skill_revision_t *sr = acta_db_skill_revision_get_by_skill_and_rev(db, sid, 1);
+    skill_revision_t *sr = acta_db_skill_revision_get_by_skill_and_rev(db, sid, 1, NULL);
     acta_db_skill_revision_free(sr);
 
     /* Create and free a context */
@@ -805,10 +868,9 @@ static void test_integration_memory_leak_sweep(void) {
     execution_t e;
     memset(&e, 0, sizeof(e));
     e.context_id = cid;
-    e.skill_revision_id = sr ? sr->id : sid; /* sr was freed, use sid as placeholder won't work */
-    /* We need valid revision ids — re-fetch */
-    model_revision_t *mr2 = acta_db_model_revision_get_by_model_and_rev(db, mid, 1);
-    skill_revision_t *sr2 = acta_db_skill_revision_get_by_skill_and_rev(db, sid, 1);
+    /* Need valid revision ids — re-fetch since sr/mr were freed above */
+    model_revision_t *mr2 = acta_db_model_revision_get_by_model_and_rev(db, mid, 1, NULL);
+    skill_revision_t *sr2 = acta_db_skill_revision_get_by_skill_and_rev(db, sid, 1, NULL);
     e.skill_revision_id = sr2->id;
     e.model_revision_id = mr2->id;
     e.prompt = "p";
@@ -828,18 +890,21 @@ static void test_integration_memory_leak_sweep(void) {
     log.metadata = NULL;
     int log_id = 0;
     acta_db_execution_log_create(db, &log, &log_id);
+
     int log_count = 0;
-    execution_log_t *logs = acta_db_execution_log_list_by_execution(db, eid, &log_count);
+    execution_log_t *logs = NULL;
+    int log_rc = acta_db_execution_log_list_by_execution(db, eid, &logs, &log_count, NULL);
+    TEST_ASSERT_EQ_INT(log_rc, 0);
     acta_db_execution_log_list_free(logs, log_count);
 
     /* List and free model revisions */
     int mrev_count = 0;
-    model_revision_t *mrevs = acta_db_model_revision_list_by_model(db, mid, &mrev_count);
+    model_revision_t *mrevs = acta_db_model_revision_list_by_model(db, mid, &mrev_count, NULL);
     acta_db_model_revision_list_free(mrevs, mrev_count);
 
     /* List and free skill revisions */
     int srev_count = 0;
-    skill_revision_t *srevs = acta_db_skill_revision_list_by_skill(db, sid, &srev_count);
+    skill_revision_t *srevs = acta_db_skill_revision_list_by_skill(db, sid, &srev_count, NULL);
     acta_db_skill_revision_list_free(srevs, srev_count);
 
     /* List and free model folders */
@@ -916,13 +981,13 @@ static void test_integration_null_safety(void) {
     acta_db_model_folder_list_free(NULL, 0);
 
     /* model revision */
-    model_revision_t *mr = acta_db_model_revision_get(NULL, 1);
+    model_revision_t *mr = acta_db_model_revision_get(NULL, 1, NULL);
     TEST_ASSERT_NULL(mr);
 
-    mr = acta_db_model_revision_get_by_model_and_rev(NULL, 1, 1);
+    mr = acta_db_model_revision_get_by_model_and_rev(NULL, 1, 1, NULL);
     TEST_ASSERT_NULL(mr);
 
-    model_revision_t *mrl = acta_db_model_revision_list_by_model(NULL, 1, (int *)NULL);
+    model_revision_t *mrl = acta_db_model_revision_list_by_model(NULL, 1, (int *)NULL, NULL);
     TEST_ASSERT_NULL(mrl);
 
     acta_db_model_revision_free(NULL);
@@ -952,13 +1017,13 @@ static void test_integration_null_safety(void) {
     acta_db_skill_folder_list_free(NULL, 0);
 
     /* skill revision */
-    skill_revision_t *sr = acta_db_skill_revision_get(NULL, 1);
+    skill_revision_t *sr = acta_db_skill_revision_get(NULL, 1, NULL);
     TEST_ASSERT_NULL(sr);
 
-    sr = acta_db_skill_revision_get_by_skill_and_rev(NULL, 1, 1);
+    sr = acta_db_skill_revision_get_by_skill_and_rev(NULL, 1, 1, NULL);
     TEST_ASSERT_NULL(sr);
 
-    skill_revision_t *srl = acta_db_skill_revision_list_by_skill(NULL, 1, (int *)NULL);
+    skill_revision_t *srl = acta_db_skill_revision_list_by_skill(NULL, 1, (int *)NULL, NULL);
     TEST_ASSERT_NULL(srl);
 
     acta_db_skill_revision_free(NULL);
@@ -978,8 +1043,10 @@ static void test_integration_null_safety(void) {
     acta_db_execution_list_free(NULL, 0);
 
     /* execution log */
-    execution_log_t *log = acta_db_execution_log_list_by_execution(NULL, 1, (int *)NULL);
-    TEST_ASSERT_NULL(log);
+    execution_log_t *log_items = NULL;
+    int log_rc = acta_db_execution_log_list_by_execution(NULL, 1, &log_items, (int *)NULL, NULL);
+    TEST_ASSERT(log_rc < 0);
+    TEST_ASSERT_NULL(log_items);
 
     acta_db_execution_log_free(NULL);
     acta_db_execution_log_list_free(NULL, 0);

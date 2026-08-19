@@ -53,13 +53,12 @@ skill_revision_t *acta_db_skill_revision_get(db_t *db, int id, int *out_err) {
 skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(db_t *db, int skill_id, int revision, int *out_err) {
     if (out_err) *out_err = ACTA_DB_OK;
     if (!db) { if (out_err) *out_err = ACTA_DB_ERR_INVALID; return NULL; }
-    if (!out_err) return NULL;
 
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE skill_id = ? AND revision = ?;", SKILL_REV_SELECT);
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        *out_err = ACTA_DB_ERR_SQL;
+        if (out_err) *out_err = ACTA_DB_ERR_SQL;
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, skill_id);
@@ -68,15 +67,16 @@ skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(db_t *db, int skil
     skill_revision_t *result = NULL;
     if (rc == SQLITE_ROW) {
         result = row_to_skill_revision(stmt);
-        if (!result) *out_err = ACTA_DB_ERR_ALLOC;
+        if (!result && out_err) *out_err = ACTA_DB_ERR_ALLOC;
     } else if (rc == SQLITE_DONE) {
-        *out_err = ACTA_DB_ERR_NOT_FOUND;
+        if (out_err) *out_err = ACTA_DB_ERR_NOT_FOUND;
     } else {
-        *out_err = ACTA_DB_ERR_SQL;
+        if (out_err) *out_err = ACTA_DB_ERR_SQL;
     }
     sqlite3_finalize(stmt);
     return result;
 }
+
 
 skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id, int *out_err) {
     if (out_err) *out_err = ACTA_DB_OK;

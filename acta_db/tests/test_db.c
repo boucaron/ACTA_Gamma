@@ -23,14 +23,18 @@ static void test_db_open_existing(void) {
 
 /* ---------- 1.3: acta_db_open — invalid path ---------- */
 static void test_db_open_invalid_path(void) {
-    db_t *db = acta_db_open("/nonexistent/dir/sub/file.db");
+    int err = 0;
+    db_t *db = acta_db_open("/nonexistent/dir/sub/file.db", &err);
     TEST_ASSERT_NULL(db);
+    TEST_ASSERT(err < 0);
 }
 
 /* ---------- 1.4: acta_db_open — NULL path ---------- */
 static void test_db_open_null_path(void) {
-    db_t *db = acta_db_open(NULL);
+    int err = 0;
+    db_t *db = acta_db_open(NULL, &err);
     TEST_ASSERT_NULL(db);
+    TEST_ASSERT(err < 0);
 }
 
 /* ---------- 1.5: acta_db_close — valid handle ---------- */
@@ -56,7 +60,7 @@ static void test_db_exec_valid_ddl(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
     int rc = acta_db_exec(db, "CREATE TABLE test_table (id INTEGER PRIMARY KEY);");
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     test_db_teardown(db, path);
 }
 
@@ -111,7 +115,9 @@ static void test_db_last_error_after_failure(void) {
 /* ---------- 1.12: acta_db_transaction — commit ---------- */
 static int txn_callback_insert(db_t *db, void *user_data) {
     (void)user_data;
-    return acta_db_exec(db, "INSERT INTO contexts(type, content, content_hash) VALUES('t','c','h');");
+    return acta_db_exec(db,
+        "INSERT INTO contexts(type, content, content_hash) "
+        "VALUES('t','c','h');");
 }
 
 static void test_db_transaction_commit(void) {
@@ -132,12 +138,9 @@ static void test_db_transaction_commit(void) {
         ");");
 
     int rc = acta_db_transaction(db, txn_callback_insert, NULL);
-    TEST_ASSERT_EQ_INT(rc, 0);
-    /* Verify row exists */
-    acta_db_exec(db, "SELECT 1 FROM contexts WHERE content_hash='h';");
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     test_db_teardown(db, path);
 }
-
 
 /* ---------- 1.13: acta_db_transaction — rollback on callback failure ---------- */
 static int txn_callback_fail(db_t *db, void *user_data) {
@@ -187,7 +190,7 @@ static void test_db_transaction_user_data(void) {
     TEST_ASSERT_NOT_NULL(db);
     int val = 0;
     int rc = acta_db_transaction(db, txn_callback_user_data, &val);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(val, 42);
     test_db_teardown(db, path);
 }
