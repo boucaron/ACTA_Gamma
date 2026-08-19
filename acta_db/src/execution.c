@@ -169,6 +169,31 @@ execution_t *acta_db_execution_list_children(db_t *db, int parent_id, int *out_c
     return items;
 }
 
+execution_t *acta_db_execution_list_by_context(db_t *db, int context_id, int *out_count) {
+    if (!db || !out_count) return NULL;
+    char sql[256];
+    snprintf(sql, sizeof(sql), "%s WHERE context_id = ? ORDER BY created_at DESC;", EXEC_SELECT);
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    sqlite3_bind_int(stmt, 1, context_id);
+
+    int count = 0;
+    execution_t *items = NULL;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        execution_t *item = row_to_execution(stmt);
+        if (!item) { sqlite3_finalize(stmt); return NULL; }
+        execution_t *tmp = realloc(items, sizeof(execution_t) * (count + 1));
+        if (!tmp) { acta_db_execution_free(item); sqlite3_finalize(stmt); return NULL; }
+        items = tmp;
+        items[count++] = *item;
+        free(item);
+    }
+    sqlite3_finalize(stmt);
+    *out_count = count;
+    return items;
+}
+
+
 void acta_db_execution_free(execution_t *e) {
     if (!e) return;
     free(e->prompt); free(e->raw_response); free(e->result);

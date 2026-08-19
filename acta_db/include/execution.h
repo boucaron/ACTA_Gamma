@@ -31,6 +31,7 @@ int         acta_db_execution_fail(db_t *db, int id, const char *error);
 int         acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
 execution_t *acta_db_execution_list_by_status(db_t *db, const char *status, int *out_count);
 execution_t *acta_db_execution_list_children(db_t *db, int parent_id, int *out_count);
+execution_t *acta_db_execution_list_by_context(db_t *db, int context_id, int *out_count);
 void        acta_db_execution_free(execution_t *e);
 void        acta_db_execution_list_free(execution_t *items, int count);
 

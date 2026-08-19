@@ -899,6 +899,101 @@ static void test_exec_raw_insert(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 9.37: list_by_context — with matches ---------- */
+static void test_exec_list_by_context_with(void) {
+    const char *path = "test/acta_test_exec_ctx_with.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), 0);
+
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "A1", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "A2", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "A3", 0) > 0);
+
+    int count = 0;
+    execution_t *items = acta_db_execution_list_by_context(db, ctx_id, &count);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 3);
+    for (int i = 0; i < count; i++) {
+        TEST_ASSERT_EQ_INT(items[i].context_id, ctx_id);
+    }
+    acta_db_execution_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.38: list_by_context — no matches ---------- */
+static void test_exec_list_by_context_no_match(void) {
+    const char *path = "test/acta_test_exec_ctx_nomatch.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), 0);
+
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "X", 0) > 0);
+
+    int count = 0;
+    execution_t *items = acta_db_execution_list_by_context(db, 999999, &count);
+    (void)items;
+    TEST_ASSERT_EQ_INT(count, 0);
+    if (items) acta_db_execution_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.39: list_by_context — mixed contexts ---------- */
+static void test_exec_list_by_context_mixed(void) {
+    const char *path = "test/acta_test_exec_ctx_mixed.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), 0);
+
+    /* Second context */
+    context_t ctx2 = {0};
+    ctx2.type         = (char *)"test2";
+    ctx2.content      = (char *)"world";
+    ctx2.content_hash = (char *)"cafebabe";
+    int ctx2_id = 0;
+    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &ctx2, &ctx2_id), 0);
+
+    /* 3 in ctx1, 2 in ctx2 */
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "C1a", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "C1b", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "C1c", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx2_id, sr_id, mr_id, "C2a", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx2_id, sr_id, mr_id, "C2b", 0) > 0);
+
+    int count = 0;
+    execution_t *items = acta_db_execution_list_by_context(db, ctx_id, &count);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 3);
+    for (int i = 0; i < count; i++) {
+        TEST_ASSERT_EQ_INT(items[i].context_id, ctx_id);
+    }
+    acta_db_execution_list_free(items, count);
+
+    /* Verify ctx2 */
+    count = 0;
+    items = acta_db_execution_list_by_context(db, ctx2_id, &count);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    for (int i = 0; i < count; i++) {
+        TEST_ASSERT_EQ_INT(items[i].context_id, ctx2_id);
+    }
+    acta_db_execution_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+
 /* ---------- runner ---------- */
 void run_execution_tests(void) {
     fprintf(stderr, "\n=== execution tests ===\n");
@@ -938,4 +1033,7 @@ void run_execution_tests(void) {
     test_exec_free_null();
     test_exec_list_free_valid();
     test_exec_raw_insert();
+    test_exec_list_by_context_with();
+    test_exec_list_by_context_no_match();
+    test_exec_list_by_context_mixed();
 }
