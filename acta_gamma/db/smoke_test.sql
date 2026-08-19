@@ -1,21 +1,20 @@
 -- Model: create
 INSERT INTO models (name, backend, model_identifier) VALUES ('test-model', 'llamacpp', 'llama-3-8b');
-SELECT 'model current_revision:', current_revision FROM models WHERE name='test-model';
+SELECT 'model current revision:', MAX(revision) FROM model_revisions WHERE model_id=1 AND deleted_at IS NULL;
 SELECT 'revision count:', COUNT(*) FROM model_revisions WHERE model_id=1;
 
 -- Model: update
 UPDATE models SET model_identifier='llama-3-8b-v2' WHERE name='test-model';
-SELECT 'after update current_revision:', current_revision FROM models WHERE name='test-model';
+SELECT 'after update current revision:', MAX(revision) FROM model_revisions WHERE model_id=1 AND deleted_at IS NULL;
 SELECT 'revision count:', COUNT(*) FROM model_revisions WHERE model_id=1;
 
 -- Model: soft-delete
 UPDATE models SET deleted_at=datetime('now') WHERE name='test-model';
-SELECT 'after delete current_revision:', current_revision FROM models WHERE name='test-model';
 SELECT 'deleted revision:', revision FROM model_revisions WHERE model_id=1 AND deleted_at IS NOT NULL;
 
 -- Skill: create
 INSERT INTO skills (name, prompt_template) VALUES ('summarize', 'Summarize: {{context}}');
-SELECT 'skill current_revision:', current_revision FROM skills WHERE name='summarize';
+SELECT 'skill current revision:', MAX(revision) FROM skill_revisions WHERE skill_id=1 AND deleted_at IS NULL;
 
 -- Context: create
 INSERT INTO contexts (type, content, content_hash) VALUES ('text', 'hello world', 'abc123');

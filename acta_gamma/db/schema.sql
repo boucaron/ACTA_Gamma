@@ -20,8 +20,7 @@ CREATE TABLE models (
     backend TEXT NOT NULL,
     base_url TEXT,
     model_identifier TEXT NOT NULL,
-    configuration TEXT,
-    current_revision INTEGER NOT NULL DEFAULT 0,
+    configuration TEXT,    
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,
@@ -89,12 +88,6 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.backend,NEW.base_url,NEW.model_identifier,NEW.configuration,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
-DROP TRIGGER IF EXISTS models_set_current;
-CREATE TRIGGER models_set_current AFTER INSERT ON model_revisions 
-WHEN NEW.deleted_at IS NULL
-BEGIN
-  UPDATE models SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.model_id;
-END;
 
 CREATE TABLE skill_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,8 +106,7 @@ CREATE TABLE skills (
     name TEXT NOT NULL,
     description TEXT,
     prompt_template TEXT NOT NULL,
-    output_schema TEXT,
-    current_revision INTEGER NOT NULL DEFAULT 0,
+    output_schema TEXT,    
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT,
     deleted_at TEXT,
@@ -176,12 +168,6 @@ BEGIN
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
 
-DROP TRIGGER IF EXISTS skills_set_current;
-CREATE TRIGGER skills_set_current AFTER INSERT ON skill_revisions 
-WHEN NEW.deleted_at IS NULL
-BEGIN
-  UPDATE skills SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.skill_id;
-END;
 
 -- immutable
 -- content_hash not used for dedup only a small check
