@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "model.h"
+#include "db.h"
 
 /* ---------- helpers ---------- */
 
@@ -35,10 +36,10 @@ static model_folder_t *row_to_model_folder(sqlite3_stmt *stmt) {
 /* ---------- model_folder ---------- */
 
 int acta_db_model_folder_create(db_t *db, const char *name, int parent_id, int *out_id) {
-    if (!db || !name || !out_id) return -1;
+    if (!db || !name || !out_id) return ACTA_DB_ERR_INVALID;
     sqlite3_stmt *stmt;
     const char *sql = "INSERT INTO model_folders (name, parent_id) VALUES (?, ?);";
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
 
     sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT);
     if (parent_id == 0) {
@@ -49,9 +50,9 @@ int acta_db_model_folder_create(db_t *db, const char *name, int parent_id, int *
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return 0;
+    return ACTA_DB_OK;
 }
 
 model_folder_t *acta_db_model_folder_get(db_t *db, int id) {
@@ -70,28 +71,28 @@ model_folder_t *acta_db_model_folder_get(db_t *db, int id) {
 }
 
 int acta_db_model_folder_rename(db_t *db, int id, const char *new_name) {
-    if (!db || !new_name) return -1;
+    if (!db || !new_name) return ACTA_DB_ERR_INVALID;
     const char *sql = "UPDATE model_folders SET name = ?, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
     sqlite3_bind_text(stmt, 1, new_name, -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 2, id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 int acta_db_model_folder_soft_delete(db_t *db, int id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
     const char *sql = "UPDATE model_folders SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 model_folder_t *acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count) {
@@ -166,13 +167,13 @@ void acta_db_model_folder_list_free(model_folder_t *items, int count) {
 /* ---------- model_t ---------- */
 
 int acta_db_model_create(db_t *db, const model_t *m, int *out_id) {
-    if (!db || !m || !m->name || !m->backend || !m->model_identifier || !out_id) return -1;
+    if (!db || !m || !m->name || !m->backend || !m->model_identifier || !out_id) return ACTA_DB_ERR_INVALID;
 
     const char *sql =
         "INSERT INTO models (folder_id, name, description, backend, base_url, model_identifier, configuration) "
         "VALUES (?, ?, ?, ?, ?, ?, ?);";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
 
     if (m->folder_id == 0) {
         sqlite3_bind_null(stmt, 1);
@@ -191,9 +192,9 @@ int acta_db_model_create(db_t *db, const model_t *m, int *out_id) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return 0;
+    return ACTA_DB_OK;
 }
 
 model_t *acta_db_model_get(db_t *db, int id) {
@@ -231,12 +232,12 @@ model_t *acta_db_model_get_live(db_t *db, int id) {
 }
 
 int acta_db_model_update(db_t *db, const model_t *m) {
-    if (!db || !m) return -1;
+    if (!db || !m) return ACTA_DB_ERR_INVALID;
     const char *sql =
         "UPDATE models SET folder_id=?, name=?, description=?, backend=?, base_url=?, "
         "model_identifier=?, configuration=?, updated_at=datetime('now') WHERE id=? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
 
     if (m->folder_id == 0) sqlite3_bind_null(stmt, 1);
     else sqlite3_bind_int(stmt, 1, m->folder_id);
@@ -253,19 +254,19 @@ int acta_db_model_update(db_t *db, const model_t *m) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 int acta_db_model_soft_delete(db_t *db, int id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
     const char *sql = "UPDATE models SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? 0 : -1;
+    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 model_t *acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count) {
@@ -321,27 +322,27 @@ model_t *acta_db_model_list_all(db_t *db, int *out_count) {
 }
 
 int acta_db_model_restore(db_t *db, int id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
     const char *sql =
         "UPDATE models SET deleted_at = NULL, updated_at = datetime('now') "
         "WHERE id = ? AND deleted_at IS NOT NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
-    return sqlite3_changes(db->handle) > 0 ? 0 : -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    return sqlite3_changes(db->handle) > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
-    if (!db) return -1;
+    if (!db) return ACTA_DB_ERR_INVALID;
     const char *sql =
         "UPDATE models SET folder_id = ?, updated_at = datetime('now') "
         "WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
 
     if (folder_id == 0) {
         sqlite3_bind_null(stmt, 1);
@@ -352,12 +353,9 @@ int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
-    return sqlite3_changes(db->handle) > 0 ? 0 : -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    return sqlite3_changes(db->handle) > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
-
-
-
 
 void acta_db_model_free(model_t *m) {
     if (!m) return;

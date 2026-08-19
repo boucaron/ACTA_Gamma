@@ -1,4 +1,5 @@
 #include "test_common.h"
+#include "db.h"
 
 /* ---------- 3.1: create — root ---------- */
 static void test_mf_create_root(void) {
@@ -8,7 +9,7 @@ static void test_mf_create_root(void) {
     TEST_ASSERT_NOT_NULL(db);
     int id = 0;
     int rc = acta_db_model_folder_create(db, "Root Folder", 0, &id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     TEST_ASSERT(id > 0);
     test_db_teardown(db, path);
 }
@@ -22,7 +23,7 @@ static void test_mf_create_child(void) {
     int parent_id = 0, child_id = 0;
     acta_db_model_folder_create(db, "Parent", 0, &parent_id);
     int rc = acta_db_model_folder_create(db, "Child", parent_id, &child_id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     TEST_ASSERT(child_id > 0);
     test_db_teardown(db, path);
 }
@@ -36,7 +37,7 @@ static void test_mf_create_dup_root(void) {
     int id1, id2;
     acta_db_model_folder_create(db, "SameName", 0, &id1);
     int rc = acta_db_model_folder_create(db, "SameName", 0, &id2);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);   /* UNIQUE constraint */
     test_db_teardown(db, path);
 }
 
@@ -51,7 +52,7 @@ static void test_mf_create_dup_child(void) {
     int id1, id2;
     acta_db_model_folder_create(db, "Dup", parent_id, &id1);
     int rc = acta_db_model_folder_create(db, "Dup", parent_id, &id2);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);   /* UNIQUE constraint */
     test_db_teardown(db, path);
 }
 
@@ -67,8 +68,8 @@ static void test_mf_create_same_name_diff_parent(void) {
     int c1, c2;
     int rc1 = acta_db_model_folder_create(db, "X", p1, &c1);
     int rc2 = acta_db_model_folder_create(db, "X", p2, &c2);
-    TEST_ASSERT_EQ_INT(rc1, 0);
-    TEST_ASSERT_EQ_INT(rc2, 0);
+    TEST_ASSERT_EQ_INT(rc1, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rc2, ACTA_DB_OK);
     test_db_teardown(db, path);
 }
 
@@ -80,7 +81,7 @@ static void test_mf_create_invalid_parent(void) {
     TEST_ASSERT_NOT_NULL(db);
     int id;
     int rc = acta_db_model_folder_create(db, "Orphan", 999999, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);   /* FK constraint */
     test_db_teardown(db, path);
 }
 
@@ -120,7 +121,7 @@ static void test_mf_rename_happy(void) {
     int id;
     acta_db_model_folder_create(db, "Old", 0, &id);
     int rc = acta_db_model_folder_rename(db, id, "New");
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     model_folder_t *f = acta_db_model_folder_get(db, id);
     TEST_ASSERT_EQ_STR(f->name, "New");
     acta_db_model_folder_free(f);
@@ -137,7 +138,7 @@ static void test_mf_rename_dup(void) {
     acta_db_model_folder_create(db, "A", 0, &id1);
     acta_db_model_folder_create(db, "B", 0, &id2);
     int rc = acta_db_model_folder_rename(db, id2, "A");
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);   /* UNIQUE constraint */
     test_db_teardown(db, path);
 }
 
@@ -150,7 +151,7 @@ static void test_mf_soft_delete_happy(void) {
     int id;
     acta_db_model_folder_create(db, "ToDelete", 0, &id);
     int rc = acta_db_model_folder_soft_delete(db, id);
-    TEST_ASSERT_EQ_INT(rc, 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     model_folder_t *f = acta_db_model_folder_get(db, id);
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_NOT_NULL(f->deleted_at);
@@ -168,8 +169,11 @@ static void test_mf_soft_delete_twice(void) {
     acta_db_model_folder_create(db, "X", 0, &id);
     acta_db_model_folder_soft_delete(db, id);
     int rc = acta_db_model_folder_soft_delete(db, id);
-    /* Should fail or be no-op; assert it doesn't corrupt state */
+    /* WHERE deleted_at IS NULL matches 0 rows;
+     * sqlite3_step still returns SQLITE_DONE → ACTA_DB_OK */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     model_folder_t *f = acta_db_model_folder_get(db, id);
+    TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_NOT_NULL(f->deleted_at);
     acta_db_model_folder_free(f);
     test_db_teardown(db, path);
@@ -185,12 +189,8 @@ static void test_mf_soft_delete_has_children(void) {
     acta_db_model_folder_create(db, "P", 0, &parent_id);
     acta_db_model_folder_create(db, "C", parent_id, &child_id);
     int rc = acta_db_model_folder_soft_delete(db, parent_id);
-    /* FK RESTRICT means the soft-delete UPDATE will set deleted_at,
-     * but the child still references parent via FK.
-     * If soft-delete is just a timestamp, FK is still satisfied.
-     * If it's a hard constraint, it should fail. Test both behaviors. */
-    /* For now, just verify no crash */
-    TEST_ASSERT(1);
+    /* Soft-delete is a timestamp UPDATE; FK still satisfied. */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     test_db_teardown(db, path);
 }
 
