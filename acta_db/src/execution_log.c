@@ -47,7 +47,7 @@ static execution_log_t *row_to_execution_log(sqlite3_stmt *stmt) {
 /* ------------------------------------------------------------------ */
 
 int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_id) {
-    if (!db || !log || !out_id)                       return ACTA_DB_ERR_INVALID;
+    if (!db || !log)                                  return ACTA_DB_ERR_INVALID;
     if (!log->level || !log->event)                   return ACTA_DB_ERR_INVALID;
     if (!acta_log_level_is_valid(log->level))         return ACTA_DB_ERR_INVALID;
 
@@ -77,7 +77,7 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
 
-    *out_id = (int)sqlite3_last_insert_rowid(db->handle);
+    if (out_id) *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
 
