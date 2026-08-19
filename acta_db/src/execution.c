@@ -25,7 +25,7 @@ static execution_t *row_to_execution(sqlite3_stmt *stmt) {
 #define EXEC_SELECT "SELECT id, context_id, skill_revision_id, model_revision_id, prompt, raw_response, result, status, error, created_at, started_at, completed_at, parent_execution_id FROM executions"
 
 int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id) {
-    if (!db || !e || !e->status || !out_id) return ACTA_DB_ERR_INVALID;
+    if (!db || !e || !e->status) return ACTA_DB_ERR_INVALID;
     const char *sql =
         "INSERT INTO executions (context_id, skill_revision_id, model_revision_id, prompt, status, parent_execution_id) "
         "VALUES (?, ?, ?, ?, ?, ?);";
@@ -45,7 +45,7 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id) {
     sqlite3_finalize(stmt);
     if (rc == SQLITE_CONSTRAINT) return ACTA_DB_ERR_INVALID; /* FK violation */
     if (rc != SQLITE_DONE)       return ACTA_DB_ERR_SQL;
-    *out_id = (int)sqlite3_last_insert_rowid(db->handle);
+    if (out_id) *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
 
@@ -175,7 +175,7 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
 }
 
 execution_t *acta_db_execution_list_by_status(db_t *db, const char *status, int *out_count) {
-    if (!db || !status || !out_count) return NULL;
+    if (!db || !status) return NULL;
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE status = ? ORDER BY created_at DESC;", EXEC_SELECT);
     sqlite3_stmt *stmt;
@@ -194,12 +194,12 @@ execution_t *acta_db_execution_list_by_status(db_t *db, const char *status, int 
         free(item);
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
     return items;
 }
 
 execution_t *acta_db_execution_list_children(db_t *db, int parent_id, int *out_count) {
-    if (!db || !out_count) return NULL;
+    if (!db) return NULL;
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE parent_execution_id = ? ORDER BY created_at;", EXEC_SELECT);
     sqlite3_stmt *stmt;
@@ -218,12 +218,12 @@ execution_t *acta_db_execution_list_children(db_t *db, int parent_id, int *out_c
         free(item);
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
     return items;
 }
 
 execution_t *acta_db_execution_list_by_context(db_t *db, int context_id, int *out_count) {
-    if (!db || !out_count) return NULL;
+    if (!db) return NULL;
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE context_id = ? ORDER BY created_at DESC;", EXEC_SELECT);
     sqlite3_stmt *stmt;
@@ -242,7 +242,7 @@ execution_t *acta_db_execution_list_by_context(db_t *db, int context_id, int *ou
         free(item);
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
     return items;
 }
 
