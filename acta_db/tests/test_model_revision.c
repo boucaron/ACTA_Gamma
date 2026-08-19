@@ -76,7 +76,7 @@ static void test_mr_get_nonexistent(void) {
     int err = ACTA_DB_OK;
     model_revision_t *rev = acta_db_model_revision_get(db, 999999, &err);
     TEST_ASSERT_NULL(rev);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOT_FOUND);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found → OK, not NOT_FOUND */
 
     test_db_teardown(db, path);
 }
@@ -119,7 +119,7 @@ static void test_mr_get_by_model_rev_missing(void) {
     int err = ACTA_DB_OK;
     model_revision_t *rev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 99, &err);
     TEST_ASSERT_NULL(rev);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOT_FOUND);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found → OK, not NOT_FOUND */
 
     test_db_teardown(db, path);
 }
@@ -164,12 +164,12 @@ static void test_mr_list_multiple(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t *items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
     for (int i = 0; i < count; i++) {
-        TEST_ASSERT_EQ_INT(items[i].model_id, model_id);
+        TEST_ASSERT_EQ_INT(items[i]->model_id, model_id);
     }
     acta_db_model_revision_list_free(items, count);
 
@@ -190,14 +190,14 @@ static void test_mr_list_ordering(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t *items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
 
     /* Ascending revision order: 1, 2, 3 */
     for (int i = 0; i < count; i++) {
-        TEST_ASSERT_EQ_INT(items[i].revision, i + 1);
+        TEST_ASSERT_EQ_INT(items[i]->revision, i + 1);
     }
     acta_db_model_revision_list_free(items, count);
 
@@ -220,14 +220,14 @@ static void test_mr_list_includes_deleted(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t *items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     /* 3 rows: rev1 (create), rev2 (update), rev3 (delete) */
     TEST_ASSERT_EQ_INT(count, 3);
 
     /* Last row is the deleted revision */
-    TEST_ASSERT_NOT_NULL(items[2].deleted_at);
+    TEST_ASSERT_NOT_NULL(items[2]->deleted_at);
     acta_db_model_revision_list_free(items, count);
 
     test_db_teardown(db, path);
@@ -270,7 +270,7 @@ static void test_mr_list_free_valid(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t *items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_model_revision_list_free(items, count);
@@ -334,7 +334,7 @@ static void test_mr_get_latest_nonexistent(void) {
     int err = ACTA_DB_OK;
     model_revision_t *latest = acta_db_model_revision_get_latest(db, 999999, &err);
     TEST_ASSERT_NULL(latest);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOT_FOUND);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found → OK, not NOT_FOUND */
 
     test_db_teardown(db, path);
 }

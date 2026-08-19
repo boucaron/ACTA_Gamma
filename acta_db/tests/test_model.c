@@ -54,10 +54,10 @@ static void test_model_create_initial_revision(void) {
     acta_db_model_create(db, &m, &model_id);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, model_id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, model_id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
     if (count > 0) {
-        TEST_ASSERT_EQ_INT(revs[0].revision, 1);
+        TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
     }
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -224,7 +224,7 @@ static void test_model_update_name(void) {
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -244,7 +244,7 @@ static void test_model_update_backend(void) {
     int rc = acta_db_model_update(db, &update);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -264,7 +264,7 @@ static void test_model_update_config(void) {
     int rc = acta_db_model_update(db, &update);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -285,7 +285,7 @@ static void test_model_update_no_change(void) {
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     /* No new revision created */
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -307,7 +307,7 @@ static void test_model_update_deleted(void) {
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -342,10 +342,10 @@ static void test_model_soft_delete_revision(void) {
     acta_db_model_soft_delete(db, id);
 
     int count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     if (count >= 2) {
-        TEST_ASSERT_NOT_NULL(revs[1].deleted_at);
+        TEST_ASSERT_NOT_NULL(revs[1]->deleted_at);
     }
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);

@@ -143,10 +143,10 @@ static void test_integration_model_lifecycle(void) {
 
     /* Revision 1 exists */
     int rev_count = 0;
-    model_revision_t *revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count, NULL);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT(revs != NULL);
-    TEST_ASSERT_EQ_INT(revs[0].revision, 1);
+    TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* Update → revision 2 */
@@ -174,7 +174,7 @@ static void test_integration_model_lifecycle(void) {
     rev_count = 0;
     revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count, NULL);
     TEST_ASSERT_EQ_INT(rev_count, 3);
-    TEST_ASSERT(revs[2].deleted_at != NULL);
+    TEST_ASSERT(revs[2]->deleted_at != NULL);
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* get_live returns NULL after soft-delete */
@@ -650,7 +650,7 @@ static void test_integration_memory_leak_sweep(void) {
     }
 
     /* list-and-free: model revisions */
-    { int n = 0; model_revision_t *r = acta_db_model_revision_list_by_model(db, mid, &n, NULL);
+    { int n = 0; model_revision_t **r = acta_db_model_revision_list_by_model(db, mid, &n, NULL);
       acta_db_model_revision_list_free(r, n); }
 
     /* list-and-free: skill revisions */
