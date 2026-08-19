@@ -235,7 +235,6 @@ static void test_sk_get_existing(void) {
     TEST_ASSERT_EQ_STR(s->name, "GetSkill");
     TEST_ASSERT_EQ_STR(s->prompt_template, "My prompt");
     TEST_ASSERT_EQ_STR(s->output_schema, "{\"out\":1}");
-    TEST_ASSERT_EQ_INT(s->current_revision, 1);
     TEST_ASSERT(s->deleted_at == NULL);
     acta_db_skill_free(s);
 
@@ -323,7 +322,6 @@ static void test_sk_update_prompt(void) {
     skill_t *fetched = acta_db_skill_get(db, id);
     TEST_ASSERT_NOT_NULL(fetched);
     TEST_ASSERT_EQ_STR(fetched->prompt_template, "New prompt");
-    TEST_ASSERT_EQ_INT(fetched->current_revision, rev_after);
     acta_db_skill_free(fetched);
 
     test_db_teardown(db, path);
@@ -469,43 +467,6 @@ static void test_sk_soft_delete_revision(void) {
 
     int latest_del = sk_latest_rev_deleted(db, id);
     TEST_ASSERT(latest_del);
-
-    test_db_teardown(db, path);
-}
-
-/* ---------- 7.19: soft_delete — current_revision unchanged ---------- */
-static void test_sk_soft_delete_current_rev(void) {
-    const char *path = "test/acta_test_sk_del_currev.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int id = sk_create_skill(db, 0, "DelCurrRev", "Prompt", "{}");
-    TEST_ASSERT(id > 0);
-
-    /* Update to create revision 2 */
-    skill_t s;
-    memset(&s, 0, sizeof(s));
-    s.id = id;
-    s.name = (char *)"DelCurrRev";
-    s.description = (char *)"desc";
-    s.prompt_template = (char *)"Updated prompt";
-    s.output_schema = (char *)("{}");
-    s.folder_id = 0;
-    acta_db_skill_update(db, &s);
-
-    skill_t *before = acta_db_skill_get(db, id);
-    TEST_ASSERT_NOT_NULL(before);
-    int expected_crev = before->current_revision;
-    acta_db_skill_free(before);
-
-    int rc = acta_db_skill_soft_delete(db, id);
-    TEST_ASSERT_EQ_INT(rc, 0);
-
-    skill_t *after = acta_db_skill_get(db, id);
-    TEST_ASSERT_NOT_NULL(after);
-    TEST_ASSERT_EQ_INT(after->current_revision, expected_crev);
-    acta_db_skill_free(after);
 
     test_db_teardown(db, path);
 }
@@ -667,7 +628,6 @@ void run_skill_tests(void) {
     test_sk_update_deleted();
     test_sk_soft_delete_happy();
     test_sk_soft_delete_revision();
-    test_sk_soft_delete_current_rev();
     test_sk_list_root();
     test_sk_list_specific_folder();
     test_sk_list_all_excludes_deleted();

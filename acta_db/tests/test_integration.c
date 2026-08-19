@@ -38,12 +38,6 @@ static void test_integration_model_lifecycle(void) {
     TEST_ASSERT_EQ_INT(revs[0].revision, 1);
     acta_db_model_revision_list_free(revs, rev_count);
 
-    /* Verify current_revision == 1 */
-    model_t *got = acta_db_model_get(db, model_id);
-    TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_INT(got->current_revision, 1);
-    acta_db_model_free(got);
-
     /* Update the model — should create revision 2 */
     model_t m2;
     memset(&m2, 0, sizeof(m2));
@@ -64,12 +58,6 @@ static void test_integration_model_lifecycle(void) {
     revs = acta_db_model_revision_list_by_model(db, model_id, &rev_count);
     TEST_ASSERT_EQ_INT(rev_count, 2);
     acta_db_model_revision_list_free(revs, rev_count);
-
-    /* current_revision should now be 2 */
-    got = acta_db_model_get(db, model_id);
-    TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_INT(got->current_revision, 2);
-    acta_db_model_free(got);
 
     /* Soft-delete the model */
     rc = acta_db_model_soft_delete(db, model_id);

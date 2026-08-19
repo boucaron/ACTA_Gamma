@@ -62,23 +62,7 @@ static void test_model_create_initial_revision(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.4: model_create — current_revision set to 1 ---------- */
-static void test_model_create_current_rev(void) {
-    const char *path = "test/acta_test_m_currev.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
-    int id = 0;
-    acta_db_model_create(db, &m, &id);
-    model_t *got = acta_db_model_get(db, id);
-    TEST_ASSERT_EQ_INT(got->current_revision, 1);
-    acta_db_model_free(got);
-    test_db_teardown(db, path);
-}
-
-/* ---------- 4.5: model_create — NULL name ---------- */
+/* ---------- 4.4: model_create — NULL name ---------- */
 static void test_model_create_null_name(void) {
     const char *path = "test/acta_test_m_nullname.db";
     remove(path);
@@ -91,7 +75,7 @@ static void test_model_create_null_name(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.6: model_create — NULL backend ---------- */
+/* ---------- 4.5: model_create — NULL backend ---------- */
 static void test_model_create_null_backend(void) {
     const char *path = "test/acta_test_m_nullbe.db";
     remove(path);
@@ -104,7 +88,7 @@ static void test_model_create_null_backend(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.7: model_create — NULL model_identifier ---------- */
+/* ---------- 4.6: model_create — NULL model_identifier ---------- */
 static void test_model_create_null_mid(void) {
     const char *path = "test/acta_test_m_nullmid.db";
     remove(path);
@@ -117,7 +101,7 @@ static void test_model_create_null_mid(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.8: model_create — invalid folder_id ---------- */
+/* ---------- 4.7: model_create — invalid folder_id ---------- */
 static void test_model_create_invalid_folder(void) {
     const char *path = "test/acta_test_m_badfolder.db";
     remove(path);
@@ -130,7 +114,7 @@ static void test_model_create_invalid_folder(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.9: model_create — duplicate name (root) ---------- */
+/* ---------- 4.8: model_create — duplicate name (root) ---------- */
 static void test_model_create_dup_root(void) {
     const char *path = "test/acta_test_m_duproot.db";
     remove(path);
@@ -145,7 +129,7 @@ static void test_model_create_dup_root(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.10: model_create — duplicate name (child) ---------- */
+/* ---------- 4.9: model_create — duplicate name (child) ---------- */
 static void test_model_create_dup_child(void) {
     const char *path = "test/acta_test_m_dupchild.db";
     remove(path);
@@ -162,7 +146,7 @@ static void test_model_create_dup_child(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.11: model_get — existing ---------- */
+/* ---------- 4.10: model_get — existing ---------- */
 static void test_model_get_existing(void) {
     const char *path = "test/acta_test_m_get.db";
     remove(path);
@@ -182,7 +166,7 @@ static void test_model_get_existing(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.12: model_get — non-existent ---------- */
+/* ---------- 4.11: model_get — non-existent ---------- */
 static void test_model_get_nonexistent(void) {
     const char *path = "test/acta_test_m_get404.db";
     remove(path);
@@ -193,7 +177,7 @@ static void test_model_get_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.13: model_get_live — live ---------- */
+/* ---------- 4.12: model_get_live — live ---------- */
 static void test_model_get_live_live(void) {
     const char *path = "test/acta_test_m_live.db";
     remove(path);
@@ -209,7 +193,7 @@ static void test_model_get_live_live(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.14: model_get_live — soft-deleted ---------- */
+/* ---------- 4.13: model_get_live — soft-deleted ---------- */
 static void test_model_get_live_deleted(void) {
     const char *path = "test/acta_test_m_livedel.db";
     remove(path);
@@ -224,7 +208,7 @@ static void test_model_get_live_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.15: model_update — change name ---------- */
+/* ---------- 4.14: model_update — change name ---------- */
 static void test_model_update_name(void) {
     const char *path = "test/acta_test_m_upname.db";
     remove(path);
@@ -245,7 +229,7 @@ static void test_model_update_name(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.16: model_update — change backend ---------- */
+/* ---------- 4.15: model_update — change backend ---------- */
 static void test_model_update_backend(void) {
     const char *path = "test/acta_test_m_upbe.db";
     remove(path);
@@ -265,7 +249,7 @@ static void test_model_update_backend(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.17: model_update — change configuration ---------- */
+/* ---------- 4.16: model_update — change configuration ---------- */
 static void test_model_update_config(void) {
     const char *path = "test/acta_test_m_upconf.db";
     remove(path);
@@ -285,7 +269,7 @@ static void test_model_update_config(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.18: model_update — no actual change ---------- */
+/* ---------- 4.17: model_update — no actual change ---------- */
 static void test_model_update_no_change(void) {
     const char *path = "test/acta_test_m_upnochange.db";
     remove(path);
@@ -305,26 +289,7 @@ static void test_model_update_no_change(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.19: model_update — current_revision updated ---------- */
-static void test_model_update_current_rev(void) {
-    const char *path = "test/acta_test_m_upcurrev.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
-    int id;
-    acta_db_model_create(db, &m, &id);
-
-    model_t update = { .id = id, .name = "Changed", .backend = "b", .model_identifier = "mid" };
-    acta_db_model_update(db, &update);
-
-    model_t *got = acta_db_model_get(db, id);
-    TEST_ASSERT_EQ_INT(got->current_revision, 2);
-    acta_db_model_free(got);
-    test_db_teardown(db, path);
-}
-
-/* ---------- 4.20: model_update — on soft-deleted model ---------- */
+/* ---------- 4.18: model_update — on soft-deleted model ---------- */
 static void test_model_update_deleted(void) {
     const char *path = "test/acta_test_m_updel.db";
     remove(path);
@@ -347,7 +312,7 @@ static void test_model_update_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.21: model_soft_delete — happy ---------- */
+/* ---------- 4.19: model_soft_delete — happy ---------- */
 static void test_model_soft_delete_happy(void) {
     const char *path = "test/acta_test_m_sd.db";
     remove(path);
@@ -364,7 +329,7 @@ static void test_model_soft_delete_happy(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.22: model_soft_delete — revision with deleted_at ---------- */
+/* ---------- 4.20: model_soft_delete — revision with deleted_at ---------- */
 static void test_model_soft_delete_revision(void) {
     const char *path = "test/acta_test_m_sdrev.db";
     remove(path);
@@ -386,25 +351,7 @@ static void test_model_soft_delete_revision(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.23: model_soft_delete — current_revision NOT updated ---------- */
-static void test_model_soft_delete_current_rev(void) {
-    const char *path = "test/acta_test_m_sdcurrev.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
-    int id;
-    acta_db_model_create(db, &m, &id);
-    acta_db_model_soft_delete(db, id);
-
-    model_t *got = acta_db_model_get(db, id);
-    /* current_revision should still be 1 (the last live revision) */
-    TEST_ASSERT_EQ_INT(got->current_revision, 1);
-    acta_db_model_free(got);
-    test_db_teardown(db, path);
-}
-
-/* ---------- 4.24: model_list_in_folder — root ---------- */
+/* ---------- 4.21: model_list_in_folder — root ---------- */
 static void test_model_list_in_folder_root(void) {
     const char *path = "test/acta_test_m_listroot.db";
     remove(path);
@@ -419,7 +366,7 @@ static void test_model_list_in_folder_root(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.25: model_list_in_folder — specific ---------- */
+/* ---------- 4.22: model_list_in_folder — specific ---------- */
 static void test_model_list_in_folder_specific(void) {
     const char *path = "test/acta_test_m_listspec.db";
     remove(path);
@@ -440,7 +387,7 @@ static void test_model_list_in_folder_specific(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.26: model_list_in_folder — empty ---------- */
+/* ---------- 4.23: model_list_in_folder — empty ---------- */
 static void test_model_list_in_folder_empty(void) {
     const char *path = "test/acta_test_m_listempty.db";
     remove(path);
@@ -455,7 +402,7 @@ static void test_model_list_in_folder_empty(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.27: model_list_all — excludes deleted ---------- */
+/* ---------- 4.24: model_list_all — excludes deleted ---------- */
 static void test_model_list_all_excludes_deleted(void) {
     const char *path = "test/acta_test_m_ladel.db";
     remove(path);
@@ -476,7 +423,7 @@ static void test_model_list_all_excludes_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.28-4.30: free / list_free ---------- */
+/* ---------- 4.25-4.27: free / list_free ---------- */
 static void test_model_free_valid(void) {
     const char *path = "test/acta_test_m_free.db";
     remove(path);
@@ -517,7 +464,6 @@ void run_model_tests(void) {
     test_model_create_root();
     test_model_create_in_folder();
     test_model_create_initial_revision();
-    test_model_create_current_rev();
     test_model_create_null_name();
     test_model_create_null_backend();
     test_model_create_null_mid();
@@ -532,11 +478,9 @@ void run_model_tests(void) {
     test_model_update_backend();
     test_model_update_config();
     test_model_update_no_change();
-    test_model_update_current_rev();
     test_model_update_deleted();
     test_model_soft_delete_happy();
     test_model_soft_delete_revision();
-    test_model_soft_delete_current_rev();
     test_model_list_in_folder_root();
     test_model_list_in_folder_specific();
     test_model_list_in_folder_empty();

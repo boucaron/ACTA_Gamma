@@ -35,8 +35,7 @@ typedef struct {
     char   *name;
     char   *description;
     char   *prompt_template;
-    char   *output_schema;
-    int     current_revision;
+    char   *output_schema;    
     char   *created_at;
     char   *updated_at;
     char   *deleted_at;

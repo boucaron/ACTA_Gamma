@@ -10,10 +10,9 @@ static skill_t *row_to_skill(sqlite3_stmt *stmt) {
     s->description     = db_col_text(stmt, 3);
     s->prompt_template = db_col_text(stmt, 4);
     s->output_schema   = db_col_text(stmt, 5);
-    s->current_revision= db_col_int(stmt, 6);
-    s->created_at      = db_col_text(stmt, 7);
-    s->updated_at      = db_col_text(stmt, 8);
-    s->deleted_at      = db_col_text(stmt, 9);
+    s->created_at      = db_col_text(stmt, 6);
+    s->updated_at      = db_col_text(stmt, 7);
+    s->deleted_at      = db_col_text(stmt, 8);
     return s;
 }
 
@@ -190,7 +189,7 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
 skill_t *acta_db_skill_get(db_t *db, int id) {
     if (!db) return NULL;
     const char *sql =
-        "SELECT id, folder_id, name, description, prompt_template, output_schema, current_revision, created_at, updated_at, deleted_at FROM skills WHERE id = ?;";
+        "SELECT id, folder_id, name, description, prompt_template, output_schema, created_at, updated_at, deleted_at FROM skills WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
     sqlite3_bind_int(stmt, 1, id);
@@ -203,7 +202,7 @@ skill_t *acta_db_skill_get(db_t *db, int id) {
 skill_t *acta_db_skill_get_live(db_t *db, int id) {
     if (!db) return NULL;
     const char *sql =
-        "SELECT id, folder_id, name, description, prompt_template, output_schema, current_revision, created_at, updated_at, deleted_at FROM skills WHERE id = ? AND deleted_at IS NULL;";
+        "SELECT id, folder_id, name, description, prompt_template, output_schema, created_at, updated_at, deleted_at FROM skills WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
     sqlite3_bind_int(stmt, 1, id);
@@ -249,8 +248,8 @@ int acta_db_skill_soft_delete(db_t *db, int id) {
 skill_t *acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count) {
     if (!db || !out_count) return NULL;
     const char *sql = folder_id == 0
-        ? "SELECT id, folder_id, name, description, prompt_template, output_schema, current_revision, created_at, updated_at, deleted_at FROM skills WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name;"
-        : "SELECT id, folder_id, name, description, prompt_template, output_schema, current_revision, created_at, updated_at, deleted_at FROM skills WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name;";
+        ? "SELECT id, folder_id, name, description, prompt_template, output_schema, created_at, updated_at, deleted_at FROM skills WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name;"
+        : "SELECT id, folder_id, name, description, prompt_template, output_schema, created_at, updated_at, deleted_at FROM skills WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
     if (folder_id != 0) sqlite3_bind_int(stmt, 1, folder_id);
@@ -274,7 +273,7 @@ skill_t *acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count) {
 skill_t *acta_db_skill_list_all(db_t *db, int *out_count) {
     if (!db || !out_count) return NULL;
     const char *sql =
-        "SELECT id, folder_id, name, description, prompt_template, output_schema, current_revision, created_at, updated_at, deleted_at FROM skills WHERE deleted_at IS NULL ORDER BY name;";
+        "SELECT id, folder_id, name, description, prompt_template, output_schema, created_at, updated_at, deleted_at FROM skills WHERE deleted_at IS NULL ORDER BY name;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
 
@@ -313,4 +312,3 @@ void acta_db_skill_list_free(skill_t *items, int count) {
     }
     free(items);
 }
-

@@ -14,10 +14,9 @@ static model_t *row_to_model(sqlite3_stmt *stmt) {
     m->base_url         = db_col_text(stmt, 5);
     m->model_identifier = db_col_text(stmt, 6);
     m->configuration    = db_col_text(stmt, 7);
-    m->current_revision = db_col_int(stmt, 8);
-    m->created_at       = db_col_text(stmt, 9);
-    m->updated_at       = db_col_text(stmt, 10);
-    m->deleted_at       = db_col_text(stmt, 11);
+    m->created_at       = db_col_text(stmt, 8);
+    m->updated_at       = db_col_text(stmt, 9);
+    m->deleted_at       = db_col_text(stmt, 10);
     return m;
 }
 
@@ -97,7 +96,6 @@ int acta_db_model_folder_soft_delete(db_t *db, int id) {
 
 model_folder_t *acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count) {
     if (!db || !out_count) return NULL;
-    /* If parent_id == 0, list root folders */
     const char *sql = parent_id == 0
         ? "SELECT id, name, parent_id, created_at, updated_at, deleted_at FROM model_folders WHERE parent_id IS NULL AND deleted_at IS NULL ORDER BY name;"
         : "SELECT id, name, parent_id, created_at, updated_at, deleted_at FROM model_folders WHERE parent_id = ? AND deleted_at IS NULL ORDER BY name;";
@@ -115,7 +113,6 @@ model_folder_t *acta_db_model_folder_list_children(db_t *db, int parent_id, int 
         if (!tmp) { acta_db_model_folder_free(item); sqlite3_finalize(stmt); return NULL; }
         items = tmp;
         items[count++] = *item;
-        /* Free the heap-allocated strings from item (they're now copied into items[]) */
         free(item);
     }
     sqlite3_finalize(stmt);
@@ -203,7 +200,7 @@ model_t *acta_db_model_get(db_t *db, int id) {
     if (!db) return NULL;
     const char *sql =
         "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
-        "current_revision, created_at, updated_at, deleted_at FROM models WHERE id = ?;";
+        "created_at, updated_at, deleted_at FROM models WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
     sqlite3_bind_int(stmt, 1, id);
@@ -220,7 +217,7 @@ model_t *acta_db_model_get_live(db_t *db, int id) {
     if (!db) return NULL;
     const char *sql =
         "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
-        "current_revision, created_at, updated_at, deleted_at FROM models WHERE id = ? AND deleted_at IS NULL;";
+        "created_at, updated_at, deleted_at FROM models WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
     sqlite3_bind_int(stmt, 1, id);
@@ -275,9 +272,9 @@ model_t *acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count) {
     if (!db || !out_count) return NULL;
     const char *sql = folder_id == 0
         ? "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
-          "current_revision, created_at, updated_at, deleted_at FROM models WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name;"
+          "created_at, updated_at, deleted_at FROM models WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name;"
         : "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
-          "current_revision, created_at, updated_at, deleted_at FROM models WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name;";
+          "created_at, updated_at, deleted_at FROM models WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
@@ -303,7 +300,7 @@ model_t *acta_db_model_list_all(db_t *db, int *out_count) {
     if (!db || !out_count) return NULL;
     const char *sql =
         "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
-        "current_revision, created_at, updated_at, deleted_at FROM models WHERE deleted_at IS NULL ORDER BY name;";
+        "created_at, updated_at, deleted_at FROM models WHERE deleted_at IS NULL ORDER BY name;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
 
@@ -352,4 +349,3 @@ void acta_db_model_list_free(model_t *items, int count) {
     }
     free(items);
 }
-

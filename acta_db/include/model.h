@@ -37,8 +37,7 @@ typedef struct {
     char   *backend;
     char   *base_url;
     char   *model_identifier;
-    char   *configuration;
-    int     current_revision;
+    char   *configuration;    
     char   *created_at;
     char   *updated_at;
     char   *deleted_at;     /* NULL if live */
