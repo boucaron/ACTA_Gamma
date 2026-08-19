@@ -122,9 +122,9 @@ model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id, int 
 
 model_revision_t *acta_db_model_revision_list_by_model(
         db_t *db, int model_id, int *out_count, int *err) {
-    if (err)     *err     = ACTA_DB_OK;
+    if (err)       *err       = ACTA_DB_OK;
     if (out_count) *out_count = 0;
-    if (!db || !out_count) { if (err) *err = ACTA_DB_ERR_INVALID; return NULL; }
+    if (!db) { if (err) *err = ACTA_DB_ERR_INVALID; return NULL; }
 
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE model_id = ? ORDER BY revision;", REV_SELECT);
@@ -161,7 +161,7 @@ model_revision_t *acta_db_model_revision_list_by_model(
     }
 
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
     return items;   /* may be NULL with count 0 – not an error */
 }
 
