@@ -7,17 +7,30 @@
 extern "C" {
 #endif
 
+
+/* --- Error codes (db.h) --- */
+#define ACTA_DB_OK             0
+#define ACTA_DB_ERR_NOT_FOUND (-1)
+#define ACTA_DB_ERR_SQL       (-2)
+#define ACTA_DB_ERR_ALLOC     (-3)
+#define ACTA_DB_ERR_INVALID   (-4)
+
+/* Return a short human-readable string for an error code.
+ * Returns "unknown error" for values outside the defined range. */
+const char *acta_db_strerror(int code);
+
+
 typedef struct db_t db_t;
 
 /* Open (or create) a database at the given path.
- * Returns NULL on failure. */
-db_t *acta_db_open(const char *path);
+ * Returns NULL on failure; if err is non-NULL it receives the error code. */
+db_t *acta_db_open(const char *path, int *err);
 
 /* Close the database and free the handle. */
 void acta_db_close(db_t *db);
 
-/* Execute a SQL statement (or script). Returns 0 on success, <0 on error.
- * Use for running DDL / migrations. */
+/* Execute a SQL statement (or script). Returns ACTA_DB_OK on success,
+ * a negative error code on failure. Use for running DDL / migrations. */
 int acta_db_exec(db_t *db, const char *sql);
 
 /* Returns the last error message for this connection. */
@@ -25,7 +38,8 @@ const char *acta_db_last_error(db_t *db);
 
 /* Run a transaction: begins, runs the callback, commits (or rolls back).
  * The callback receives the db handle and user_data.
- * Returns 0 on success, <0 if the callback returned <0 or a SQL error occurred. */
+ * Returns ACTA_DB_OK on success, a negative error code if the callback
+ * returned a non-OK code or a SQL error occurred. */
 int acta_db_transaction(db_t *db, int (*fn)(db_t *, void *), void *user_data);
 
 #ifdef __cplusplus
