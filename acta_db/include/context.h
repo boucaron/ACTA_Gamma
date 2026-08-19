@@ -18,6 +18,8 @@ typedef struct {
 
 int       acta_db_context_create(db_t *db, const context_t *c, int *out_id);
 context_t *acta_db_context_get(db_t *db, int id);
+context_t *acta_db_context_list_all(db_t *db, int *out_count);
+context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_count);
 context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_count);
 void      acta_db_context_free(context_t *c);
 void      acta_db_context_list_free(context_t *items, int count);

@@ -258,6 +258,124 @@ static void test_context_immutable(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 2.18: context_list_all — happy path ---------- */
+static void test_context_list_all_happy(void) {
+    const char *path = "test/acta_test_ctx_listall.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    context_t c1 = { .type = "a", .content = "x", .content_hash = "h1" };
+    context_t c2 = { .type = "b", .content = "y", .content_hash = "h2" };
+    context_t c3 = { .type = "c", .content = "z", .content_hash = "h3" };
+    int id1, id2, id3;
+    acta_db_context_create(db, &c1, &id1);
+    acta_db_context_create(db, &c2, &id2);
+    acta_db_context_create(db, &c3, &id3);
+
+    int count = 0;
+    context_t *items = acta_db_context_list_all(db, &count);
+    TEST_ASSERT_EQ_INT(count, 3);
+    TEST_ASSERT_NOT_NULL(items);
+    /* Verify ordered by id */
+    TEST_ASSERT_EQ_INT(items[0].id, id1);
+    TEST_ASSERT_EQ_INT(items[1].id, id2);
+    TEST_ASSERT_EQ_INT(items[2].id, id3);
+    TEST_ASSERT_EQ_STR(items[0].type, "a");
+    TEST_ASSERT_EQ_STR(items[1].type, "b");
+    TEST_ASSERT_EQ_STR(items[2].type, "c");
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.19: context_list_all — empty table ---------- */
+static void test_context_list_all_empty(void) {
+    const char *path = "test/acta_test_ctx_listallempty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = -1;
+    context_t *items = acta_db_context_list_all(db, &count);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.20: context_list_all — NULL db ---------- */
+static void test_context_list_all_null_db(void) {
+    int count = 0;
+    context_t *items = acta_db_context_list_all(NULL, &count);
+    TEST_ASSERT_NULL(items);
+}
+
+/* ---------- 2.21: context_list_by_type — match ---------- */
+static void test_context_list_by_type_match(void) {
+    const char *path = "test/acta_test_ctx_listtype.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    context_t c1 = { .type = "doc", .content = "a", .content_hash = "h1" };
+    context_t c2 = { .type = "doc", .content = "b", .content_hash = "h2" };
+    context_t c3 = { .type = "image", .content = "c", .content_hash = "h3" };
+    int id1, id2, id3;
+    acta_db_context_create(db, &c1, &id1);
+    acta_db_context_create(db, &c2, &id2);
+    acta_db_context_create(db, &c3, &id3);
+
+    int count = 0;
+    context_t *items = acta_db_context_list_by_type(db, "doc", &count);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0].id, id1);
+    TEST_ASSERT_EQ_INT(items[1].id, id2);
+    TEST_ASSERT_EQ_STR(items[0].type, "doc");
+    TEST_ASSERT_EQ_STR(items[1].type, "doc");
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.22: context_list_by_type — no match ---------- */
+static void test_context_list_by_type_nomatch(void) {
+    const char *path = "test/acta_test_ctx_listtypenomatch.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    context_t c = { .type = "doc", .content = "a", .content_hash = "h1" };
+    int id;
+    acta_db_context_create(db, &c, &id);
+
+    int count = -1;
+    context_t *items = acta_db_context_list_by_type(db, "audio", &count);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.23: context_list_by_type — NULL type ---------- */
+static void test_context_list_by_type_null(void) {
+    const char *path = "test/acta_test_ctx_listtypenull.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = -1;
+    context_t *items = acta_db_context_list_by_type(db, NULL, &count);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.24: context_list_by_type — NULL db ---------- */
+static void test_context_list_by_type_null_db(void) {
+    int count = 0;
+    context_t *items = acta_db_context_list_by_type(NULL, "doc", &count);
+    TEST_ASSERT_NULL(items);
+}
+
+
 void run_context_tests(void) {
     fprintf(stderr, "\n=== context.h tests ===\n");
     test_context_create_happy();
@@ -277,4 +395,11 @@ void run_context_tests(void) {
     test_context_list_free_valid();
     test_context_list_free_null();
     test_context_immutable();
+    test_context_list_all_happy();
+    test_context_list_all_empty();
+    test_context_list_all_null_db();
+    test_context_list_by_type_match();
+    test_context_list_by_type_nomatch();
+    test_context_list_by_type_null();
+    test_context_list_by_type_null_db();
 }

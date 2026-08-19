@@ -88,6 +88,91 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
     return items;
 }
 
+context_t *acta_db_context_list_all(db_t *db, int *out_count) {
+    if (!db || !out_count) return NULL;
+
+    const char *sql =
+        "SELECT id, type, content, content_hash, metadata, created_at "
+        "FROM contexts ORDER BY id;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    int count = 0;
+    context_t *items = NULL;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        context_t *item = row_to_context(stmt);
+        if (!item) {
+            sqlite3_finalize(stmt);
+            acta_db_context_list_free(items, count);
+            *out_count = 0;
+            return NULL;
+        }
+        context_t *tmp = realloc(items, sizeof(context_t) * (count + 1));
+        if (!tmp) {
+            acta_db_context_free(item);
+            sqlite3_finalize(stmt);
+            acta_db_context_list_free(items, count);
+            *out_count = 0;
+            return NULL;
+        }
+        items = tmp;
+        items[count++] = *item;
+        free(item);
+    }
+    sqlite3_finalize(stmt);
+    *out_count = count;
+    return items;
+}
+
+context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_count) {
+    if (!db || !out_count) return NULL;
+    if (!type) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    const char *sql =
+        "SELECT id, type, content, content_hash, metadata, created_at "
+        "FROM contexts WHERE type = ? ORDER BY id;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        *out_count = 0;
+        return NULL;
+    }
+    sqlite3_bind_text(stmt, 1, type, -1, SQLITE_TRANSIENT);
+
+    int count = 0;
+    context_t *items = NULL;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        context_t *item = row_to_context(stmt);
+        if (!item) {
+            sqlite3_finalize(stmt);
+            acta_db_context_list_free(items, count);
+            *out_count = 0;
+            return NULL;
+        }
+        context_t *tmp = realloc(items, sizeof(context_t) * (count + 1));
+        if (!tmp) {
+            acta_db_context_free(item);
+            sqlite3_finalize(stmt);
+            acta_db_context_list_free(items, count);
+            *out_count = 0;
+            return NULL;
+        }
+        items = tmp;
+        items[count++] = *item;
+        free(item);
+    }
+    sqlite3_finalize(stmt);
+    *out_count = count;
+    return items;
+}
+
+
+
 
 void acta_db_context_free(context_t *c) {
     if (!c) return;
