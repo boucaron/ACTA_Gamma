@@ -7,6 +7,15 @@
 extern "C" {
 #endif
 
+/* --- String constants (execution_log.h) --- */
+#define ACTA_LOG_LEVEL_DEBUG "debug"
+#define ACTA_LOG_LEVEL_INFO  "info"
+#define ACTA_LOG_LEVEL_WARN  "warn"
+#define ACTA_LOG_LEVEL_ERROR "error"
+
+/* Convenience macro for callers */
+#define ACTA_LOG_LEVEL_SET(lvl, name) (lvl) = ACTA_LOG_LEVEL_##name
+
 typedef struct {
     int     id;
     int     execution_id;

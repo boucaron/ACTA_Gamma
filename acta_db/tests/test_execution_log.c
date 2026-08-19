@@ -52,7 +52,6 @@ static int el_raw_delete_execution(db_t *db, int execution_id) {
     return acta_db_exec(db, sql);
 }
 
-
 /* ---------- 10.1: create — happy ---------- */
 static void test_el_create_happy(void) {
     const char *path = "test/acta_test_el_create_happy.db";
@@ -62,13 +61,12 @@ static void test_el_create_happy(void) {
 
     el_insert_execution(db, 1);
 
-    execution_log_t log = {
-        .execution_id = 1,
-        .level        = "info",
-        .event        = "step_completed",
-        .message      = "All good",
-        .metadata     = NULL,
-    };
+    execution_log_t log = {0};
+    log.execution_id = 1;
+    ACTA_LOG_LEVEL_SET(log.level, INFO);
+    log.event        = "step_completed";
+    log.message      = "All good";
+
     int id = 0;
     int rc = acta_db_execution_log_create(db, &log, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
@@ -87,10 +85,9 @@ static void test_el_create_invalid_execution(void) {
     execution_log_t log;
     memset(&log, 0, sizeof(log));
     log.execution_id = 999999;
-    log.level = (char *)"info";
-    log.event = (char *)"event";
-    log.message = (char *)"msg";
-    log.metadata = NULL;
+    ACTA_LOG_LEVEL_SET(log.level, INFO);
+    log.event        = "event";
+    log.message      = "msg";
 
     int id = 0;
     int rc = acta_db_execution_log_create(db, &log, &id);
@@ -109,10 +106,9 @@ static void test_el_create_invalid_level(void) {
     execution_log_t log;
     memset(&log, 0, sizeof(log));
     log.execution_id = 1;
-    log.level = (char *)"verbose";
-    log.event = (char *)"event";
-    log.message = (char *)"msg";
-    log.metadata = NULL;
+    log.level = (char *)"verbose";   /* intentionally not a valid constant */
+    log.event        = "event";
+    log.message      = "msg";
 
     int id = 0;
     int rc = acta_db_execution_log_create(db, &log, &id);
@@ -130,21 +126,20 @@ static void test_el_create_all_valid_levels(void) {
 
     el_insert_execution(db, 1);
 
-    int id_debug = el_create_log(db, 1, "debug", "dbg_event", "debug msg", NULL);
+    int id_debug = el_create_log(db, 1, ACTA_LOG_LEVEL_DEBUG, "dbg_event", "debug msg", NULL);
     TEST_ASSERT(id_debug > 0);
 
-    int id_info = el_create_log(db, 1, "info", "info_event", "info msg", NULL);
+    int id_info = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "info_event", "info msg", NULL);
     TEST_ASSERT(id_info > 0);
 
-    int id_warn = el_create_log(db, 1, "warn", "warn_event", "warn msg", NULL);
+    int id_warn = el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "warn_event", "warn msg", NULL);
     TEST_ASSERT(id_warn > 0);
 
-    int id_error = el_create_log(db, 1, "error", "error_event", "error msg", NULL);
+    int id_error = el_create_log(db, 1, ACTA_LOG_LEVEL_ERROR, "error_event", "error msg", NULL);
     TEST_ASSERT(id_error > 0);
 
     test_db_teardown(db, path);
 }
-
 
 /* ---------- 10.5: create — NULL event ---------- */
 static void test_el_create_null_event(void) {
@@ -156,10 +151,9 @@ static void test_el_create_null_event(void) {
     execution_log_t log;
     memset(&log, 0, sizeof(log));
     log.execution_id = 1;
-    log.level = (char *)"info";
-    log.event = NULL;
-    log.message = (char *)"msg";
-    log.metadata = NULL;
+    ACTA_LOG_LEVEL_SET(log.level, INFO);
+    log.event   = NULL;
+    log.message = "msg";
 
     int id = 0;
     int rc = acta_db_execution_log_create(db, &log, &id);
@@ -177,7 +171,7 @@ static void test_el_create_null_message(void) {
 
     el_insert_execution(db, 1);
 
-    int id = el_create_log(db, 1, "info", "event", NULL, NULL);
+    int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", NULL, NULL);
     TEST_ASSERT(id > 0);
 
     test_db_teardown(db, path);
@@ -192,7 +186,7 @@ static void test_el_create_null_metadata(void) {
 
     el_insert_execution(db, 1);
 
-    int id = el_create_log(db, 1, "info", "event", "msg", NULL);
+    int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
     TEST_ASSERT(id > 0);
 
     test_db_teardown(db, path);
@@ -208,7 +202,7 @@ static void test_el_list_multiple(void) {
     el_insert_execution(db, 1);
 
     for (int i = 0; i < 5; i++) {
-        int id = el_create_log(db, 1, "info", "event", "msg", NULL);
+        int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
         TEST_ASSERT(id > 0);
     }
 
@@ -227,9 +221,9 @@ static void test_el_list_ordering(void) {
 
     el_insert_execution(db, 1);
 
-    int id1 = el_create_log(db, 1, "info", "first", "msg1", NULL);
-    int id2 = el_create_log(db, 1, "info", "second", "msg2", NULL);
-    int id3 = el_create_log(db, 1, "info", "third", "msg3", NULL);
+    int id1 = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "first",  "msg1", NULL);
+    int id2 = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "second", "msg2", NULL);
+    int id3 = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "third",  "msg3", NULL);
     TEST_ASSERT(id1 > 0);
     TEST_ASSERT(id2 > 0);
     TEST_ASSERT(id3 > 0);
@@ -259,7 +253,6 @@ static void test_el_list_no_logs(void) {
     execution_log_t *logs = acta_db_execution_log_list_by_execution(db, 42, &count);
     TEST_ASSERT_EQ_INT(count, 0);
 
-    /* logs may be NULL or a valid (empty) array */
     if (logs) {
         acta_db_execution_log_list_free(logs, count);
     }
@@ -295,23 +288,19 @@ static void test_el_list_excludes_others(void) {
     el_insert_execution(db, 1);
     el_insert_execution(db, 2);
 
-    /* Create logs for execution 1 */
-    int id_a1 = el_create_log(db, 1, "info", "event_a1", "msg", NULL);
-    int id_a2 = el_create_log(db, 1, "info", "event_a2", "msg", NULL);
+    int id_a1 = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event_a1", "msg", NULL);
+    int id_a2 = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event_a2", "msg", NULL);
     TEST_ASSERT(id_a1 > 0);
     TEST_ASSERT(id_a2 > 0);
 
-    /* Create logs for execution 2 */
-    int id_b1 = el_create_log(db, 2, "info", "event_b1", "msg", NULL);
+    int id_b1 = el_create_log(db, 2, ACTA_LOG_LEVEL_INFO, "event_b1", "msg", NULL);
     TEST_ASSERT(id_b1 > 0);
 
-    /* List execution 1 — should only contain id_a1 and id_a2 */
     int count = 0;
     execution_log_t *logs = acta_db_execution_log_list_by_execution(db, 1, &count);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 2);
 
-    /* Verify execution 2's log is NOT present */
     for (int i = 0; i < count; i++) {
         TEST_ASSERT(logs[i].id != id_b1);
         TEST_ASSERT_EQ_INT(logs[i].execution_id, 1);
@@ -331,7 +320,7 @@ static void test_el_free_valid(void) {
 
     el_insert_execution(db, 1);
 
-    int id = el_create_log(db, 1, "info", "event", "msg", NULL);
+    int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
     TEST_ASSERT(id > 0);
 
     int count = 0;
@@ -339,7 +328,7 @@ static void test_el_free_valid(void) {
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 1);
 
-    acta_db_execution_log_free(logs);
+    acta_db_execution_log_list_free(logs, count);  /* fixed: was incorrectly using _free() */
     TEST_ASSERT(1); /* no crash */
 
     test_db_teardown(db, path);
@@ -368,7 +357,7 @@ static void test_el_list_free_valid(void) {
     el_insert_execution(db, 1);
 
     for (int i = 0; i < 4; i++) {
-        int id = el_create_log(db, 1, "info", "event", "msg", NULL);
+        int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
         TEST_ASSERT(id > 0);
     }
 
@@ -392,20 +381,17 @@ static void test_el_cascade_delete(void) {
 
     el_insert_execution(db, 1);
 
-    /* Create logs for execution 1 */
-    int id1 = el_create_log(db, 1, "info", "event1", "msg", NULL);
-    int id2 = el_create_log(db, 1, "warn", "event2", "msg", NULL);
+    int id1 = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO,  "event1", "msg", NULL);
+    int id2 = el_create_log(db, 1, ACTA_LOG_LEVEL_WARN,  "event2", "msg", NULL);
     TEST_ASSERT(id1 > 0);
     TEST_ASSERT(id2 > 0);
 
     int count_before = el_count_logs(db, 1);
     TEST_ASSERT_EQ_INT(count_before, 2);
 
-    /* Delete the execution row via raw SQL (CASCADE should remove logs) */
     int rc = el_raw_delete_execution(db, 1);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    /* Logs should be gone due to CASCADE */
     int count_after = el_count_logs(db, 1);
     TEST_ASSERT_EQ_INT(count_after, 0);
 
