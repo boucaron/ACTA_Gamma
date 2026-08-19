@@ -34,8 +34,10 @@ static void test_sf_create_child(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
     TEST_ASSERT(child_id > 0);
 
-    skill_folder_t *child = acta_db_skill_folder_get(db, child_id);
+    int err = 0;
+    skill_folder_t *child = acta_db_skill_folder_get(db, child_id, &err);
     TEST_ASSERT_NOT_NULL(child);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(child->parent_id, parent_id);
     acta_db_skill_folder_free(child);
 
@@ -107,8 +109,10 @@ static void test_sf_get_existing(void) {
     int rc = acta_db_skill_folder_create(db, "MyFolder", 0, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    skill_folder_t *f = acta_db_skill_folder_get(db, id);
+    int err = 0;
+    skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(f->id, id);
     TEST_ASSERT_EQ_STR(f->name, "MyFolder");
     TEST_ASSERT_EQ_INT(f->parent_id, 0);
@@ -125,8 +129,10 @@ static void test_sf_get_nonexistent(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    skill_folder_t *f = acta_db_skill_folder_get(db, 999999);
+    int err = 0;
+    skill_folder_t *f = acta_db_skill_folder_get(db, 999999, &err);
     TEST_ASSERT_NULL(f);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
@@ -145,8 +151,10 @@ static void test_sf_rename_happy(void) {
     rc = acta_db_skill_folder_rename(db, id, "NewName");
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    skill_folder_t *f = acta_db_skill_folder_get(db, id);
+    int err = 0;
+    skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_STR(f->name, "NewName");
     acta_db_skill_folder_free(f);
 
@@ -191,8 +199,10 @@ static void test_sf_soft_delete_happy(void) {
     rc = acta_db_skill_folder_soft_delete(db, id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    skill_folder_t *f = acta_db_skill_folder_get(db, id);
+    int err = 0;
+    skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(f->deleted_at);
     acta_db_skill_folder_free(f);
 
@@ -240,13 +250,14 @@ static void test_sf_list_children_with(void) {
     rc = acta_db_skill_folder_create(db, "C3", parent_id, &child3);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    int count = 0;
-    skill_folder_t *items = acta_db_skill_folder_list_children(db, parent_id, &count);
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
 
     for (int i = 0; i < count; i++) {
-        TEST_ASSERT_EQ_INT(items[i].parent_id, parent_id);
+        TEST_ASSERT_EQ_INT(items[i]->parent_id, parent_id);
     }
     acta_db_skill_folder_list_free(items, count);
 
@@ -264,8 +275,9 @@ static void test_sf_list_children_empty(void) {
     int rc = acta_db_skill_folder_create(db, "Lonely", 0, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    int count = 0;
-    skill_folder_t *items = acta_db_skill_folder_list_children(db, id, &count);
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, id, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     if (items != NULL) {
         acta_db_skill_folder_list_free(items, count);
@@ -290,11 +302,12 @@ static void test_sf_list_all_excludes_deleted(void) {
     rc = acta_db_skill_folder_soft_delete(db, id2);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    int count = 0;
-    skill_folder_t *items = acta_db_skill_folder_list_all(db, &count);
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all(db, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 1);
-    TEST_ASSERT_EQ_INT(items[0].id, id1);
+    TEST_ASSERT_EQ_INT(items[0]->id, id1);
     acta_db_skill_folder_list_free(items, count);
 
     test_db_teardown(db, path);
@@ -311,7 +324,8 @@ static void test_sf_free_valid(void) {
     int rc = acta_db_skill_folder_create(db, "FreeMe", 0, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    skill_folder_t *f = acta_db_skill_folder_get(db, id);
+    int err = 0;
+    skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
     acta_db_skill_folder_free(f);
 
@@ -339,8 +353,9 @@ static void test_sf_list_free_valid(void) {
     rc = acta_db_skill_folder_create(db, "C2", parent_id, &child2);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    int count = 0;
-    skill_folder_t *items = acta_db_skill_folder_list_children(db, parent_id, &count);
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_skill_folder_list_free(items, count);
 

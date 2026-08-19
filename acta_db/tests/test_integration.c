@@ -242,7 +242,8 @@ static void test_integration_skill_lifecycle(void) {
     TEST_ASSERT(revs[2]->deleted_at != NULL);
     acta_db_skill_revision_list_free(revs, rev_count);
 
-    TEST_ASSERT_NULL(acta_db_skill_get_live(db, skill_id));
+    /* get_live returns NULL after soft-delete */
+    TEST_ASSERT_NULL(acta_db_skill_get_live(db, skill_id, NULL));
 
     test_db_teardown(db, path);
 }
@@ -610,7 +611,7 @@ static void test_integration_memory_leak_sweep(void) {
 
     /* skill */
     int sid = make_skill(db, "LeakSkill");
-    { skill_t *sg = acta_db_skill_get(db, sid); acta_db_skill_free(sg); }
+    { skill_t *sg = acta_db_skill_get(db, sid, NULL); acta_db_skill_free(sg); }
 
     /* skill revision */
     { skill_revision_t *sr = get_skill_rev(db, sid, 1); acta_db_skill_revision_free(sr); }
@@ -662,7 +663,7 @@ static void test_integration_memory_leak_sweep(void) {
       acta_db_model_folder_list_free(f, n); }
 
     /* list-and-free: skill folders */
-    { int n = 0; skill_folder_t *f = acta_db_skill_folder_list_all(db, &n);
+    { int n = 0, err = 0; skill_folder_t **f = acta_db_skill_folder_list_all(db, &n, &err);
       acta_db_skill_folder_list_free(f, n); }
 
     /* list-and-free: models */
@@ -670,7 +671,7 @@ static void test_integration_memory_leak_sweep(void) {
       acta_db_model_list_free(m, n); }
 
     /* list-and-free: skills */
-    { int n = 0; skill_t *s = acta_db_skill_list_all(db, &n);
+    { int n = 0, err = 0; skill_t **s = acta_db_skill_list_all(db, &n, &err);
       acta_db_skill_list_free(s, n); }
 
     /* list-and-free: executions by status */
@@ -717,15 +718,15 @@ static void test_integration_null_safety(void) {
     acta_db_model_revision_list_free(NULL, 0);
 
     /* skill */
-    TEST_ASSERT_NULL(acta_db_skill_get(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_skill_get_live(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_skill_list_all(NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_get(NULL, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_get_live(NULL, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_list_all(NULL, NULL, NULL));
     acta_db_skill_free(NULL);
     acta_db_skill_list_free(NULL, 0);
 
     /* skill folder */
-    TEST_ASSERT_NULL(acta_db_skill_folder_get(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_skill_folder_list_all(NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_folder_get(NULL, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_folder_list_all(NULL, NULL, NULL));
     acta_db_skill_folder_free(NULL);
     acta_db_skill_folder_list_free(NULL, 0);
 
