@@ -27,6 +27,9 @@ model_folder_t *acta_db_model_folder_list_all(db_t *db, int *out_count);
 void          acta_db_model_folder_free(model_folder_t *f);
 void          acta_db_model_folder_list_free(model_folder_t *items, int count);
 
+int  acta_db_model_restore(db_t *db, int id);
+int  acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id);
+
 /* ---------- model_t ---------- */
 
 typedef struct {

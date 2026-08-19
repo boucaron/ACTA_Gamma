@@ -459,6 +459,192 @@ static void test_model_list_free_valid(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 4.28: model_restore — happy path ---------- */
+static void test_model_restore_happy(void) {
+    const char *path = "test/acta_test_m_restore.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    int id;
+    acta_db_model_create(db, &m, &id);
+    acta_db_model_soft_delete(db, id);
+
+    int rc = acta_db_model_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* Should be visible via get_live again */
+    model_t *got = acta_db_model_get_live(db, id);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_NULL(got->deleted_at);
+    acta_db_model_free(got);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.29: model_restore — already live ---------- */
+static void test_model_restore_already_live(void) {
+    const char *path = "test/acta_test_m_restore_live.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    int id;
+    acta_db_model_create(db, &m, &id);
+
+    /* Model is not deleted, so restore should fail (WHERE deleted_at IS NOT NULL matches nothing) */
+    int rc = acta_db_model_restore(db, id);
+    TEST_ASSERT(rc < 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.30: model_restore — non-existent ---------- */
+static void test_model_restore_nonexistent(void) {
+    const char *path = "test/acta_test_m_restore_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int rc = acta_db_model_restore(db, 999999);
+    TEST_ASSERT(rc < 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.31: model_restore — appears in list_all after restore ---------- */
+static void test_model_restore_in_list(void) {
+    const char *path = "test/acta_test_m_restore_list.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m1 = { .name = "A", .backend = "b", .model_identifier = "mid" };
+    model_t m2 = { .name = "B", .backend = "b", .model_identifier = "mid" };
+    int id1, id2;
+    acta_db_model_create(db, &m1, &id1);
+    acta_db_model_create(db, &m2, &id2);
+
+    acta_db_model_soft_delete(db, id2);
+
+    int count = 0;
+    acta_db_model_list_all(db, &count);
+    TEST_ASSERT_EQ_INT(count, 1);
+
+    acta_db_model_restore(db, id2);
+
+    count = 0;
+    model_t *items = acta_db_model_list_all(db, &count);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.32: model_move_to_folder — to specific folder ---------- */
+static void test_model_move_to_folder_specific(void) {
+    const char *path = "test/acta_test_m_move_spec.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int f1, f2;
+    acta_db_model_folder_create(db, "FolderA", 0, &f1);
+    acta_db_model_folder_create(db, "FolderB", 0, &f2);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid", .folder_id = f1 };
+    int id;
+    acta_db_model_create(db, &m, &id);
+
+    int rc = acta_db_model_move_to_folder(db, id, f2);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* Should no longer appear in f1 */
+    int count1 = 0;
+    model_t *items1 = acta_db_model_list_in_folder(db, f1, &count1);
+    TEST_ASSERT_EQ_INT(count1, 0);
+    acta_db_model_list_free(items1, count1);
+
+    /* Should appear in f2 */
+    int count2 = 0;
+    model_t *items2 = acta_db_model_list_in_folder(db, f2, &count2);
+    TEST_ASSERT_EQ_INT(count2, 1);
+    TEST_ASSERT_EQ_INT(items2[0].id, id);
+    acta_db_model_list_free(items2, count2);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.33: model_move_to_folder — to root (folder_id = 0) ---------- */
+static void test_model_move_to_folder_root(void) {
+    const char *path = "test/acta_test_m_move_root.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int fid;
+    acta_db_model_folder_create(db, "F", 0, &fid);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid", .folder_id = fid };
+    int id;
+    acta_db_model_create(db, &m, &id);
+
+    int rc = acta_db_model_move_to_folder(db, id, 0);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* Should appear at root */
+    int count = 0;
+    model_t *items = acta_db_model_list_in_folder(db, 0, &count);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_INT(items[0].id, id);
+    acta_db_model_list_free(items, count);
+
+    /* Should NOT appear in the old folder */
+    count = 0;
+    model_t *old = acta_db_model_list_in_folder(db, fid, &count);
+    TEST_ASSERT_EQ_INT(count, 0);
+    acta_db_model_list_free(old, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.34: model_move_to_folder — soft-deleted model ---------- */
+static void test_model_move_deleted(void) {
+    const char *path = "test/acta_test_m_move_del.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int fid;
+    acta_db_model_folder_create(db, "F", 0, &fid);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    int id;
+    acta_db_model_create(db, &m, &id);
+    acta_db_model_soft_delete(db, id);
+
+    int rc = acta_db_model_move_to_folder(db, id, fid);
+    TEST_ASSERT(rc < 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.35: model_move_to_folder — non-existent model ---------- */
+static void test_model_move_nonexistent(void) {
+    const char *path = "test/acta_test_m_move_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int rc = acta_db_model_move_to_folder(db, 999999, 0);
+    TEST_ASSERT(rc < 0);
+
+    test_db_teardown(db, path);
+}
+
+
 void run_model_tests(void) {
     fprintf(stderr, "\n=== model tests ===\n");
     test_model_create_root();
@@ -488,4 +674,15 @@ void run_model_tests(void) {
     test_model_free_valid();
     test_model_free_null();
     test_model_list_free_valid();
+    /* restore */
+    test_model_restore_happy();
+    test_model_restore_already_live();
+    test_model_restore_nonexistent();
+    test_model_restore_in_list();
+    /* move_to_folder */
+    test_model_move_to_folder_specific();
+    test_model_move_to_folder_root();
+    test_model_move_deleted();
+    test_model_move_nonexistent();
 }
+

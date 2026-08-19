@@ -320,6 +320,45 @@ model_t *acta_db_model_list_all(db_t *db, int *out_count) {
     return items;
 }
 
+int acta_db_model_restore(db_t *db, int id) {
+    if (!db) return -1;
+    const char *sql =
+        "UPDATE models SET deleted_at = NULL, updated_at = datetime('now') "
+        "WHERE id = ? AND deleted_at IS NOT NULL;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    sqlite3_bind_int(stmt, 1, id);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) return -1;
+    return sqlite3_changes(db->handle) > 0 ? 0 : -1;
+}
+
+int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
+    if (!db) return -1;
+    const char *sql =
+        "UPDATE models SET folder_id = ?, updated_at = datetime('now') "
+        "WHERE id = ? AND deleted_at IS NULL;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+
+    if (folder_id == 0) {
+        sqlite3_bind_null(stmt, 1);
+    } else {
+        sqlite3_bind_int(stmt, 1, folder_id);
+    }
+    sqlite3_bind_int(stmt, 2, model_id);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) return -1;
+    return sqlite3_changes(db->handle) > 0 ? 0 : -1;
+}
+
+
+
+
 void acta_db_model_free(model_t *m) {
     if (!m) return;
     free(m->name);
