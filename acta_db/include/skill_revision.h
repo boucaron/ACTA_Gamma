@@ -26,7 +26,7 @@ skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(db_t *db, int skil
 skill_revision_t *acta_db_skill_revision_list_by_skill(db_t *db, int skill_id, int *out_count);
 void              acta_db_skill_revision_free(skill_revision_t *r);
 void              acta_db_skill_revision_list_free(skill_revision_t *items, int count);
-
+skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id);
 #ifdef __cplusplus
 }
 #endif

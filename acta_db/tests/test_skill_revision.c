@@ -1,4 +1,4 @@
-/* test_skill_revision.c — Tests for skill_revision.h (tests 8.1 – 8.7) */
+/* test_skill_revision.c — Tests for skill_revision.h (tests 8.1 – 8.10) */
 
 #include "test_common.h"
 #include "skill_revision.h"
@@ -203,6 +203,61 @@ static void test_sr_list_free_valid(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 8.8: get_latest — multiple revisions, returns highest ---------- */
+static void test_sr_get_latest_multiple(void) {
+    const char *path = "test/acta_test_sr_latest.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill88");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+    sr_update_skill(db, skill_id, "v3");
+
+    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, skill_id);
+    TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(latest->skill_id, skill_id);
+    TEST_ASSERT_EQ_INT(latest->revision, 3);
+    TEST_ASSERT_EQ_STR(latest->name, "v3");
+    acta_db_skill_revision_free(latest);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.9: get_latest — single revision ---------- */
+static void test_sr_get_latest_single(void) {
+    const char *path = "test/acta_test_sr_latest_single.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill89");
+    TEST_ASSERT(skill_id > 0);
+
+    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, skill_id);
+    TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(latest->skill_id, skill_id);
+    TEST_ASSERT_EQ_INT(latest->revision, 1);
+    TEST_ASSERT_EQ_STR(latest->name, "RevSkill89");
+    acta_db_skill_revision_free(latest);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.10: get_latest — non-existent skill ---------- */
+static void test_sr_get_latest_nonexistent(void) {
+    const char *path = "test/acta_test_sr_latest_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    skill_revision_t *latest = acta_db_skill_revision_get_latest(db, 999999);
+    TEST_ASSERT_NULL(latest);
+
+    test_db_teardown(db, path);
+}
+
 /* ---------- runner ---------- */
 void run_skill_revision_tests(void) {
     fprintf(stderr, "\n=== skill_revision tests ===\n");
@@ -215,4 +270,7 @@ void run_skill_revision_tests(void) {
     test_sr_free_valid();
     test_sr_free_null();
     test_sr_list_free_valid();
+    test_sr_get_latest_multiple();
+    test_sr_get_latest_single();
+    test_sr_get_latest_nonexistent();
 }
