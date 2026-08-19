@@ -15,7 +15,7 @@ static context_t *row_to_context(sqlite3_stmt *stmt) {
 }
 
 int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
-    if (!db || !c || !c->type || !c->content || !c->content_hash || !out_id)
+    if (!db || !c || !c->type || !c->content || !c->content_hash)
         return ACTA_DB_ERR_INVALID;
 
     const char *sql =
@@ -34,7 +34,8 @@ int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
 
-    *out_id = (int)sqlite3_last_insert_rowid(db->handle);
+    if (out_id)
+        *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
 
@@ -57,9 +58,10 @@ context_t *acta_db_context_get(db_t *db, int id) {
 }
 
 context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_count) {
-    if (!db || !out_count) return NULL;
+    if (!db) return NULL;
     if (!hash) {
-        *out_count = 0;
+        if (out_count)
+            *out_count = 0;
         return NULL;
     }
 
@@ -68,7 +70,8 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
         "FROM contexts WHERE content_hash = ? ORDER BY id;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        *out_count = 0;
+        if (out_count)
+            *out_count = 0;
         return NULL;
     }
     sqlite3_bind_text(stmt, 1, hash, -1, SQLITE_TRANSIENT);
@@ -80,7 +83,8 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
         if (!item) {
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            *out_count = 0;
+            if (out_count)
+                *out_count = 0;
             return NULL;
         }
         context_t *tmp = realloc(items, sizeof(context_t) * (count + 1));
@@ -88,7 +92,8 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
             acta_db_context_free(item);
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            *out_count = 0;
+            if (out_count)
+                *out_count = 0;
             return NULL;
         }
         items = tmp;
@@ -96,19 +101,21 @@ context_t *acta_db_context_list_by_hash(db_t *db, const char *hash, int *out_cou
         free(item);
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count)
+        *out_count = count;
     return items;
 }
 
 context_t *acta_db_context_list_all(db_t *db, int *out_count) {
-    if (!db || !out_count) return NULL;
+    if (!db) return NULL;
 
     const char *sql =
         "SELECT id, type, content, content_hash, metadata, created_at "
         "FROM contexts ORDER BY id;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        *out_count = 0;
+        if (out_count)
+            *out_count = 0;
         return NULL;
     }
 
@@ -119,7 +126,8 @@ context_t *acta_db_context_list_all(db_t *db, int *out_count) {
         if (!item) {
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            *out_count = 0;
+            if (out_count)
+                *out_count = 0;
             return NULL;
         }
         context_t *tmp = realloc(items, sizeof(context_t) * (count + 1));
@@ -127,7 +135,8 @@ context_t *acta_db_context_list_all(db_t *db, int *out_count) {
             acta_db_context_free(item);
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            *out_count = 0;
+            if (out_count)
+                *out_count = 0;
             return NULL;
         }
         items = tmp;
@@ -135,14 +144,16 @@ context_t *acta_db_context_list_all(db_t *db, int *out_count) {
         free(item);
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count)
+        *out_count = count;
     return items;
 }
 
 context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_count) {
-    if (!db || !out_count) return NULL;
+    if (!db) return NULL;
     if (!type) {
-        *out_count = 0;
+        if (out_count)
+            *out_count = 0;
         return NULL;
     }
 
@@ -151,7 +162,8 @@ context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_cou
         "FROM contexts WHERE type = ? ORDER BY id;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        *out_count = 0;
+        if (out_count)
+            *out_count = 0;
         return NULL;
     }
     sqlite3_bind_text(stmt, 1, type, -1, SQLITE_TRANSIENT);
@@ -163,7 +175,8 @@ context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_cou
         if (!item) {
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            *out_count = 0;
+            if (out_count)
+                *out_count = 0;
             return NULL;
         }
         context_t *tmp = realloc(items, sizeof(context_t) * (count + 1));
@@ -171,7 +184,8 @@ context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_cou
             acta_db_context_free(item);
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            *out_count = 0;
+            if (out_count)
+                *out_count = 0;
             return NULL;
         }
         items = tmp;
@@ -179,7 +193,8 @@ context_t *acta_db_context_list_by_type(db_t *db, const char *type, int *out_cou
         free(item);
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count)
+        *out_count = count;
     return items;
 }
 
