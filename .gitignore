@@ -42,7 +42,3 @@ htmlcov/
 # Local config overrides
 config/local.yaml
 
-# Makefiles
-Makefile*
-Makefile.Debug
-Makefile.Release
