@@ -607,6 +607,202 @@ static void test_sk_free_and_list_free(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 7.24: restore — happy path ---------- */
+static void test_sk_restore_happy(void) {
+    const char *path = "test/acta_test_sk_restore_happy.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = sk_create_skill(db, 0, "RestoreSkill", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    /* Soft delete first */
+    int rc = acta_db_skill_soft_delete(db, id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    skill_t *deleted = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(deleted);
+    TEST_ASSERT_NOT_NULL(deleted->deleted_at);
+    acta_db_skill_free(deleted);
+
+    /* Now restore */
+    rc = acta_db_skill_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    skill_t *restored = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(restored);
+    TEST_ASSERT(restored->deleted_at == NULL);
+    acta_db_skill_free(restored);
+
+    /* get_live should find it again */
+    skill_t *live = acta_db_skill_get_live(db, id);
+    TEST_ASSERT_NOT_NULL(live);
+    acta_db_skill_free(live);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.25: restore — already live (no-op) ---------- */
+static void test_sk_restore_already_live(void) {
+    const char *path = "test/acta_test_sk_restore_live.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = sk_create_skill(db, 0, "AlreadyLive", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    /* Should succeed as a no-op (WHERE deleted_at IS NOT NULL matches nothing) */
+    int rc = acta_db_skill_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    skill_t *s = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT(s->deleted_at == NULL);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.26: restore — non-existent id ---------- */
+static void test_sk_restore_nonexistent(void) {
+    const char *path = "test/acta_test_sk_restore_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* No row with id 999999 — UPDATE affects 0 rows, but rc is still SQLITE_DONE */
+    /* So this returns 0 (success) but effectively a no-op */
+    int rc = acta_db_skill_restore(db, 999999);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    skill_t *s = acta_db_skill_get(db, 999999);
+    TEST_ASSERT_NULL(s);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.27: move — to existing folder ---------- */
+static void test_sk_move_to_folder_happy(void) {
+    const char *path = "test/acta_test_sk_move_folder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "TargetFolder", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int id = sk_create_skill(db, 0, "Movable", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    int rc = acta_db_skill_move_to_folder(db, id, folder_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    skill_t *s = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(s->folder_id, folder_id);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.28: move — to root (folder_id = 0) ---------- */
+static void test_sk_move_to_root(void) {
+    const char *path = "test/acta_test_sk_move_root.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "OrigFolder", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int id = sk_create_skill(db, folder_id, "MoveToRoot", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    int rc = acta_db_skill_move_to_folder(db, id, 0);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    skill_t *s = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(s->folder_id, 0);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.29: move — invalid folder_id ---------- */
+static void test_sk_move_invalid_folder(void) {
+    const char *path = "test/acta_test_sk_move_badfolder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = sk_create_skill(db, 0, "BadMove", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    int rc = acta_db_skill_move_to_folder(db, id, 99999);
+    TEST_ASSERT(rc < 0);
+
+    /* Skill unchanged */
+    skill_t *s = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(s->folder_id, 0);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.30: move — deleted skill ---------- */
+static void test_sk_move_deleted_skill(void) {
+    const char *path = "test/acta_test_sk_move_deleted.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "DestFolder", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int id = sk_create_skill(db, 0, "DelMove", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    int rc = acta_db_skill_soft_delete(db, id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    rc = acta_db_skill_move_to_folder(db, id, folder_id);
+    TEST_ASSERT(rc < 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.31: move — to deleted folder ---------- */
+static void test_sk_move_to_deleted_folder(void) {
+    const char *path = "test/acta_test_sk_move_del_folder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "WillDelete", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int rc = acta_db_skill_folder_soft_delete(db, folder_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int id = sk_create_skill(db, 0, "MoveDel", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    rc = acta_db_skill_move_to_folder(db, id, folder_id);
+    TEST_ASSERT(rc < 0);
+
+    skill_t *s = acta_db_skill_get(db, id);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(s->folder_id, 0);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+
 /* ---------- runner ---------- */
 void run_skill_tests(void) {
     fprintf(stderr, "\n=== skill tests ===\n");
@@ -632,4 +828,13 @@ void run_skill_tests(void) {
     test_sk_list_specific_folder();
     test_sk_list_all_excludes_deleted();
     test_sk_free_and_list_free();
+    test_sk_restore_happy();
+    test_sk_restore_already_live();
+    test_sk_restore_nonexistent();
+    test_sk_move_to_folder_happy();
+    test_sk_move_to_root();
+    test_sk_move_invalid_folder();
+    test_sk_move_deleted_skill();
+    test_sk_move_to_deleted_folder();
 }
+

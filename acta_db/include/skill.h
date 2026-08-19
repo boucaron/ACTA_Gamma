@@ -51,6 +51,9 @@ skill_t *acta_db_skill_list_all(db_t *db, int *out_count);
 void     acta_db_skill_free(skill_t *s);
 void     acta_db_skill_list_free(skill_t *items, int count);
 
+int  acta_db_skill_restore(db_t *db, int id);
+int  acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id);
+
 #ifdef __cplusplus
 }
 #endif

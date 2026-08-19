@@ -293,6 +293,47 @@ skill_t *acta_db_skill_list_all(db_t *db, int *out_count) {
     return items;
 }
 
+int acta_db_skill_restore(db_t *db, int id) {
+    if (!db) return -1;
+    const char *sql = "UPDATE skills SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NOT NULL;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+    sqlite3_bind_int(stmt, 1, id);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return rc == SQLITE_DONE ? 0 : -1;
+}
+
+int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id) {
+    if (!db) return -1;
+
+    /* Validate target folder exists and is live */
+    if (folder_id != 0) {
+        sqlite3_stmt *check;
+        const char *check_sql = "SELECT 1 FROM skill_folders WHERE id = ? AND deleted_at IS NULL;";
+        if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK) return -1;
+        sqlite3_bind_int(check, 1, folder_id);
+        int found = (sqlite3_step(check) == SQLITE_ROW);
+        sqlite3_finalize(check);
+        if (!found) return -1;
+    }
+
+    const char *sql = "UPDATE skills SET folder_id = ?, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return -1;
+
+    if (folder_id == 0) sqlite3_bind_null(stmt, 1);
+    else sqlite3_bind_int(stmt, 1, folder_id);
+    sqlite3_bind_int(stmt, 2, skill_id);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) return -1;
+    return sqlite3_changes(db->handle) > 0 ? 0 : -1;
+}
+
+
+
 void acta_db_skill_free(skill_t *s) {
     if (!s) return;
     free(s->name); free(s->description); free(s->prompt_template);
