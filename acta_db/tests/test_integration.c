@@ -428,7 +428,9 @@ static void test_integration_context_reuse(void) {
 
     /* Verify list_by_hash returns the single context */
     int ctx_count = 0;
-    context_t *ctx_list = acta_db_context_list_by_hash(db, "shared_hash", &ctx_count);
+    int ctx_err = 0;
+    context_t **ctx_list = acta_db_context_list_by_hash(db, "shared_hash", &ctx_count, &ctx_err);
+    TEST_ASSERT_EQ_INT(ctx_err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(ctx_count, 1);
     acta_db_context_list_free(ctx_list, ctx_count);
 
@@ -710,11 +712,13 @@ static void test_integration_concurrency_two_connections(void) {
     TEST_ASSERT_EQ_INT(rc2, ACTA_DB_OK);
 
     /* Verify both rows are visible from both connections */
-    context_t *got1          = acta_db_context_get(db1, id1);
-    context_t *got1_from_db2 = acta_db_context_get(db2, id1);
-    context_t *got2          = acta_db_context_get(db2, id2);
-    context_t *got2_from_db1 = acta_db_context_get(db1, id2);
+    int get_err = 0;
+    context_t *got1          = acta_db_context_get(db1, id1, &get_err);
+    context_t *got1_from_db2 = acta_db_context_get(db2, id1, &get_err);
+    context_t *got2          = acta_db_context_get(db2, id2, &get_err);
+    context_t *got2_from_db1 = acta_db_context_get(db1, id2, &get_err);
 
+    TEST_ASSERT_EQ_INT(get_err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(got1);
     TEST_ASSERT_NOT_NULL(got1_from_db2);
     TEST_ASSERT_NOT_NULL(got2);
@@ -762,7 +766,9 @@ static void test_integration_large_content(void) {
     TEST_ASSERT(context_id > 0);
 
     /* Round-trip: get it back and verify content matches */
-    context_t *got = acta_db_context_get(db, context_id);
+    int get_err = 0;
+    context_t *got = acta_db_context_get(db, context_id, &get_err);
+    TEST_ASSERT_EQ_INT(get_err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(got);
     TEST_ASSERT(got->content != NULL);
     TEST_ASSERT_EQ_INT((int)strlen(got->content), (int)size);
@@ -794,7 +800,9 @@ static void test_integration_unicode_content(void) {
     int rc = acta_db_context_create(db, &ctx, &context_id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    context_t *got = acta_db_context_get(db, context_id);
+    int get_err = 0;
+    context_t *got = acta_db_context_get(db, context_id, &get_err);
+    TEST_ASSERT_EQ_INT(get_err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(got);
     TEST_ASSERT(got->content != NULL);
     TEST_ASSERT(strcmp(got->content, utf8_content) == 0);
@@ -861,7 +869,7 @@ static void test_integration_memory_leak_sweep(void) {
     ctx.metadata = NULL;
     int cid = 0;
     acta_db_context_create(db, &ctx, &cid);
-    context_t *cg = acta_db_context_get(db, cid);
+    context_t *cg = acta_db_context_get(db, cid, NULL);
     acta_db_context_free(cg);
 
     /* Create and free an execution */
@@ -948,11 +956,11 @@ static void test_integration_null_safety(void) {
        We don't need an open DB for this. */
 
     /* context */
-    context_t *c = acta_db_context_get(NULL, 1);
+    context_t *c = acta_db_context_get(NULL, 1, NULL);
     TEST_ASSERT_NULL(c);
 
-    c = acta_db_context_list_by_hash(NULL, "hash", (int *)NULL);
-    TEST_ASSERT_NULL(c);
+    context_t **cl = acta_db_context_list_by_hash(NULL, "hash", (int *)NULL, NULL);
+    TEST_ASSERT_NULL(cl);
 
     acta_db_context_free(NULL);
     acta_db_context_list_free(NULL, 0);
