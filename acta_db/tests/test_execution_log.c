@@ -1,4 +1,4 @@
-/* test_execution_log.c — Tests for execution_log.h (tests 10.1 – 10.16) */
+/* test_execution_log.c — Tests for acta_db_execution_log.h (tests 10.1 – 10.16) */
 
 #include "test_common.h"
 #include "execution_log.h"
@@ -38,10 +38,9 @@ static int el_create_log(db_t *db, int execution_id, const char *level,
 
 /* Count logs for a given execution_id */
 static int el_count_logs(db_t *db, int execution_id) {
-    execution_log_t *items = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, execution_id, &items, &count, &err);
-    if (rc == ACTA_DB_OK && items) {
+    execution_log_t **items = acta_db_execution_log_list_by_execution(db, execution_id, &count, &err);
+    if (items) {
         acta_db_execution_log_list_free(items, count);
     }
     return count;
@@ -229,16 +228,15 @@ static void test_el_list_ordering(void) {
     TEST_ASSERT(id2 > 0);
     TEST_ASSERT(id3 > 0);
 
-    execution_log_t *logs = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, 1, &logs, &count, &err);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 3);
 
     /* Verify ordering: id should be monotonically increasing */
-    TEST_ASSERT(logs[0].id <= logs[1].id);
-    TEST_ASSERT(logs[1].id <= logs[2].id);
+    TEST_ASSERT(logs[0]->id <= logs[1]->id);
+    TEST_ASSERT(logs[1]->id <= logs[2]->id);
 
     acta_db_execution_log_list_free(logs, count);
 
@@ -252,15 +250,11 @@ static void test_el_list_no_logs(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    execution_log_t *logs = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, 42, &logs, &count, &err);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 42, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
-
-    if (logs) {
-        acta_db_execution_log_list_free(logs, count);
-    }
+    TEST_ASSERT_NULL(logs);          /* not-found → NULL, no allocation to free */
 
     test_db_teardown(db, path);
 }
@@ -272,15 +266,11 @@ static void test_el_list_nonexistent_execution(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    execution_log_t *logs = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, 999999, &logs, &count, &err);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 999999, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
-
-    if (logs) {
-        acta_db_execution_log_list_free(logs, count);
-    }
+    TEST_ASSERT_NULL(logs);
 
     test_db_teardown(db, path);
 }
@@ -303,16 +293,15 @@ static void test_el_list_excludes_others(void) {
     int id_b1 = el_create_log(db, 2, ACTA_LOG_LEVEL_INFO, "event_b1", "msg", NULL);
     TEST_ASSERT(id_b1 > 0);
 
-    execution_log_t *logs = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, 1, &logs, &count, &err);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 2);
 
     for (int i = 0; i < count; i++) {
-        TEST_ASSERT(logs[i].id != id_b1);
-        TEST_ASSERT_EQ_INT(logs[i].execution_id, 1);
+        TEST_ASSERT(logs[i]->id != id_b1);
+        TEST_ASSERT_EQ_INT(logs[i]->execution_id, 1);
     }
 
     acta_db_execution_log_list_free(logs, count);
@@ -332,14 +321,13 @@ static void test_el_free_valid(void) {
     int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
     TEST_ASSERT(id > 0);
 
-    execution_log_t *logs = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, 1, &logs, &count, &err);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 1);
 
-    acta_db_execution_log_list_free(logs, count);  /* fixed: was incorrectly using _free() */
+    acta_db_execution_log_list_free(logs, count);
     TEST_ASSERT(1); /* no crash */
 
     test_db_teardown(db, path);
@@ -372,10 +360,9 @@ static void test_el_list_free_valid(void) {
         TEST_ASSERT(id > 0);
     }
 
-    execution_log_t *logs = NULL;
     int count = 0, err = 0;
-    int rc = acta_db_execution_log_list_by_execution(db, 1, &logs, &count, &err);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 4);
 

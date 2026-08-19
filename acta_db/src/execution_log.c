@@ -81,18 +81,21 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
     return ACTA_DB_OK;
 }
 
-int acta_db_execution_log_list_by_execution(db_t *db,
-                                            int execution_id,
-                                            execution_log_t **out_items,
-                                            int *out_count,
-                                            int *out_err) {
-    if (!db || !out_items || !out_count) {
-        if (out_err) *out_err = ACTA_DB_ERR_INVALID;
-        return ACTA_DB_ERR_INVALID;
+/* ------------------------------------------------------------------ */
+/*  Lister – returns execution_log_t ** (array of heap-allocated ptrs)   */
+/*  on success; NULL on not-found or real failure.                       */
+/* ------------------------------------------------------------------ */
+
+execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
+                                                          int execution_id,
+                                                          int *out_count,
+                                                          int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
     }
 
-    *out_items = NULL;
-    *out_count = 0;
+    if (out_count) *out_count = 0;
 
     const char *sql =
         "SELECT id, execution_id, level, event, message, metadata, created_at"
@@ -101,29 +104,26 @@ int acta_db_execution_log_list_by_execution(db_t *db,
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        if (out_err) *out_err = ACTA_DB_ERR_SQL;
-        return ACTA_DB_ERR_SQL;
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
     }
     sqlite3_bind_int(stmt, 1, execution_id);
 
     int    count    = 0;
-    size_t capacity = 8;
-    execution_log_t *items = malloc(capacity * sizeof *items);
-    if (!items) {
-        if (out_err) *out_err = ACTA_DB_ERR_ALLOC;
-        sqlite3_finalize(stmt);
-        return ACTA_DB_ERR_ALLOC;
-    }
+    size_t capacity = 0;
+    execution_log_t **items = NULL;   /* NULL until first row is seen */
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        if ((size_t)count == capacity) {
-            size_t new_cap = capacity * 2;
-            execution_log_t *tmp = realloc(items, new_cap * sizeof *tmp);
+        /* Grow the pointer array as needed.
+         * realloc(NULL, n) ≡ malloc(n), so the first iteration allocates. */
+        if ((size_t)count >= capacity) {
+            size_t new_cap = capacity ? capacity * 2 : 8;
+            execution_log_t **tmp = realloc(items, new_cap * sizeof *tmp);
             if (!tmp) {
                 acta_db_execution_log_list_free(items, count);
                 sqlite3_finalize(stmt);
-                if (out_err) *out_err = ACTA_DB_ERR_ALLOC;
-                return ACTA_DB_ERR_ALLOC;
+                if (err) *err = ACTA_DB_ERR_ALLOC;
+                return NULL;
             }
             items    = tmp;
             capacity = new_cap;
@@ -133,20 +133,28 @@ int acta_db_execution_log_list_by_execution(db_t *db,
         if (!item) {
             acta_db_execution_log_list_free(items, count);
             sqlite3_finalize(stmt);
-            if (out_err) *out_err = ACTA_DB_ERR_INVALID;
-            return ACTA_DB_ERR_INVALID;
+            if (err) *err = ACTA_DB_ERR_INVALID;
+            return NULL;
         }
-        items[count++] = *item;
-        free(item);
+        items[count++] = item;       /* store the pointer directly */
     }
 
     sqlite3_finalize(stmt);
-    *out_items = items;
-    *out_count = count;
-    if (out_err) *out_err = ACTA_DB_OK;
-    return ACTA_DB_OK;
+
+    if (out_count) *out_count = count;
+    if (err)       *err       = ACTA_DB_OK;
+
+    /* Zero rows → not-found: release the (possibly NULL) array, return NULL. */
+    if (count == 0) {
+        free(items);
+        return NULL;
+    }
+    return items;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Free helpers                                                        */
+/* ------------------------------------------------------------------ */
 
 void acta_db_execution_log_free(execution_log_t *log) {
     if (!log) return;
@@ -158,14 +166,10 @@ void acta_db_execution_log_free(execution_log_t *log) {
     free(log);
 }
 
-void acta_db_execution_log_list_free(execution_log_t *items, int count) {
+void acta_db_execution_log_list_free(execution_log_t **items, int count) {
     if (!items) return;
     for (int i = 0; i < count; i++) {
-        free(items[i].level);
-        free(items[i].event);
-        free(items[i].message);
-        free(items[i].metadata);
-        free(items[i].created_at);
+        acta_db_execution_log_free(items[i]);
     }
     free(items);
 }

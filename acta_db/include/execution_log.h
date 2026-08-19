@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-/* --- String constants (execution_log.h) --- */
+/* --- String constants --- */
 #define ACTA_LOG_LEVEL_DEBUG "debug"
 #define ACTA_LOG_LEVEL_INFO  "info"
 #define ACTA_LOG_LEVEL_WARN  "warn"
@@ -26,16 +26,38 @@ typedef struct {
     char   *created_at;
 } execution_log_t;
 
-int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_id);
+/*
+ * Mutator.
+ *   Return value is the error code:
+ *     ACTA_DB_OK (0)        – row created; *out_id set (if non-NULL).
+ *     negative ACTA_DB_ERR_* – failure; *out_id left untouched.
+ * out_id may be NULL if the caller does not need the new id.
+ */
+int acta_db_execution_log_create(db_t *db,
+                                 const execution_log_t *log,
+                                 int *out_id);
 
-int acta_db_execution_log_list_by_execution(db_t *db,
-                                            int execution_id,
-                                            execution_log_t **out_items,
-                                            int *out_count,
-                                            int *out_err);
+/*
+ * Lister – target pattern:  T ** foo_list(…, int *err);
+ *
+ *   success / rows found → returns valid execution_log_t ** (array of
+ *                          heap-allocated structs), *err = ACTA_DB_OK.
+ *   no rows (not-found)  → returns NULL, *err = ACTA_DB_OK.
+ *   real failure         → returns NULL, *err = negative ACTA_DB_ERR_*.
+ *
+ * Both out_count and err may be NULL (caller ignores them).
+ */
+execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
+                                                          int execution_id,
+                                                          int *out_count,
+                                                          int *err);
 
+/* Free a single log entry (its string fields + the struct). */
 void acta_db_execution_log_free(execution_log_t *log);
-void acta_db_execution_log_list_free(execution_log_t *items, int count);
+
+/* Free an array of log entries produced by the lister, plus the array itself.
+ * items is the pointer returned by acta_db_execution_log_list_by_execution. */
+void acta_db_execution_log_list_free(execution_log_t **items, int count);
 
 #ifdef __cplusplus
 }
