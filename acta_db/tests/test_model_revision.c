@@ -1,4 +1,4 @@
-/* test_model_revision.c — Tests for model_revision.h (tests 5.1 – 5.11) */
+/* test_model_revision.c — Tests for model_revision.h (tests 5.1 – 5.15) */
 
 #include "test_common.h"
 #include "model_revision.h"
@@ -260,6 +260,67 @@ static void test_mr_list_free_valid(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 5.12: get_latest — multiple revisions ---------- */
+static void test_mr_get_latest_multi(void) {
+    const char *path = "test/acta_test_mr_latest_multi.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel512");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+    mr_update_model(db, model_id, "v3");
+
+    model_revision_t *latest = acta_db_model_revision_get_latest(db, model_id);
+    TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(latest->model_id, model_id);
+    TEST_ASSERT_EQ_INT(latest->revision, 3);
+    TEST_ASSERT_EQ_STR(latest->name, "v3");
+    acta_db_model_revision_free(latest);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 5.13: get_latest — single revision ---------- */
+static void test_mr_get_latest_single(void) {
+    const char *path = "test/acta_test_mr_latest_single.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel513");
+    TEST_ASSERT(model_id > 0);
+
+    model_revision_t *latest = acta_db_model_revision_get_latest(db, model_id);
+    TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(latest->model_id, model_id);
+    TEST_ASSERT_EQ_INT(latest->revision, 1);
+    TEST_ASSERT_EQ_STR(latest->name, "RevModel513");
+    acta_db_model_revision_free(latest);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 5.14: get_latest — non-existent model ---------- */
+static void test_mr_get_latest_nonexistent(void) {
+    const char *path = "test/acta_test_mr_latest_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_revision_t *latest = acta_db_model_revision_get_latest(db, 999999);
+    TEST_ASSERT_NULL(latest);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 5.15: get_latest — NULL db ---------- */
+static void test_mr_get_latest_null_db(void) {
+    model_revision_t *latest = acta_db_model_revision_get_latest(NULL, 1);
+    TEST_ASSERT_NULL(latest);
+}
+
 /* ---------- runner ---------- */
 void run_model_revision_tests(void) {
     fprintf(stderr, "\n=== model_revision tests ===\n");
@@ -274,4 +335,8 @@ void run_model_revision_tests(void) {
     test_mr_free_valid();
     test_mr_free_null();
     test_mr_list_free_valid();
+    test_mr_get_latest_multi();
+    test_mr_get_latest_single();
+    test_mr_get_latest_nonexistent();
+    test_mr_get_latest_null_db();
 }

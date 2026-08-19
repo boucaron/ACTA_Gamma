@@ -77,6 +77,21 @@ model_revision_t *acta_db_model_revision_list_by_model(db_t *db, int model_id, i
     return items;
 }
 
+model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id) {
+    if (!db) return NULL;
+    char sql[256];
+    snprintf(sql, sizeof(sql), "%s WHERE model_id = ? ORDER BY revision DESC LIMIT 1;", REV_SELECT);
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    sqlite3_bind_int(stmt, 1, model_id);
+
+    model_revision_t *result = NULL;
+    if (sqlite3_step(stmt) == SQLITE_ROW) result = row_to_model_revision(stmt);
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+
 void acta_db_model_revision_free(model_revision_t *r) {
     if (!r) return;
     free(r->name);

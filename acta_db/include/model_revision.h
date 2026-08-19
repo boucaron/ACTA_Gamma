@@ -28,6 +28,7 @@ model_revision_t *acta_db_model_revision_get_by_model_and_rev(db_t *db, int mode
 model_revision_t *acta_db_model_revision_list_by_model(db_t *db, int model_id, int *out_count);
 void              acta_db_model_revision_free(model_revision_t *r);
 void              acta_db_model_revision_list_free(model_revision_t *items, int count);
+model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id);
 
 #ifdef __cplusplus
 }
