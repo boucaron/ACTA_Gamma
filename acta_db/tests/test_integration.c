@@ -71,11 +71,19 @@ static int make_execution(db_t *db, int ctx_id,
     e.skill_revision_id = skill_rev_id;
     e.model_revision_id = model_rev_id;
     e.prompt            = prompt;
-    e.status            = "pending";
+    e.status            = ACTA_EXEC_STATUS_PENDING;
     int id = 0;
     int rc = acta_db_execution_create(db, &e, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
     return id;
+}
+
+/* Count items in a NULL-terminated execution list */
+static int count_exec_list(execution_t **items) {
+    int n = 0;
+    if (!items) return 0;
+    for (; items[n] != NULL; n++) {}
+    return n;
 }
 
 /* Convenience: build the full 4-piece set (ctx, model, skill, revs) */
@@ -251,7 +259,9 @@ static void test_integration_execution_references_revisions(void) {
     int exec_id = make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id, "Say hello");
     TEST_ASSERT(exec_id > 0);
 
-    execution_t *got = acta_db_execution_get(db, exec_id);
+    int err = 0;
+    execution_t *got = acta_db_execution_get(db, exec_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(got);
     TEST_ASSERT_EQ_INT(got->context_id,        ts.context_id);
     TEST_ASSERT_EQ_INT(got->skill_revision_id, ts.srev->id);
@@ -323,8 +333,11 @@ static void test_integration_context_reuse(void) {
         exec_ids[i] = make_execution(db, ctx_id, srev->id, mrev->id, "exec");
     }
 
+    int err = 0;
     for (int i = 0; i < 3; i++) {
-        execution_t *got = acta_db_execution_get(db, exec_ids[i]);
+        err = 0;
+        execution_t *got = acta_db_execution_get(db, exec_ids[i], &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
         TEST_ASSERT_NOT_NULL(got);
         TEST_ASSERT_EQ_INT(got->context_id, ctx_id);
         acta_db_execution_free(got);
@@ -360,7 +373,7 @@ static void test_integration_nested_executions(void) {
     child.skill_revision_id = ts.srev->id;
     child.model_revision_id = ts.mrev->id;
     child.prompt            = "child";
-    child.status            = "pending";
+    child.status            = ACTA_EXEC_STATUS_PENDING;
     child.parent_execution_id = root_id;
     int child_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &child, &child_id), 0);
@@ -372,28 +385,35 @@ static void test_integration_nested_executions(void) {
     gc.skill_revision_id = ts.srev->id;
     gc.model_revision_id = ts.mrev->id;
     gc.prompt            = "grandchild";
-    gc.status            = "pending";
+    gc.status            = ACTA_EXEC_STATUS_PENDING;
     gc.parent_execution_id = child_id;
     int gc_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &gc, &gc_id), 0);
 
     /* Verify tree */
-    int n = 0;
-    execution_t *kids = acta_db_execution_list_children(db, root_id, &n);
-    TEST_ASSERT_EQ_INT(n, 1);
-    TEST_ASSERT(kids[0].id == child_id);
-    acta_db_execution_list_free(kids, n);
+    int err = 0;
 
-    n = 0;
-    kids = acta_db_execution_list_children(db, child_id, &n);
-    TEST_ASSERT_EQ_INT(n, 1);
-    TEST_ASSERT(kids[0].id == gc_id);
-    acta_db_execution_list_free(kids, n);
+    err = 0;
+    execution_t **kids = acta_db_execution_list_children(db, root_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(kids);
+    TEST_ASSERT_EQ_INT(count_exec_list(kids), 1);
+    TEST_ASSERT(kids[0]->id == child_id);
+    acta_db_execution_list_free(kids);
 
-    n = 0;
-    kids = acta_db_execution_list_children(db, gc_id, &n);
-    TEST_ASSERT_EQ_INT(n, 0);
-    acta_db_execution_list_free(kids, n);
+    err = 0;
+    kids = acta_db_execution_list_children(db, child_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(kids);
+    TEST_ASSERT_EQ_INT(count_exec_list(kids), 1);
+    TEST_ASSERT(kids[0]->id == gc_id);
+    acta_db_execution_list_free(kids);
+
+    err = 0;
+    kids = acta_db_execution_list_children(db, gc_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT(kids == NULL || count_exec_list(kids) == 0);
+    acta_db_execution_list_free(kids);
 
     free_test_set(&ts);
     test_db_teardown(db, path);
@@ -441,7 +461,7 @@ static void test_integration_fk_enforcement(void) {
         e.skill_revision_id = srev->id;
         e.model_revision_id = mrev->id;
         e.prompt            = "test";
-        e.status            = "pending";
+        e.status            = ACTA_EXEC_STATUS_PENDING;
         int id = 0;
         int rc = acta_db_execution_create(db, &e, &id);
         TEST_ASSERT(rc < 0);
@@ -457,7 +477,7 @@ static void test_integration_fk_enforcement(void) {
         e.skill_revision_id = 999999;
         e.model_revision_id = mrev->id;
         e.prompt            = "test";
-        e.status            = "pending";
+        e.status            = ACTA_EXEC_STATUS_PENDING;
         int id = 0;
         TEST_ASSERT(acta_db_execution_create(db, &e, &id) < 0);
     }
@@ -470,7 +490,7 @@ static void test_integration_fk_enforcement(void) {
         e.skill_revision_id = srev->id;
         e.model_revision_id = 999999;
         e.prompt            = "test";
-        e.status            = "pending";
+        e.status            = ACTA_EXEC_STATUS_PENDING;
         int id = 0;
         TEST_ASSERT(acta_db_execution_create(db, &e, &id) < 0);
     }
@@ -603,7 +623,12 @@ static void test_integration_memory_leak_sweep(void) {
     model_revision_t *mrev = get_model_rev(db, mid, 1);
     skill_revision_t  *srev = get_skill_rev(db, sid, 1);
     int eid = make_execution(db, cid, srev->id, mrev->id, "p");
-    { execution_t *eg = acta_db_execution_get(db, eid); acta_db_execution_free(eg); }
+    {
+        int err = 0;
+        execution_t *eg = acta_db_execution_get(db, eid, &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+        acta_db_execution_free(eg);
+    }
 
     /* execution log  (NEW API: returns execution_log_t **, err via out-param) */
     {
@@ -649,8 +674,12 @@ static void test_integration_memory_leak_sweep(void) {
       acta_db_skill_list_free(s, n); }
 
     /* list-and-free: executions by status */
-    { int n = 0; execution_t *e = acta_db_execution_list_by_status(db, "pending", &n);
-      acta_db_execution_list_free(e, n); }
+    {
+        int err = 0;
+        execution_t **e = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+        acta_db_execution_list_free(e);
+    }
 
     acta_db_model_revision_free(mrev);
     acta_db_skill_revision_free(srev);
@@ -708,11 +737,23 @@ static void test_integration_null_safety(void) {
     acta_db_skill_revision_list_free(NULL, 0);
 
     /* execution */
-    TEST_ASSERT_NULL(acta_db_execution_get(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_execution_list_by_status(NULL, "pending", NULL));
-    TEST_ASSERT_NULL(acta_db_execution_list_children(NULL, 1, NULL));
+    {
+        int err = 0;
+        TEST_ASSERT_NULL(acta_db_execution_get(NULL, 1, &err));
+        TEST_ASSERT(err < 0);
+    }
+    {
+        int err = 0;
+        TEST_ASSERT_NULL(acta_db_execution_list_by_status(NULL, ACTA_EXEC_STATUS_PENDING, &err));
+        TEST_ASSERT(err < 0);
+    }
+    {
+        int err = 0;
+        TEST_ASSERT_NULL(acta_db_execution_list_children(NULL, 1, &err));
+        TEST_ASSERT(err < 0);
+    }
     acta_db_execution_free(NULL);
-    acta_db_execution_list_free(NULL, 0);
+    acta_db_execution_list_free(NULL);
 
     /* execution log  (NEW API) */
     {
