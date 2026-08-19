@@ -26,10 +26,16 @@ typedef struct {
     char   *created_at;
 } execution_log_t;
 
-int             acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_id);
-execution_log_t *acta_db_execution_log_list_by_execution(db_t *db, int execution_id, int *out_count);
-void            acta_db_execution_log_free(execution_log_t *log);
-void            acta_db_execution_log_list_free(execution_log_t *items, int count);
+int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_id);
+
+int acta_db_execution_log_list_by_execution(db_t *db,
+                                            int execution_id,
+                                            execution_log_t **out_items,
+                                            int *out_count,
+                                            int *out_err);
+
+void acta_db_execution_log_free(execution_log_t *log);
+void acta_db_execution_log_list_free(execution_log_t *items, int count);
 
 #ifdef __cplusplus
 }

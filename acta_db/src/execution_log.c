@@ -47,9 +47,9 @@ static execution_log_t *row_to_execution_log(sqlite3_stmt *stmt) {
 /* ------------------------------------------------------------------ */
 
 int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_id) {
-    if (!db || !log || !out_id) return -1;
-    if (!log->level || !log->event) return -1;
-    if (!acta_log_level_is_valid(log->level)) return -1;
+    if (!db || !log || !out_id)                       return ACTA_DB_ERR_INVALID;
+    if (!log->level || !log->event)                   return ACTA_DB_ERR_INVALID;
+    if (!acta_log_level_is_valid(log->level))         return ACTA_DB_ERR_INVALID;
 
     const char *sql =
         "INSERT INTO execution_logs (execution_id, level, event, message, metadata)"
@@ -57,7 +57,7 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
-        return -1;
+        return ACTA_DB_ERR_SQL;
 
     sqlite3_bind_int(stmt, 1, log->execution_id);
     sqlite3_bind_text(stmt, 2, log->level,  -1, SQLITE_TRANSIENT);
@@ -75,16 +75,24 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return -1;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
 
     *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return 0;
+    return ACTA_DB_OK;
 }
 
-execution_log_t *acta_db_execution_log_list_by_execution(db_t *db,
-                                                         int execution_id,
-                                                         int *out_count) {
-    if (!db || !out_count) return NULL;
+int acta_db_execution_log_list_by_execution(db_t *db,
+                                            int execution_id,
+                                            execution_log_t **out_items,
+                                            int *out_count,
+                                            int *out_err) {
+    if (!db || !out_items || !out_count || !out_err) {
+        *out_err = ACTA_DB_ERR_INVALID;
+        return ACTA_DB_ERR_INVALID;
+    }
+
+    *out_items = NULL;
+    *out_count = 0;
 
     const char *sql =
         "SELECT id, execution_id, level, event, message, metadata, created_at"
@@ -92,14 +100,20 @@ execution_log_t *acta_db_execution_log_list_by_execution(db_t *db,
         " ORDER BY created_at, id;";
 
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
-        return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        *out_err = ACTA_DB_ERR_SQL;
+        return ACTA_DB_ERR_SQL;
+    }
     sqlite3_bind_int(stmt, 1, execution_id);
 
     int    count    = 0;
     size_t capacity = 8;
     execution_log_t *items = malloc(capacity * sizeof *items);
-    if (!items) { sqlite3_finalize(stmt); return NULL; }
+    if (!items) {
+        *out_err = ACTA_DB_ERR_ALLOC;
+        sqlite3_finalize(stmt);
+        return ACTA_DB_ERR_ALLOC;
+    }
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         if ((size_t)count == capacity) {
@@ -108,7 +122,8 @@ execution_log_t *acta_db_execution_log_list_by_execution(db_t *db,
             if (!tmp) {
                 acta_db_execution_log_list_free(items, count);
                 sqlite3_finalize(stmt);
-                return NULL;
+                *out_err = ACTA_DB_ERR_ALLOC;
+                return ACTA_DB_ERR_ALLOC;
             }
             items    = tmp;
             capacity = new_cap;
@@ -118,15 +133,18 @@ execution_log_t *acta_db_execution_log_list_by_execution(db_t *db,
         if (!item) {
             acta_db_execution_log_list_free(items, count);
             sqlite3_finalize(stmt);
-            return NULL;
+            *out_err = ACTA_DB_ERR_INVALID;   /* row missing required text */
+            return ACTA_DB_ERR_INVALID;
         }
         items[count++] = *item;
         free(item);
     }
 
     sqlite3_finalize(stmt);
+    *out_items = items;
     *out_count = count;
-    return items;
+    *out_err   = ACTA_DB_OK;
+    return ACTA_DB_OK;
 }
 
 void acta_db_execution_log_free(execution_log_t *log) {
