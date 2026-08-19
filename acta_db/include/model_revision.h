@@ -23,12 +23,32 @@ typedef struct {
     char   *deleted_at;     /* NULL if live */
 } model_revision_t;
 
-model_revision_t *acta_db_model_revision_get(db_t *db, int id);
-model_revision_t *acta_db_model_revision_get_by_model_and_rev(db_t *db, int model_id, int revision);
-model_revision_t *acta_db_model_revision_list_by_model(db_t *db, int model_id, int *out_count);
-void              acta_db_model_revision_free(model_revision_t *r);
-void              acta_db_model_revision_list_free(model_revision_t *items, int count);
-model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id);
+/*
+ * All query functions accept an optional int *err out-parameter.
+ * Pass NULL if the caller does not need the specific error code.
+ *
+ * Error codes (from db.h):
+ *   ACTA_DB_OK            – success (or "not found" for single-row getters)
+ *   ACTA_DB_ERR_NOT_FOUND – query succeeded but no matching row
+ *   ACTA_DB_ERR_SQL       – sqlite3_prepare / step failure
+ *   ACTA_DB_ERR_ALLOC     – calloc / realloc failure
+ *   ACTA_DB_ERR_INVALID   – NULL db / out_count
+ */
+
+model_revision_t *acta_db_model_revision_get(
+        db_t *db, int id, int *err);
+
+model_revision_t *acta_db_model_revision_get_by_model_and_rev(
+        db_t *db, int model_id, int revision, int *err);
+
+model_revision_t *acta_db_model_revision_list_by_model(
+        db_t *db, int model_id, int *out_count, int *err);
+
+model_revision_t *acta_db_model_revision_get_latest(
+        db_t *db, int model_id, int *err);
+
+void acta_db_model_revision_free(model_revision_t *r);
+void acta_db_model_revision_list_free(model_revision_t *items, int count);
 
 #ifdef __cplusplus
 }

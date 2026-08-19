@@ -1,7 +1,10 @@
 #include "internal.h"
 #include "model_revision.h"
+#include "db.h" /* for ACTA_DB_* error codes */
 
 #include <stdio.h>
+
+/* ── internal row decoder ─────────────────────────────────────────── */
 
 static model_revision_t *row_to_model_revision(sqlite3_stmt *stmt) {
     model_revision_t *r = calloc(1, sizeof(model_revision_t));
@@ -22,75 +25,147 @@ static model_revision_t *row_to_model_revision(sqlite3_stmt *stmt) {
     return r;
 }
 
-#define REV_SELECT "SELECT id, model_id, revision, folder_id, name, description, backend, base_url, model_identifier, configuration, created_at, updated_at, deleted_at FROM model_revisions"
+#define REV_SELECT \
+    "SELECT id, model_id, revision, folder_id, name, description, " \
+    "backend, base_url, model_identifier, configuration, " \
+    "created_at, updated_at, deleted_at FROM model_revisions"
 
-model_revision_t *acta_db_model_revision_get(db_t *db, int id) {
-    if (!db) return NULL;
+/* ── single-row getters ────────────────────────────────────────────── */
+
+model_revision_t *acta_db_model_revision_get(db_t *db, int id, int *err) {
+    if (err) *err = ACTA_DB_OK;
+    if (!db) { if (err) *err = ACTA_DB_ERR_INVALID; return NULL; }
+
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE id = ?;", REV_SELECT);
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     sqlite3_bind_int(stmt, 1, id);
 
     model_revision_t *result = NULL;
-    if (sqlite3_step(stmt) == SQLITE_ROW) result = row_to_model_revision(stmt);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        result = row_to_model_revision(stmt);
+        if (!result) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+    } else {
+        if (err) *err = ACTA_DB_ERR_NOT_FOUND;
+    }
     sqlite3_finalize(stmt);
     return result;
 }
 
-model_revision_t *acta_db_model_revision_get_by_model_and_rev(db_t *db, int model_id, int revision) {
-    if (!db) return NULL;
+model_revision_t *acta_db_model_revision_get_by_model_and_rev(
+        db_t *db, int model_id, int revision, int *err) {
+    if (err) *err = ACTA_DB_OK;
+    if (!db) { if (err) *err = ACTA_DB_ERR_INVALID; return NULL; }
+
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE model_id = ? AND revision = ?;", REV_SELECT);
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     sqlite3_bind_int(stmt, 1, model_id);
     sqlite3_bind_int(stmt, 2, revision);
 
     model_revision_t *result = NULL;
-    if (sqlite3_step(stmt) == SQLITE_ROW) result = row_to_model_revision(stmt);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        result = row_to_model_revision(stmt);
+        if (!result) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+    } else {
+        if (err) *err = ACTA_DB_ERR_NOT_FOUND;
+    }
     sqlite3_finalize(stmt);
     return result;
 }
 
-model_revision_t *acta_db_model_revision_list_by_model(db_t *db, int model_id, int *out_count) {
-    if (!db || !out_count) return NULL;
+model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id, int *err) {
+    if (err) *err = ACTA_DB_OK;
+    if (!db) { if (err) *err = ACTA_DB_ERR_INVALID; return NULL; }
+
+    char sql[256];
+    snprintf(sql, sizeof(sql), "%s WHERE model_id = ? ORDER BY revision DESC LIMIT 1;", REV_SELECT);
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
+    sqlite3_bind_int(stmt, 1, model_id);
+
+    model_revision_t *result = NULL;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        result = row_to_model_revision(stmt);
+        if (!result) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+    } else {
+        if (err) *err = ACTA_DB_ERR_NOT_FOUND;
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+/* ── list (multi-row) ──────────────────────────────────────────────── */
+
+model_revision_t *acta_db_model_revision_list_by_model(
+        db_t *db, int model_id, int *out_count, int *err) {
+    if (err)     *err     = ACTA_DB_OK;
+    if (out_count) *out_count = 0;
+    if (!db || !out_count) { if (err) *err = ACTA_DB_ERR_INVALID; return NULL; }
+
     char sql[256];
     snprintf(sql, sizeof(sql), "%s WHERE model_id = ? ORDER BY revision;", REV_SELECT);
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     sqlite3_bind_int(stmt, 1, model_id);
 
-    int count = 0;
+    int  count = 0;
     model_revision_t *items = NULL;
+
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         model_revision_t *item = row_to_model_revision(stmt);
-        if (!item) { sqlite3_finalize(stmt); return NULL; }
+        if (!item) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            acta_db_model_revision_list_free(items, count);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+
         model_revision_t *tmp = realloc(items, sizeof(model_revision_t) * (count + 1));
-        if (!tmp) { acta_db_model_revision_free(item); sqlite3_finalize(stmt); return NULL; }
+        if (!tmp) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            acta_db_model_revision_free(item);
+            acta_db_model_revision_list_free(items, count);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
         items = tmp;
         items[count++] = *item;
         free(item);
     }
+
     sqlite3_finalize(stmt);
     *out_count = count;
-    return items;
+    return items;   /* may be NULL with count 0 – not an error */
 }
 
-model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id) {
-    if (!db) return NULL;
-    char sql[256];
-    snprintf(sql, sizeof(sql), "%s WHERE model_id = ? ORDER BY revision DESC LIMIT 1;", REV_SELECT);
-    sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
-    sqlite3_bind_int(stmt, 1, model_id);
-
-    model_revision_t *result = NULL;
-    if (sqlite3_step(stmt) == SQLITE_ROW) result = row_to_model_revision(stmt);
-    sqlite3_finalize(stmt);
-    return result;
-}
-
+/* ── destructors ───────────────────────────────────────────────────── */
 
 void acta_db_model_revision_free(model_revision_t *r) {
     if (!r) return;
@@ -121,4 +196,3 @@ void acta_db_model_revision_list_free(model_revision_t *items, int count) {
     }
     free(items);
 }
-
