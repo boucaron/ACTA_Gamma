@@ -141,7 +141,7 @@ static void test_context_get_nonexistent(void) {
     int err = ACTA_DB_ERR_SQL;
     context_t *got = acta_db_context_get(db, 999999, &err);
     TEST_ASSERT_NULL(got);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found is still "OK" */
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     test_db_teardown(db, path);
 }
 
@@ -168,7 +168,7 @@ static void test_context_list_by_hash_match(void) {
 
     int count = 0;
     int err = ACTA_DB_ERR_SQL;
-    context_t **items = acta_db_context_list_by_hash(db, "same_hash", &count, &err);
+    context_t **items = acta_db_context_list_by_hash(db, "same_hash", 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     TEST_ASSERT_NOT_NULL(items);
@@ -185,7 +185,7 @@ static void test_context_list_by_hash_nomatch(void) {
 
     int count = 0;
     int err = ACTA_DB_ERR_SQL;
-    context_t **items = acta_db_context_list_by_hash(db, "nonexistent_hash", &count, &err);
+    context_t **items = acta_db_context_list_by_hash(db, "nonexistent_hash", 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(items);
@@ -201,7 +201,7 @@ static void test_context_list_by_hash_null(void) {
 
     int count = -1;
     int err = ACTA_DB_OK;
-    context_t **items = acta_db_context_list_by_hash(db, NULL, &count, &err);
+    context_t **items = acta_db_context_list_by_hash(db, NULL, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(items);
@@ -243,7 +243,7 @@ static void test_context_list_free_valid(void) {
     }
     int count = 0;
     int err = 0;
-    context_t **items = acta_db_context_list_by_hash(db, "bulk", &count, &err);
+    context_t **items = acta_db_context_list_by_hash(db, "bulk", 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(count, 5);
     acta_db_context_list_free(items, count);
     test_db_teardown(db, path);
@@ -290,7 +290,7 @@ static void test_context_list_all_happy(void) {
 
     int count = 0;
     int err = ACTA_DB_ERR_SQL;
-    context_t **items = acta_db_context_list_all(db, &count, &err);
+    context_t **items = acta_db_context_list_all(db, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
     TEST_ASSERT_NOT_NULL(items);
@@ -313,7 +313,7 @@ static void test_context_list_all_empty(void) {
 
     int count = -1;
     int err = ACTA_DB_ERR_SQL;
-    context_t **items = acta_db_context_list_all(db, &count, &err);
+    context_t **items = acta_db_context_list_all(db, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(items);
@@ -324,7 +324,7 @@ static void test_context_list_all_empty(void) {
 static void test_context_list_all_null_db(void) {
     int count = 0;
     int err = ACTA_DB_OK;
-    context_t **items = acta_db_context_list_all(NULL, &count, &err);
+    context_t **items = acta_db_context_list_all(NULL, 0, 0, &count, &err);
     TEST_ASSERT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
@@ -346,7 +346,7 @@ static void test_context_list_by_type_match(void) {
 
     int count = 0;
     int err = ACTA_DB_ERR_SQL;
-    context_t **items = acta_db_context_list_by_type(db, "doc", &count, &err);
+    context_t **items = acta_db_context_list_by_type(db, "doc", 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     TEST_ASSERT_NOT_NULL(items);
@@ -371,7 +371,7 @@ static void test_context_list_by_type_nomatch(void) {
 
     int count = -1;
     int err = ACTA_DB_ERR_SQL;
-    context_t **items = acta_db_context_list_by_type(db, "audio", &count, &err);
+    context_t **items = acta_db_context_list_by_type(db, "audio", 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(items);
@@ -387,7 +387,7 @@ static void test_context_list_by_type_null(void) {
 
     int count = -1;
     int err = ACTA_DB_OK;
-    context_t **items = acta_db_context_list_by_type(db, NULL, &count, &err);
+    context_t **items = acta_db_context_list_by_type(db, NULL, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(items);
@@ -398,9 +398,239 @@ static void test_context_list_by_type_null(void) {
 static void test_context_list_by_type_null_db(void) {
     int count = 0;
     int err = ACTA_DB_OK;
-    context_t **items = acta_db_context_list_by_type(NULL, "doc", &count, &err);
+    context_t **items = acta_db_context_list_by_type(NULL, "doc", 0, 0, &count, &err);
     TEST_ASSERT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 2.25: context_list_all — limit truncates ---------- */
+static void test_context_list_all_limit(void) {
+    const char *path = "test/acta_test_ctx_listall_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        context_t c = { .type = "t", .content = "c", .content_hash = "h" };
+        acta_db_context_create(db, &c, &ids[i]);
+    }
+
+    int count = 0;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_all(db, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[0]);
+    TEST_ASSERT_EQ_INT(items[1]->id, ids[1]);
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.26: context_list_all — offset skips rows ---------- */
+static void test_context_list_all_offset(void) {
+    const char *path = "test/acta_test_ctx_listall_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[4];
+    for (int i = 0; i < 4; i++) {
+        context_t c = { .type = "t", .content = "c", .content_hash = "h" };
+        acta_db_context_create(db, &c, &ids[i]);
+    }
+
+    int count = 0;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_all(db, 2, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[2]);
+    TEST_ASSERT_EQ_INT(items[1]->id, ids[3]);
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.27: context_list_all — offset + limit (window) ---------- */
+static void test_context_list_all_offset_limit(void) {
+    const char *path = "test/acta_test_ctx_listall_win.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        context_t c = { .type = "t", .content = "c", .content_hash = "h" };
+        acta_db_context_create(db, &c, &ids[i]);
+    }
+
+    /* Skip first 2, take next 2 → rows 3 and 4 (0-indexed 2,3) */
+    int count = 0;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_all(db, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[2]);
+    TEST_ASSERT_EQ_INT(items[1]->id, ids[3]);
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.28: context_list_all — offset beyond result set ---------- */
+static void test_context_list_all_offset_beyond(void) {
+    const char *path = "test/acta_test_ctx_listall_beyond.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    context_t c = { .type = "t", .content = "c", .content_hash = "h" };
+    acta_db_context_create(db, &c, &(int){0});
+
+    int count = -1;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_all(db, 10, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.29: context_list_all — negative offset ---------- */
+static void test_context_list_all_neg_offset(void) {
+    const char *path = "test/acta_test_ctx_listall_negoff.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = 0;
+    int err = ACTA_DB_OK;
+    context_t **items = acta_db_context_list_all(db, -1, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.30: context_list_by_type — offset + limit ---------- */
+static void test_context_list_by_type_offset_limit(void) {
+    const char *path = "test/acta_test_ctx_listtype_win.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int doc_ids[3];
+    for (int i = 0; i < 3; i++) {
+        context_t c = { .type = "doc", .content = "c", .content_hash = "h" };
+        acta_db_context_create(db, &c, &doc_ids[i]);
+    }
+    /* one non-doc row to ensure type filter still applies */
+    context_t other = { .type = "image", .content = "c", .content_hash = "h" };
+    acta_db_context_create(db, &other, &(int){0});
+
+    /* offset=1, limit=1 → second doc only */
+    int count = 0;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_by_type(db, "doc", 1, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0]->id, doc_ids[1]);
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.31: context_list_by_hash — limit ---------- */
+static void test_context_list_by_hash_limit(void) {
+    const char *path = "test/acta_test_ctx_hashlimit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[3];
+    for (int i = 0; i < 3; i++) {
+        context_t c = { .type = "t", .content = "c", .content_hash = "h" };
+        acta_db_context_create(db, &c, &ids[i]);
+    }
+
+    int count = 0;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_by_hash(db, "h", 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[0]);
+    TEST_ASSERT_EQ_INT(items[1]->id, ids[1]);
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.32: context_list_by_hash — offset ---------- */
+static void test_context_list_by_hash_offset(void) {
+    const char *path = "test/acta_test_ctx_hashoffset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[3];
+    for (int i = 0; i < 3; i++) {
+        context_t c = { .type = "t", .content = "c", .content_hash = "h" };
+        acta_db_context_create(db, &c, &ids[i]);
+    }
+
+    int count = 0;
+    int err = ACTA_DB_ERR_SQL;
+    context_t **items = acta_db_context_list_by_hash(db, "h", 2, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[2]);
+    acta_db_context_list_free(items, count);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.33: context_list_by_type — negative offset ---------- */
+static void test_context_list_by_type_neg_offset(void) {
+    const char *path = "test/acta_test_ctx_listtype_negoff.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = 0;
+    int err = ACTA_DB_OK;
+    context_t **items = acta_db_context_list_by_type(db, "doc", -1, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.34: context_list_by_hash — negative offset ---------- */
+static void test_context_list_by_hash_neg_offset(void) {
+    const char *path = "test/acta_test_ctx_hashnegoff.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = 0;
+    int err = ACTA_DB_OK;
+    context_t **items = acta_db_context_list_by_hash(db, "h", -1, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(items);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.35: context_list_all — NULL db with pagination params ---------- */
+static void test_context_list_all_null_db_paged(void) {
+    int count = 0;
+    int err = ACTA_DB_OK;
+    context_t **items = acta_db_context_list_all(NULL, 5, 10, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
 }
 
 void run_context_tests(void) {
@@ -429,4 +659,16 @@ void run_context_tests(void) {
     test_context_list_by_type_nomatch();
     test_context_list_by_type_null();
     test_context_list_by_type_null_db();
+    /* new pagination tests */
+    test_context_list_all_limit();
+    test_context_list_all_offset();
+    test_context_list_all_offset_limit();
+    test_context_list_all_offset_beyond();
+    test_context_list_all_neg_offset();
+    test_context_list_by_type_offset_limit();
+    test_context_list_by_hash_limit();
+    test_context_list_by_hash_offset();
+    test_context_list_by_type_neg_offset();
+    test_context_list_by_hash_neg_offset();
+    test_context_list_all_null_db_paged();
 }

@@ -16,7 +16,7 @@ static context_t *row_to_context(sqlite3_stmt *stmt) {
     return c;
 }
 
-/* ---------- create (unchanged – not a getter/lister) ---------- */
+/* ---------- create ---------- */
 
 int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
     if (!db || !c || !c->type || !c->content || !c->content_hash)
@@ -49,7 +49,7 @@ int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
 /* ---------- get ---------- */
 
 context_t *acta_db_context_get(db_t *db, int id, int *err) {
-    if (err) *err = ACTA_DB_OK;          /* default: success / not-found */
+    if (err) *err = ACTA_DB_OK;
 
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
@@ -75,13 +75,11 @@ context_t *acta_db_context_get(db_t *db, int id, int *err) {
             return NULL;
         }
     }
-    /* sqlite3_step returned SQLITE_DONE → not-found: result stays NULL,
-     * err stays ACTA_DB_OK  (per the "not-found" rule) */
     sqlite3_finalize(stmt);
     return result;
 }
 
-/* ---------- list helpers (shared across the three list_* fns) ---------- */
+/* ---------- list helpers ---------- */
 
 static context_t **collect_rows(sqlite3_stmt *stmt,
                                 int *out_count, int *err) {
@@ -90,7 +88,7 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         context_t *item = row_to_context(stmt);
-        if (!item) {                       /* calloc failed */
+        if (!item) {
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
             if (err)       *err       = ACTA_DB_ERR_ALLOC;
@@ -100,7 +98,7 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
 
         context_t **tmp = realloc(items,
                                   sizeof(context_t *) * (count + 1));
-        if (!tmp) {                        /* realloc failed */
+        if (!tmp) {
             acta_db_context_free(item);
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
@@ -109,20 +107,21 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
             return NULL;
         }
         items = tmp;
-        items[count++] = item;            /* pointer stored, NOT copied */
+        items[count++] = item;
     }
 
     sqlite3_finalize(stmt);
     if (out_count) *out_count = count;
-    return items;   /* NULL when count == 0 (never realloc'd) */
+    return items;
 }
 
 /* ---------- list_all ---------- */
 
-context_t **acta_db_context_list_all(db_t *db, int *out_count, int *err) {
+context_t **acta_db_context_list_all(db_t *db, int offset, int limit,
+                                      int *out_count, int *err) {
     if (err) *err = ACTA_DB_OK;
 
-    if (!db) {
+    if (!db || offset < 0) {
         if (err)       *err       = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
         return NULL;
@@ -130,13 +129,17 @@ context_t **acta_db_context_list_all(db_t *db, int *out_count, int *err) {
 
     const char *sql =
         "SELECT id, type, content, content_hash, metadata, created_at "
-        "FROM contexts ORDER BY id;";
+        "FROM contexts ORDER BY id LIMIT ? OFFSET ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err)       *err       = ACTA_DB_ERR_SQL;
         if (out_count) *out_count = 0;
         return NULL;
     }
+
+    /* SQLite: LIMIT -1 means "no limit". */
+    sqlite3_bind_int(stmt, 1, limit > 0 ? limit : -1);
+    sqlite3_bind_int(stmt, 2, offset);
 
     return collect_rows(stmt, out_count, err);
 }
@@ -144,10 +147,11 @@ context_t **acta_db_context_list_all(db_t *db, int *out_count, int *err) {
 /* ---------- list_by_type ---------- */
 
 context_t **acta_db_context_list_by_type(db_t *db, const char *type,
-                                         int *out_count, int *err) {
+                                          int offset, int limit,
+                                          int *out_count, int *err) {
     if (err) *err = ACTA_DB_OK;
 
-    if (!db || !type) {
+    if (!db || !type || offset < 0) {
         if (err)       *err       = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
         return NULL;
@@ -155,14 +159,17 @@ context_t **acta_db_context_list_by_type(db_t *db, const char *type,
 
     const char *sql =
         "SELECT id, type, content, content_hash, metadata, created_at "
-        "FROM contexts WHERE type = ? ORDER BY id;";
+        "FROM contexts WHERE type = ? ORDER BY id LIMIT ? OFFSET ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err)       *err       = ACTA_DB_ERR_SQL;
         if (out_count) *out_count = 0;
         return NULL;
     }
+
     sqlite3_bind_text(stmt, 1, type, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, limit > 0 ? limit : -1);
+    sqlite3_bind_int(stmt, 3, offset);
 
     return collect_rows(stmt, out_count, err);
 }
@@ -170,10 +177,11 @@ context_t **acta_db_context_list_by_type(db_t *db, const char *type,
 /* ---------- list_by_hash ---------- */
 
 context_t **acta_db_context_list_by_hash(db_t *db, const char *hash,
-                                         int *out_count, int *err) {
+                                          int offset, int limit,
+                                          int *out_count, int *err) {
     if (err) *err = ACTA_DB_OK;
 
-    if (!db || !hash) {
+    if (!db || !hash || offset < 0) {
         if (err)       *err       = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
         return NULL;
@@ -181,14 +189,17 @@ context_t **acta_db_context_list_by_hash(db_t *db, const char *hash,
 
     const char *sql =
         "SELECT id, type, content, content_hash, metadata, created_at "
-        "FROM contexts WHERE content_hash = ? ORDER BY id;";
+        "FROM contexts WHERE content_hash = ? ORDER BY id LIMIT ? OFFSET ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err)       *err       = ACTA_DB_ERR_SQL;
         if (out_count) *out_count = 0;
         return NULL;
     }
+
     sqlite3_bind_text(stmt, 1, hash, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, limit > 0 ? limit : -1);
+    sqlite3_bind_int(stmt, 3, offset);
 
     return collect_rows(stmt, out_count, err);
 }
@@ -208,6 +219,6 @@ void acta_db_context_free(context_t *c) {
 void acta_db_context_list_free(context_t **items, int count) {
     if (!items) return;
     for (int i = 0; i < count; i++)
-        acta_db_context_free(items[i]);   /* frees struct + all strings */
-    free(items);                           /* frees the pointer array */
+        acta_db_context_free(items[i]);
+    free(items);
 }

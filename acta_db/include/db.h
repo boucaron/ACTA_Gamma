@@ -21,8 +21,9 @@ extern "C" {
  * Getters:   T *foo_get(db, key, int *err);
  *            err nullable; NULL return + *err==OK means not-found.
  *
- * Listers:   T **foo_list_*(db, …, int *out_count, int *err);
- *            both out-params nullable; NULL return + *err==OK means empty.
+  * Listers:   T **foo_list_*(db, …, int offset, int limit, int *out_count, int *err);
+ *            offset 0-based row offset; limit ≤ 0 means no cap (return all).
+ *            Both out-params nullable; NULL return + *err==OK means empty.
  *
  * Mutators:  int foo_mutate(db, …);   returns ACTA_DB_OK or negative code.
  *

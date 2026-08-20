@@ -36,32 +36,59 @@ int       acta_db_context_create(db_t *db, const context_t *c, int *out_id);
  * The err parameter may be NULL (caller ignores the code). */
 context_t *acta_db_context_get(db_t *db, int id, int *err);
 
-/* Return all contexts ordered by id.
+/* Return a page of contexts ordered by id.
+ *
+ * Pagination:
+ *   offset – zero-based row offset (skip this many rows).
+ *            Must be >= 0; a negative value yields ACTA_DB_ERR_INVALID.
+ *   limit  – maximum number of rows to return.
+ *            0 or negative means "no limit" (return all remaining rows).
  *
  * Returns a heap-allocated array of context_t pointers (free with
  * acta_db_context_list_free), or NULL on real failure.
  *
- * If out_count is non-NULL it receives the number of items.
- * If err is non-NULL it is set to ACTA_DB_OK on success (including
- * an empty result set) or a negative ACTA_DB_ERR_* code on failure.
+ * If out_count is non-NULL it receives the number of items actually
+ * returned (may be less than limit if the result set is exhausted).
+ * If err is non-NULL it is set to ACTA_DB_OK on success (including an
+ * empty result set) or a negative ACTA_DB_ERR_* code on failure.
  * Either out_count or err (or both) may be NULL. */
-context_t **acta_db_context_list_all(db_t *db, int *out_count, int *err);
+context_t **acta_db_context_list_all(db_t *db,
+                                     int offset, int limit,
+                                     int *out_count, int *err);
 
-/* Return all contexts matching the given type, ordered by id.
+/* Return a page of contexts matching the given type, ordered by id.
  *
  * If type is NULL the function fails with ACTA_DB_ERR_INVALID.
- * Same return / err / out_count contract as acta_db_context_list_all. */
+ *
+ * Pagination: same contract as acta_db_context_list_all.
+ *
+ * Returns a heap-allocated array of context_t pointers (free with
+ * acta_db_context_list_free), or NULL on real failure.
+ * If out_count is non-NULL it receives the number of items returned.
+ * If err is non-NULL it is set to ACTA_DB_OK on success or a negative
+ * ACTA_DB_ERR_* code on failure.
+ * Either out_count or err (or both) may be NULL. */
 context_t **acta_db_context_list_by_type(db_t *db,
                                           const char *type,
+                                          int offset, int limit,
                                           int *out_count,
                                           int *err);
 
-/* Return all contexts matching the given content hash, ordered by id.
+/* Return a page of contexts matching the given content hash, ordered by id.
  *
  * If hash is NULL the function fails with ACTA_DB_ERR_INVALID.
- * Same return / err / out_count contract as acta_db_context_list_all. */
+ *
+ * Pagination: same contract as acta_db_context_list_all.
+ *
+ * Returns a heap-allocated array of context_t pointers (free with
+ * acta_db_context_list_free), or NULL on real failure.
+ * If out_count is non-NULL it receives the number of items returned.
+ * If err is non-NULL it is set to ACTA_DB_OK on success or a negative
+ * ACTA_DB_ERR_* code on failure.
+ * Either out_count or err (or both) may be NULL. */
 context_t **acta_db_context_list_by_hash(db_t *db,
                                           const char *hash,
+                                          int offset, int limit,
                                           int *out_count,
                                           int *err);
 
