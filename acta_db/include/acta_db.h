@@ -3,6 +3,7 @@
 
 #include "db.h"
 #include "model.h"
+#include "model_folder.h"
 #include "model_revision.h"
 #include "skill.h"
 #include "skill_revision.h"
