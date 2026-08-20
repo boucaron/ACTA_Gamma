@@ -82,38 +82,46 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
 }
 
 /* ------------------------------------------------------------------ */
-/*  Getter – fetch a single row by its primary key.                     */
+/*  Getter – fetch a single row by its primary key.                    */
 /* ------------------------------------------------------------------ */
 
-int acta_db_execution_log_get(db_t *db, int id, execution_log_t **out_log) {
-    if (!db)              return ACTA_DB_ERR_INVALID;
-    if (out_log) *out_log = NULL;
+execution_log_t *acta_db_execution_log_get(db_t *db, int id, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
 
     const char *sql =
         "SELECT id, execution_id, level, event, message, metadata, created_at"
         " FROM execution_logs WHERE id = ?;";
 
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
-        return ACTA_DB_ERR_SQL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
 
     sqlite3_bind_int(stmt, 1, id);
-
     int rc = sqlite3_step(stmt);
 
+    execution_log_t *log = NULL;
+    int code;
+
     if (rc == SQLITE_ROW) {
-        execution_log_t *log = row_to_execution_log(stmt);
-        sqlite3_finalize(stmt);
-        if (!log) return ACTA_DB_ERR_ALLOC;
-        if (out_log) *out_log = log;
-        return ACTA_DB_OK;
+        log  = row_to_execution_log(stmt);
+        code = log ? ACTA_DB_OK : ACTA_DB_ERR_ALLOC;
+    } else if (rc == SQLITE_DONE) {
+        code = ACTA_DB_ERR_NOT_FOUND;
+    } else {
+        code = ACTA_DB_ERR_SQL;
     }
 
     sqlite3_finalize(stmt);
 
-    if (rc == SQLITE_DONE) return ACTA_DB_ERR_NOT_FOUND;
-    return ACTA_DB_ERR_SQL;
+    if (err) *err = code;
+    return log;          /* non-NULL ⇔ row found & allocated */
 }
+
 
 
 /* ------------------------------------------------------------------ */
