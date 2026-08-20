@@ -48,6 +48,14 @@ execution_t **acta_db_execution_list_children(db_t *db, int parent_id,
 execution_t **acta_db_execution_list_by_context(db_t *db, int context_id,
                                                 int offset, int limit,
                                                 int *out_count, int *err);
+execution_t **acta_db_execution_list_by_skill_revision(db_t *db,
+                                                        int skill_revision_id,
+                                                        int offset, int limit,
+                                                        int *out_count, int *err);
+execution_t **acta_db_execution_list_by_model_revision(db_t *db,
+                                                        int model_revision_id,
+                                                        int offset, int limit,
+                                                        int *out_count, int *err);
 
 /* --- free --- */
 void acta_db_execution_free(execution_t *e);

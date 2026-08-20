@@ -1233,6 +1233,241 @@ static void test_exec_list_by_status_cancelled(void) {
 }
 
 
+/* ---------- 9.48: list_by_skill_revision — happy path ---------- */
+static void test_exec_list_by_skill_revision_with(void) {
+    const char *path = "test/acta_test_exec_list_skillrev.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    /* 3 executions under the same skill revision */
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "S1", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "S2", 0);
+    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "S3", 0);
+    TEST_ASSERT(e1 > 0 && e2 > 0 && e3 > 0);
+
+    /* 1 execution under a different skill revision (should not appear) */
+    int other_sr = 0;
+    int rv = acta_db_exec(db,
+        "INSERT INTO skill_revisions (skill_id, revision, name, description, "
+        "prompt_template, output_schema) "
+        "VALUES (1, 2, 'other-skill', 'desc', 'tmpl', '{}')");
+    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
+    int err2 = 0;
+    skill_revision_t *srev2 = acta_db_skill_revision_get_by_skill_and_rev(db, 1, 2, &err2);
+    TEST_ASSERT_NOT_NULL(srev2);
+    other_sr = srev2->id;
+    acta_db_skill_revision_free(srev2);
+    TEST_ASSERT(exec_create(db, ctx_id, other_sr, mr_id, "Other", 0) > 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_skill_revision(
+        db, sr_id, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 3);
+    for (int i = 0; i < out_count; i++) {
+        TEST_ASSERT_EQ_INT(items[i]->skill_revision_id, sr_id);
+    }
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+
+/* ---------- 9.49: list_by_skill_revision — no match ---------- */
+static void test_exec_list_by_skill_revision_no_match(void) {
+    const char *path = "test/acta_test_exec_list_skillrev_nom.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    TEST_ASSERT(eid > 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_skill_revision(
+        db, 99999, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.50: list_by_skill_revision — mixed revisions ---------- */
+static void test_exec_list_by_skill_revision_mixed(void) {
+    const char *path = "test/acta_test_exec_list_skillrev_mix.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    /* second skill revision */
+    int sr2 = 0;
+    int rv = acta_db_exec(db,
+        "INSERT INTO skill_revisions (skill_id, revision, name, description, "
+        "prompt_template, output_schema) "
+        "VALUES (1, 2, 'skill2', 'desc', 'tmpl', '{}')");
+    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
+    int err2 = 0;
+    skill_revision_t *srev2 = acta_db_skill_revision_get_by_skill_and_rev(db, 1, 2, &err2);
+    TEST_ASSERT_NOT_NULL(srev2);
+    sr2 = srev2->id;
+    acta_db_skill_revision_free(srev2);
+
+    /* 2 under sr_id, 2 under sr2 */
+    exec_create(db, ctx_id, sr_id, mr_id, "A1", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "A2", 0);
+    exec_create(db, ctx_id, sr2,   mr_id, "B1", 0);
+    exec_create(db, ctx_id, sr2,   mr_id, "B2", 0);
+
+    /* list by sr2 → expect exactly 2 */
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_skill_revision(
+        db, sr2, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 2);
+    for (int i = 0; i < out_count; i++) {
+        TEST_ASSERT_EQ_INT(items[i]->skill_revision_id, sr2);
+    }
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+
+/* ---------- 9.51: list_by_model_revision — happy path ---------- */
+static void test_exec_list_by_model_revision_with(void) {
+    const char *path = "test/acta_test_exec_list_modrev.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    /* 3 executions under the same model revision */
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "M1", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "M2", 0);
+    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "M3", 0);
+    TEST_ASSERT(e1 > 0 && e2 > 0 && e3 > 0);
+
+    /* 1 execution under a different model revision (should not appear) */
+    int other_mr = 0;
+    int rv = acta_db_exec(db,
+        "INSERT INTO model_revisions (model_id, revision, name, description, "
+        "backend, base_url, model_identifier, configuration) "
+        "VALUES (1, 2, 'other-model', 'desc', 'openai', 'http://localhost', "
+        "'other-model-id', '{}')");
+    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
+    int err2 = 0;
+    model_revision_t *mrev2 = acta_db_model_revision_get_by_model_and_rev(db, 1, 2, &err2);
+    TEST_ASSERT_NOT_NULL(mrev2);
+    other_mr = mrev2->id;
+    acta_db_model_revision_free(mrev2);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, other_mr, "Other", 0) > 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_model_revision(
+        db, mr_id, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 3);
+    for (int i = 0; i < out_count; i++) {
+        TEST_ASSERT_EQ_INT(items[i]->model_revision_id, mr_id);
+    }
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+
+/* ---------- 9.52: list_by_model_revision — no match ---------- */
+static void test_exec_list_by_model_revision_no_match(void) {
+    const char *path = "test/acta_test_exec_list_modrev_nom.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    TEST_ASSERT(eid > 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_model_revision(
+        db, 99999, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.53: list_by_model_revision — mixed revisions ---------- */
+static void test_exec_list_by_model_revision_mixed(void) {
+    const char *path = "test/acta_test_exec_list_modrev_mix.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    /* second model revision */
+    int mr2 = 0;
+    int rv = acta_db_exec(db,
+        "INSERT INTO model_revisions (model_id, revision, name, description, "
+        "backend, base_url, model_identifier, configuration) "
+        "VALUES (1, 2, 'model2', 'desc', 'openai', 'http://localhost', "
+        "'model2-id', '{}')");
+    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
+    int err2 = 0;
+    model_revision_t *mrev2 = acta_db_model_revision_get_by_model_and_rev(db, 1, 2, &err2);
+    TEST_ASSERT_NOT_NULL(mrev2);
+    mr2 = mrev2->id;
+    acta_db_model_revision_free(mrev2);
+
+    /* 2 under mr_id, 2 under mr2 */
+    exec_create(db, ctx_id, sr_id, mr_id, "A1", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "A2", 0);
+    exec_create(db, ctx_id, sr_id, mr2,   "B1", 0);
+    exec_create(db, ctx_id, sr_id, mr2,   "B2", 0);
+
+    /* list by mr2 → expect exactly 2 */
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_model_revision(
+        db, mr2, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 2);
+    for (int i = 0; i < out_count; i++) {
+        TEST_ASSERT_EQ_INT(items[i]->model_revision_id, mr2);
+    }
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+
+
 
 /* ---------- runner ---------- */
 void run_execution_tests(void) {
@@ -1284,5 +1519,11 @@ void run_execution_tests(void) {
     test_exec_cancel_nonexistent();
     test_exec_cancel_completed_at();
     test_exec_list_by_status_cancelled();
+    test_exec_list_by_skill_revision_with();
+    test_exec_list_by_skill_revision_no_match();
+    test_exec_list_by_skill_revision_mixed();
+    test_exec_list_by_model_revision_with();
+    test_exec_list_by_model_revision_no_match();
+    test_exec_list_by_model_revision_mixed();
 
 }
