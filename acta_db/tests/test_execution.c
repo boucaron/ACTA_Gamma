@@ -1467,6 +1467,147 @@ static void test_exec_list_by_model_revision_mixed(void) {
 }
 
 
+/* ---------- 9.54: list_all — with data ---------- */
+static void test_exec_list_all_with_data(void) {
+    const char *path = "test/acta_test_exec_list_all.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_all(db, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 3);
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.55: list_all — empty table ---------- */
+static void test_exec_list_all_empty(void) {
+    const char *path = "test/acta_test_exec_list_all_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_all(db, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.56: list_all — limit ---------- */
+static void test_exec_list_all_limit(void) {
+    const char *path = "test/acta_test_exec_list_all_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    for (int i = 0; i < 5; i++)
+        exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_all(db, 0, 3, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 3);
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.57: list_all — offset ---------- */
+static void test_exec_list_all_offset(void) {
+    const char *path = "test/acta_test_exec_list_all_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    for (int i = 0; i < 5; i++)
+        exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_all(db, 3, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 2);
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.58: list_all — null db ---------- */
+static void test_exec_list_all_null_db(void) {
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_all(NULL, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 0);
+}
+
+/* ---------- 9.59: list_all — mixed statuses (no filter) ---------- */
+static void test_exec_list_all_no_filter(void) {
+    const char *path = "test/acta_test_exec_list_all_nofilter.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
+    int e4 = exec_create(db, ctx_id, sr_id, mr_id, "D", 0);
+    int e5 = exec_create(db, ctx_id, sr_id, mr_id, "E", 0);
+
+    /* e1 → running (started, not completed) */
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e1), ACTA_DB_OK);
+
+    /* e2 → completed (started, then completed) */
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e2), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, e2, "ok"), ACTA_DB_OK);
+
+    /* e3, e4, e5 → pending (never started) */
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_all(db, 0, 0, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 5);
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+
+
 
 
 /* ---------- runner ---------- */
@@ -1525,5 +1666,11 @@ void run_execution_tests(void) {
     test_exec_list_by_model_revision_with();
     test_exec_list_by_model_revision_no_match();
     test_exec_list_by_model_revision_mixed();
+    test_exec_list_all_with_data();
+    test_exec_list_all_empty();
+    test_exec_list_all_limit();
+    test_exec_list_all_offset();
+    test_exec_list_all_null_db();
+    test_exec_list_all_no_filter();
 
 }

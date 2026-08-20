@@ -39,6 +39,9 @@ int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
 
 /* --- getters / listers (standardised err pattern) --- */
 execution_t  *acta_db_execution_get(db_t *db, int id, int *err);
+execution_t **acta_db_execution_list_all(db_t *db,
+                                          int offset, int limit,
+                                          int *out_count, int *err);
 execution_t **acta_db_execution_list_by_status(db_t *db, const char *status,
                                                 int offset, int limit,
                                                 int *out_count, int *err);

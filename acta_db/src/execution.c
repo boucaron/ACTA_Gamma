@@ -231,6 +231,68 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
 /* ------------------------------------------------------------------ */
 /*  Listers (paginated)                                               */
 /* ------------------------------------------------------------------ */
+execution_t **acta_db_execution_list_all(db_t *db,
+                                         int offset, int limit,
+                                         int *out_count, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+    if (offset < 0) offset = 0;
+    if (limit <= 0) limit = -1;   /* SQLite: LIMIT -1 = no upper bound */
+    if (out_count) *out_count = 0;
+
+    const char *sql =
+        EXEC_SELECT " ORDER BY created_at DESC LIMIT ? OFFSET ?;";
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
+    sqlite3_bind_int(stmt, 1, limit);
+    sqlite3_bind_int(stmt, 2, offset);
+
+    int    count    = 0;
+    size_t capacity = 0;
+    execution_t **items = NULL;
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if ((size_t)count >= capacity) {
+            size_t new_cap = capacity ? capacity * 2 : 8;
+            execution_t **tmp = realloc(items, new_cap * sizeof *tmp);
+            if (!tmp) {
+                acta_db_execution_list_free(items, count);
+                sqlite3_finalize(stmt);
+                if (err) *err = ACTA_DB_ERR_ALLOC;
+                return NULL;
+            }
+            items    = tmp;
+            capacity = new_cap;
+        }
+
+        execution_t *item = row_to_execution(stmt);
+        if (!item) {
+            acta_db_execution_list_free(items, count);
+            sqlite3_finalize(stmt);
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            return NULL;
+        }
+        items[count++] = item;
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (out_count) *out_count = count;
+    if (err)       *err       = ACTA_DB_OK;
+
+    if (count == 0) {
+        free(items);
+        return NULL;
+    }
+    return items;
+}
+
 
 execution_t **acta_db_execution_list_by_status(db_t *db, const char *status,
                                                int offset, int limit,
