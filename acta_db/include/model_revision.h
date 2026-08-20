@@ -7,6 +7,10 @@
 extern "C" {
 #endif
 
+/*
+A new revision row is inserted by a DB trigger every time an insert/update is called. 
+The revision column is the auto-incremented sequence per model
+ */
 typedef struct {
     int     id;
     int     model_id;

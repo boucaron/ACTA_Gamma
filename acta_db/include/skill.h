@@ -62,7 +62,6 @@ skill_t *acta_db_skill_get_live(db_t *db, int id, int *err);
  */
 int      acta_db_skill_update(db_t *db, const skill_t *s);
 
-/* Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on failure. */
 int      acta_db_skill_soft_delete(db_t *db, int id);
 
 /* Returns a heap-allocated array of skill_t* on success, or NULL.
