@@ -219,7 +219,7 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
 /*  Listers (standardised: T** return, int *err)                      */
 /* ------------------------------------------------------------------ */
 
-execution_t **acta_db_execution_list_by_status(db_t *db, const char *status, int *err) {
+execution_t **acta_db_execution_list_by_status(db_t *db, const char *status, int *out_count, int *err) {
     if (!db || !status) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
@@ -260,15 +260,17 @@ execution_t **acta_db_execution_list_by_status(db_t *db, const char *status, int
     sqlite3_finalize(stmt);
 
     if (count == 0) {
-        if (err) *err = ACTA_DB_OK;   /* not-found / empty → OK */
+        if (out_count) *out_count = 0;
+        if (err) *err = ACTA_DB_OK;
         return NULL;
     }
     items[count] = NULL;               /* NULL-terminate */
+    if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
     return items;
 }
 
-execution_t **acta_db_execution_list_children(db_t *db, int parent_id, int *err) {
+execution_t **acta_db_execution_list_children(db_t *db, int parent_id, int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
@@ -309,15 +311,17 @@ execution_t **acta_db_execution_list_children(db_t *db, int parent_id, int *err)
     sqlite3_finalize(stmt);
 
     if (count == 0) {
+        if (out_count) *out_count = 0;
         if (err) *err = ACTA_DB_OK;
         return NULL;
     }
     items[count] = NULL;
+    if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
     return items;
 }
 
-execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *err) {
+execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
@@ -358,10 +362,12 @@ execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *e
     sqlite3_finalize(stmt);
 
     if (count == 0) {
+        if (out_count) *out_count = 0;
         if (err) *err = ACTA_DB_OK;
         return NULL;
     }
     items[count] = NULL;
+    if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
     return items;
 }
