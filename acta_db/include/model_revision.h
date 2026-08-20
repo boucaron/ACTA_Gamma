@@ -48,8 +48,20 @@ model_revision_t *acta_db_model_revision_get(
 model_revision_t *acta_db_model_revision_get_by_model_and_rev(
         db_t *db, int model_id, int revision, int *err);
 
+/*
+ * Paginated listing of all revisions belonging to a given model.
+ *
+ *   offset – number of rows to skip (0-based; 0 = first page)
+ *   limit  – maximum number of rows to return; pass 0 or negative
+ *            for "no limit" (return all matching rows)
+ *
+ * On success *out_count is set to the number of rows actually
+ * returned (≤ limit, or total if limit ≤ 0).
+ */
 model_revision_t **acta_db_model_revision_list_by_model(
-        db_t *db, int model_id, int *out_count, int *err);
+        db_t *db, int model_id,
+        int offset, int limit,
+        int *out_count, int *err);
 
 model_revision_t *acta_db_model_revision_get_latest(
         db_t *db, int model_id, int *err);
