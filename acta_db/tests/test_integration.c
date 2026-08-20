@@ -178,7 +178,8 @@ static void test_integration_model_lifecycle(void) {
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* get_live returns NULL after soft-delete */
-    TEST_ASSERT_NULL(acta_db_model_get_live(db, model_id));
+    int err = 0;
+    TEST_ASSERT_NULL(acta_db_model_get_live(db, model_id, &err));
 
     test_db_teardown(db, path);
 }
@@ -393,28 +394,29 @@ static void test_integration_nested_executions(void) {
 
     /* Verify tree */
     int err = 0;
+    int kcount = 0;
 
-    err = 0;
-    execution_t **kids = acta_db_execution_list_children(db, root_id, &err);
+    err = 0; kcount = 0;
+    execution_t **kids = acta_db_execution_list_children(db, root_id, &kcount, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(kids);
-    TEST_ASSERT_EQ_INT(count_exec_list(kids), 1);
+    TEST_ASSERT_EQ_INT(kcount, 1);
     TEST_ASSERT(kids[0]->id == child_id);
-    acta_db_execution_list_free(kids);
+    acta_db_execution_list_free(kids, kcount);
 
-    err = 0;
-    kids = acta_db_execution_list_children(db, child_id, &err);
+    err = 0; kcount = 0;
+    kids = acta_db_execution_list_children(db, child_id, &kcount, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(kids);
-    TEST_ASSERT_EQ_INT(count_exec_list(kids), 1);
+    TEST_ASSERT_EQ_INT(kcount, 1);
     TEST_ASSERT(kids[0]->id == gc_id);
-    acta_db_execution_list_free(kids);
+    acta_db_execution_list_free(kids, kcount);
 
-    err = 0;
-    kids = acta_db_execution_list_children(db, gc_id, &err);
+    err = 0; kcount = 0;
+    kids = acta_db_execution_list_children(db, gc_id, &kcount, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT(kids == NULL || count_exec_list(kids) == 0);
-    acta_db_execution_list_free(kids);
+    TEST_ASSERT(kids == NULL || kcount == 0);
+    acta_db_execution_list_free(kids, kcount);
 
     free_test_set(&ts);
     test_db_teardown(db, path);
@@ -600,11 +602,11 @@ static void test_integration_memory_leak_sweep(void) {
     /* model folder */
     int fid = 0;
     acta_db_model_folder_create(db, "LeakFolder", 0, &fid);
-    { model_folder_t *mf = acta_db_model_folder_get(db, fid); acta_db_model_folder_free(mf); }
+    { int ferr = 0; model_folder_t *mf = acta_db_model_folder_get(db, fid, &ferr); acta_db_model_folder_free(mf); }
 
     /* model */
     int mid = make_model(db, "LeakModel");
-    { model_t *mg = acta_db_model_get(db, mid); acta_db_model_free(mg); }
+    { int merr = 0; model_t *mg = acta_db_model_get(db, mid, &merr); acta_db_model_free(mg); }
 
     /* model revision */
     { model_revision_t *mr = get_model_rev(db, mid, 1); acta_db_model_revision_free(mr); }
@@ -659,7 +661,7 @@ static void test_integration_memory_leak_sweep(void) {
       acta_db_skill_revision_list_free(r, n); }
 
     /* list-and-free: model folders */
-    { int n = 0; model_folder_t *f = acta_db_model_folder_list_all(db, &n);
+    { int n = 0, err = 0; model_folder_t **f = acta_db_model_folder_list_all(db, &n, &err);
       acta_db_model_folder_list_free(f, n); }
 
     /* list-and-free: skill folders */
@@ -667,7 +669,7 @@ static void test_integration_memory_leak_sweep(void) {
       acta_db_skill_folder_list_free(f, n); }
 
     /* list-and-free: models */
-    { int n = 0; model_t *m = acta_db_model_list_all(db, &n);
+    { int n = 0, err = 0; model_t **m = acta_db_model_list_all(db, &n, &err);
       acta_db_model_list_free(m, n); }
 
     /* list-and-free: skills */
@@ -676,10 +678,10 @@ static void test_integration_memory_leak_sweep(void) {
 
     /* list-and-free: executions by status */
     {
-        int err = 0;
-        execution_t **e = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &err);
+        int n = 0, err = 0;
+        execution_t **e = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &n, &err);
         TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-        acta_db_execution_list_free(e);
+        acta_db_execution_list_free(e, n);
     }
 
     acta_db_model_revision_free(mrev);
@@ -698,15 +700,15 @@ static void test_integration_null_safety(void) {
     acta_db_context_list_free(NULL, 0);
 
     /* model */
-    TEST_ASSERT_NULL(acta_db_model_get(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_model_get_live(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_model_list_all(NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_model_get(NULL, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_model_get_live(NULL, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_model_list_all(NULL, NULL, NULL));
     acta_db_model_free(NULL);
     acta_db_model_list_free(NULL, 0);
 
     /* model folder */
-    TEST_ASSERT_NULL(acta_db_model_folder_get(NULL, 1));
-    TEST_ASSERT_NULL(acta_db_model_folder_list_all(NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_model_folder_get(NULL, 1, NULL));
+    TEST_ASSERT_NULL(acta_db_model_folder_list_all(NULL, NULL, NULL));
     acta_db_model_folder_free(NULL);
     acta_db_model_folder_list_free(NULL, 0);
 
@@ -746,16 +748,16 @@ static void test_integration_null_safety(void) {
     }
     {
         int err = 0;
-        TEST_ASSERT_NULL(acta_db_execution_list_by_status(NULL, ACTA_EXEC_STATUS_PENDING, &err));
+        TEST_ASSERT_NULL(acta_db_execution_list_by_status(NULL, ACTA_EXEC_STATUS_PENDING, NULL, &err));
         TEST_ASSERT(err < 0);
     }
     {
         int err = 0;
-        TEST_ASSERT_NULL(acta_db_execution_list_children(NULL, 1, &err));
+        TEST_ASSERT_NULL(acta_db_execution_list_children(NULL, 1, NULL, &err));
         TEST_ASSERT(err < 0);
     }
     acta_db_execution_free(NULL);
-    acta_db_execution_list_free(NULL);
+    acta_db_execution_list_free(NULL, 0);
 
     /* execution log  (NEW API) */
     {
