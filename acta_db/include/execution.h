@@ -29,6 +29,42 @@ typedef struct {
     int     parent_execution_id;
 } execution_t;
 
+/*
+ * ── Execution state machine ──────────────────────────────────────────────────
+ *
+ *   pending ──start()──────────▶ running ──complete()──▶ completed   (terminal)
+ *                     │               │
+ *                     │          fail()
+ *                     │               ▼
+ *                     └──cancel()───▶ failed        (terminal)
+ *                              ▼
+ *                         cancelled                (terminal)
+ *
+ *  Transition rules (enforced in the C layer, not in SQL):
+ *
+ *    start()       requires  status == pending
+ *    cancel()      requires  status ∈ {pending, running}
+ *    complete()    requires  status == running
+ *    fail()        requires  status == running
+ *
+ *  Terminal states (completed, failed, cancelled) are immutable;
+ *  no function will modify a row in a terminal state.
+ *
+ *  set_raw_response() has NO status restriction — it updates a data
+ *  field, not a state transition, and may be called from any non-terminal
+ *  (or even terminal) state.
+ *
+ *  The caller does NOT need to pre-check status.  Each transition function
+ *  validates the current state internally and returns ACTA_DB_ERR_INVALID
+ *  if the transition is illegal.
+ *
+ *  ⚠  The SELECT-then-UPDATE pattern is not atomic.  This is safe under
+ *  the project's single-threaded DB usage model.  If the handle is ever
+ *  shared across threads, fold the status guard into the UPDATE itself
+ *  (  WHERE id = ? AND status = ?  ) and rely on sqlite3_changes().
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
 /* --- action / mutation functions (return int status directly) --- */
 int  acta_db_execution_create(db_t *db, const execution_t *e, int *out_id);
 int  acta_db_execution_start(db_t *db, int id);
