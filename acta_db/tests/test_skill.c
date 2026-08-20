@@ -32,12 +32,13 @@ static int sk_create_folder(db_t *db, const char *name, int parent_id) {
 static int sk_count_revisions(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, 0, &count, &err);
     if (revs) {
         acta_db_skill_revision_list_free(revs, count);
     }
     return count;
 }
+
 
 /* Get the latest revision number for a skill */
 static int sk_latest_revision(db_t *db, int skill_id) {

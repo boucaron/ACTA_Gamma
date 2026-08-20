@@ -214,7 +214,7 @@ static void test_sr_list_free_valid(void) {
 
     int count = 0;
     int err = 0;
-    skill_revision_t **items = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(db, skill_id, 0, 0, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
