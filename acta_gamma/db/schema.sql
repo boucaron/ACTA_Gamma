@@ -198,7 +198,7 @@ CREATE TABLE executions (
     prompt TEXT,
     raw_response TEXT,
     result TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed','cancelled')),
     error TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at TEXT,
