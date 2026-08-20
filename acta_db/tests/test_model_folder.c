@@ -1,6 +1,8 @@
 #include "test_common.h"
 #include "db.h"
 
+#include <time.h>
+
 /* ---------- 3.1: create — root ---------- */
 static void test_mf_create_root(void) {
     const char *path = "test/acta_test_mf_root.db";
@@ -524,6 +526,127 @@ static void test_mf_list_all_offset_zero(void) {
     test_db_teardown(db, path);
 }
 
+
+/* ---------- 3.32: restore — basic soft-delete → restore round-trip ---------- */
+static void test_mf_restore_basic(void) {
+    const char *path = "test/acta_test_mf_restore_basic.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    int rc = acta_db_model_folder_create(db, "toRestore", 0, &id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_TRUE(id > 0);
+
+    /* Soft-delete the folder. */
+    rc = acta_db_model_folder_soft_delete(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Confirm it is actually deleted. */
+    model_folder_t *f = acta_db_model_folder_get(db, id, &(int){0});
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_NOT_NULL(f->deleted_at);
+    acta_db_model_folder_free(f);
+
+    /* Restore it. */
+    rc = acta_db_model_folder_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Confirm deleted_at is back to NULL. */
+    f = acta_db_model_folder_get(db, id, &(int){0});
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_NULL(f->deleted_at);
+    acta_db_model_folder_free(f);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 3.33: restore — non-existent id returns NOT_FOUND ---------- */
+static void test_mf_restore_not_found(void) {
+    const char *path = "test/acta_test_mf_restore_nf.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create one folder so the table exists, then target a bogus id. */
+    acta_db_model_folder_create(db, "real", 0, &(int){0});
+
+    int rc = acta_db_model_folder_restore(db, 99999);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 3.34: restore — NULL db returns INVALID ---------- */
+static void test_mf_restore_null_db(void) {
+    int rc = acta_db_model_folder_restore(NULL, 1);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 3.35: restore — already-live folder is idempotent (OK) ---------- */
+static void test_mf_restore_idempotent(void) {
+    const char *path = "test/acta_test_mf_restore_idem.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    acta_db_model_folder_create(db, "live", 0, &id);
+
+    /* No soft_delete performed; folder is live.  Restore should still
+     * match the row (changes ≥ 1) and return OK without error. */
+    int rc = acta_db_model_folder_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Folder is still intact and live. */
+    model_folder_t *f = acta_db_model_folder_get(db, id, &(int){0});
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_NULL(f->deleted_at);
+    TEST_ASSERT_EQ_STR(f->name, "live");
+    acta_db_model_folder_free(f);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 3.36: restore — updated_at is bumped only when actually deleted ---------- */
+static void test_mf_restore_updates_timestamp(void) {
+    const char *path = "test/acta_test_mf_restore_ts.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    acta_db_model_folder_create(db, "ts", 0, &id);
+
+    /* Capture the original updated_at. */
+    model_folder_t *f = acta_db_model_folder_get(db, id, &(int){0});
+    char orig_updated[64];
+    snprintf(orig_updated, sizeof(orig_updated), "%s", f->updated_at);
+    acta_db_model_folder_free(f);
+
+    /* Soft-delete (sets deleted_at, bumps updated_at). */
+    acta_db_model_folder_soft_delete(db, id);
+
+    /* Small sleep so datetime('now') is distinguishable. */
+    struct timespec ts = {.tv_sec = 1, .tv_nsec = 0};
+    nanosleep(&ts, NULL);
+
+    /* Restore. */
+    int rc = acta_db_model_folder_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    f = acta_db_model_folder_get(db, id, &(int){0});
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_NULL(f->deleted_at);
+    /* updated_at should have changed (CASE bumped it because deleted_at was NOT NULL). */
+    TEST_ASSERT_TRUE(strcmp(f->updated_at, orig_updated) != 0);
+    acta_db_model_folder_free(f);
+
+    test_db_teardown(db, path);
+}
+
+
 void run_model_folder_tests(void) {
     fprintf(stderr, "\n=== model_folder tests ===\n");
     test_mf_create_root();
@@ -558,4 +681,12 @@ void run_model_folder_tests(void) {
     test_mf_list_children_paged_excludes_deleted();
     test_mf_list_all_paged_excludes_deleted();
     test_mf_list_all_offset_zero();
+
+    test_mf_restore_basic();
+    test_mf_restore_not_found();
+    test_mf_restore_null_db();
+    test_mf_restore_idempotent();
+    test_mf_restore_updates_timestamp();
+
+    
 }

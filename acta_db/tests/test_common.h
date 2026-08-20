@@ -57,6 +57,15 @@ static int test_failures = 0;
     } \
 } while (0)
 
+
+#define TEST_ASSERT_TRUE(expr) do { \
+    test_count++; \
+    if (!(expr)) { \
+        test_failures++; \
+        fprintf(stderr, "  ASSERT FAILED: %s is not true (line %d)\n", #expr, __LINE__); \
+    } \
+} while (0)
+
 /* Helper: create a temp db path, open, exec schema, return handle. Caller must close. */
 static db_t *test_db_open(const char *path) {
     int err = 0;

@@ -1,3 +1,4 @@
+/* acta_db_model_folder.h */
 #ifndef ACTA_DB_MODEL_FOLDER_H
 #define ACTA_DB_MODEL_FOLDER_H
 
@@ -22,6 +23,13 @@ int          acta_db_model_folder_create(db_t *db, const char *name, int parent_
 model_folder_t *acta_db_model_folder_get(db_t *db, int id, int *err);
 int          acta_db_model_folder_rename(db_t *db, int id, const char *new_name);
 int          acta_db_model_folder_soft_delete(db_t *db, int id);
+
+/* Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_INVALID if db is NULL.
+ * ACTA_DB_ERR_SQL on prepare/step failure.
+ * No-op (returns ACTA_DB_OK) if the folder is already live (deleted_at IS NULL). */
+int          acta_db_model_folder_restore(db_t *db, int id);
+
 model_folder_t **acta_db_model_folder_list_children(db_t *db,
                                                     int parent_id,
                                                     int offset, int limit,

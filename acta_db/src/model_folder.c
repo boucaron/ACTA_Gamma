@@ -3,6 +3,8 @@
 #include "db.h"
 
 
+
+
 static model_folder_t *row_to_model_folder(sqlite3_stmt *stmt) {
     model_folder_t *f = calloc(1, sizeof(model_folder_t));
     if (!f) return NULL;
@@ -211,3 +213,23 @@ model_folder_t **acta_db_model_folder_list_all(db_t *db,
     if (err) *err = ACTA_DB_OK;
     return items;
 }
+
+int acta_db_model_folder_restore(db_t *db, int id) {
+    if (!db) return ACTA_DB_ERR_INVALID;
+    const char *sql =
+        "UPDATE model_folders SET deleted_at = NULL, "
+        "updated_at = CASE WHEN deleted_at IS NOT NULL THEN datetime('now') ELSE updated_at END "
+        "WHERE id = ?;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(stmt, 1, id);
+
+    int rc = sqlite3_step(stmt);
+    int changes = sqlite3_changes(db->handle);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    if (changes == 0) return ACTA_DB_ERR_NOT_FOUND;
+    return ACTA_DB_OK;
+}
+
+
