@@ -310,7 +310,8 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
 }
 
 int acta_db_skill_update(db_t *db, const skill_t *s) {
-    if (!db || !s) return ACTA_DB_ERR_INVALID;
+    if (!db || !s || !s->name || !s->prompt_template)
+        return ACTA_DB_ERR_INVALID;
     const char *sql =
         "UPDATE skills SET folder_id=?, name=?, description=?, prompt_template=?,"
         " output_schema=?, updated_at=datetime('now') WHERE id=? AND deleted_at IS NULL;";

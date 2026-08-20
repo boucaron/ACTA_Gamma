@@ -136,7 +136,7 @@ static void test_sr_list_multiple(void) {
 
     int count = 0;
     int err = 0;
-    skill_revision_t **items = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(db, skill_id, 0, 0, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -164,7 +164,7 @@ static void test_sr_list_includes_deleted(void) {
 
     int count = 0;
     int err = 0;
-    skill_revision_t **items = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(db, skill_id, 0, 0, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     /* 3 rows: rev1 (create), rev2 (update), rev3 (delete) */
@@ -284,6 +284,164 @@ static void test_sr_get_latest_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 8.11: list_by_skill — offset & limit (first page) ---------- */
+static void test_sr_list_paged_first_page(void) {
+    const char *path = "test/acta_test_sr_paged1.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill811");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+    sr_update_skill(db, skill_id, "v3");
+    sr_update_skill(db, skill_id, "v4");
+
+    /* offset=0, limit=2 → rev 1, rev 2 */
+    int count = 0;
+    int err = 0;
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(
+        db, skill_id, 0, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 1);
+    TEST_ASSERT_EQ_INT(items[1]->revision, 2);
+    acta_db_skill_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.12: list_by_skill — offset & limit (second page) ---------- */
+static void test_sr_list_paged_second_page(void) {
+    const char *path = "test/acta_test_sr_paged2.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill812");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+    sr_update_skill(db, skill_id, "v3");
+    sr_update_skill(db, skill_id, "v4");
+
+    /* offset=2, limit=2 → rev 3, rev 4 */
+    int count = 0;
+    int err = 0;
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(
+        db, skill_id, 2, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 3);
+    TEST_ASSERT_EQ_INT(items[1]->revision, 4);
+    acta_db_skill_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.13: list_by_skill — offset beyond total ---------- */
+static void test_sr_list_paged_offset_beyond(void) {
+    const char *path = "test/acta_test_sr_paged_beyond.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill813");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+
+    /* only 2 rows exist; offset=10 should yield 0 */
+    int count = 0;
+    int err = 0;
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(
+        db, skill_id, 10, 5, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.14: list_by_skill — limit=0 means no limit ---------- */
+static void test_sr_list_paged_no_limit(void) {
+    const char *path = "test/acta_test_sr_paged_nolimit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill814");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+    sr_update_skill(db, skill_id, "v3");
+
+    /* limit=0 → fetch all */
+    int count = 0;
+    int err = 0;
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(
+        db, skill_id, 0, 0, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);
+    acta_db_skill_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.15: list_by_skill — limit > total rows ---------- */
+static void test_sr_list_paged_limit_exceeds(void) {
+    const char *path = "test/acta_test_sr_paged_exceed.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill815");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+
+    /* only 2 rows; limit=100 should still return 2 */
+    int count = 0;
+    int err = 0;
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(
+        db, skill_id, 0, 100, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 1);
+    TEST_ASSERT_EQ_INT(items[1]->revision, 2);
+    acta_db_skill_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 8.16: list_by_skill — negative offset clamped to 0 ---------- */
+static void test_sr_list_paged_negative_offset(void) {
+    const char *path = "test/acta_test_sr_paged_negoff.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int skill_id = sr_create_skill(db, "RevSkill816");
+    TEST_ASSERT(skill_id > 0);
+    sr_update_skill(db, skill_id, "v2");
+    sr_update_skill(db, skill_id, "v3");
+
+    /* negative offset should be treated as 0 */
+    int count = 0;
+    int err = 0;
+    skill_revision_t **items = acta_db_skill_revision_list_by_skill(
+        db, skill_id, -5, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 1);
+    TEST_ASSERT_EQ_INT(items[1]->revision, 2);
+    acta_db_skill_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+
 /* ---------- runner ---------- */
 void run_skill_revision_tests(void) {
     fprintf(stderr, "\n=== skill_revision tests ===\n");
@@ -299,4 +457,10 @@ void run_skill_revision_tests(void) {
     test_sr_get_latest_multiple();
     test_sr_get_latest_single();
     test_sr_get_latest_nonexistent();
+    test_sr_list_paged_first_page();
+    test_sr_list_paged_second_page();
+    test_sr_list_paged_offset_beyond();
+    test_sr_list_paged_no_limit();
+    test_sr_list_paged_limit_exceeds();
+    test_sr_list_paged_negative_offset();
 }

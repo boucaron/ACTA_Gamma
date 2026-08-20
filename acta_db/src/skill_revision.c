@@ -126,18 +126,27 @@ skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id, int 
 /* ---------------------------------------------------------------------- */
 /*  Lister                                                                 */
 /* ---------------------------------------------------------------------- */
-
 skill_revision_t **acta_db_skill_revision_list_by_skill(
-        db_t *db, int skill_id, int *out_count, int *err) {
+        db_t *db, int skill_id, int offset, int limit,
+        int *out_count, int *err) {
     if (err) *err = ACTA_DB_OK;
     if (!db || !out_count) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
         return NULL;
     }
+    if (offset < 0) offset = 0;
 
-    char sql[256];
-    snprintf(sql, sizeof(sql), "%s WHERE skill_id = ? ORDER BY revision;", SKILL_REV_SELECT);
+    char sql[512];
+    if (limit > 0) {
+        snprintf(sql, sizeof(sql),
+                 "%s WHERE skill_id = ? ORDER BY revision LIMIT ? OFFSET ?;",
+                 SKILL_REV_SELECT);
+    } else {
+        snprintf(sql, sizeof(sql),
+                 "%s WHERE skill_id = ? ORDER BY revision;", SKILL_REV_SELECT);
+    }
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
@@ -145,6 +154,10 @@ skill_revision_t **acta_db_skill_revision_list_by_skill(
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, skill_id);
+    if (limit > 0) {
+        sqlite3_bind_int(stmt, 2, limit);
+        sqlite3_bind_int(stmt, 3, offset);
+    }
 
     int count = 0;
     skill_revision_t **items = NULL;
@@ -183,6 +196,7 @@ skill_revision_t **acta_db_skill_revision_list_by_skill(
     if (err) *err = ACTA_DB_OK;
     return items;
 }
+
 
 /* ---------------------------------------------------------------------- */
 /*  Free                                                                   */

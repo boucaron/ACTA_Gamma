@@ -239,7 +239,7 @@ static void test_integration_skill_lifecycle(void) {
 
     /* Revision 1 */
     int err = 0, rev_count = 0;
-    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
@@ -258,7 +258,7 @@ static void test_integration_skill_lifecycle(void) {
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s2), 0);
 
     err = 0; rev_count = 0;
-    revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 2);
     acta_db_skill_revision_list_free(revs, rev_count);
@@ -267,10 +267,44 @@ static void test_integration_skill_lifecycle(void) {
     TEST_ASSERT_EQ_INT(acta_db_skill_soft_delete(db, skill_id), 0);
 
     err = 0; rev_count = 0;
-    revs = acta_db_skill_revision_list_by_skill(db, skill_id, &rev_count, &err);
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 3);
     TEST_ASSERT(revs[2]->deleted_at != NULL);
+    acta_db_skill_revision_list_free(revs, rev_count);
+
+    /* Pagination: limit=1 offset=0 → only rev 1 */
+    err = 0; rev_count = 0;
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, 1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rev_count, 1);
+    TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
+    acta_db_skill_revision_list_free(revs, rev_count);
+
+    /* Pagination: limit=1 offset=2 → only rev 3 */
+    err = 0; rev_count = 0;
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, 2, 1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rev_count, 1);
+    TEST_ASSERT_EQ_INT(revs[0]->revision, 3);
+    TEST_ASSERT(revs[0]->deleted_at != NULL);
+    acta_db_skill_revision_list_free(revs, rev_count);
+
+    /* Pagination: limit=2 offset=1 → rev 2, rev 3 */
+    err = 0; rev_count = 0;
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, 1, 2, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rev_count, 2);
+    TEST_ASSERT_EQ_INT(revs[0]->revision, 2);
+    TEST_ASSERT_EQ_INT(revs[1]->revision, 3);
+    acta_db_skill_revision_list_free(revs, rev_count);
+
+    /* Pagination: offset beyond last row → empty, no error */
+    err = 0; rev_count = -1;
+    revs = acta_db_skill_revision_list_by_skill(db, skill_id, 100, 10, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rev_count, 0);
+    TEST_ASSERT(revs == NULL || revs == (skill_revision_t **)0);
     acta_db_skill_revision_list_free(revs, rev_count);
 
     /* get_live returns NULL after soft-delete */
@@ -686,8 +720,8 @@ static void test_integration_memory_leak_sweep(void) {
     { int n = 0; model_revision_t **r = acta_db_model_revision_list_by_model(db, mid, 0, -1, &n, NULL);
       acta_db_model_revision_list_free(r, n); }
 
-    /* list-and-free: skill revisions */
-    { int n = 0, err = 0; skill_revision_t **r = acta_db_skill_revision_list_by_skill(db, sid, &n, &err);
+    /* list-and-free: skill revisions (offset=0, limit=-1 → all) */
+    { int n = 0, err = 0; skill_revision_t **r = acta_db_skill_revision_list_by_skill(db, sid, 0, -1, &n, &err);
       acta_db_skill_revision_list_free(r, n); }
 
     /* list-and-free: model folders  (offset=0, limit=-1 → all) */
@@ -767,7 +801,7 @@ static void test_integration_null_safety(void) {
     TEST_ASSERT_NULL(acta_db_skill_revision_get(NULL, 1, NULL));
     TEST_ASSERT_NULL(acta_db_skill_revision_get_by_skill_and_rev(NULL, 1, 1, NULL));
     TEST_ASSERT_NULL(acta_db_skill_revision_get_latest(NULL, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_skill_revision_list_by_skill(NULL, 1, NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_revision_list_by_skill(NULL, 1, 0, -1, NULL, NULL));
     acta_db_skill_revision_free(NULL);
     acta_db_skill_revision_list_free(NULL, 0);
 

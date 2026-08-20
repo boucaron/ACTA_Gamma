@@ -1,6 +1,4 @@
-
-
-/* test_skill.c — Tests for acta_db_skill.h (tests 7.1 – 7.35) */
+/* test_skill.c — Tests for acta_db_skill.h (tests 7.1 – 7.42) */
 
 #include "test_common.h"
 #include "skill.h"
@@ -34,7 +32,7 @@ static int sk_create_folder(db_t *db, const char *name, int parent_id) {
 static int sk_count_revisions(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &count, &err);
     if (revs) {
         acta_db_skill_revision_list_free(revs, count);
     }
@@ -45,7 +43,7 @@ static int sk_count_revisions(db_t *db, int skill_id) {
 static int sk_latest_revision(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &count, &err);
     if (!revs || count == 0) {
         if (revs) acta_db_skill_revision_list_free(revs, count);
         return 0;
@@ -64,7 +62,7 @@ static int sk_latest_revision(db_t *db, int skill_id) {
 static int sk_latest_rev_deleted(db_t *db, int skill_id) {
     int count = 0;
     int err = 0;
-    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, &count, &err);
+    skill_revision_t **revs = acta_db_skill_revision_list_by_skill(db, skill_id, 0, -1, &count, &err);
     if (!revs || count == 0) {
         if (revs) acta_db_skill_revision_list_free(revs, count);
         return 0;
@@ -1159,7 +1157,7 @@ void run_skill_tests(void) {
     test_sk_move_invalid_folder();
     test_sk_move_deleted_skill();
     test_sk_move_to_deleted_folder();
-    
+
     test_sk_list_in_folder_limit();
     test_sk_list_in_folder_offset_limit();
     test_sk_list_in_folder_offset_beyond();
@@ -1171,5 +1169,4 @@ void run_skill_tests(void) {
     test_sk_folder_list_children_root_offset();
     test_sk_list_all_offset_beyond();
     test_sk_list_in_folder_limit_exceeds_total();
-
 }

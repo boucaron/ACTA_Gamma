@@ -20,7 +20,7 @@ typedef struct {
 } skill_folder_t;
 
 /* Returns ACTA_DB_OK on success.
- * ACTA_DB_ERR_INVALID if db/name/out_id is NULL or folder has live children.
+ * ACTA_DB_ERR_INVALID if db/name/out_id is NULL
  * ACTA_DB_ERR_SQL on prepare/step failure. */
 int            acta_db_skill_folder_create(db_t *db, const char *name, int parent_id, int *out_id);
 

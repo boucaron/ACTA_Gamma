@@ -35,7 +35,9 @@ skill_revision_t *acta_db_skill_revision_get_latest(
 /* --- Lister ----------------------------------------------------------- */
 
 skill_revision_t **acta_db_skill_revision_list_by_skill(
-    db_t *db, int skill_id, int *out_count, int *err);
+    db_t *db, int skill_id,
+    int offset, int limit,
+    int *out_count, int *err);
 
 /* --- Free -------------------------------------------------------------- */
 
