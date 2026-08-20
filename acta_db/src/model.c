@@ -77,7 +77,7 @@ model_t *acta_db_model_get(db_t *db, int id, int *err) {
         if (!result && err) *err = ACTA_DB_ERR_ALLOC;
     }
     sqlite3_finalize(stmt);
-    if (err && !result && !result) *err = ACTA_DB_OK;  /* not-found */
+    if (err && !result) *err = ACTA_DB_OK;  /* not-found */
     return result;
 }
 
@@ -134,8 +134,9 @@ int acta_db_model_update(db_t *db, const model_t *m) {
     }
     int changes = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
+    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
+
 
 
 int acta_db_model_soft_delete(db_t *db, int id) {
@@ -146,9 +147,15 @@ int acta_db_model_soft_delete(db_t *db, int id) {
     sqlite3_bind_int(stmt, 1, id);
 
     int rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        return ACTA_DB_ERR_SQL;
+    }
+    int changes = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
+    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
+
 
 int acta_db_model_restore(db_t *db, int id) {
     if (!db) return ACTA_DB_ERR_INVALID;

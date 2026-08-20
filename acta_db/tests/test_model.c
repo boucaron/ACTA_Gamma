@@ -316,7 +316,7 @@ static void test_model_update_deleted(void) {
 
     model_t update = { .id = id, .name = "X", .backend = "b", .model_identifier = "mid" };
     int rc = acta_db_model_update(db, &update);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     int count = 0;
     model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, 0, -1, &count, NULL);

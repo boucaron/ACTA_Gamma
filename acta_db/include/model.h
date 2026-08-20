@@ -26,6 +26,28 @@ typedef struct {
 int      acta_db_model_create(db_t *db, const model_t *m, int *out_id);
 model_t *acta_db_model_get(db_t *db, int id, int *err);
 model_t *acta_db_model_get_live(db_t *db, int id, int *err);   /* NULL if soft-deleted */
+
+/**
+ * Update an existing model (full-row write).
+ *
+ * All fields are written; pass the full struct.
+ * NULL optional fields (description, base_url, configuration) are stored as
+ * SQL NULL, overwriting any previous value.  folder_id == 0 is stored as
+ * NULL.
+ *
+ * name, backend, and model_identifier must be non-NULL (no internal guard);
+ * passing NULL for any of them results in undefined behaviour.
+ *
+ * To change a single field, first read the row (acta_db_model_get),
+ * modify that field, then call this function with the complete struct.
+ *
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on
+ * failure.  Returns ACTA_DB_ERR_SQL (not ACTA_DB_ERR_NOT_FOUND) if no live
+ * row matches m->id — see note below.
+ *
+ * NOTE: Inconsistent with acta_db_skill_update, which returns
+ * ACTA_DB_ERR_NOT_FOUND for the same condition.  Should be unified.
+ */
 int      acta_db_model_update(db_t *db, const model_t *m);
 int      acta_db_model_soft_delete(db_t *db, int id);
 model_t **acta_db_model_list_in_folder(db_t *db,

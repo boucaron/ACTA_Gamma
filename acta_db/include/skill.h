@@ -37,7 +37,21 @@ skill_t *acta_db_skill_get(db_t *db, int id, int *err);
  * On real failure: returns NULL, *err = negative ACTA_DB_ERR_*. */
 skill_t *acta_db_skill_get_live(db_t *db, int id, int *err);
 
-/* Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on failure. */
+/**
+ * Update an existing skill (full-row write).
+ *
+ * All fields are written; pass the full struct.
+ * NULL optional fields (description, output_schema) are stored as SQL NULL,
+ * overwriting any previous value.  folder_id == 0 is stored as NULL.
+ *
+ * To change a single field, first read the row (acta_db_skill_get),
+ * modify that field, then call this function with the complete struct.
+ *
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on
+ * failure.  Returns ACTA_DB_ERR_NOT_FOUND if no live row matches s->id.
+ */
+int acta_db_skill_update(db_t *db, const skill_t *s);
+
 int      acta_db_skill_update(db_t *db, const skill_t *s);
 
 /* Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on failure. */
