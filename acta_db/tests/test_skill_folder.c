@@ -453,6 +453,97 @@ static void test_sf_list_all_paged(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 6.19: restore — happy path (soft-delete then restore) ---------- */
+static void test_sf_restore_happy(void) {
+    const char *path = "test/acta_test_sf_restore_happy.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    int rc = acta_db_skill_folder_create(db, "Tempo", 0, &id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Soft-delete it */
+    rc = acta_db_skill_folder_soft_delete(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Verify it's deleted: list_all should not include it */
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+    acta_db_skill_folder_list_free(items, count);
+
+    /* Restore it */
+    rc = acta_db_skill_folder_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Verify it's back */
+    skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_STR(f->name, "Tempo");
+    TEST_ASSERT_NULL(f->deleted_at);   /* live again */
+    acta_db_skill_folder_free(f);
+
+    /* list_all should now include it */
+    items = acta_db_skill_folder_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Tempo");
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.20: restore — nonexistent id → NOT_FOUND ---------- */
+static void test_sf_restore_nonexistent(void) {
+    const char *path = "test/acta_test_sf_restore_nonexistent.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int rc = acta_db_skill_folder_restore(db, 99999);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.21: restore — NULL db → INVALID ---------- */
+static void test_sf_restore_null_db(void) {
+    int rc = acta_db_skill_folder_restore(NULL, 1);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 6.22: restore — already-live folder (idempotent no-op) ---------- */
+static void test_sf_restore_already_live(void) {
+    const char *path = "test/acta_test_sf_restore_already_live.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    int rc = acta_db_skill_folder_create(db, "Alive", 0, &id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Restore without ever deleting: should still return OK */
+    rc = acta_db_skill_folder_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Folder is still intact and live */
+    int err = 0;
+    skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_STR(f->name, "Alive");
+    TEST_ASSERT_NULL(f->deleted_at);
+    acta_db_skill_folder_free(f);
+
+    test_db_teardown(db, path);
+}
+
 /* ---------- runner ---------- */
 void run_skill_folder_tests(void) {
     fprintf(stderr, "\n=== skill_folder tests ===\n");
@@ -476,4 +567,8 @@ void run_skill_folder_tests(void) {
     test_sf_list_children_paged_first();
     test_sf_list_children_paged_second();
     test_sf_list_all_paged();
+    test_sf_restore_happy();
+    test_sf_restore_nonexistent();
+    test_sf_restore_null_db();
+    test_sf_restore_already_live();
 }

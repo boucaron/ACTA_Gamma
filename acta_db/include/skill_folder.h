@@ -16,7 +16,7 @@ typedef struct {
     int     parent_id;      /* 0 = root */
     char   *created_at;
     char   *updated_at;
-    char   *deleted_at;
+    char   *deleted_at;     /* NULL if live */
 } skill_folder_t;
 
 /* Returns ACTA_DB_OK on success.
@@ -36,6 +36,12 @@ int            acta_db_skill_folder_rename(db_t *db, int id, const char *new_nam
  * ACTA_DB_ERR_INVALID if db is NULL or folder has live children.
  * ACTA_DB_ERR_SQL on prepare/step failure. */
 int            acta_db_skill_folder_soft_delete(db_t *db, int id);
+
+/* Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_INVALID if db is NULL.
+ * ACTA_DB_ERR_SQL on prepare/step failure.
+ * No-op (returns ACTA_DB_OK) if the folder is already live (deleted_at IS NULL). */
+int            acta_db_skill_folder_restore(db_t *db, int id);
 
 /* Returns a heap-allocated array of skill_folder_t* on success, or NULL.
  * err may be NULL. *out_count receives the item count.

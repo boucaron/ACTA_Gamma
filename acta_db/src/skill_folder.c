@@ -261,6 +261,28 @@ skill_folder_t **acta_db_skill_folder_list_all(db_t *db,
     return items;
 }
 
+int acta_db_skill_folder_restore(db_t *db, int id) {
+    if (!db) return ACTA_DB_ERR_INVALID;
+    const char *sql =
+        "UPDATE skill_folders SET deleted_at = NULL, "
+        "updated_at = CASE WHEN deleted_at IS NOT NULL THEN datetime('now') ELSE updated_at END "
+        "WHERE id = ?;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(stmt, 1, id);
+    int rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        return ACTA_DB_ERR_SQL;
+    }
+    int changed = sqlite3_changes(db->handle);
+    sqlite3_finalize(stmt);
+    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+}
+
+
+
 /* ---------- skill_folder: free ---------- */
 
 void acta_db_skill_folder_free(skill_folder_t *f) {
