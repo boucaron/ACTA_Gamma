@@ -6,6 +6,7 @@
 #include "model_folder.h"
 #include "model_revision.h"
 #include "skill.h"
+#include "skill_folder.h"
 #include "skill_revision.h"
 #include "context.h"
 #include "execution.h"
