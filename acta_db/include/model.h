@@ -22,10 +22,10 @@ int          acta_db_model_folder_create(db_t *db, const char *name, int parent_
 model_folder_t *acta_db_model_folder_get(db_t *db, int id);
 int          acta_db_model_folder_rename(db_t *db, int id, const char *new_name);
 int          acta_db_model_folder_soft_delete(db_t *db, int id);
-model_folder_t *acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count);
-model_folder_t *acta_db_model_folder_list_all(db_t *db, int *out_count);
+model_folder_t **acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count, int *err);
+model_folder_t **acta_db_model_folder_list_all(db_t *db, int *out_count, int *err);
 void          acta_db_model_folder_free(model_folder_t *f);
-void          acta_db_model_folder_list_free(model_folder_t *items, int count);
+void          acta_db_model_folder_list_free(model_folder_t **items, int count);
 
 int  acta_db_model_restore(db_t *db, int id);
 int  acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id);
@@ -51,10 +51,10 @@ model_t *acta_db_model_get(db_t *db, int id);
 model_t *acta_db_model_get_live(db_t *db, int id);   /* NULL if soft-deleted */
 int      acta_db_model_update(db_t *db, const model_t *m);
 int      acta_db_model_soft_delete(db_t *db, int id);
-model_t *acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count);
-model_t *acta_db_model_list_all(db_t *db, int *out_count);
+model_t **acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count, int *err);
+model_t **acta_db_model_list_all(db_t *db, int *out_count, int *err);
 void     acta_db_model_free(model_t *m);
-void     acta_db_model_list_free(model_t *items, int count);
+void     acta_db_model_list_free(model_t **items, int count);
 
 #ifdef __cplusplus
 }

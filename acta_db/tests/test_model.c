@@ -360,7 +360,7 @@ static void test_model_list_in_folder_root(void) {
     model_t m = { .name = "RootModel", .backend = "b", .model_identifier = "mid" };
     acta_db_model_create(db, &m, &(int){0});
     int count = 0;
-    model_t *items = acta_db_model_list_in_folder(db, 0, &count);
+    model_t **items = acta_db_model_list_in_folder(db, 0, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -381,7 +381,7 @@ static void test_model_list_in_folder_specific(void) {
     acta_db_model_create(db, &mb, &(int){0});
 
     int count = 0;
-    model_t *items = acta_db_model_list_in_folder(db, f1, &count);
+    model_t **items = acta_db_model_list_in_folder(db, f1, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -396,7 +396,7 @@ static void test_model_list_in_folder_empty(void) {
     int fid;
     acta_db_model_folder_create(db, "Empty", 0, &fid);
     int count = 0;
-    model_t *items = acta_db_model_list_in_folder(db, fid, &count);
+    model_t **items = acta_db_model_list_in_folder(db, fid, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 0);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -417,7 +417,7 @@ static void test_model_list_all_excludes_deleted(void) {
     acta_db_model_create(db, &m3, &id3);
     acta_db_model_soft_delete(db, id2);
     int count = 0;
-    model_t *items = acta_db_model_list_all(db, &count);
+    model_t **items = acta_db_model_list_all(db, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -454,7 +454,7 @@ static void test_model_list_free_valid(void) {
         acta_db_model_create(db, &m, &(int){0});
     }
     int count = 0;
-    model_t *items = acta_db_model_list_all(db, &count);
+    model_t **items = acta_db_model_list_all(db, &count, NULL);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
 }
@@ -500,7 +500,6 @@ static void test_model_restore_already_live(void) {
     test_db_teardown(db, path);
 }
 
-
 /* ---------- 4.30: model_restore — non-existent ---------- */
 static void test_model_restore_nonexistent(void) {
     const char *path = "test/acta_test_m_restore_404.db";
@@ -513,7 +512,6 @@ static void test_model_restore_nonexistent(void) {
 
     test_db_teardown(db, path);
 }
-
 
 /* ---------- 4.31: model_restore — appears in list_all after restore ---------- */
 static void test_model_restore_in_list(void) {
@@ -531,13 +529,13 @@ static void test_model_restore_in_list(void) {
     acta_db_model_soft_delete(db, id2);
 
     int count = 0;
-    acta_db_model_list_all(db, &count);
+    acta_db_model_list_all(db, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
 
     acta_db_model_restore(db, id2);
 
     count = 0;
-    model_t *items = acta_db_model_list_all(db, &count);
+    model_t **items = acta_db_model_list_all(db, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_list_free(items, count);
 
@@ -563,14 +561,14 @@ static void test_model_move_to_folder_specific(void) {
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int count1 = 0;
-    model_t *items1 = acta_db_model_list_in_folder(db, f1, &count1);
+    model_t **items1 = acta_db_model_list_in_folder(db, f1, &count1, NULL);
     TEST_ASSERT_EQ_INT(count1, 0);
     acta_db_model_list_free(items1, count1);
 
     int count2 = 0;
-    model_t *items2 = acta_db_model_list_in_folder(db, f2, &count2);
+    model_t **items2 = acta_db_model_list_in_folder(db, f2, &count2, NULL);
     TEST_ASSERT_EQ_INT(count2, 1);
-    TEST_ASSERT_EQ_INT(items2[0].id, id);
+    TEST_ASSERT_EQ_INT(items2[0]->id, id);
     acta_db_model_list_free(items2, count2);
 
     test_db_teardown(db, path);
@@ -594,13 +592,13 @@ static void test_model_move_to_folder_root(void) {
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int count = 0;
-    model_t *items = acta_db_model_list_in_folder(db, 0, &count);
+    model_t **items = acta_db_model_list_in_folder(db, 0, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 1);
-    TEST_ASSERT_EQ_INT(items[0].id, id);
+    TEST_ASSERT_EQ_INT(items[0]->id, id);
     acta_db_model_list_free(items, count);
 
     count = 0;
-    model_t *old = acta_db_model_list_in_folder(db, fid, &count);
+    model_t **old = acta_db_model_list_in_folder(db, fid, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 0);
     acta_db_model_list_free(old, count);
 
@@ -640,7 +638,6 @@ static void test_model_move_nonexistent(void) {
 
     test_db_teardown(db, path);
 }
-
 
 void run_model_tests(void) {
     fprintf(stderr, "\n=== model tests ===\n");

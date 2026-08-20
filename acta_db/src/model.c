@@ -95,53 +95,93 @@ int acta_db_model_folder_soft_delete(db_t *db, int id) {
     return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
-model_folder_t *acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count) {
-    if (!db || !out_count) return NULL;
+model_folder_t **acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count, int *err) {
+    if (!db || !out_count) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
     const char *sql = parent_id == 0
         ? "SELECT id, name, parent_id, created_at, updated_at, deleted_at FROM model_folders WHERE parent_id IS NULL AND deleted_at IS NULL ORDER BY name;"
         : "SELECT id, name, parent_id, created_at, updated_at, deleted_at FROM model_folders WHERE parent_id = ? AND deleted_at IS NULL ORDER BY name;";
 
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     if (parent_id != 0) sqlite3_bind_int(stmt, 1, parent_id);
 
     int count = 0;
-    model_folder_t *items = NULL;
+    model_folder_t **items = NULL;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         model_folder_t *item = row_to_model_folder(stmt);
-        if (!item) { sqlite3_finalize(stmt); return NULL; }
-        model_folder_t *tmp = realloc(items, sizeof(model_folder_t) * (count + 1));
-        if (!tmp) { acta_db_model_folder_free(item); sqlite3_finalize(stmt); return NULL; }
+        if (!item) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            for (int i = 0; i < count; i++) acta_db_model_folder_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+        model_folder_t **tmp = realloc(items, sizeof(model_folder_t *) * (count + 1));
+        if (!tmp) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            acta_db_model_folder_free(item);
+            for (int i = 0; i < count; i++) acta_db_model_folder_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
         items = tmp;
-        items[count++] = *item;
-        free(item);
+        items[count++] = item;
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
+    if (err) *err = ACTA_DB_OK;
     return items;
 }
 
-model_folder_t *acta_db_model_folder_list_all(db_t *db, int *out_count) {
-    if (!db || !out_count) return NULL;
+
+model_folder_t **acta_db_model_folder_list_all(db_t *db, int *out_count, int *err) {
+    if (!db || !out_count) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
     const char *sql = "SELECT id, name, parent_id, created_at, updated_at, deleted_at FROM model_folders WHERE deleted_at IS NULL ORDER BY name;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
 
     int count = 0;
-    model_folder_t *items = NULL;
+    model_folder_t **items = NULL;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         model_folder_t *item = row_to_model_folder(stmt);
-        if (!item) { sqlite3_finalize(stmt); return NULL; }
-        model_folder_t *tmp = realloc(items, sizeof(model_folder_t) * (count + 1));
-        if (!tmp) { acta_db_model_folder_free(item); sqlite3_finalize(stmt); return NULL; }
+        if (!item) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            for (int i = 0; i < count; i++) acta_db_model_folder_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+        model_folder_t **tmp = realloc(items, sizeof(model_folder_t *) * (count + 1));
+        if (!tmp) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            acta_db_model_folder_free(item);
+            for (int i = 0; i < count; i++) acta_db_model_folder_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
         items = tmp;
-        items[count++] = *item;
-        free(item);
+        items[count++] = item;
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
+    if (err) *err = ACTA_DB_OK;
     return items;
 }
+
 
 void acta_db_model_folder_free(model_folder_t *f) {
     if (!f) return;
@@ -152,13 +192,10 @@ void acta_db_model_folder_free(model_folder_t *f) {
     free(f);
 }
 
-void acta_db_model_folder_list_free(model_folder_t *items, int count) {
+void acta_db_model_folder_list_free(model_folder_t **items, int count) {
     if (!items) return;
     for (int i = 0; i < count; i++) {
-        free(items[i].name);
-        free(items[i].created_at);
-        free(items[i].updated_at);
-        free(items[i].deleted_at);
+        acta_db_model_folder_free(items[i]);
     }
     free(items);
 }
@@ -275,8 +312,11 @@ int acta_db_model_soft_delete(db_t *db, int id) {
     return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
-model_t *acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count) {
-    if (!db || !out_count) return NULL;
+model_t **acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count, int *err) {
+    if (!db || !out_count) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
     const char *sql = folder_id == 0
         ? "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
           "created_at, updated_at, deleted_at FROM models WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name;"
@@ -284,46 +324,81 @@ model_t *acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count) {
           "created_at, updated_at, deleted_at FROM models WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name;";
 
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     if (folder_id != 0) sqlite3_bind_int(stmt, 1, folder_id);
 
     int count = 0;
-    model_t *items = NULL;
+    model_t **items = NULL;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         model_t *item = row_to_model(stmt);
-        if (!item) { sqlite3_finalize(stmt); return NULL; }
-        model_t *tmp = realloc(items, sizeof(model_t) * (count + 1));
-        if (!tmp) { acta_db_model_free(item); sqlite3_finalize(stmt); return NULL; }
+        if (!item) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            for (int i = 0; i < count; i++) acta_db_model_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+        model_t **tmp = realloc(items, sizeof(model_t *) * (count + 1));
+        if (!tmp) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            acta_db_model_free(item);
+            for (int i = 0; i < count; i++) acta_db_model_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
         items = tmp;
-        items[count++] = *item;
-        free(item);
+        items[count++] = item;
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
+    if (err) *err = ACTA_DB_OK;
     return items;
 }
 
-model_t *acta_db_model_list_all(db_t *db, int *out_count) {
-    if (!db || !out_count) return NULL;
+model_t **acta_db_model_list_all(db_t *db, int *out_count, int *err) {
+    if (!db || !out_count) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
     const char *sql =
         "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
         "created_at, updated_at, deleted_at FROM models WHERE deleted_at IS NULL ORDER BY name;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
 
     int count = 0;
-    model_t *items = NULL;
+    model_t **items = NULL;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         model_t *item = row_to_model(stmt);
-        if (!item) { sqlite3_finalize(stmt); return NULL; }
-        model_t *tmp = realloc(items, sizeof(model_t) * (count + 1));
-        if (!tmp) { acta_db_model_free(item); sqlite3_finalize(stmt); return NULL; }
+        if (!item) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            for (int i = 0; i < count; i++) acta_db_model_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+        model_t **tmp = realloc(items, sizeof(model_t *) * (count + 1));
+        if (!tmp) {
+            if (err) *err = ACTA_DB_ERR_ALLOC;
+            acta_db_model_free(item);
+            for (int i = 0; i < count; i++) acta_db_model_free(items[i]);
+            free(items);
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
         items = tmp;
-        items[count++] = *item;
-        free(item);
+        items[count++] = item;
     }
     sqlite3_finalize(stmt);
-    *out_count = count;
+    if (out_count) *out_count = count;
+    if (err) *err = ACTA_DB_OK;
     return items;
 }
 
@@ -377,18 +452,10 @@ void acta_db_model_free(model_t *m) {
     free(m);
 }
 
-void acta_db_model_list_free(model_t *items, int count) {
+void acta_db_model_list_free(model_t **items, int count) {
     if (!items) return;
     for (int i = 0; i < count; i++) {
-        free(items[i].name);
-        free(items[i].description);
-        free(items[i].backend);
-        free(items[i].base_url);
-        free(items[i].model_identifier);
-        free(items[i].configuration);
-        free(items[i].created_at);
-        free(items[i].updated_at);
-        free(items[i].deleted_at);
+        acta_db_model_free(items[i]);
     }
     free(items);
 }
