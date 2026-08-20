@@ -84,10 +84,13 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
 /* ------------------------------------------------------------------ */
 /*  Lister – returns execution_log_t ** (array of heap-allocated ptrs)   */
 /*  on success; NULL on not-found or real failure.                       */
+/*  Supports pagination via offset (rows to skip) and limit (max rows;   */
+/*  -1 means "no limit").                                               */
 /* ------------------------------------------------------------------ */
 
 execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
                                                           int execution_id,
+                                                          int offset, int limit,
                                                           int *out_count,
                                                           int *err) {
     if (!db) {
@@ -95,12 +98,16 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
         return NULL;
     }
 
+    if (offset < 0) offset = 0;
+    /* limit < 0 → SQLite treats LIMIT -1 as "no upper bound". */
+
     if (out_count) *out_count = 0;
 
     const char *sql =
         "SELECT id, execution_id, level, event, message, metadata, created_at"
         " FROM execution_logs WHERE execution_id = ?"
-        " ORDER BY created_at, id;";
+        " ORDER BY created_at, id"
+        " LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -108,6 +115,8 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, execution_id);
+    sqlite3_bind_int(stmt, 2, limit);    /* -1 → unlimited */
+    sqlite3_bind_int(stmt, 3, offset);   /* rows to skip */
 
     int    count    = 0;
     size_t capacity = 0;

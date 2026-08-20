@@ -40,6 +40,11 @@ int acta_db_execution_log_create(db_t *db,
 /*
  * Lister – target pattern:  T ** foo_list(…, int *out_count, int *err);
  *
+ *   Pagination:
+ *     offset  – number of rows to skip (0-based).
+ *     limit   – maximum number of rows to return.
+ *               Pass -1 (or INT_MAX) to fetch all remaining rows.
+ *
  *   success / rows found → returns valid execution_log_t ** (array of
  *                          heap-allocated structs), *err = ACTA_DB_OK.
  *   no rows (not-found)  → returns NULL, *err = ACTA_DB_OK.
@@ -49,6 +54,7 @@ int acta_db_execution_log_create(db_t *db,
  */
 execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
                                                           int execution_id,
+                                                          int offset, int limit,
                                                           int *out_count,
                                                           int *err);
 
