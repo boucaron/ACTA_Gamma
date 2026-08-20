@@ -1,4 +1,4 @@
-/* test_execution.c — Tests for execution.h (tests 9.1 – 9.39) */
+/* test_execution.c — Tests for execution.h (tests 9.1 – 9.47) */
 
 #include "test_common.h"
 #include "execution.h"
@@ -696,7 +696,7 @@ static void test_exec_list_by_status_pending(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
@@ -728,7 +728,7 @@ static void test_exec_list_by_status_completed(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_COMPLETED, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_COMPLETED, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 2);
@@ -752,7 +752,7 @@ static void test_exec_list_by_status_no_match(void) {
 
     int out_count = -1;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_FAILED, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_FAILED, 0, 0, &out_count, &err);
     /* Either error or empty list */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
@@ -771,7 +771,7 @@ static void test_exec_list_by_status_invalid(void) {
 
     int out_count = -1;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_status(db, "bogus", &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_status(db, "bogus", 0, 0, &out_count, &err);
     /* Either an error or 0 results */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
@@ -803,7 +803,7 @@ static void test_exec_list_children_with(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **children = acta_db_execution_list_children(db, parent_id, &out_count, &err);
+    execution_t **children = acta_db_execution_list_children(db, parent_id, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(children);
     TEST_ASSERT_EQ_INT(out_count, 3);
@@ -830,7 +830,7 @@ static void test_exec_list_children_none(void) {
 
     int out_count = -1;
     int err = 0;
-    execution_t **children = acta_db_execution_list_children(db, leaf_id, &out_count, &err);
+    execution_t **children = acta_db_execution_list_children(db, leaf_id, 0, 0, &out_count, &err);
     /* Either error or empty list */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
@@ -849,7 +849,7 @@ static void test_exec_list_children_nonexistent(void) {
 
     int out_count = -1;
     int err = 0;
-    execution_t **children = acta_db_execution_list_children(db, 999999, &out_count, &err);
+    execution_t **children = acta_db_execution_list_children(db, 999999, 0, 0, &out_count, &err);
     /* Either an error or 0 results */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
@@ -906,7 +906,7 @@ static void test_exec_list_free_valid(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_PENDING, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
@@ -953,7 +953,7 @@ static void test_exec_list_by_context_with(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_context(db, ctx_id, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_context(db, ctx_id, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
@@ -979,7 +979,7 @@ static void test_exec_list_by_context_no_match(void) {
 
     int out_count = -1;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_context(db, 999999, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_context(db, 999999, 0, 0, &out_count, &err);
     /* Either error or empty list */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
@@ -1016,7 +1016,7 @@ static void test_exec_list_by_context_mixed(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_context(db, ctx_id, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_context(db, ctx_id, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
@@ -1028,7 +1028,7 @@ static void test_exec_list_by_context_mixed(void) {
     /* Verify ctx2 */
     out_count = 0;
     err = 0;
-    items = acta_db_execution_list_by_context(db, ctx2_id, &out_count, &err);
+    items = acta_db_execution_list_by_context(db, ctx2_id, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 2);
@@ -1220,7 +1220,7 @@ static void test_exec_list_by_status_cancelled(void) {
 
     int out_count = 0;
     int err = 0;
-    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_CANCELLED, &out_count, &err);
+    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_CANCELLED, 0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 2);

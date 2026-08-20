@@ -39,10 +39,15 @@ int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
 
 /* --- getters / listers (standardised err pattern) --- */
 execution_t  *acta_db_execution_get(db_t *db, int id, int *err);
-execution_t **acta_db_execution_list_by_status(db_t *db, const char *status, int *out_count, int *err);
-execution_t **acta_db_execution_list_children(db_t *db, int parent_id, int *out_count, int *err);
-execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *out_count, int *err);
-
+execution_t **acta_db_execution_list_by_status(db_t *db, const char *status,
+                                                int offset, int limit,
+                                                int *out_count, int *err);
+execution_t **acta_db_execution_list_children(db_t *db, int parent_id,
+                                               int offset, int limit,
+                                               int *out_count, int *err);
+execution_t **acta_db_execution_list_by_context(db_t *db, int context_id,
+                                                int offset, int limit,
+                                                int *out_count, int *err);
 
 /* --- free --- */
 void acta_db_execution_free(execution_t *e);

@@ -26,14 +26,10 @@ static execution_t *row_to_execution(sqlite3_stmt *stmt) {
     return e;
 }
 
-/* Free a partially-built list on error (NULL-terminated array of ptrs). */
-static void list_cleanup(execution_t **arr, int count) {
-    for (int i = 0; i < count; i++)
-        acta_db_execution_free(arr[i]);
-    free(arr);
-}
-
-#define EXEC_SELECT "SELECT id, context_id, skill_revision_id, model_revision_id, prompt, raw_response, result, status, error, created_at, started_at, completed_at, parent_execution_id FROM executions"
+#define EXEC_SELECT \
+    "SELECT id, context_id, skill_revision_id, model_revision_id, prompt, " \
+    "raw_response, result, status, error, created_at, started_at, " \
+    "completed_at, parent_execution_id FROM executions"
 
 /* ------------------------------------------------------------------ */
 /*  Create                                                            */
@@ -65,7 +61,7 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Get (standardised err pattern)                                    */
+/*  Get                                                               */
 /* ------------------------------------------------------------------ */
 
 execution_t *acta_db_execution_get(db_t *db, int id, int *err) {
@@ -74,8 +70,7 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err) {
         return NULL;
     }
 
-    char sql[256];
-    snprintf(sql, sizeof(sql), "%s WHERE id = ?;", EXEC_SELECT);
+    const char *sql = EXEC_SELECT " WHERE id = ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -95,14 +90,12 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err) {
     }
     sqlite3_finalize(stmt);
 
-    /* Found row  →  valid ptr,  OK
-       No row     →  NULL,       OK  (not-found is not an error) */
     if (err) *err = ACTA_DB_OK;
     return result;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Start / Complete / Fail / Set raw  (action fns – return int)      */
+/*  Start / Cancel / Complete / Fail / Set raw                        */
 /* ------------------------------------------------------------------ */
 
 int acta_db_execution_start(db_t *db, int id) {
@@ -117,10 +110,8 @@ int acta_db_execution_start(db_t *db, int id) {
     }
     acta_db_execution_free(existing);
 
-    char sql[256];
-    snprintf(sql, sizeof(sql),
-             "UPDATE executions SET status = '%s', started_at = datetime('now') WHERE id = ?;",
-             ACTA_EXEC_STATUS_RUNNING);
+    const char *sql =
+        "UPDATE executions SET status = 'running', started_at = datetime('now') WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -145,10 +136,8 @@ int acta_db_execution_cancel(db_t *db, int id) {
     }
     acta_db_execution_free(existing);
 
-    char sql[256];
-    snprintf(sql, sizeof(sql),
-             "UPDATE executions SET status = '%s', completed_at = datetime('now') WHERE id = ?;",
-             ACTA_EXEC_STATUS_CANCELLED);
+    const char *sql =
+        "UPDATE executions SET status = 'cancelled', completed_at = datetime('now') WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -159,8 +148,6 @@ int acta_db_execution_cancel(db_t *db, int id) {
     sqlite3_finalize(stmt);
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
-
-
 
 int acta_db_execution_complete(db_t *db, int id, const char *result) {
     if (!db) return ACTA_DB_ERR_INVALID;
@@ -174,11 +161,9 @@ int acta_db_execution_complete(db_t *db, int id, const char *result) {
     }
     acta_db_execution_free(existing);
 
-    char sql[384];
-    snprintf(sql, sizeof(sql),
-             "UPDATE executions SET status = '%s', result = ?, "
-             "completed_at = datetime('now') WHERE id = ?;",
-             ACTA_EXEC_STATUS_COMPLETED);
+    const char *sql =
+        "UPDATE executions SET status = 'completed', result = ?, "
+        "completed_at = datetime('now') WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -205,11 +190,9 @@ int acta_db_execution_fail(db_t *db, int id, const char *error) {
     }
     acta_db_execution_free(existing);
 
-    char sql[384];
-    snprintf(sql, sizeof(sql),
-             "UPDATE executions SET status = '%s', error = ?, "
-             "completed_at = datetime('now') WHERE id = ?;",
-             ACTA_EXEC_STATUS_FAILED);
+    const char *sql =
+        "UPDATE executions SET status = 'failed', error = ?, "
+        "completed_at = datetime('now') WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -246,17 +229,23 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Listers (standardised: T** return, int *err)                      */
+/*  Listers (paginated)                                               */
 /* ------------------------------------------------------------------ */
 
-execution_t **acta_db_execution_list_by_status(db_t *db, const char *status, int *out_count, int *err) {
+execution_t **acta_db_execution_list_by_status(db_t *db, const char *status,
+                                               int offset, int limit,
+                                               int *out_count, int *err) {
     if (!db || !status) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
+    if (offset < 0) offset = 0;
+    if (limit <= 0) limit = -1;   /* SQLite: LIMIT -1 = no upper bound */
 
-    char sql[256];
-    snprintf(sql, sizeof(sql), "%s WHERE status = ? ORDER BY created_at DESC;", EXEC_SELECT);
+    if (out_count) *out_count = 0;
+
+    const char *sql =
+        EXEC_SELECT " WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -264,50 +253,62 @@ execution_t **acta_db_execution_list_by_status(db_t *db, const char *status, int
         return NULL;
     }
     sqlite3_bind_text(stmt, 1, status, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, limit);    /* -1 → unlimited */
+    sqlite3_bind_int(stmt, 3, offset);   /* rows to skip */
 
+    int    count    = 0;
+    size_t capacity = 0;
     execution_t **items = NULL;
-    int count = 0;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if ((size_t)count >= capacity) {
+            size_t new_cap = capacity ? capacity * 2 : 8;
+            execution_t **tmp = realloc(items, new_cap * sizeof *tmp);
+            if (!tmp) {
+                acta_db_execution_list_free(items, count);
+                sqlite3_finalize(stmt);
+                if (err) *err = ACTA_DB_ERR_ALLOC;
+                return NULL;
+            }
+            items    = tmp;
+            capacity = new_cap;
+        }
+
         execution_t *item = row_to_execution(stmt);
         if (!item) {
-            list_cleanup(items, count);
+            acta_db_execution_list_free(items, count);
             sqlite3_finalize(stmt);
             if (err) *err = ACTA_DB_ERR_ALLOC;
             return NULL;
         }
-        execution_t **tmp = realloc(items, sizeof(execution_t *) * (count + 2));
-        if (!tmp) {
-            acta_db_execution_free(item);
-            list_cleanup(items, count);
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_ALLOC;
-            return NULL;
-        }
-        items = tmp;
         items[count++] = item;
     }
+
     sqlite3_finalize(stmt);
 
+    if (out_count) *out_count = count;
+    if (err)       *err       = ACTA_DB_OK;
+
     if (count == 0) {
-        if (out_count) *out_count = 0;
-        if (err) *err = ACTA_DB_OK;
+        free(items);
         return NULL;
     }
-    items[count] = NULL;               /* NULL-terminate */
-    if (out_count) *out_count = count;
-    if (err) *err = ACTA_DB_OK;
     return items;
 }
 
-execution_t **acta_db_execution_list_children(db_t *db, int parent_id, int *out_count, int *err) {
+execution_t **acta_db_execution_list_children(db_t *db, int parent_id,
+                                              int offset, int limit,
+                                              int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
+    if (offset < 0) offset = 0;
+    if (limit <= 0) limit = -1;   /* SQLite: LIMIT -1 = no upper bound */
+    if (out_count) *out_count = 0;
 
-    char sql[256];
-    snprintf(sql, sizeof(sql), "%s WHERE parent_execution_id = ? ORDER BY created_at;", EXEC_SELECT);
+    const char *sql =
+        EXEC_SELECT " WHERE parent_execution_id = ? ORDER BY created_at LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -315,50 +316,63 @@ execution_t **acta_db_execution_list_children(db_t *db, int parent_id, int *out_
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, parent_id);
+    sqlite3_bind_int(stmt, 2, limit);
+    sqlite3_bind_int(stmt, 3, offset);
 
+    int    count    = 0;
+    size_t capacity = 0;
     execution_t **items = NULL;
-    int count = 0;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if ((size_t)count >= capacity) {
+            size_t new_cap = capacity ? capacity * 2 : 8;
+            execution_t **tmp = realloc(items, new_cap * sizeof *tmp);
+            if (!tmp) {
+                acta_db_execution_list_free(items, count);
+                sqlite3_finalize(stmt);
+                if (err) *err = ACTA_DB_ERR_ALLOC;
+                return NULL;
+            }
+            items    = tmp;
+            capacity = new_cap;
+        }
+
         execution_t *item = row_to_execution(stmt);
         if (!item) {
-            list_cleanup(items, count);
+            acta_db_execution_list_free(items, count);
             sqlite3_finalize(stmt);
             if (err) *err = ACTA_DB_ERR_ALLOC;
             return NULL;
         }
-        execution_t **tmp = realloc(items, sizeof(execution_t *) * (count + 2));
-        if (!tmp) {
-            acta_db_execution_free(item);
-            list_cleanup(items, count);
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_ALLOC;
-            return NULL;
-        }
-        items = tmp;
         items[count++] = item;
     }
+
     sqlite3_finalize(stmt);
 
+    if (out_count) *out_count = count;
+    if (err)       *err       = ACTA_DB_OK;
+
     if (count == 0) {
-        if (out_count) *out_count = 0;
-        if (err) *err = ACTA_DB_OK;
+        free(items);
         return NULL;
     }
-    items[count] = NULL;
-    if (out_count) *out_count = count;
-    if (err) *err = ACTA_DB_OK;
     return items;
 }
 
-execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *out_count, int *err) {
+execution_t **acta_db_execution_list_by_context(db_t *db, int context_id,
+                                                int offset, int limit,
+                                                int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
+    if (offset < 0) offset = 0;
+    if (limit <= 0) limit = -1;   /* SQLite: LIMIT -1 = no upper bound */
 
-    char sql[256];
-    snprintf(sql, sizeof(sql), "%s WHERE context_id = ? ORDER BY created_at DESC;", EXEC_SELECT);
+    if (out_count) *out_count = 0;
+
+    const char *sql =
+        EXEC_SELECT " WHERE context_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -366,39 +380,46 @@ execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *o
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, context_id);
+    sqlite3_bind_int(stmt, 2, limit);
+    sqlite3_bind_int(stmt, 3, offset);
 
+    int    count    = 0;
+    size_t capacity = 0;
     execution_t **items = NULL;
-    int count = 0;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if ((size_t)count >= capacity) {
+            size_t new_cap = capacity ? capacity * 2 : 8;
+            execution_t **tmp = realloc(items, new_cap * sizeof *tmp);
+            if (!tmp) {
+                acta_db_execution_list_free(items, count);
+                sqlite3_finalize(stmt);
+                if (err) *err = ACTA_DB_ERR_ALLOC;
+                return NULL;
+            }
+            items    = tmp;
+            capacity = new_cap;
+        }
+
         execution_t *item = row_to_execution(stmt);
         if (!item) {
-            list_cleanup(items, count);
+            acta_db_execution_list_free(items, count);
             sqlite3_finalize(stmt);
             if (err) *err = ACTA_DB_ERR_ALLOC;
             return NULL;
         }
-        execution_t **tmp = realloc(items, sizeof(execution_t *) * (count + 2));
-        if (!tmp) {
-            acta_db_execution_free(item);
-            list_cleanup(items, count);
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_ALLOC;
-            return NULL;
-        }
-        items = tmp;
         items[count++] = item;
     }
+
     sqlite3_finalize(stmt);
 
+    if (out_count) *out_count = count;
+    if (err)       *err       = ACTA_DB_OK;
+
     if (count == 0) {
-        if (out_count) *out_count = 0;
-        if (err) *err = ACTA_DB_OK;
+        free(items);
         return NULL;
     }
-    items[count] = NULL;
-    if (out_count) *out_count = count;
-    if (err) *err = ACTA_DB_OK;
     return items;
 }
 
@@ -417,7 +438,6 @@ void acta_db_execution_free(execution_t *e) {
 void acta_db_execution_list_free(execution_t **items, int count) {
     if (!items) return;
     for (int i = 0; i < count; i++)
-        acta_db_execution_free(items[i]);   /* NULL-safe per element */
+        acta_db_execution_free(items[i]);
     free(items);
 }
-
