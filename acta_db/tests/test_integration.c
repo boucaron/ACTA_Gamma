@@ -51,7 +51,9 @@ static int make_skill(db_t *db, const char *name) {
 }
 
 static model_revision_t *get_model_rev(db_t *db, int model_id, int rev) {
-    model_revision_t *r = acta_db_model_revision_get_by_model_and_rev(db, model_id, rev, NULL);
+    int err = 0;
+    model_revision_t *r = acta_db_model_revision_get_by_model_and_rev(db, model_id, rev, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(r);
     return r;
 }
@@ -141,74 +143,119 @@ static void test_integration_model_lifecycle(void) {
     TEST_ASSERT_EQ_INT(acta_db_model_create(db, &m, &model_id), 0);
     TEST_ASSERT(model_id > 0);
 
-    /* Revision 1 exists */
+    /* Revision 1 exists and carries the full model snapshot */
     int rev_count = 0;
-    model_revision_t **revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, NULL);
+    int err = 0;
+    model_revision_t **revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT(revs != NULL);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
+    TEST_ASSERT_EQ_INT(revs[0]->model_id, model_id);
+    TEST_ASSERT_EQ_INT(revs[0]->folder_id, folder_id);
+    TEST_ASSERT_EQ_STR(revs[0]->name, "TestModel");
+    TEST_ASSERT_EQ_STR(revs[0]->description, "A test model");
+    TEST_ASSERT_EQ_STR(revs[0]->backend, "openai");
+    TEST_ASSERT_EQ_STR(revs[0]->base_url, "https://api.openai.com");
+    TEST_ASSERT_EQ_STR(revs[0]->model_identifier, "gpt-4");
+    TEST_ASSERT(revs[0]->deleted_at == NULL);
     acta_db_model_revision_list_free(revs, rev_count);
 
-    /* Update → revision 2 */
+    /* Update → revision 2 (snapshot captures new description) */
     model_t m2;
     memset(&m2, 0, sizeof(m2));
-    m2.id        = model_id;
-    m2.folder_id = folder_id;
-    m2.name      = "TestModel";
-    m2.description = "Updated description";
-    m2.backend   = "openai";
-    m2.base_url = "https://api.openai.com";
+    m2.id             = model_id;
+    m2.folder_id      = folder_id;
+    m2.name           = "TestModel";
+    m2.description    = "Updated description";
+    m2.backend        = "openai";
+    m2.base_url       = "https://api.openai.com";
     m2.model_identifier = "gpt-4";
-    m2.configuration = NULL;
+    m2.configuration  = NULL;
 
     TEST_ASSERT_EQ_INT(acta_db_model_update(db, &m2), 0);
 
-    rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, NULL);
+    rev_count = 0; err = 0;
+    revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 2);
+    /* rev 1 retains original description */
+    TEST_ASSERT_EQ_STR(revs[0]->description, "A test model");
+    /* rev 2 has the updated description */
+    TEST_ASSERT_EQ_INT(revs[1]->revision, 2);
+    TEST_ASSERT_EQ_STR(revs[1]->description, "Updated description");
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* Soft-delete → revision 3 with deleted_at */
     TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), 0);
 
-    rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, NULL);
+    rev_count = 0; err = 0;
+    revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 3);
     TEST_ASSERT(revs[2]->deleted_at != NULL);
+    /* rev 3 snapshot still carries the model fields */
+    TEST_ASSERT_EQ_STR(revs[2]->name, "TestModel");
+    TEST_ASSERT_EQ_STR(revs[2]->description, "Updated description");
     acta_db_model_revision_list_free(revs, rev_count);
 
+    /* acta_db_model_revision_get by explicit id */
+    {
+        model_revision_t *single = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+        TEST_ASSERT_NOT_NULL(single);
+        TEST_ASSERT_EQ_INT(single->revision, 1);
+        TEST_ASSERT_EQ_STR(single->name, "TestModel");
+        acta_db_model_revision_free(single);
+    }
+
+    /* acta_db_model_revision_get_latest returns the most recent revision */
+    {
+        err = 0;
+        model_revision_t *latest = acta_db_model_revision_get_latest(db, model_id, &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+        TEST_ASSERT_NOT_NULL(latest);
+        TEST_ASSERT_EQ_INT(latest->revision, 3);
+        TEST_ASSERT(latest->deleted_at != NULL);
+        acta_db_model_revision_free(latest);
+    }
+
     /* Pagination: limit=1 offset=0 → only rev 1 */
-    rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 0, 1, &rev_count, NULL);
+    rev_count = 0; err = 0;
+    revs = acta_db_model_revision_list_by_model(db, model_id, 0, 1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* Pagination: limit=1 offset=2 → only rev 3 */
-    rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 2, 1, &rev_count, NULL);
+    rev_count = 0; err = 0;
+    revs = acta_db_model_revision_list_by_model(db, model_id, 2, 1, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 3);
     TEST_ASSERT(revs[0]->deleted_at != NULL);
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* Pagination: limit=2 offset=1 → rev 2, rev 3 */
-    rev_count = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 1, 2, &rev_count, NULL);
+    rev_count = 0; err = 0;
+    revs = acta_db_model_revision_list_by_model(db, model_id, 1, 2, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 2);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 2);
     TEST_ASSERT_EQ_INT(revs[1]->revision, 3);
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* Pagination: offset beyond last row → empty, no error */
-    rev_count = -1;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 100, 10, &rev_count, NULL);
+    rev_count = -1; err = 0;
+    revs = acta_db_model_revision_list_by_model(db, model_id, 100, 10, &rev_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 0);
-    TEST_ASSERT(revs == NULL || revs == (model_revision_t **)0);
+    TEST_ASSERT(revs == NULL);
     acta_db_model_revision_list_free(revs, rev_count);
 
     /* get_live returns NULL after soft-delete */
-    int err = 0;
+    err = 0;
     TEST_ASSERT_NULL(acta_db_model_get_live(db, model_id, &err));
 
     test_db_teardown(db, path);
@@ -304,7 +351,7 @@ static void test_integration_skill_lifecycle(void) {
     revs = acta_db_skill_revision_list_by_skill(db, skill_id, 100, 10, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 0);
-    TEST_ASSERT(revs == NULL || revs == (skill_revision_t **)0);
+    TEST_ASSERT(revs == NULL);
     acta_db_skill_revision_list_free(revs, rev_count);
 
     /* get_live returns NULL after soft-delete */
@@ -353,6 +400,7 @@ static void test_integration_execution_updated_revisions(void) {
     model_t m_upd;
     memset(&m_upd, 0, sizeof(m_upd));
     m_upd.id             = model_id;
+    m_upd.folder_id      = 0;
     m_upd.name           = "UpdRevModel";
     m_upd.description    = "updated";
     m_upd.backend        = "openai";
@@ -364,11 +412,16 @@ static void test_integration_execution_updated_revisions(void) {
     skill_t s_upd;
     memset(&s_upd, 0, sizeof(s_upd));
     s_upd.id             = skill_id;
+    s_upd.folder_id      = 0;
     s_upd.name           = "UpdRevSkill";
     s_upd.prompt_template = "v2";
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s_upd), 0);
 
-    model_revision_t *mrev2 = get_model_rev(db, model_id, 2);
+    int err = 0;
+    model_revision_t *mrev2 = acta_db_model_revision_get_by_model_and_rev(db, model_id, 2, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(mrev2);
+
     skill_revision_t  *srev2 = get_skill_rev(db, skill_id, 2);
 
     int exec_id = make_execution(db, ctx_id, srev2->id, mrev2->id, "test");
@@ -717,7 +770,7 @@ static void test_integration_memory_leak_sweep(void) {
     }
 
     /* list-and-free: model revisions (offset=0, limit=-1 → all) */
-    { int n = 0; model_revision_t **r = acta_db_model_revision_list_by_model(db, mid, 0, -1, &n, NULL);
+    { int n = 0, err = 0; model_revision_t **r = acta_db_model_revision_list_by_model(db, mid, 0, -1, &n, &err);
       acta_db_model_revision_list_free(r, n); }
 
     /* list-and-free: skill revisions (offset=0, limit=-1 → all) */
@@ -728,16 +781,16 @@ static void test_integration_memory_leak_sweep(void) {
     { int n = 0, err = 0; model_folder_t **f = acta_db_model_folder_list_all(db, 0, -1, &n, &err);
       acta_db_model_folder_list_free(f, n); }
 
-    /* list-and-free: skill folders  (no pagination in skill API) */
-    { int n = 0, err = 0; skill_folder_t **f = acta_db_skill_folder_list_all(db, &n, &err);
+    /* list-and-free: skill folders  (offset=0, limit=-1 → all) */
+    { int n = 0, err = 0; skill_folder_t **f = acta_db_skill_folder_list_all(db, 0, -1, &n, &err);
       acta_db_skill_folder_list_free(f, n); }
 
     /* list-and-free: models  (offset=0, limit=-1 → all) */
     { int n = 0, err = 0; model_t **m = acta_db_model_list_all(db, 0, -1, &n, &err);
       acta_db_model_list_free(m, n); }
 
-    /* list-and-free: skills  (no pagination in skill API) */
-    { int n = 0, err = 0; skill_t **s = acta_db_skill_list_all(db, &n, &err);
+    /* list-and-free: skills  (offset=0, limit=-1 → all) */
+    { int n = 0, err = 0; skill_t **s = acta_db_skill_list_all(db, 0, -1, &n, &err);
       acta_db_skill_list_free(s, n); }
 
     /* list-and-free: executions by status */
@@ -776,24 +829,41 @@ static void test_integration_null_safety(void) {
     acta_db_model_folder_free(NULL);
     acta_db_model_folder_list_free(NULL, 0);
 
-    /* model revision */
-    TEST_ASSERT_NULL(acta_db_model_revision_get(NULL, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_model_revision_get_by_model_and_rev(NULL, 1, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_model_revision_get_latest(NULL, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_model_revision_list_by_model(NULL, 1, 0, -1, NULL, NULL));
+    /* model revision — verify err is negative on NULL db */
+    {
+        int err = 0;
+        TEST_ASSERT_NULL(acta_db_model_revision_get(NULL, 1, &err));
+        TEST_ASSERT(err < 0);
+    }
+    {
+        int err = 0;
+        TEST_ASSERT_NULL(acta_db_model_revision_get_by_model_and_rev(NULL, 1, 1, &err));
+        TEST_ASSERT(err < 0);
+    }
+    {
+        int err = 0;
+        TEST_ASSERT_NULL(acta_db_model_revision_get_latest(NULL, 1, &err));
+        TEST_ASSERT(err < 0);
+    }
+    {
+        int cnt = 0, err = 0;
+        model_revision_t **items = acta_db_model_revision_list_by_model(NULL, 1, 0, -1, &cnt, &err);
+        TEST_ASSERT(err < 0);
+        TEST_ASSERT_NULL(items);
+    }
     acta_db_model_revision_free(NULL);
     acta_db_model_revision_list_free(NULL, 0);
 
     /* skill */
     TEST_ASSERT_NULL(acta_db_skill_get(NULL, 1, NULL));
     TEST_ASSERT_NULL(acta_db_skill_get_live(NULL, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_skill_list_all(NULL, NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_list_all(NULL, 0, -1, NULL, NULL));
     acta_db_skill_free(NULL);
     acta_db_skill_list_free(NULL, 0);
 
     /* skill folder */
     TEST_ASSERT_NULL(acta_db_skill_folder_get(NULL, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_skill_folder_list_all(NULL, NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_skill_folder_list_all(NULL, 0, -1, NULL, NULL));
     acta_db_skill_folder_free(NULL);
     acta_db_skill_folder_list_free(NULL, 0);
 
