@@ -39,10 +39,22 @@ int            acta_db_skill_folder_soft_delete(db_t *db, int id);
 
 /* Returns a heap-allocated array of skill_folder_t* on success, or NULL.
  * err may be NULL. *out_count receives the item count.
+ * offset is the row offset (0-based); limit is max rows (-1 or 0 = no limit).
  * On success / empty: *err = ACTA_DB_OK.
  * On real failure: returns NULL, *err = negative ACTA_DB_ERR_*. */
-skill_folder_t **acta_db_skill_folder_list_children(db_t *db, int parent_id, int *out_count, int *err);
-skill_folder_t **acta_db_skill_folder_list_all(db_t *db, int *out_count, int *err);
+skill_folder_t **acta_db_skill_folder_list_children(db_t *db,
+                                                    int parent_id,
+                                                    int offset, int limit,
+                                                    int *out_count, int *err);
+
+/* Returns a heap-allocated array of skill_folder_t* on success, or NULL.
+ * err may be NULL. *out_count receives the item count.
+ * offset is the row offset (0-based); limit is max rows (-1 or 0 = no limit).
+ * On success / empty: *err = ACTA_DB_OK.
+ * On real failure: returns NULL, *err = negative ACTA_DB_ERR_*. */
+skill_folder_t **acta_db_skill_folder_list_all(db_t *db,
+                                               int offset, int limit,
+                                               int *out_count, int *err);
 
 void            acta_db_skill_folder_free(skill_folder_t *f);
 void            acta_db_skill_folder_list_free(skill_folder_t **items, int count);
@@ -84,10 +96,22 @@ int      acta_db_skill_soft_delete(db_t *db, int id);
 
 /* Returns a heap-allocated array of skill_t* on success, or NULL.
  * err may be NULL. *out_count receives the item count.
+ * offset is the row offset (0-based); limit is max rows (-1 or 0 = no limit).
  * On success / empty: *err = ACTA_DB_OK.
  * On real failure: returns NULL, *err = negative ACTA_DB_ERR_*. */
-skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count, int *err);
-skill_t **acta_db_skill_list_all(db_t *db, int *out_count, int *err);
+skill_t **acta_db_skill_list_in_folder(db_t *db,
+                                        int folder_id,
+                                        int offset, int limit,
+                                        int *out_count, int *err);
+
+/* Returns a heap-allocated array of skill_t* on success, or NULL.
+ * err may be NULL. *out_count receives the item count.
+ * offset is the row offset (0-based); limit is max rows (-1 or 0 = no limit).
+ * On success / empty: *err = ACTA_DB_OK.
+ * On real failure: returns NULL, *err = negative ACTA_DB_ERR_*. */
+skill_t **acta_db_skill_list_all(db_t *db,
+                                  int offset, int limit,
+                                  int *out_count, int *err);
 
 void     acta_db_skill_free(skill_t *s);
 void     acta_db_skill_list_free(skill_t **items, int count);

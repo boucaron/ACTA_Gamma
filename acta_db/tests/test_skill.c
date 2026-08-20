@@ -1,4 +1,6 @@
-/* test_skill.c — Tests for acta_db_skill.h (tests 7.1 – 7.31) */
+
+
+/* test_skill.c — Tests for acta_db_skill.h (tests 7.1 – 7.35) */
 
 #include "test_common.h"
 #include "skill.h"
@@ -497,7 +499,7 @@ static void test_sk_list_root(void) {
     sk_create_skill(db, folder_id, "ChildC", "P3", "{}");
 
     int count = 0;
-    skill_t **items = acta_db_skill_list_in_folder(db, 0, &count, NULL);
+    skill_t **items = acta_db_skill_list_in_folder(db, 0, 0, -1, &count, NULL);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 2);
 
@@ -534,7 +536,7 @@ static void test_sk_list_specific_folder(void) {
 
     /* List folder1 — should only contain id1 */
     int count = 0;
-    skill_t **items = acta_db_skill_list_in_folder(db, folder1, &count, NULL);
+    skill_t **items = acta_db_skill_list_in_folder(db, folder1, 0, -1, &count, NULL);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 1);
     TEST_ASSERT_EQ_INT(items[0]->id, id1);
@@ -543,7 +545,7 @@ static void test_sk_list_specific_folder(void) {
 
     /* List folder2 — should only contain id2 */
     count = 0;
-    items = acta_db_skill_list_in_folder(db, folder2, &count, NULL);
+    items = acta_db_skill_list_in_folder(db, folder2, 0, -1, &count, NULL);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 1);
     TEST_ASSERT_EQ_INT(items[0]->id, id2);
@@ -570,7 +572,7 @@ static void test_sk_list_all_excludes_deleted(void) {
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int count = 0;
-    skill_t **items = acta_db_skill_list_all(db, &count, NULL);
+    skill_t **items = acta_db_skill_list_all(db, 0, -1, &count, NULL);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 2);
 
@@ -609,7 +611,7 @@ static void test_sk_free_and_list_free(void) {
 
     /* Valid list_free */
     int count = 0;
-    skill_t **items = acta_db_skill_list_all(db, &count, NULL);
+    skill_t **items = acta_db_skill_list_all(db, 0, -1, &count, NULL);
     TEST_ASSERT_NOT_NULL(items);
     acta_db_skill_list_free(items, count);
 
@@ -810,6 +812,320 @@ static void test_sk_move_to_deleted_folder(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 7.32: list_in_folder — limit (first page) ---------- */
+static void test_sk_list_in_folder_limit(void) {
+    const char *path = "test/acta_test_sk_list_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "PagFolder", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    /* Create 5 skills in the folder, sorted by name: A1..A5 */
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Skill%da", i + 1);
+        ids[i] = sk_create_skill(db, folder_id, name, "P", "{}");
+        TEST_ASSERT(ids[i] > 0);
+    }
+
+    /* Request first page: offset=0, limit=3 → expect 3 items (Skill1a, Skill2a, Skill3a) */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_in_folder(db, folder_id, 0, 3, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 3);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Skill1a");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Skill2a");
+    TEST_ASSERT_EQ_STR(items[2]->name, "Skill3a");
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.33: list_in_folder — offset + limit (middle page) ---------- */
+static void test_sk_list_in_folder_offset_limit(void) {
+    const char *path = "test/acta_test_sk_list_offset_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "PagFolder2", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Skill%da", i + 1);
+        ids[i] = sk_create_skill(db, folder_id, name, "P", "{}");
+        TEST_ASSERT(ids[i] > 0);
+    }
+
+    /* offset=2, limit=3 → expect 3 items (Skill3a, Skill4a, Skill5a) */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_in_folder(db, folder_id, 2, 3, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 3);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[2]);
+    TEST_ASSERT_EQ_INT(items[1]->id, ids[3]);
+    TEST_ASSERT_EQ_INT(items[2]->id, ids[4]);
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.34: list_in_folder — offset beyond total (empty) ---------- */
+static void test_sk_list_in_folder_offset_beyond(void) {
+    const char *path = "test/acta_test_sk_list_beyond.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "PagFolder3", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    sk_create_skill(db, folder_id, "Only1", "P", "{}");
+    sk_create_skill(db, folder_id, "Only2", "P", "{}");
+
+    /* offset=100 → no rows match → empty list */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_in_folder(db, folder_id, 100, 10, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);  /* NULL + OK = empty */
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.35: list_all — limit (first page) ---------- */
+static void test_sk_list_all_limit(void) {
+    const char *path = "test/acta_test_sk_all_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "All%da", i + 1);
+        ids[i] = sk_create_skill(db, 0, name, "P", "{}");
+        TEST_ASSERT(ids[i] > 0);
+    }
+
+    /* limit=2 → first 2 by name order */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_all(db, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "All1a");
+    TEST_ASSERT_EQ_STR(items[1]->name, "All2a");
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.36: list_all — last page (offset+limit) ---------- */
+static void test_sk_list_all_last_page(void) {
+    const char *path = "test/acta_test_sk_all_last_page.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "All%da", i + 1);
+        ids[i] = sk_create_skill(db, 0, name, "P", "{}");
+        TEST_ASSERT(ids[i] > 0);
+    }
+
+    /* offset=3, limit=2 → last 2 items (All4a, All5a) */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_all(db, 3, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->id, ids[3]);
+    TEST_ASSERT_EQ_INT(items[1]->id, ids[4]);
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.37: list_all — limit=0 means no limit ---------- */
+static void test_sk_list_all_no_limit(void) {
+    const char *path = "test/acta_test_sk_all_nolimit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ids[5];
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "NL%da", i + 1);
+        ids[i] = sk_create_skill(db, 0, name, "P", "{}");
+        TEST_ASSERT(ids[i] > 0);
+    }
+
+    /* limit=0 → no LIMIT clause → all 5 returned */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_all(db, 0, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 5);
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.38: list_all — limit=-1 means no limit ---------- */
+static void test_sk_list_all_neg_limit(void) {
+    const char *path = "test/acta_test_sk_all_neglimit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    sk_create_skill(db, 0, "NegA", "P", "{}");
+    sk_create_skill(db, 0, "NegB", "P", "{}");
+    sk_create_skill(db, 0, "NegC", "P", "{}");
+
+    /* limit=-1 → no LIMIT clause → all 3 returned */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 3);
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.39: list_children — limit ---------- */
+static void test_sk_folder_list_children_limit(void) {
+    const char *path = "test/acta_test_sk_folder_children_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = sk_create_folder(db, "Parent", 0);
+    TEST_ASSERT(parent_id > 0);
+
+    /* Create 4 child folders under parent */
+    int child_ids[4];
+    for (int i = 0; i < 4; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Child%d", i + 1);
+        child_ids[i] = sk_create_folder(db, name, parent_id);
+        TEST_ASSERT(child_ids[i] > 0);
+    }
+
+    /* offset=0, limit=2 → first 2 children by name */
+    int count = 0;
+    int err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Child1");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Child2");
+    acta_db_skill_folder_list_free(items, count);
+
+    /* offset=2, limit=2 → last 2 children */
+    count = 0;
+    items = acta_db_skill_folder_list_children(db, parent_id, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Child3");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Child4");
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.40: list_children — root with offset ---------- */
+static void test_sk_folder_list_children_root_offset(void) {
+    const char *path = "test/acta_test_sk_folder_root_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 3 root folders */
+    sk_create_folder(db, "RootA", 0);
+    sk_create_folder(db, "RootB", 0);
+    sk_create_folder(db, "RootC", 0);
+
+    /* parent_id=0 (root), offset=1, limit=1 → only RootB */
+    int count = 0;
+    int err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, 0, 1, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "RootB");
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.41: list_all — offset beyond total (empty) ---------- */
+static void test_sk_list_all_offset_beyond(void) {
+    const char *path = "test/acta_test_sk_all_beyond.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    sk_create_skill(db, 0, "Beyond1", "P", "{}");
+    sk_create_skill(db, 0, "Beyond2", "P", "{}");
+
+    /* offset=50 on 2 items → empty */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_all(db, 50, 10, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 7.42: list_in_folder — limit > total (clamps to total) ---------- */
+static void test_sk_list_in_folder_limit_exceeds_total(void) {
+    const char *path = "test/acta_test_sk_list_limit_exceed.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "SmallFolder", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    sk_create_skill(db, folder_id, "X1", "P", "{}");
+    sk_create_skill(db, folder_id, "X2", "P", "{}");
+
+    /* limit=100 but only 2 exist → returns 2 */
+    int count = 0;
+    int err = 0;
+    skill_t **items = acta_db_skill_list_in_folder(db, folder_id, 0, 100, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_skill_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+
 /* ---------- runner ---------- */
 void run_skill_tests(void) {
     fprintf(stderr, "\n=== skill tests ===\n");
@@ -843,4 +1159,17 @@ void run_skill_tests(void) {
     test_sk_move_invalid_folder();
     test_sk_move_deleted_skill();
     test_sk_move_to_deleted_folder();
+    
+    test_sk_list_in_folder_limit();
+    test_sk_list_in_folder_offset_limit();
+    test_sk_list_in_folder_offset_beyond();
+    test_sk_list_all_limit();
+    test_sk_list_all_last_page();
+    test_sk_list_all_no_limit();
+    test_sk_list_all_neg_limit();
+    test_sk_folder_list_children_limit();
+    test_sk_folder_list_children_root_offset();
+    test_sk_list_all_offset_beyond();
+    test_sk_list_in_folder_limit_exceeds_total();
+
 }

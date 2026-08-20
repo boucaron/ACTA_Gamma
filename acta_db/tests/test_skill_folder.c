@@ -1,4 +1,4 @@
-/* test_skill_folder.c — Tests for skill.h (tests 6.1 – 6.15) */
+/* test_skill_folder.c — Tests for skill.h (tests 6.1 – 6.18) */
 
 #include "test_common.h"
 #include "skill.h"
@@ -231,7 +231,7 @@ static void test_sf_soft_delete_has_children(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 6.12: list_children — with children ---------- */
+/* ---------- 6.12: list_children — with children (no pagination) ---------- */
 static void test_sf_list_children_with(void) {
     const char *path = "test/acta_test_sf_list_with.db";
     remove(path);
@@ -251,7 +251,7 @@ static void test_sf_list_children_with(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     int count = 0, err = 0;
-    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, &count, &err);
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, 0, -1, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -276,7 +276,7 @@ static void test_sf_list_children_empty(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     int count = 0, err = 0;
-    skill_folder_t **items = acta_db_skill_folder_list_children(db, id, &count, &err);
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, id, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     if (items != NULL) {
@@ -303,7 +303,7 @@ static void test_sf_list_all_excludes_deleted(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     int count = 0, err = 0;
-    skill_folder_t **items = acta_db_skill_folder_list_all(db, &count, &err);
+    skill_folder_t **items = acta_db_skill_folder_list_all(db, 0, -1, &count, &err);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 1);
@@ -354,9 +354,100 @@ static void test_sf_list_free_valid(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     int count = 0, err = 0;
-    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, &count, &err);
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.16: list_children — pagination (limit=2, offset=0) ---------- */
+static void test_sf_list_children_paged_first(void) {
+    const char *path = "test/acta_test_sf_paged_first.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0;
+    int rc = acta_db_skill_folder_create(db, "Parent", 0, &parent_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    for (int i = 1; i <= 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Child%02d", i);
+        int child_id = 0;
+        rc = acta_db_skill_folder_create(db, name, parent_id, &child_id);
+        TEST_ASSERT_EQ_INT(rc, 0);
+    }
+
+    /* Page 1: first 2 */
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, 0, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Child01");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Child02");
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.17: list_children — pagination (limit=2, offset=2) ---------- */
+static void test_sf_list_children_paged_second(void) {
+    const char *path = "test/acta_test_sf_paged_second.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0;
+    int rc = acta_db_skill_folder_create(db, "Parent", 0, &parent_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    for (int i = 1; i <= 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Child%02d", i);
+        int child_id = 0;
+        rc = acta_db_skill_folder_create(db, name, parent_id, &child_id);
+        TEST_ASSERT_EQ_INT(rc, 0);
+    }
+
+    /* Page 2: rows 3–4 */
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, 2, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Child03");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Child04");
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.18: list_all — pagination (limit=1, offset=1) ---------- */
+static void test_sf_list_all_paged(void) {
+    const char *path = "test/acta_test_sf_list_all_paged.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id1 = 0, id2 = 0, id3 = 0;
+    int rc = acta_db_skill_folder_create(db, "Alpha", 0, &id1);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "Beta", 0, &id2);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "Gamma", 0, &id3);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* Fetch only the 2nd row (offset=1, limit=1) */
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all(db, 1, 1, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Beta");
     acta_db_skill_folder_list_free(items, count);
 
     test_db_teardown(db, path);
@@ -382,4 +473,7 @@ void run_skill_folder_tests(void) {
     test_sf_free_valid();
     test_sf_free_null();
     test_sf_list_free_valid();
+    test_sf_list_children_paged_first();
+    test_sf_list_children_paged_second();
+    test_sf_list_all_paged();
 }

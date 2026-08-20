@@ -3,6 +3,8 @@
 #include "skill.h"
 #include "db.h"
 
+#include <stdio.h>
+
 /* ---------- row helpers ---------- */
 
 static skill_t *row_to_skill(sqlite3_stmt *stmt) {
@@ -125,9 +127,11 @@ skill_folder_t *acta_db_skill_folder_get(db_t *db, int id, int *err) {
     return result;   /* valid ptr or NULL (not-found) */
 }
 
-/* ---------- skill_folder: listers ---------- */
+/* ---------- skill_folder: listers (paginated) ---------- */
 
-skill_folder_t **acta_db_skill_folder_list_children(db_t *db, int parent_id, int *out_count, int *err) {
+skill_folder_t **acta_db_skill_folder_list_children(db_t *db, int parent_id,
+                                                    int offset, int limit,
+                                                    int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
@@ -135,17 +139,32 @@ skill_folder_t **acta_db_skill_folder_list_children(db_t *db, int parent_id, int
     }
     if (out_count) *out_count = 0;
 
-    const char *sql = parent_id == 0
+    const char *base = parent_id == 0
         ? "SELECT id, name, parent_id, created_at, updated_at, deleted_at"
-          " FROM skill_folders WHERE parent_id IS NULL AND deleted_at IS NULL ORDER BY name;"
+          " FROM skill_folders WHERE parent_id IS NULL AND deleted_at IS NULL ORDER BY name"
         : "SELECT id, name, parent_id, created_at, updated_at, deleted_at"
-          " FROM skill_folders WHERE parent_id = ? AND deleted_at IS NULL ORDER BY name;";
+          " FROM skill_folders WHERE parent_id = ? AND deleted_at IS NULL ORDER BY name";
+
+    /* Build final SQL with optional LIMIT/OFFSET */
+    char sql_buf[512];
+    int  bind_idx = (parent_id != 0) ? 1 : 0;  /* next param index for LIMIT/OFFSET */
+
+    if (limit > 0) {
+        snprintf(sql_buf, sizeof(sql_buf), "%s LIMIT ? OFFSET ?;", base);
+    } else {
+        snprintf(sql_buf, sizeof(sql_buf), "%s;", base);
+    }
+
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db->handle, sql_buf, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
     }
     if (parent_id != 0) sqlite3_bind_int(stmt, 1, parent_id);
+    if (limit > 0) {
+        sqlite3_bind_int(stmt, ++bind_idx, limit);
+        sqlite3_bind_int(stmt, ++bind_idx, offset < 0 ? 0 : offset);
+    }
 
     int count = 0;
     skill_folder_t **items = NULL;
@@ -176,11 +195,13 @@ skill_folder_t **acta_db_skill_folder_list_children(db_t *db, int parent_id, int
     if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
 
-    if (count == 0) { free(items); return NULL; }  /* NULL + OK = empty list */
+    if (count == 0) { free(items); return NULL; }
     return items;
 }
 
-skill_folder_t **acta_db_skill_folder_list_all(db_t *db, int *out_count, int *err) {
+skill_folder_t **acta_db_skill_folder_list_all(db_t *db,
+                                               int offset, int limit,
+                                               int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
@@ -188,13 +209,25 @@ skill_folder_t **acta_db_skill_folder_list_all(db_t *db, int *out_count, int *er
     }
     if (out_count) *out_count = 0;
 
-    const char *sql =
+    const char *base =
         "SELECT id, name, parent_id, created_at, updated_at, deleted_at"
-        " FROM skill_folders WHERE deleted_at IS NULL ORDER BY name;";
+        " FROM skill_folders WHERE deleted_at IS NULL ORDER BY name";
+
+    char sql_buf[512];
+    if (limit > 0) {
+        snprintf(sql_buf, sizeof(sql_buf), "%s LIMIT ? OFFSET ?;", base);
+    } else {
+        snprintf(sql_buf, sizeof(sql_buf), "%s;", base);
+    }
+
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db->handle, sql_buf, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
+    }
+    if (limit > 0) {
+        sqlite3_bind_int(stmt, 1, limit);
+        sqlite3_bind_int(stmt, 2, offset < 0 ? 0 : offset);
     }
 
     int count = 0;
@@ -378,9 +411,11 @@ skill_t *acta_db_skill_get_live(db_t *db, int id, int *err) {
     return result;
 }
 
-/* ---------- skill: listers ---------- */
+/* ---------- skill: listers (paginated) ---------- */
 
-skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count, int *err) {
+skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id,
+                                        int offset, int limit,
+                                        int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
@@ -388,19 +423,33 @@ skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count, 
     }
     if (out_count) *out_count = 0;
 
-    const char *sql = folder_id == 0
+    const char *base = folder_id == 0
         ? "SELECT id, folder_id, name, description, prompt_template, output_schema,"
           " created_at, updated_at, deleted_at FROM skills"
-          " WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name;"
+          " WHERE folder_id IS NULL AND deleted_at IS NULL ORDER BY name"
         : "SELECT id, folder_id, name, description, prompt_template, output_schema,"
           " created_at, updated_at, deleted_at FROM skills"
-          " WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name;";
+          " WHERE folder_id = ? AND deleted_at IS NULL ORDER BY name";
+
+    char sql_buf[512];
+    int  bind_idx = (folder_id != 0) ? 1 : 0;
+
+    if (limit > 0) {
+        snprintf(sql_buf, sizeof(sql_buf), "%s LIMIT ? OFFSET ?;", base);
+    } else {
+        snprintf(sql_buf, sizeof(sql_buf), "%s;", base);
+    }
+
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db->handle, sql_buf, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
     }
     if (folder_id != 0) sqlite3_bind_int(stmt, 1, folder_id);
+    if (limit > 0) {
+        sqlite3_bind_int(stmt, ++bind_idx, limit);
+        sqlite3_bind_int(stmt, ++bind_idx, offset < 0 ? 0 : offset);
+    }
 
     int count = 0;
     skill_t **items = NULL;
@@ -435,7 +484,9 @@ skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id, int *out_count, 
     return items;
 }
 
-skill_t **acta_db_skill_list_all(db_t *db, int *out_count, int *err) {
+skill_t **acta_db_skill_list_all(db_t *db,
+                                  int offset, int limit,
+                                  int *out_count, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         if (out_count) *out_count = 0;
@@ -443,13 +494,25 @@ skill_t **acta_db_skill_list_all(db_t *db, int *out_count, int *err) {
     }
     if (out_count) *out_count = 0;
 
-    const char *sql =
+    const char *base =
         "SELECT id, folder_id, name, description, prompt_template, output_schema,"
-        " created_at, updated_at, deleted_at FROM skills WHERE deleted_at IS NULL ORDER BY name;";
+        " created_at, updated_at, deleted_at FROM skills WHERE deleted_at IS NULL ORDER BY name";
+
+    char sql_buf[512];
+    if (limit > 0) {
+        snprintf(sql_buf, sizeof(sql_buf), "%s LIMIT ? OFFSET ?;", base);
+    } else {
+        snprintf(sql_buf, sizeof(sql_buf), "%s;", base);
+    }
+
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db->handle, sql_buf, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
+    }
+    if (limit > 0) {
+        sqlite3_bind_int(stmt, 1, limit);
+        sqlite3_bind_int(stmt, 2, offset < 0 ? 0 : offset);
     }
 
     int count = 0;
