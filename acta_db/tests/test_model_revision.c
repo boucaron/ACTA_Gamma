@@ -164,7 +164,7 @@ static void test_mr_list_multiple(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -190,7 +190,7 @@ static void test_mr_list_ordering(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -220,7 +220,7 @@ static void test_mr_list_includes_deleted(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     /* 3 rows: rev1 (create), rev2 (update), rev3 (delete) */
@@ -270,7 +270,7 @@ static void test_mr_list_free_valid(void) {
 
     int count = 0;
     int err = 0;
-    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, &count, &err);
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_model_revision_list_free(items, count);
