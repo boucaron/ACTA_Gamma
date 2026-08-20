@@ -17,7 +17,8 @@ static void test_db_open_existing(void) {
     remove(path);
     db_t *db1 = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db1);
-    acta_db_close(db1);
+    int rc = acta_db_close(db1);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     db_t *db2 = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db2);
     test_db_teardown(db2, path);
@@ -45,14 +46,56 @@ static void test_db_close_valid(void) {
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
-    acta_db_close(db);
+    int rc = acta_db_close(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
     remove(path);
 }
 
 /* ---------- 1.6: acta_db_close — NULL handle ---------- */
 static void test_db_close_null(void) {
-    acta_db_close(NULL);
-    TEST_ASSERT(1); /* didn't crash */
+    int rc = acta_db_close(NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 1.6b: acta_db_close — outstanding statements ---------- */
+static void test_db_close_outstanding_stmts(void) {
+    const char *path = "test/acta_test_close_busy.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    acta_db_exec(db, "CREATE TABLE t (id INTEGER);");
+
+    /* Prepare a statement and leave it unfinalized. */
+    sqlite3_stmt *stmt = NULL;
+    const char *tail = NULL;
+    TEST_ASSERT_EQ_INT(
+        sqlite3_prepare_v2(db->handle, "SELECT 1;", -1, &stmt, &tail),
+        SQLITE_OK);
+
+    /* Close with an outstanding statement — should fail. */
+    int rc = acta_db_close(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
+
+    /* Finalize the statement so SQLite can release the handle. */
+    sqlite3_finalize(stmt);
+    remove(path);
+}
+
+/* ---------- 1.6c: acta_db_close — in-transaction (implicit rollback) ---------- */
+static void test_db_close_implicit_rollback(void) {
+    const char *path = "test/acta_test_close_txn.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    acta_db_exec(db, "CREATE TABLE t (id INTEGER);");
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    acta_db_exec(db, "INSERT INTO t(id) VALUES(1);");
+
+    /* Close without explicit commit/rollback — implicit rollback applies. */
+    int rc = acta_db_close(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    remove(path);
 }
 
 /* ---------- 1.7: acta_db_exec — valid DDL ---------- */
@@ -362,7 +405,8 @@ static void test_db_implicit_rollback_on_close(void) {
     /* Begin txn, insert, then close WITHOUT commit/rollback. */
     TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
     acta_db_exec(db, "INSERT INTO items(name) VALUES('uncommitted');");
-    acta_db_close(db);
+    int rc = acta_db_close(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     /* Re-open and verify only the committed row survived. */
     db_t *db2 = test_db_open(path);
@@ -467,6 +511,23 @@ static void test_db_transaction_nesting_rejected(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 2.15: acta_db_close — returns ACTA_DB_OK when no txn ---------- */
+static void test_db_close_returns_ok(void) {
+    const char *path = "test/acta_test_close_rc.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    int rc = acta_db_close(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    remove(path);
+}
+
+/* ================================================================== */
+/*  Runner                                                            */
+/* ================================================================== */
+
 void run_db_tests(void) {
     fprintf(stderr, "\n=== db.h tests ===\n");
     test_db_open_new();
@@ -475,6 +536,8 @@ void run_db_tests(void) {
     test_db_open_null_path();
     test_db_close_valid();
     test_db_close_null();
+    test_db_close_outstanding_stmts();
+    test_db_close_implicit_rollback();
     test_db_exec_valid_ddl();
     test_db_exec_invalid_sql();
     test_db_exec_null_sql();
@@ -499,4 +562,5 @@ void run_db_tests(void) {
     test_db_multi_op_rollback();
     test_db_exec_error_then_rollback();
     test_db_transaction_nesting_rejected();
+    test_db_close_returns_ok();
 }

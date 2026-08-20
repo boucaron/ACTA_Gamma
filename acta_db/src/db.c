@@ -52,8 +52,12 @@ db_t *acta_db_open(const char *path, int *err) {
     return db;
 }
 
-void acta_db_close(db_t *db) {
-    if (!db) return;
+/* Close the database and free the handle.
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_SQL if the close failed
+ * (e.g. outstanding prepared statements still hold the handle).
+ */
+int acta_db_close(db_t *db) {
+    if (!db) return ACTA_DB_ERR_INVALID;
 
     /* Implicit rollback if the caller forgot to commit/rollback. */
     if (db->in_transaction) {
@@ -62,9 +66,12 @@ void acta_db_close(db_t *db) {
     }
 
     free(db->last_error);
-    sqlite3_close(db->handle);
+
+    int rc = sqlite3_close(db->handle);
     free(db);
+    return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
+
 
 /* ------------------------------------------------------------------ */
 /*  Exec / last error                                                  */

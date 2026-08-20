@@ -44,8 +44,11 @@ typedef struct db_t db_t;
  * Returns NULL on failure; if err is non-NULL it receives the error code. */
 db_t *acta_db_open(const char *path, int *err);
 
-/* Close the database and free the handle. */
-void acta_db_close(db_t *db);
+/* Close the database and free the handle.
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_SQL if the close failed
+ * (e.g. outstanding prepared statements still hold the handle). */
+int acta_db_close(db_t *db);
+
 
 /* Execute a SQL statement (or script). Returns ACTA_DB_OK on success,
  * a negative error code on failure. Use for running DDL / migrations. */
