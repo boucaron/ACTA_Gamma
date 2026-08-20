@@ -55,18 +55,28 @@ int acta_db_model_folder_create(db_t *db, const char *name, int parent_id, int *
     return ACTA_DB_OK;
 }
 
-model_folder_t *acta_db_model_folder_get(db_t *db, int id) {
-    if (!db) return NULL;
-    const char *sql = "SELECT id, name, parent_id, created_at, updated_at, deleted_at FROM model_folders WHERE id = ?;";
+model_folder_t *acta_db_model_folder_get(db_t *db, int id, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+    const char *sql =
+        "SELECT id, name, parent_id, created_at, updated_at, deleted_at "
+        "FROM model_folders WHERE id = ?;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     sqlite3_bind_int(stmt, 1, id);
 
     model_folder_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         result = row_to_model_folder(stmt);
+        if (!result && err) *err = ACTA_DB_ERR_ALLOC;
     }
     sqlite3_finalize(stmt);
+    if (err && !result) *err = ACTA_DB_OK;   /* not-found is still "ok" */
     return result;
 }
 
@@ -234,37 +244,53 @@ int acta_db_model_create(db_t *db, const model_t *m, int *out_id) {
     return ACTA_DB_OK;
 }
 
-model_t *acta_db_model_get(db_t *db, int id) {
-    if (!db) return NULL;
+model_t *acta_db_model_get(db_t *db, int id, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
     const char *sql =
         "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
         "created_at, updated_at, deleted_at FROM models WHERE id = ?;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     sqlite3_bind_int(stmt, 1, id);
 
     model_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         result = row_to_model(stmt);
+        if (!result && err) *err = ACTA_DB_ERR_ALLOC;
     }
     sqlite3_finalize(stmt);
+    if (err && !result && !result) *err = ACTA_DB_OK;  /* not-found */
     return result;
 }
 
-model_t *acta_db_model_get_live(db_t *db, int id) {
-    if (!db) return NULL;
+model_t *acta_db_model_get_live(db_t *db, int id, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
     const char *sql =
         "SELECT id, folder_id, name, description, backend, base_url, model_identifier, configuration, "
         "created_at, updated_at, deleted_at FROM models WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
     sqlite3_bind_int(stmt, 1, id);
 
     model_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         result = row_to_model(stmt);
+        if (!result && err) *err = ACTA_DB_ERR_ALLOC;
     }
     sqlite3_finalize(stmt);
+    if (err && !result) *err = ACTA_DB_OK;  /* not-found */
     return result;
 }
 

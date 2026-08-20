@@ -156,8 +156,11 @@ static void test_model_get_existing(void) {
     model_t m = { .name = "Test", .backend = "openai", .model_identifier = "gpt-4", .description = "desc" };
     int id;
     acta_db_model_create(db, &m, &id);
-    model_t *got = acta_db_model_get(db, id);
+
+    int err = 0;
+    model_t *got = acta_db_model_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(got->id, id);
     TEST_ASSERT_EQ_STR(got->name, "Test");
     TEST_ASSERT_EQ_STR(got->backend, "openai");
@@ -173,8 +176,11 @@ static void test_model_get_nonexistent(void) {
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
-    model_t *got = acta_db_model_get(db, 999999);
+
+    int err = -1;
+    model_t *got = acta_db_model_get(db, 999999, &err);
     TEST_ASSERT_NULL(got);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);  /* not-found is still "ok" */
     test_db_teardown(db, path);
 }
 
@@ -187,8 +193,11 @@ static void test_model_get_live_live(void) {
     model_t m = { .name = "L", .backend = "b", .model_identifier = "mid" };
     int id;
     acta_db_model_create(db, &m, &id);
-    model_t *got = acta_db_model_get_live(db, id);
+
+    int err = 0;
+    model_t *got = acta_db_model_get_live(db, id, &err);
     TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NULL(got->deleted_at);
     acta_db_model_free(got);
     test_db_teardown(db, path);
@@ -204,8 +213,11 @@ static void test_model_get_live_deleted(void) {
     int id;
     acta_db_model_create(db, &m, &id);
     acta_db_model_soft_delete(db, id);
-    model_t *got = acta_db_model_get_live(db, id);
+
+    int err = -1;
+    model_t *got = acta_db_model_get_live(db, id, &err);
     TEST_ASSERT_NULL(got);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);  /* not-found (deleted) is still "ok" */
     test_db_teardown(db, path);
 }
 
@@ -324,7 +336,11 @@ static void test_model_soft_delete_happy(void) {
     acta_db_model_create(db, &m, &id);
     int rc = acta_db_model_soft_delete(db, id);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
-    model_t *got = acta_db_model_get(db, id);
+
+    int err = 0;
+    model_t *got = acta_db_model_get(db, id, &err);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(got->deleted_at);
     acta_db_model_free(got);
     test_db_teardown(db, path);
@@ -432,7 +448,7 @@ static void test_model_free_valid(void) {
     model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
     int id;
     acta_db_model_create(db, &m, &id);
-    model_t *got = acta_db_model_get(db, id);
+    model_t *got = acta_db_model_get(db, id, NULL);
     acta_db_model_free(got);
     test_db_teardown(db, path);
 }
@@ -474,8 +490,10 @@ static void test_model_restore_happy(void) {
     int rc = acta_db_model_restore(db, id);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
-    model_t *got = acta_db_model_get_live(db, id);
+    int err = 0;
+    model_t *got = acta_db_model_get_live(db, id, &err);
     TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NULL(got->deleted_at);
     acta_db_model_free(got);
 

@@ -19,7 +19,7 @@ typedef struct {
 } model_folder_t;
 
 int          acta_db_model_folder_create(db_t *db, const char *name, int parent_id, int *out_id);
-model_folder_t *acta_db_model_folder_get(db_t *db, int id);
+model_folder_t *acta_db_model_folder_get(db_t *db, int id, int *err);
 int          acta_db_model_folder_rename(db_t *db, int id, const char *new_name);
 int          acta_db_model_folder_soft_delete(db_t *db, int id);
 model_folder_t **acta_db_model_folder_list_children(db_t *db, int parent_id, int *out_count, int *err);
@@ -47,8 +47,8 @@ typedef struct {
 } model_t;
 
 int      acta_db_model_create(db_t *db, const model_t *m, int *out_id);
-model_t *acta_db_model_get(db_t *db, int id);
-model_t *acta_db_model_get_live(db_t *db, int id);   /* NULL if soft-deleted */
+model_t *acta_db_model_get(db_t *db, int id, int *err);
+model_t *acta_db_model_get_live(db_t *db, int id, int *err);   /* NULL if soft-deleted */
 int      acta_db_model_update(db_t *db, const model_t *m);
 int      acta_db_model_soft_delete(db_t *db, int id);
 model_t **acta_db_model_list_in_folder(db_t *db, int folder_id, int *out_count, int *err);
