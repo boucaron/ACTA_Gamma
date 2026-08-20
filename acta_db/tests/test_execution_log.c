@@ -588,11 +588,14 @@ static void test_el_get_not_found(void) {
 
     execution_log_t *log = (execution_log_t *)0x1; /* sentinel */
     int rc = acta_db_execution_log_get(db, 999999, &log);
-    TEST_ASSERT(rc != ACTA_DB_OK);
+
+   
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
     TEST_ASSERT_NULL(log);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 10.24: get — NULL db ---------- */
 static void test_el_get_null_db(void) {
@@ -618,12 +621,13 @@ static void test_el_get_null_out_log(void) {
     int rc = acta_db_execution_log_get(db, id, NULL);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
-    /* non-existent id with NULL out_log — still a clean error, no crash */
+    /* Non-existent id with NULL out_log: still ACTA_DB_OK (not-found is not an error). */
     int rc2 = acta_db_execution_log_get(db, 424242, NULL);
-    TEST_ASSERT(rc2 != ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rc2, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 10.26: get — NULL optional fields round-trip ---------- */
 static void test_el_get_null_optional_fields(void) {
