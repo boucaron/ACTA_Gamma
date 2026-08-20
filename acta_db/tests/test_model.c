@@ -376,7 +376,9 @@ static void test_model_list_in_folder_root(void) {
     model_t m = { .name = "RootModel", .backend = "b", .model_identifier = "mid" };
     acta_db_model_create(db, &m, &(int){0});
     int count = 0;
-    model_t **items = acta_db_model_list_in_folder(db, 0, &count, NULL);
+    int err = 0;
+    model_t **items = acta_db_model_list_in_folder(db, 0, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 1);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -397,7 +399,9 @@ static void test_model_list_in_folder_specific(void) {
     acta_db_model_create(db, &mb, &(int){0});
 
     int count = 0;
-    model_t **items = acta_db_model_list_in_folder(db, f1, &count, NULL);
+    int err = 0;
+    model_t **items = acta_db_model_list_in_folder(db, f1, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 1);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -412,7 +416,9 @@ static void test_model_list_in_folder_empty(void) {
     int fid;
     acta_db_model_folder_create(db, "Empty", 0, &fid);
     int count = 0;
-    model_t **items = acta_db_model_list_in_folder(db, fid, &count, NULL);
+    int err = 0;
+    model_t **items = acta_db_model_list_in_folder(db, fid, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -433,7 +439,9 @@ static void test_model_list_all_excludes_deleted(void) {
     acta_db_model_create(db, &m3, &id3);
     acta_db_model_soft_delete(db, id2);
     int count = 0;
-    model_t **items = acta_db_model_list_all(db, &count, NULL);
+    int err = 0;
+    model_t **items = acta_db_model_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
@@ -470,7 +478,9 @@ static void test_model_list_free_valid(void) {
         acta_db_model_create(db, &m, &(int){0});
     }
     int count = 0;
-    model_t **items = acta_db_model_list_all(db, &count, NULL);
+    int err = 0;
+    model_t **items = acta_db_model_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     acta_db_model_list_free(items, count);
     test_db_teardown(db, path);
 }
@@ -547,13 +557,18 @@ static void test_model_restore_in_list(void) {
     acta_db_model_soft_delete(db, id2);
 
     int count = 0;
-    acta_db_model_list_all(db, &count, NULL);
+    int err = 0;
+    model_t **items = acta_db_model_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 1);
+    acta_db_model_list_free(items, count);
 
     acta_db_model_restore(db, id2);
 
     count = 0;
-    model_t **items = acta_db_model_list_all(db, &count, NULL);
+    err = 0;
+    items = acta_db_model_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_list_free(items, count);
 
@@ -578,16 +593,20 @@ static void test_model_move_to_folder_specific(void) {
     int rc = acta_db_model_move_to_folder(db, id, f2);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
+    int err = 0;
     int count1 = 0;
-    model_t **items1 = acta_db_model_list_in_folder(db, f1, &count1, NULL);
+    model_t **items1 = acta_db_model_list_in_folder(db, f1, 0, -1, &count1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count1, 0);
     acta_db_model_list_free(items1, count1);
 
-    int count2 = 0;
-    model_t **items2 = acta_db_model_list_in_folder(db, f2, &count2, NULL);
-    TEST_ASSERT_EQ_INT(count2, 1);
+    count1 = 0;
+    err = 0;
+    model_t **items2 = acta_db_model_list_in_folder(db, f2, 0, -1, &count1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count1, 1);
     TEST_ASSERT_EQ_INT(items2[0]->id, id);
-    acta_db_model_list_free(items2, count2);
+    acta_db_model_list_free(items2, count1);
 
     test_db_teardown(db, path);
 }
@@ -609,14 +628,18 @@ static void test_model_move_to_folder_root(void) {
     int rc = acta_db_model_move_to_folder(db, id, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
+    int err = 0;
     int count = 0;
-    model_t **items = acta_db_model_list_in_folder(db, 0, &count, NULL);
+    model_t **items = acta_db_model_list_in_folder(db, 0, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 1);
     TEST_ASSERT_EQ_INT(items[0]->id, id);
     acta_db_model_list_free(items, count);
 
     count = 0;
-    model_t **old = acta_db_model_list_in_folder(db, fid, &count, NULL);
+    err = 0;
+    model_t **old = acta_db_model_list_in_folder(db, fid, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     acta_db_model_list_free(old, count);
 
@@ -653,6 +676,180 @@ static void test_model_move_nonexistent(void) {
 
     int rc = acta_db_model_move_to_folder(db, 999999, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.36: model_list_in_folder — pagination (offset) ---------- */
+static void test_model_list_in_folder_pagination_offset(void) {
+    const char *path = "test/acta_test_m_pagen_off.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 3 models in root */
+    for (int i = 0; i < 3; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "Pag%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        acta_db_model_create(db, &m, &(int){0});
+    }
+
+    /* offset=1, limit=1 → should return only the 2nd model */
+    int count = 0;
+    int err = 0;
+    model_t **items = acta_db_model_list_in_folder(db, 0, 1, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Pag1");
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.37: model_list_in_folder — pagination (limit) ---------- */
+static void test_model_list_in_folder_pagination_limit(void) {
+    const char *path = "test/acta_test_m_pagen_lim.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 5 models in root */
+    for (int i = 0; i < 5; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "Lim%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        acta_db_model_create(db, &m, &(int){0});
+    }
+
+    /* offset=0, limit=2 → first 2 only */
+    int count = 0;
+    int err = 0;
+    model_t **items = acta_db_model_list_in_folder(db, 0, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Lim0");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Lim1");
+    acta_db_model_list_free(items, count);
+
+    /* offset=2, limit=2 → items 2 and 3 */
+    count = 0;
+    err = 0;
+    items = acta_db_model_list_in_folder(db, 0, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Lim2");
+    TEST_ASSERT_EQ_STR(items[1]->name, "Lim3");
+    acta_db_model_list_free(items, count);
+
+    /* offset=4, limit=2 → only 1 remaining */
+    count = 0;
+    err = 0;
+    items = acta_db_model_list_in_folder(db, 0, 4, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Lim4");
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.38: model_list_all — pagination ---------- */
+static void test_model_list_all_pagination(void) {
+    const char *path = "test/acta_test_m_pagen_all.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 4 models in root */
+    for (int i = 0; i < 4; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "All%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        acta_db_model_create(db, &m, &(int){0});
+    }
+
+    /* offset=0, limit=2 */
+    int count = 0;
+    int err = 0;
+    model_t **items = acta_db_model_list_all(db, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_model_list_free(items, count);
+
+    /* offset=2, limit=-1 (remaining) */
+    count = 0;
+    err = 0;
+    items = acta_db_model_list_all(db, 2, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.39: model_folder_list_children — pagination ---------- */
+static void test_model_folder_list_children_pagination(void) {
+    const char *path = "test/acta_test_mf_pagen.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 3 child folders under root */
+    for (int i = 0; i < 3; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "Child%d", i);
+        acta_db_model_folder_create(db, name, 0, &(int){0});
+    }
+
+    /* offset=0, limit=2 → first 2 children */
+    int count = 0;
+    int err = 0;
+    model_folder_t **items = acta_db_model_folder_list_children(db, 0, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_model_folder_list_free(items, count);
+
+    /* offset=2, limit=-1 → remaining 1 */
+    count = 0;
+    err = 0;
+    items = acta_db_model_folder_list_children(db, 0, 2, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    acta_db_model_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.40: model_folder_list_all — pagination ---------- */
+static void test_model_folder_list_all_pagination(void) {
+    const char *path = "test/acta_test_mf_pagen_all.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 4 folders at root */
+    for (int i = 0; i < 4; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "Folder%d", i);
+        acta_db_model_folder_create(db, name, 0, &(int){0});
+    }
+
+    /* offset=0, limit=3 */
+    int count = 0;
+    int err = 0;
+    model_folder_t **items = acta_db_model_folder_list_all(db, 0, 3, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);
+    acta_db_model_folder_list_free(items, count);
+
+    /* offset=3, limit=-1 → last 1 */
+    count = 0;
+    err = 0;
+    items = acta_db_model_folder_list_all(db, 3, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    acta_db_model_folder_list_free(items, count);
 
     test_db_teardown(db, path);
 }
@@ -696,4 +893,10 @@ void run_model_tests(void) {
     test_model_move_to_folder_root();
     test_model_move_deleted();
     test_model_move_nonexistent();
+    /* pagination */
+    test_model_list_in_folder_pagination_offset();
+    test_model_list_in_folder_pagination_limit();
+    test_model_list_all_pagination();
+    test_model_folder_list_children_pagination();
+    test_model_folder_list_all_pagination();
 }
