@@ -38,7 +38,7 @@ int acta_db_execution_log_create(db_t *db,
                                  int *out_id);
 
 /*
- * Lister – target pattern:  T ** foo_list(…, int *err);
+ * Lister – target pattern:  T ** foo_list(…, int *out_count, int *err);
  *
  *   success / rows found → returns valid execution_log_t ** (array of
  *                          heap-allocated structs), *err = ACTA_DB_OK.

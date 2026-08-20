@@ -1040,6 +1040,199 @@ static void test_exec_list_by_context_mixed(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 9.40: cancel — pending → cancelled ---------- */
+static void test_exec_cancel_pending_to_cancelled(void) {
+    const char *path = "test/acta_test_exec_cancel_pend.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelPend", 0);
+    TEST_ASSERT(eid > 0);
+
+    int rc = acta_db_execution_cancel(db, eid);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    int err = 0;
+    execution_t *got = acta_db_execution_get(db, eid, &err);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_CANCELLED);
+    acta_db_execution_free(got);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.41: cancel — running → cancelled ---------- */
+static void test_exec_cancel_running_to_cancelled(void) {
+    const char *path = "test/acta_test_exec_cancel_run.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelRun", 0);
+    TEST_ASSERT(eid > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, eid), ACTA_DB_OK);
+    int rc = acta_db_execution_cancel(db, eid);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    int err = 0;
+    execution_t *got = acta_db_execution_get(db, eid, &err);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_CANCELLED);
+    acta_db_execution_free(got);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.42: cancel — already cancelled ---------- */
+static void test_exec_cancel_already_cancelled(void) {
+    const char *path = "test/acta_test_exec_cancel_twice.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelTwice", 0);
+    TEST_ASSERT(eid > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, eid), ACTA_DB_OK);
+
+    int rc = acta_db_execution_cancel(db, eid);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.43: cancel — completed execution ---------- */
+static void test_exec_cancel_completed(void) {
+    const char *path = "test/acta_test_exec_cancel_comp.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelComp", 0);
+    TEST_ASSERT(eid > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, eid), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, eid, "done"), ACTA_DB_OK);
+
+    int rc = acta_db_execution_cancel(db, eid);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.44: cancel — failed execution ---------- */
+static void test_exec_cancel_failed(void) {
+    const char *path = "test/acta_test_exec_cancel_fail.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelFail", 0);
+    TEST_ASSERT(eid > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, eid), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_fail(db, eid, "oops"), ACTA_DB_OK);
+
+    int rc = acta_db_execution_cancel(db, eid);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.45: cancel — non-existent id ---------- */
+static void test_exec_cancel_nonexistent(void) {
+    const char *path = "test/acta_test_exec_cancel_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int rc = acta_db_execution_cancel(db, 999999);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.46: cancel — completed_at is set ---------- */
+static void test_exec_cancel_completed_at(void) {
+    const char *path = "test/acta_test_exec_cancel_at.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelAt", 0);
+    TEST_ASSERT(eid > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, eid), ACTA_DB_OK);
+
+    int err = 0;
+    execution_t *got = acta_db_execution_get(db, eid, &err);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_CANCELLED);
+    TEST_ASSERT(got->completed_at != NULL);
+    acta_db_execution_free(got);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 9.47: list_by_status — "cancelled" ---------- */
+static void test_exec_list_by_status_cancelled(void) {
+    const char *path = "test/acta_test_exec_list_cancel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    /* 2 cancelled */
+    int c1 = exec_create(db, ctx_id, sr_id, mr_id, "Canc1", 0);
+    int c2 = exec_create(db, ctx_id, sr_id, mr_id, "Canc2", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, c1), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, c2), ACTA_DB_OK);
+
+    /* 1 pending (should not appear) */
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "Pend", 0) > 0);
+
+    /* 1 completed (should not appear) */
+    int comp = exec_create(db, ctx_id, sr_id, mr_id, "Comp", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, comp), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, comp, "ok"), ACTA_DB_OK);
+
+    int out_count = 0;
+    int err = 0;
+    execution_t **items = acta_db_execution_list_by_status(db, ACTA_EXEC_STATUS_CANCELLED, &out_count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(out_count, 2);
+    for (int i = 0; i < out_count; i++) {
+        TEST_ASSERT_EQ_STR(items[i]->status, ACTA_EXEC_STATUS_CANCELLED);
+    }
+    acta_db_execution_list_free(items, out_count);
+
+    test_db_teardown(db, path);
+}
+
+
 
 /* ---------- runner ---------- */
 void run_execution_tests(void) {
@@ -1083,4 +1276,13 @@ void run_execution_tests(void) {
     test_exec_list_by_context_with();
     test_exec_list_by_context_no_match();
     test_exec_list_by_context_mixed();
+    test_exec_cancel_pending_to_cancelled();
+    test_exec_cancel_running_to_cancelled();
+    test_exec_cancel_already_cancelled();
+    test_exec_cancel_completed();
+    test_exec_cancel_failed();
+    test_exec_cancel_nonexistent();
+    test_exec_cancel_completed_at();
+    test_exec_list_by_status_cancelled();
+
 }

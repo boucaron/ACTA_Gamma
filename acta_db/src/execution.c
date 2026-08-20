@@ -132,6 +132,36 @@ int acta_db_execution_start(db_t *db, int id) {
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
 
+int acta_db_execution_cancel(db_t *db, int id) {
+    if (!db) return ACTA_DB_ERR_INVALID;
+
+    execution_t *existing = acta_db_execution_get(db, id, NULL);
+    if (!existing) return ACTA_DB_ERR_NOT_FOUND;
+
+    if (strcmp(existing->status, ACTA_EXEC_STATUS_PENDING) != 0 &&
+        strcmp(existing->status, ACTA_EXEC_STATUS_RUNNING) != 0) {
+        acta_db_execution_free(existing);
+        return ACTA_DB_ERR_INVALID;
+    }
+    acta_db_execution_free(existing);
+
+    char sql[256];
+    snprintf(sql, sizeof(sql),
+             "UPDATE executions SET status = '%s', completed_at = datetime('now') WHERE id = ?;",
+             ACTA_EXEC_STATUS_CANCELLED);
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(stmt, 1, id);
+    int rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) { sqlite3_finalize(stmt); return ACTA_DB_ERR_SQL; }
+    int changes = sqlite3_changes(db->handle);
+    sqlite3_finalize(stmt);
+    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+}
+
+
+
 int acta_db_execution_complete(db_t *db, int id, const char *result) {
     if (!db) return ACTA_DB_ERR_INVALID;
 

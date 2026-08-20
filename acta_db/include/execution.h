@@ -11,6 +11,7 @@ extern "C" {
 #define ACTA_EXEC_STATUS_RUNNING   "running"
 #define ACTA_EXEC_STATUS_COMPLETED "completed"
 #define ACTA_EXEC_STATUS_FAILED    "failed"
+#define ACTA_EXEC_STATUS_CANCELLED "cancelled"
 
 typedef struct {
     int     id;
@@ -31,6 +32,7 @@ typedef struct {
 /* --- action / mutation functions (return int status directly) --- */
 int  acta_db_execution_create(db_t *db, const execution_t *e, int *out_id);
 int  acta_db_execution_start(db_t *db, int id);
+int  acta_db_execution_cancel(db_t*, int id);
 int  acta_db_execution_complete(db_t *db, int id, const char *result);
 int  acta_db_execution_fail(db_t *db, int id, const char *error);
 int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
