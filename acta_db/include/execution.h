@@ -44,7 +44,7 @@ execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *o
 
 /* --- free --- */
 void acta_db_execution_free(execution_t *e);
-void acta_db_execution_list_free(execution_t **items);
+void acta_db_execution_list_free(execution_t **items, int count);
 
 #ifdef __cplusplus
 }

@@ -378,14 +378,16 @@ execution_t **acta_db_execution_list_by_context(db_t *db, int context_id, int *o
 
 void acta_db_execution_free(execution_t *e) {
     if (!e) return;
-    free(e->prompt); free(e->raw_response); free(e->result);
-    free(e->status); free(e->error); free(e->created_at);
-    free(e->started_at); free(e->completed_at); free(e);
+    free(e->prompt);       free(e->raw_response); free(e->result);
+    free(e->status);       free(e->error);
+    free(e->created_at);   free(e->started_at);   free(e->completed_at);
+    free(e);
 }
 
-void acta_db_execution_list_free(execution_t **items) {
+void acta_db_execution_list_free(execution_t **items, int count) {
     if (!items) return;
-    for (int i = 0; items[i] != NULL; i++)
-        acta_db_execution_free(items[i]);
+    for (int i = 0; i < count; i++)
+        acta_db_execution_free(items[i]);   /* NULL-safe per element */
     free(items);
 }
+

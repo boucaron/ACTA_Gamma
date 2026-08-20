@@ -93,14 +93,6 @@ static int exec_create(db_t *db, int ctx_id, int sr_id, int mr_id,
     return out_id;
 }
 
-/* Count elements in a null-terminated execution_t** array. */
-static int exec_list_count(execution_t **items) {
-    if (!items) return 0;
-    int n = 0;
-    while (items[n] != NULL) n++;
-    return n;
-}
-
 
 /* ---------- 9.1: create — happy ---------- */
 static void test_exec_create_happy(void) {
@@ -708,8 +700,7 @@ static void test_exec_list_by_status_pending(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
-    TEST_ASSERT_EQ_INT(exec_list_count(items), 3);
-    acta_db_execution_list_free(items);
+    acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -741,8 +732,7 @@ static void test_exec_list_by_status_completed(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 2);
-    TEST_ASSERT_EQ_INT(exec_list_count(items), 2);
-    acta_db_execution_list_free(items);
+    acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -766,9 +756,8 @@ static void test_exec_list_by_status_no_match(void) {
     /* Either error or empty list */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
-        TEST_ASSERT_EQ_INT(exec_list_count(items), 0);
     }
-    if (items) acta_db_execution_list_free(items);
+    if (items) acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -786,9 +775,8 @@ static void test_exec_list_by_status_invalid(void) {
     /* Either an error or 0 results */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
-        TEST_ASSERT_EQ_INT(exec_list_count(items), 0);
     }
-    if (items) acta_db_execution_list_free(items);
+    if (items) acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -819,11 +807,10 @@ static void test_exec_list_children_with(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(children);
     TEST_ASSERT_EQ_INT(out_count, 3);
-    TEST_ASSERT_EQ_INT(exec_list_count(children), 3);
-    for (int i = 0; children[i] != NULL; i++) {
+    for (int i = 0; i < out_count; i++) {
         TEST_ASSERT_EQ_INT(children[i]->parent_execution_id, parent_id);
     }
-    acta_db_execution_list_free(children);
+    acta_db_execution_list_free(children, out_count);
 
     test_db_teardown(db, path);
 }
@@ -847,9 +834,8 @@ static void test_exec_list_children_none(void) {
     /* Either error or empty list */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
-        TEST_ASSERT_EQ_INT(exec_list_count(children), 0);
     }
-    if (children) acta_db_execution_list_free(children);
+    if (children) acta_db_execution_list_free(children, out_count);
 
     test_db_teardown(db, path);
 }
@@ -867,9 +853,8 @@ static void test_exec_list_children_nonexistent(void) {
     /* Either an error or 0 results */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
-        TEST_ASSERT_EQ_INT(exec_list_count(children), 0);
     }
-    if (children) acta_db_execution_list_free(children);
+    if (children) acta_db_execution_list_free(children, out_count);
 
     test_db_teardown(db, path);
 }
@@ -925,8 +910,7 @@ static void test_exec_list_free_valid(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
-    TEST_ASSERT_EQ_INT(exec_list_count(items), 3);
-    acta_db_execution_list_free(items);
+    acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -973,11 +957,10 @@ static void test_exec_list_by_context_with(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
-    TEST_ASSERT_EQ_INT(exec_list_count(items), 3);
-    for (int i = 0; items[i] != NULL; i++) {
+    for (int i = 0; i < out_count; i++) {
         TEST_ASSERT_EQ_INT(items[i]->context_id, ctx_id);
     }
-    acta_db_execution_list_free(items);
+    acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -1000,9 +983,8 @@ static void test_exec_list_by_context_no_match(void) {
     /* Either error or empty list */
     if (err == ACTA_DB_OK) {
         TEST_ASSERT_EQ_INT(out_count, 0);
-        TEST_ASSERT_EQ_INT(exec_list_count(items), 0);
     }
-    if (items) acta_db_execution_list_free(items);
+    if (items) acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
@@ -1038,11 +1020,10 @@ static void test_exec_list_by_context_mixed(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 3);
-    TEST_ASSERT_EQ_INT(exec_list_count(items), 3);
-    for (int i = 0; items[i] != NULL; i++) {
+    for (int i = 0; i < out_count; i++) {
         TEST_ASSERT_EQ_INT(items[i]->context_id, ctx_id);
     }
-    acta_db_execution_list_free(items);
+    acta_db_execution_list_free(items, out_count);
 
     /* Verify ctx2 */
     out_count = 0;
@@ -1051,11 +1032,10 @@ static void test_exec_list_by_context_mixed(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(out_count, 2);
-    TEST_ASSERT_EQ_INT(exec_list_count(items), 2);
-    for (int i = 0; items[i] != NULL; i++) {
+    for (int i = 0; i < out_count; i++) {
         TEST_ASSERT_EQ_INT(items[i]->context_id, ctx2_id);
     }
-    acta_db_execution_list_free(items);
+    acta_db_execution_list_free(items, out_count);
 
     test_db_teardown(db, path);
 }
