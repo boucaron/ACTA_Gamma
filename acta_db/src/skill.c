@@ -25,7 +25,7 @@ static skill_t *row_to_skill(sqlite3_stmt *stmt) {
 /* ---------- skill: action functions ---------- */
 
 int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
-    if (!db || !s || !s->name || !s->prompt_template || !out_id)
+    if (!db || !s || !s->name || !s->prompt_template)
         return ACTA_DB_ERR_INVALID;
     const char *sql =
         "INSERT INTO skills (folder_id, name, description, prompt_template, output_schema)"
@@ -46,9 +46,11 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    *out_id = (int)sqlite3_last_insert_rowid(db->handle);
+    if (out_id)
+        *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
+
 
 int acta_db_skill_update(db_t *db, const skill_t *s) {
     if (!db || !s || !s->name || !s->prompt_template)

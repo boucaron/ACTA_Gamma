@@ -42,11 +42,7 @@ model_t *acta_db_model_get_live(db_t *db, int id, int *err);   /* NULL if soft-d
  * modify that field, then call this function with the complete struct.
  *
  * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on
- * failure.  Returns ACTA_DB_ERR_SQL (not ACTA_DB_ERR_NOT_FOUND) if no live
- * row matches m->id — see note below.
- *
- * NOTE: Inconsistent with acta_db_skill_update, which returns
- * ACTA_DB_ERR_NOT_FOUND for the same condition.  Should be unified.
+ * failure.  Returns ACTA_DB_ERR_NOT_FOUND if no live row matches s->id.
  */
 int      acta_db_model_update(db_t *db, const model_t *m);
 int      acta_db_model_soft_delete(db_t *db, int id);

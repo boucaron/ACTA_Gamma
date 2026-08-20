@@ -22,10 +22,20 @@ typedef struct {
     char   *deleted_at;
 } skill_t;
 
-/* Returns ACTA_DB_OK on success.
- * ACTA_DB_ERR_INVALID if db/s/name/prompt_template/out_id is NULL.
- * ACTA_DB_ERR_SQL on prepare/step failure. */
-int      acta_db_skill_create(db_t *db, const skill_t *s, int *out_id);
+/* Inserts a skill row into the "skills" table.
+ *
+ * Returns ACTA_DB_OK on success.
+ * Returns ACTA_DB_ERR_INVALID if db, s, s->name, or s->prompt_template is NULL.
+ * Returns ACTA_DB_ERR_SQL on prepare or step failure.
+ *
+ * @param out_id  [out] receives the new row id; may be NULL if not needed.
+ *
+ * Optional fields (bound as NULL when absent):
+ *   s->folder_id      — 0 means NULL (top-level)
+ *   s->description    — NULL if pointer is NULL
+ *   s->output_schema  — NULL if pointer is NULL
+ */
+int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id);
 
 /* Returns a heap-allocated skill_t on success, or NULL.
  * err may be NULL. On success / not-found: *err = ACTA_DB_OK.
@@ -50,8 +60,6 @@ skill_t *acta_db_skill_get_live(db_t *db, int id, int *err);
  * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on
  * failure.  Returns ACTA_DB_ERR_NOT_FOUND if no live row matches s->id.
  */
-int acta_db_skill_update(db_t *db, const skill_t *s);
-
 int      acta_db_skill_update(db_t *db, const skill_t *s);
 
 /* Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID or ACTA_DB_ERR_SQL on failure. */
