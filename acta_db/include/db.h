@@ -15,6 +15,23 @@ extern "C" {
 #define ACTA_DB_ERR_ALLOC     (-3)
 #define ACTA_DB_ERR_INVALID   (-4)
 
+/*
+ * ACTA DB – uniform calling conventions
+ *
+ * Getters:   T *foo_get(db, key, int *err);
+ *            err nullable; NULL return + *err==OK means not-found.
+ *
+ * Listers:   T **foo_list_*(db, …, int *out_count, int *err);
+ *            both out-params nullable; NULL return + *err==OK means empty.
+ *
+ * Mutators:  int foo_mutate(db, …);   returns ACTA_DB_OK or negative code.
+ *
+ * Free:      void foo_free(T *);                  (single, NULL-safe)
+ *            void foo_list_free(T **items, int count);  (array, NULL-safe)
+ */
+
+
+
 /* Return a short human-readable string for an error code.
  * Returns "unknown error" for values outside the defined range. */
 const char *acta_db_strerror(int code);
