@@ -10,6 +10,10 @@ extern "C" {
 
 /* --- Error codes (db.h) --- */
 #define ACTA_DB_OK             0
+/* ACTA_DB_ERR_NOT_FOUND: returned only by mutators when the target
+ * row does not exist (e.g. move_to_folder, rename, restore).
+ * Getters and listers do NOT return this code; they use
+ * ACTA_DB_OK + NULL to signal "not found / empty". */
 #define ACTA_DB_ERR_NOT_FOUND (-1)
 #define ACTA_DB_ERR_SQL       (-2)
 #define ACTA_DB_ERR_ALLOC     (-3)

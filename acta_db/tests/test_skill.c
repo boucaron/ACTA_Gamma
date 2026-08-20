@@ -426,15 +426,16 @@ static void test_sk_update_deleted(void) {
     s.folder_id = 0;
 
     rc = acta_db_skill_update(db, &s);
-    /* UPDATE ... WHERE deleted_at IS NULL matches 0 rows → SQLITE_DONE → OK,
-     * but no revision is created. */
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    /* Mutator on a soft-deleted row → ACTA_DB_ERR_NOT_FOUND,
+     * no revision is created. */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     int rev_after = sk_count_revisions(db, id);
     TEST_ASSERT_EQ_INT(rev_after, rev_before);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 7.17: soft_delete — happy ---------- */
 static void test_sk_soft_delete_happy(void) {
@@ -663,9 +664,10 @@ static void test_sk_restore_already_live(void) {
     int id = sk_create_skill(db, 0, "AlreadyLive", "Prompt", "{}");
     TEST_ASSERT(id > 0);
 
-    /* Should succeed as a no-op (WHERE deleted_at IS NOT NULL matches nothing) */
+    /* Row exists but is already live → WHERE deleted_at IS NOT NULL
+     * matches 0 rows → ACTA_DB_ERR_NOT_FOUND (no-op). */
     int rc = acta_db_skill_restore(db, id);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     skill_t *s = acta_db_skill_get(db, id, NULL);
     TEST_ASSERT_NOT_NULL(s);
@@ -675,6 +677,7 @@ static void test_sk_restore_already_live(void) {
     test_db_teardown(db, path);
 }
 
+
 /* ---------- 7.25: restore — non-existent id ---------- */
 static void test_sk_restore_nonexistent(void) {
     const char *path = "test/acta_test_sk_restore_404.db";
@@ -682,15 +685,16 @@ static void test_sk_restore_nonexistent(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    /* No row with id 999999 — UPDATE affects 0 rows, rc is still ACTA_DB_OK (no-op) */
+    /* No row with id 999999 → mutator returns ACTA_DB_ERR_NOT_FOUND */
     int rc = acta_db_skill_restore(db, 999999);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     skill_t *s = acta_db_skill_get(db, 999999, NULL);
     TEST_ASSERT_NULL(s);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 7.26: move — to existing folder ---------- */
 static void test_sk_move_to_folder_happy(void) {
