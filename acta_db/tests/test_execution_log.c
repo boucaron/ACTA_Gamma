@@ -547,6 +547,111 @@ static void test_el_list_limit_zero(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 10.22: get — happy path, all fields populated ---------- */
+static void test_el_get_happy(void) {
+    const char *path = "test/acta_test_el_get_happy.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    int id = el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "deploy_started",
+                           "Kicking off deploy", "{\"env\":\"prod\"}");
+    TEST_ASSERT(id > 0);
+
+    execution_log_t *log = NULL;
+    int rc = acta_db_execution_log_get(db, id, &log);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(log);
+    TEST_ASSERT_EQ_INT(log->id, id);
+    TEST_ASSERT_EQ_INT(log->execution_id, 1);
+    TEST_ASSERT(strcmp(log->level, ACTA_LOG_LEVEL_WARN) == 0);
+    TEST_ASSERT(strcmp(log->event, "deploy_started") == 0);
+    TEST_ASSERT(strcmp(log->message, "Kicking off deploy") == 0);
+    TEST_ASSERT(strcmp(log->metadata, "{\"env\":\"prod\"}") == 0);
+    TEST_ASSERT_NOT_NULL(log->created_at);
+
+    acta_db_execution_log_free(log);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.23: get — not found ---------- */
+static void test_el_get_not_found(void) {
+    const char *path = "test/acta_test_el_get_notfound.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+    el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
+
+    execution_log_t *log = (execution_log_t *)0x1; /* sentinel */
+    int rc = acta_db_execution_log_get(db, 999999, &log);
+    TEST_ASSERT(rc != ACTA_DB_OK);
+    TEST_ASSERT_NULL(log);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.24: get — NULL db ---------- */
+static void test_el_get_null_db(void) {
+    execution_log_t *log = NULL;
+    int rc = acta_db_execution_log_get(NULL, 1, &log);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_NULL(log);
+}
+
+/* ---------- 10.25: get — NULL out_log (existence check) ---------- */
+static void test_el_get_null_out_log(void) {
+    const char *path = "test/acta_test_el_get_nullout.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "event", "msg", NULL);
+    TEST_ASSERT(id > 0);
+
+    /* out_log is NULL — caller only wants the return code */
+    int rc = acta_db_execution_log_get(db, id, NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* non-existent id with NULL out_log — still a clean error, no crash */
+    int rc2 = acta_db_execution_log_get(db, 424242, NULL);
+    TEST_ASSERT(rc2 != ACTA_DB_OK);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.26: get — NULL optional fields round-trip ---------- */
+static void test_el_get_null_optional_fields(void) {
+    const char *path = "test/acta_test_el_get_nullopt.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    int id = el_create_log(db, 1, ACTA_LOG_LEVEL_DEBUG, "bare_event", NULL, NULL);
+    TEST_ASSERT(id > 0);
+
+    execution_log_t *log = NULL;
+    int rc = acta_db_execution_log_get(db, id, &log);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(log);
+    TEST_ASSERT_EQ_INT(log->id, id);
+    TEST_ASSERT(strcmp(log->level, ACTA_LOG_LEVEL_DEBUG) == 0);
+    TEST_ASSERT(strcmp(log->event, "bare_event") == 0);
+    TEST_ASSERT_NULL(log->message);
+    TEST_ASSERT_NULL(log->metadata);
+
+    acta_db_execution_log_free(log);
+    test_db_teardown(db, path);
+}
+
+
 /* ---------- runner ---------- */
 void run_execution_log_tests(void) {
     fprintf(stderr, "\n=== execution_log tests ===\n");
@@ -571,4 +676,10 @@ void run_execution_log_tests(void) {
     test_el_list_offset_limit();
     test_el_list_offset_beyond();
     test_el_list_limit_zero();
+    test_el_get_happy();
+    test_el_get_not_found();
+    test_el_get_null_db();
+    test_el_get_null_out_log();
+    test_el_get_null_optional_fields();
+
 }

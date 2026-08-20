@@ -38,6 +38,24 @@ int acta_db_execution_log_create(db_t *db,
                                  int *out_id);
 
 /*
+ * Getter – fetch a single row by its primary key.
+ *
+ *   Return value is the error code:
+ *     ACTA_DB_OK (0)            – row found; *out_log set to a
+ *                                 heap-allocated execution_log_t.
+ *     negative ACTA_DB_ERR_*    – failure or row not found;
+ *                                 *out_log set to NULL.
+ *
+ * out_log may be NULL if the caller only needs the success/failure
+ * status (e.g. an existence check).
+ *
+ * Free the result with acta_db_execution_log_free().
+ */
+int acta_db_execution_log_get(db_t *db,
+                              int id,
+                              execution_log_t **out_log);
+
+/*
  * Lister – target pattern:  T ** foo_list(…, int *out_count, int *err);
  *
  *   Pagination:
