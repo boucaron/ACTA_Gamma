@@ -1,5 +1,10 @@
 #include "internal.h"
 #include "db.h"
+#include <sqlite3.h>
+
+/* ------------------------------------------------------------------ */
+/*  Error string                                                       */
+/* ------------------------------------------------------------------ */
 
 const char *acta_db_strerror(int code)
 {
@@ -12,6 +17,10 @@ const char *acta_db_strerror(int code)
     default:                    return "unknown error";
     }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Lifecycle                                                          */
+/* ------------------------------------------------------------------ */
 
 db_t *acta_db_open(const char *path, int *err) {
     if (!path) {
@@ -36,17 +45,30 @@ db_t *acta_db_open(const char *path, int *err) {
         if (err) *err = ACTA_DB_ERR_ALLOC;
         return NULL;
     }
-    db->handle = handle;
-    db->last_error = NULL;
+    db->handle          = handle;
+    db->last_error      = NULL;
+    db->in_transaction  = 0;
     if (err) *err = ACTA_DB_OK;
     return db;
 }
 
 void acta_db_close(db_t *db) {
     if (!db) return;
+
+    /* Implicit rollback if the caller forgot to commit/rollback. */
+    if (db->in_transaction) {
+        sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL);
+        db->in_transaction = 0;
+    }
+
+    free(db->last_error);
     sqlite3_close(db->handle);
     free(db);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Exec / last error                                                  */
+/* ------------------------------------------------------------------ */
 
 int acta_db_exec(db_t *db, const char *sql) {
     if (!db || !sql) return ACTA_DB_ERR_INVALID;
@@ -57,7 +79,7 @@ int acta_db_exec(db_t *db, const char *sql) {
     char *err = NULL;
     int rc = sqlite3_exec(db->handle, sql, NULL, NULL, &err);
     if (rc != SQLITE_OK) {
-        db->last_error = err;   /* take ownership */
+        db->last_error = err;   /* take ownership of sqlite-allocated string */
         return ACTA_DB_ERR_SQL;
     }
     return ACTA_DB_OK;
@@ -68,11 +90,20 @@ const char *acta_db_last_error(db_t *db) {
     return db->last_error;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Callback-style transaction                                         */
+/* ------------------------------------------------------------------ */
+
 int acta_db_transaction(db_t *db, int (*fn)(db_t *, void *), void *user_data) {
     if (!db || !fn) return ACTA_DB_ERR_INVALID;
+    if (db->in_transaction) return ACTA_DB_ERR_INVALID;  /* no nesting */
 
-    if (sqlite3_exec(db->handle, "BEGIN;", NULL, NULL, NULL) != SQLITE_OK)
+    db->in_transaction = 1;
+
+    if (sqlite3_exec(db->handle, "BEGIN;", NULL, NULL, NULL) != SQLITE_OK) {
+        db->in_transaction = 0;
         return ACTA_DB_ERR_SQL;
+    }
 
     int result = fn(db, user_data);
 
@@ -81,5 +112,46 @@ int acta_db_transaction(db_t *db, int (*fn)(db_t *, void *), void *user_data) {
     } else {
         sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL);
     }
+
+    db->in_transaction = 0;
     return result;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Application-controlled (long-running) transaction                  */
+/* ------------------------------------------------------------------ */
+
+int acta_db_begin(db_t *db) {
+    if (!db) return ACTA_DB_ERR_INVALID;
+    if (db->in_transaction) return ACTA_DB_ERR_INVALID;  /* already in txn */
+
+    if (sqlite3_exec(db->handle, "BEGIN;", NULL, NULL, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+
+    db->in_transaction = 1;
+    return ACTA_DB_OK;
+}
+
+int acta_db_commit(db_t *db) {
+    if (!db) return ACTA_DB_ERR_INVALID;
+    if (!db->in_transaction) return ACTA_DB_ERR_INVALID;  /* nothing to commit */
+
+    db->in_transaction = 0;
+
+    if (sqlite3_exec(db->handle, "COMMIT;", NULL, NULL, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+
+    return ACTA_DB_OK;
+}
+
+int acta_db_rollback(db_t *db) {
+    if (!db) return ACTA_DB_ERR_INVALID;
+    if (!db->in_transaction) return ACTA_DB_ERR_INVALID;  /* nothing to roll back */
+
+    db->in_transaction = 0;
+
+    if (sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+
+    return ACTA_DB_OK;
 }

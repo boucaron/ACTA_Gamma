@@ -1,4 +1,6 @@
 #include "test_common.h"
+#include "internal.h"
+
 
 /* ---------- 1.1: acta_db_open — new file ---------- */
 static void test_db_open_new(void) {
@@ -195,6 +197,276 @@ static void test_db_transaction_user_data(void) {
     test_db_teardown(db, path);
 }
 
+/* ================================================================== */
+/*  2.x: Application-controlled transactions (begin/commit/rollback)  */
+/* ================================================================== */
+
+/* Helper: create a simple table for txn tests. */
+static void create_simple_table(db_t *db) {
+    acta_db_exec(db,
+        "CREATE TABLE items ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  name TEXT NOT NULL"
+        ");");
+}
+
+/* Helper: count rows in items table. */
+static int count_items(db_t *db) {
+    const char *tail = NULL;
+    sqlite3_stmt *stmt;
+    int count = 0;
+    if (sqlite3_prepare_v2(db->handle, "SELECT COUNT(*) FROM items;", -1, &stmt, &tail) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+            count = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    /* tail is not heap-allocated — do NOT free it */
+    return count;
+}
+
+
+/* ---------- 2.1: acta_db_begin — successful ---------- */
+static void test_db_begin_success(void) {
+    const char *path = "test/acta_test_begin_ok.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    int rc = acta_db_begin(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Clean up with a rollback so the txn flag is cleared before close. */
+    acta_db_rollback(db);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.2: acta_db_begin — NULL handle ---------- */
+static void test_db_begin_null(void) {
+    int rc = acta_db_begin(NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 2.3: acta_db_begin — nested (already in txn) ---------- */
+static void test_db_begin_nested(void) {
+    const char *path = "test/acta_test_begin_nested.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    int rc = acta_db_begin(db);  /* second BEGIN while first is active */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    acta_db_rollback(db);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.4: acta_db_commit — successful (data persists) ---------- */
+static void test_db_commit_persists(void) {
+    const char *path = "test/acta_test_commit_p.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('alpha');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('beta');");
+
+    int rc = acta_db_commit(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count_items(db), 2);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.5: acta_db_commit — NULL handle ---------- */
+static void test_db_commit_null(void) {
+    int rc = acta_db_commit(NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 2.6: acta_db_commit — no transaction in progress ---------- */
+static void test_db_commit_no_txn(void) {
+    const char *path = "test/acta_test_commit_notxn.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    int rc = acta_db_commit(db);  /* never called begin */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.7: acta_db_rollback — successful (data discarded) ---------- */
+static void test_db_rollback_discards(void) {
+    const char *path = "test/acta_test_rollback_d.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    /* Pre-existing row (committed before txn). */
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('existing');");
+    TEST_ASSERT_EQ_INT(count_items(db), 1);
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('transient');");
+    /* Inside txn we see 2 rows. */
+    TEST_ASSERT_EQ_INT(count_items(db), 2);
+
+    int rc = acta_db_rollback(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* After rollback only the pre-existing row remains. */
+    TEST_ASSERT_EQ_INT(count_items(db), 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.8: acta_db_rollback — NULL handle ---------- */
+static void test_db_rollback_null(void) {
+    int rc = acta_db_rollback(NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 2.9: acta_db_rollback — no transaction in progress ---------- */
+static void test_db_rollback_no_txn(void) {
+    const char *path = "test/acta_test_rollback_notxn.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    int rc = acta_db_rollback(db);  /* never called begin */
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.10: implicit rollback on close ---------- */
+static void test_db_implicit_rollback_on_close(void) {
+    const char *path = "test/acta_test_implicit_rb.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('committed');");
+    TEST_ASSERT_EQ_INT(count_items(db), 1);
+
+    /* Begin txn, insert, then close WITHOUT commit/rollback. */
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('uncommitted');");
+    acta_db_close(db);
+
+    /* Re-open and verify only the committed row survived. */
+    db_t *db2 = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db2);
+    TEST_ASSERT_EQ_INT(count_items(db2), 1);
+    test_db_teardown(db2, path);
+}
+
+/* ---------- 2.11: multi-operation commit (simulates multi-file import) ---------- */
+static void test_db_multi_op_commit(void) {
+    const char *path = "test/acta_test_multi_commit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+
+    /* Simulate 3 "files" each inserting rows. */
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file1_a');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file1_b');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file2_a');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file3_a');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file3_b');");
+
+    int rc = acta_db_commit(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count_items(db), 5);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.12: multi-operation rollback (aborted import) ---------- */
+static void test_db_multi_op_rollback(void) {
+    const char *path = "test/acta_test_multi_rb.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('pre');");
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file1_a');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file2_a');");
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('file3_a');");
+
+    /* Simulate an error detected after file 2 — abort. */
+    int rc = acta_db_rollback(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count_items(db), 1);  /* only 'pre' survives */
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.13: begin → exec error → rollback recovers ---------- */
+static void test_db_exec_error_then_rollback(void) {
+    const char *path = "test/acta_test_err_rb.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('before');");
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('good');");
+    int rc = acta_db_exec(db, "GARBAGE SQL;");
+    TEST_ASSERT(rc < 0);  /* SQL error inside txn */
+
+    rc = acta_db_rollback(db);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count_items(db), 1);  /* 'before' only */
+
+    /* Connection is still usable after rollback. */
+    acta_db_exec(db, "INSERT INTO items(name) VALUES('after');");
+    TEST_ASSERT_EQ_INT(count_items(db), 2);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 2.14: acta_db_transaction — nesting rejected ---------- */
+static int txn_callback_harmless(db_t *db, void *user_data) {
+    (void)db; (void)user_data;
+    return 0;
+}
+
+static void test_db_transaction_nesting_rejected(void) {
+    const char *path = "test/acta_test_txn_nest.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    TEST_ASSERT_EQ_INT(acta_db_begin(db), ACTA_DB_OK);
+
+    /* Trying to run the callback-style txn inside an active txn must fail. */
+    int rc = acta_db_transaction(db, txn_callback_harmless, NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+
+    acta_db_rollback(db);
+    test_db_teardown(db, path);
+}
+
 void run_db_tests(void) {
     fprintf(stderr, "\n=== db.h tests ===\n");
     test_db_open_new();
@@ -212,4 +484,19 @@ void run_db_tests(void) {
     test_db_transaction_rollback_callback();
     test_db_transaction_rollback_sql_error();
     test_db_transaction_user_data();
+    /* --- 2.x: begin / commit / rollback --- */
+    test_db_begin_success();
+    test_db_begin_null();
+    test_db_begin_nested();
+    test_db_commit_persists();
+    test_db_commit_null();
+    test_db_commit_no_txn();
+    test_db_rollback_discards();
+    test_db_rollback_null();
+    test_db_rollback_no_txn();
+    test_db_implicit_rollback_on_close();
+    test_db_multi_op_commit();
+    test_db_multi_op_rollback();
+    test_db_exec_error_then_rollback();
+    test_db_transaction_nesting_rejected();
 }

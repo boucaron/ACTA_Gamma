@@ -21,7 +21,7 @@ extern "C" {
  * Getters:   T *foo_get(db, key, int *err);
  *            err nullable; NULL return + *err==OK means not-found.
  *
-  * Listers:   T **foo_list_*(db, …, int offset, int limit, int *out_count, int *err);
+ * Listers:   T **foo_list_*(db, …, int offset, int limit, int *out_count, int *err);
  *            offset 0-based row offset; limit ≤ 0 means no cap (return all).
  *            Both out-params nullable; NULL return + *err==OK means empty.
  *
@@ -59,6 +59,37 @@ const char *acta_db_last_error(db_t *db);
  * Returns ACTA_DB_OK on success, a negative error code if the callback
  * returned a non-OK code or a SQL error occurred. */
 int acta_db_transaction(db_t *db, int (*fn)(db_t *, void *), void *user_data);
+
+/*
+ * Application-controlled (long-running) transactions.
+ *
+ * Use begin / commit / rollback when the transaction spans multiple
+ * independent operations that are driven by application logic rather
+ * than a single callback (e.g. a multi-file import where each file
+ * triggers its own set of INSERTs).
+ *
+ * Rules:
+ *   - begin must be called before any commit/rollback.
+ *   - commit and rollback are mutually exclusive for a given begin.
+ *   - If neither is called before acta_db_close, the transaction is
+ *     implicitly rolled back.
+ *   - Nested begin is not supported; returns ACTA_DB_ERR_INVALID.
+ */
+
+/* Begin a transaction on this connection.
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if a transaction
+ * is already in progress, or another negative code on failure. */
+int acta_db_begin(db_t *db);
+
+/* Commit the current transaction.
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if no transaction
+ * is in progress, or another negative code on failure. */
+int acta_db_commit(db_t *db);
+
+/* Roll back the current transaction.
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if no transaction
+ * is in progress, or another negative code on failure. */
+int acta_db_rollback(db_t *db);
 
 #ifdef __cplusplus
 }

@@ -10,6 +10,7 @@
 struct db_t {
     sqlite3 *handle;
     char    *last_error;   /* NULL when no error */
+    int       in_transaction;  /* 0 = idle, 1 = BEGIN issued, not yet closed */
 };
 
 /* strdup that returns NULL on allocation failure (we prefer NULL over crashing) */
