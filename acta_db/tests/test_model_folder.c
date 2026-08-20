@@ -93,7 +93,8 @@ static void test_mf_get_existing(void) {
     TEST_ASSERT_NOT_NULL(db);
     int id;
     acta_db_model_folder_create(db, "MyFolder", 0, &id);
-    model_folder_t *f = acta_db_model_folder_get(db, id);
+    int err;
+    model_folder_t *f = acta_db_model_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_EQ_INT(f->id, id);
     TEST_ASSERT_EQ_STR(f->name, "MyFolder");
@@ -107,7 +108,8 @@ static void test_mf_get_nonexistent(void) {
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
-    model_folder_t *f = acta_db_model_folder_get(db, 999999);
+    int err;
+    model_folder_t *f = acta_db_model_folder_get(db, 999999, &err);
     TEST_ASSERT_NULL(f);
     test_db_teardown(db, path);
 }
@@ -122,7 +124,8 @@ static void test_mf_rename_happy(void) {
     acta_db_model_folder_create(db, "Old", 0, &id);
     int rc = acta_db_model_folder_rename(db, id, "New");
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
-    model_folder_t *f = acta_db_model_folder_get(db, id);
+    int err;
+    model_folder_t *f = acta_db_model_folder_get(db, id, &err);
     TEST_ASSERT_EQ_STR(f->name, "New");
     acta_db_model_folder_free(f);
     test_db_teardown(db, path);
@@ -152,7 +155,8 @@ static void test_mf_soft_delete_happy(void) {
     acta_db_model_folder_create(db, "ToDelete", 0, &id);
     int rc = acta_db_model_folder_soft_delete(db, id);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
-    model_folder_t *f = acta_db_model_folder_get(db, id);
+    int err;
+    model_folder_t *f = acta_db_model_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_NOT_NULL(f->deleted_at);
     acta_db_model_folder_free(f);
@@ -172,7 +176,8 @@ static void test_mf_soft_delete_twice(void) {
     /* WHERE deleted_at IS NULL matches 0 rows;
      * sqlite3_step still returns SQLITE_DONE → ACTA_DB_OK */
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
-    model_folder_t *f = acta_db_model_folder_get(db, id);
+    int err;
+    model_folder_t *f = acta_db_model_folder_get(db, id, &err);
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_NOT_NULL(f->deleted_at);
     acta_db_model_folder_free(f);
@@ -205,8 +210,8 @@ static void test_mf_list_children_with(void) {
     acta_db_model_folder_create(db, "C1", parent_id, &(int){0});
     acta_db_model_folder_create(db, "C2", parent_id, &(int){0});
     acta_db_model_folder_create(db, "C3", parent_id, &(int){0});
-    int count = 0;
-    model_folder_t *items = acta_db_model_folder_list_children(db, parent_id, &count);
+    int count = 0, err;
+    model_folder_t **items = acta_db_model_folder_list_children(db, parent_id, &count, &err);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_model_folder_list_free(items, count);
     test_db_teardown(db, path);
@@ -220,8 +225,8 @@ static void test_mf_list_children_none(void) {
     TEST_ASSERT_NOT_NULL(db);
     int id;
     acta_db_model_folder_create(db, "Leaf", 0, &id);
-    int count = 0;
-    model_folder_t *items = acta_db_model_folder_list_children(db, id, &count);
+    int count = 0, err;
+    model_folder_t **items = acta_db_model_folder_list_children(db, id, &count, &err);
     TEST_ASSERT_EQ_INT(count, 0);
     acta_db_model_folder_list_free(items, count);
     test_db_teardown(db, path);
@@ -237,8 +242,8 @@ static void test_mf_list_all_mixed(void) {
     acta_db_model_folder_create(db, "R1", 0, &root1);
     acta_db_model_folder_create(db, "R2", 0, &root2);
     acta_db_model_folder_create(db, "C1", root1, &child1);
-    int count = 0;
-    model_folder_t *items = acta_db_model_folder_list_all(db, &count);
+    int count = 0, err;
+    model_folder_t **items = acta_db_model_folder_list_all(db, &count, &err);
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_model_folder_list_free(items, count);
     test_db_teardown(db, path);
@@ -255,8 +260,8 @@ static void test_mf_list_all_excludes_deleted(void) {
     acta_db_model_folder_create(db, "B", 0, &id2);
     acta_db_model_folder_create(db, "C", 0, &id3);
     acta_db_model_folder_soft_delete(db, id2);
-    int count = 0;
-    model_folder_t *items = acta_db_model_folder_list_all(db, &count);
+    int count = 0, err;
+    model_folder_t **items = acta_db_model_folder_list_all(db, &count, &err);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_folder_list_free(items, count);
     test_db_teardown(db, path);
@@ -270,7 +275,8 @@ static void test_mf_free_valid(void) {
     TEST_ASSERT_NOT_NULL(db);
     int id;
     acta_db_model_folder_create(db, "F", 0, &id);
-    model_folder_t *f = acta_db_model_folder_get(db, id);
+    int err;
+    model_folder_t *f = acta_db_model_folder_get(db, id, &err);
     acta_db_model_folder_free(f);
     test_db_teardown(db, path);
 }
@@ -290,8 +296,8 @@ static void test_mf_list_free_valid(void) {
         snprintf(name, sizeof(name), "Folder%d", i);
         acta_db_model_folder_create(db, name, 0, &(int){0});
     }
-    int count = 0;
-    model_folder_t *items = acta_db_model_folder_list_all(db, &count);
+    int count = 0, err;
+    model_folder_t **items = acta_db_model_folder_list_all(db, &count, &err);
     acta_db_model_folder_list_free(items, count);
     test_db_teardown(db, path);
 }
