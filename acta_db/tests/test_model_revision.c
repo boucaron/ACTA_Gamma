@@ -1,19 +1,20 @@
-/* test_model_revision.c — Tests for model_revision.h (tests 5.1 – 5.15) */
+/* test_model_revision.c — Tests for model_revision.h */
 
 #include "test_common.h"
 #include "model_revision.h"
 
-/* Short helper to keep test bodies readable (model create has many params) */
+/* ── helpers ───────────────────────────────────────────────────────── */
+
 static int mr_create_model(db_t *db, const char *name) {
     model_t m;
     memset(&m, 0, sizeof(m));
-    m.name = (char *)name;
-    m.description = (char *)"desc";
-    m.backend = (char *)"openai";
-    m.base_url = (char *)"http://localhost:8080";
+    m.name             = (char *)name;
+    m.description      = (char *)"desc";
+    m.backend          = (char *)"openai";
+    m.base_url         = (char *)"http://localhost:8080";
     m.model_identifier = (char *)"model-id";
-    m.configuration = (char *)"{ }";
-    m.folder_id = 0;
+    m.configuration    = (char *)"{ }";
+    m.folder_id        = 0;
 
     int id = 0;
     int rc = acta_db_model_create(db, &m, &id);
@@ -23,19 +24,18 @@ static int mr_create_model(db_t *db, const char *name) {
 static int mr_update_model(db_t *db, int model_id, const char *name) {
     model_t m;
     memset(&m, 0, sizeof(m));
-    m.id = model_id;
-    m.name = (char *)name;
-    m.description = (char *)"desc";
-    m.backend = (char *)"openai";
-    m.base_url = (char *)"http://localhost:8080";
+    m.id               = model_id;
+    m.name             = (char *)name;
+    m.description      = (char *)"desc";
+    m.backend          = (char *)"openai";
+    m.base_url         = (char *)"http://localhost:8080";
     m.model_identifier = (char *)"model-id";
-    m.configuration = (char *)"{ }";
+    m.configuration    = (char *)"{ }";
 
     return acta_db_model_update(db, &m);
 }
 
-
-/* ---------- 5.1: get — existing ---------- */
+/* ── 5.1: get — existing ──────────────────────────────────────────── */
 static void test_mr_get_existing(void) {
     const char *path = "test/acta_test_mr_get.db";
     remove(path);
@@ -45,7 +45,6 @@ static void test_mr_get_existing(void) {
     int model_id = mr_create_model(db, "RevModel");
     TEST_ASSERT(model_id > 0);
 
-    /* Grab rev 1 by (model_id, 1), then fetch by its row id */
     int err = 0;
     model_revision_t *rev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 1, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
@@ -66,7 +65,7 @@ static void test_mr_get_existing(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.2: get — non-existent ---------- */
+/* ── 5.2: get — non-existent ──────────────────────────────────────── */
 static void test_mr_get_nonexistent(void) {
     const char *path = "test/acta_test_mr_get404.db";
     remove(path);
@@ -76,12 +75,12 @@ static void test_mr_get_nonexistent(void) {
     int err = ACTA_DB_OK;
     model_revision_t *rev = acta_db_model_revision_get(db, 999999, &err);
     TEST_ASSERT_NULL(rev);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found → OK, not NOT_FOUND */
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.3: get_by_model_and_rev — existing ---------- */
+/* ── 5.3: get_by_model_and_rev — existing ─────────────────────────── */
 static void test_mr_get_by_model_rev_existing(void) {
     const char *path = "test/acta_test_mr_gbmrev.db";
     remove(path);
@@ -106,7 +105,7 @@ static void test_mr_get_by_model_rev_existing(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.4: get_by_model_and_rev — missing ---------- */
+/* ── 5.4: get_by_model_and_rev — missing ──────────────────────────── */
 static void test_mr_get_by_model_rev_missing(void) {
     const char *path = "test/acta_test_mr_gbmrev_miss.db";
     remove(path);
@@ -119,12 +118,12 @@ static void test_mr_get_by_model_rev_missing(void) {
     int err = ACTA_DB_OK;
     model_revision_t *rev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 99, &err);
     TEST_ASSERT_NULL(rev);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found → OK, not NOT_FOUND */
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.5: get_by_model_and_rev — deleted revision ---------- */
+/* ── 5.5: get_by_model_and_rev — deleted revision ─────────────────── */
 static void test_mr_get_by_model_rev_deleted(void) {
     const char *path = "test/acta_test_mr_gbmrev_del.db";
     remove(path);
@@ -137,7 +136,6 @@ static void test_mr_get_by_model_rev_deleted(void) {
     int rc = acta_db_model_soft_delete(db, model_id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    /* Deleted revision is row 2 (rev 1 = create, rev 2 = delete) */
     int err = 0;
     model_revision_t *rev = acta_db_model_revision_get_by_model_and_rev(db, model_id, 2, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
@@ -150,7 +148,7 @@ static void test_mr_get_by_model_rev_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.6: list_by_model — multiple revs ---------- */
+/* ── 5.6: list_by_model — multiple revs ───────────────────────────── */
 static void test_mr_list_multiple(void) {
     const char *path = "test/acta_test_mr_list.db";
     remove(path);
@@ -176,7 +174,7 @@ static void test_mr_list_multiple(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.7: list_by_model — ordering ---------- */
+/* ── 5.7: list_by_model — ordering ────────────────────────────────── */
 static void test_mr_list_ordering(void) {
     const char *path = "test/acta_test_mr_list_order.db";
     remove(path);
@@ -195,7 +193,6 @@ static void test_mr_list_ordering(void) {
     TEST_ASSERT_NOT_NULL(items);
     TEST_ASSERT_EQ_INT(count, 3);
 
-    /* Ascending revision order: 1, 2, 3 */
     for (int i = 0; i < count; i++) {
         TEST_ASSERT_EQ_INT(items[i]->revision, i + 1);
     }
@@ -204,7 +201,7 @@ static void test_mr_list_ordering(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.8: list_by_model — includes deleted ---------- */
+/* ── 5.8: list_by_model — includes deleted ────────────────────────── */
 static void test_mr_list_includes_deleted(void) {
     const char *path = "test/acta_test_mr_list_del.db";
     remove(path);
@@ -223,17 +220,140 @@ static void test_mr_list_includes_deleted(void) {
     model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    /* 3 rows: rev1 (create), rev2 (update), rev3 (delete) */
     TEST_ASSERT_EQ_INT(count, 3);
 
-    /* Last row is the deleted revision */
     TEST_ASSERT_NOT_NULL(items[2]->deleted_at);
     acta_db_model_revision_list_free(items, count);
 
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.9: free — valid ---------- */
+/* ── 5.9: list_by_model — pagination limit ────────────────────────── */
+static void test_mr_list_pagination_limit(void) {
+    const char *path = "test/acta_test_mr_list_limit.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel59");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+    mr_update_model(db, model_id, "v3");
+    mr_update_model(db, model_id, "v4");
+    /* 4 revisions total */
+
+    int count = 0;
+    int err = 0;
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 1);
+    TEST_ASSERT_EQ_INT(items[1]->revision, 2);
+    acta_db_model_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.10: list_by_model — pagination offset ──────────────────────── */
+static void test_mr_list_pagination_offset(void) {
+    const char *path = "test/acta_test_mr_list_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel510");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+    mr_update_model(db, model_id, "v3");
+    mr_update_model(db, model_id, "v4");
+    /* 4 revisions total */
+
+    /* Skip 2, take 2 → revisions 3 and 4 */
+    int count = 0;
+    int err = 0;
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 3);
+    TEST_ASSERT_EQ_INT(items[1]->revision, 4);
+    acta_db_model_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.11: list_by_model — offset beyond total ────────────────────── */
+static void test_mr_list_offset_beyond_total(void) {
+    const char *path = "test/acta_test_mr_list_off_beyond.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel511");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+    /* 2 revisions total */
+
+    int count = 99;
+    int err = 0;
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 10, 5, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.12: list_by_model — limit 1 ────────────────────────────────── */
+static void test_mr_list_limit_one(void) {
+    const char *path = "test/acta_test_mr_list_limit1.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel512");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+
+    int count = 0;
+    int err = 0;
+    model_revision_t **items = acta_db_model_revision_list_by_model(db, model_id, 0, 1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_INT(items[0]->revision, 1);
+    acta_db_model_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.13: list_by_model — NULL db ────────────────────────────────── */
+static void test_mr_list_null_db(void) {
+    int count = 0;
+    int err = ACTA_DB_OK;
+    model_revision_t **items = acta_db_model_revision_list_by_model(NULL, 1, 0, 0, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ── 5.14: get — NULL db ──────────────────────────────────────────── */
+static void test_mr_get_null_db(void) {
+    int err = ACTA_DB_OK;
+    model_revision_t *rev = acta_db_model_revision_get(NULL, 1, &err);
+    TEST_ASSERT_NULL(rev);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ── 5.15: get_by_model_and_rev — NULL db ─────────────────────────── */
+static void test_mr_get_by_model_rev_null_db(void) {
+    int err = ACTA_DB_OK;
+    model_revision_t *rev = acta_db_model_revision_get_by_model_and_rev(NULL, 1, 1, &err);
+    TEST_ASSERT_NULL(rev);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ── 5.16: free — valid ───────────────────────────────────────────── */
 static void test_mr_free_valid(void) {
     const char *path = "test/acta_test_mr_free.db";
     remove(path);
@@ -250,13 +370,13 @@ static void test_mr_free_valid(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.10: free — NULL ---------- */
+/* ── 5.17: free — NULL ────────────────────────────────────────────── */
 static void test_mr_free_null(void) {
     acta_db_model_revision_free(NULL);
     TEST_ASSERT(1);
 }
 
-/* ---------- 5.11: list_free — valid ---------- */
+/* ── 5.18: list_free — valid ──────────────────────────────────────── */
 static void test_mr_list_free_valid(void) {
     const char *path = "test/acta_test_mr_lfree.db";
     remove(path);
@@ -278,7 +398,7 @@ static void test_mr_list_free_valid(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.12: get_latest — multiple revisions ---------- */
+/* ── 5.19: get_latest — multiple revisions ────────────────────────── */
 static void test_mr_get_latest_multi(void) {
     const char *path = "test/acta_test_mr_latest_multi.db";
     remove(path);
@@ -302,7 +422,7 @@ static void test_mr_get_latest_multi(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.13: get_latest — single revision ---------- */
+/* ── 5.20: get_latest — single revision ───────────────────────────── */
 static void test_mr_get_latest_single(void) {
     const char *path = "test/acta_test_mr_latest_single.db";
     remove(path);
@@ -324,7 +444,7 @@ static void test_mr_get_latest_single(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.14: get_latest — non-existent model ---------- */
+/* ── 5.21: get_latest — non-existent model ────────────────────────── */
 static void test_mr_get_latest_nonexistent(void) {
     const char *path = "test/acta_test_mr_latest_404.db";
     remove(path);
@@ -334,12 +454,12 @@ static void test_mr_get_latest_nonexistent(void) {
     int err = ACTA_DB_OK;
     model_revision_t *latest = acta_db_model_revision_get_latest(db, 999999, &err);
     TEST_ASSERT_NULL(latest);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* not-found → OK, not NOT_FOUND */
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
 
-/* ---------- 5.15: get_latest — NULL db ---------- */
+/* ── 5.22: get_latest — NULL db ───────────────────────────────────── */
 static void test_mr_get_latest_null_db(void) {
     int err = ACTA_DB_OK;
     model_revision_t *latest = acta_db_model_revision_get_latest(NULL, 1, &err);
@@ -347,22 +467,145 @@ static void test_mr_get_latest_null_db(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
 
-/* ---------- runner ---------- */
+/* ── 5.23: count — multiple revisions ─────────────────────────────── */
+static void test_mr_count_multi(void) {
+    const char *path = "test/acta_test_mr_count_multi.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel523");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+    mr_update_model(db, model_id, "v3");
+
+    int err = ACTA_DB_OK;
+    int count = acta_db_model_revision_count(db, model_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.24: count — single revision ────────────────────────────────── */
+static void test_mr_count_single(void) {
+    const char *path = "test/acta_test_mr_count_single.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel524");
+    TEST_ASSERT(model_id > 0);
+
+    int err = ACTA_DB_OK;
+    int count = acta_db_model_revision_count(db, model_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.25: count — non-existent model ─────────────────────────────── */
+static void test_mr_count_nonexistent(void) {
+    const char *path = "test/acta_test_mr_count_404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = ACTA_DB_OK;
+    int count = acta_db_model_revision_count(db, 999999, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.26: count — includes deleted ───────────────────────────────── */
+static void test_mr_count_includes_deleted(void) {
+    const char *path = "test/acta_test_mr_count_del.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel526");
+    TEST_ASSERT(model_id > 0);
+    mr_update_model(db, model_id, "v2");
+
+    int rc = acta_db_model_soft_delete(db, model_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int err = ACTA_DB_OK;
+    int count = acta_db_model_revision_count(db, model_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);  /* rev1, rev2, rev3 (delete) */
+
+    test_db_teardown(db, path);
+}
+
+/* ── 5.27: count — NULL db ────────────────────────────────────────── */
+static void test_mr_count_null_db(void) {
+    int err = ACTA_DB_OK;
+    int count = acta_db_model_revision_count(NULL, 1, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, -1);
+}
+
+/* ── 5.28: count — NULL err ───────────────────────────────────────── */
+static void test_mr_count_null_err(void) {
+    const char *path = "test/acta_test_mr_count_nulerr.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_model(db, "RevModel528");
+    TEST_ASSERT(model_id > 0);
+
+    int count = acta_db_model_revision_count(db, model_id, NULL);
+    TEST_ASSERT_EQ_INT(count, 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ── runner ────────────────────────────────────────────────────────── */
+
 void run_model_revision_tests(void) {
     fprintf(stderr, "\n=== model_revision tests ===\n");
+
+    /* getters */
     test_mr_get_existing();
     test_mr_get_nonexistent();
     test_mr_get_by_model_rev_existing();
     test_mr_get_by_model_rev_missing();
     test_mr_get_by_model_rev_deleted();
-    test_mr_list_multiple();
-    test_mr_list_ordering();
-    test_mr_list_includes_deleted();
-    test_mr_free_valid();
-    test_mr_free_null();
-    test_mr_list_free_valid();
     test_mr_get_latest_multi();
     test_mr_get_latest_single();
     test_mr_get_latest_nonexistent();
+
+    /* lister */
+    test_mr_list_multiple();
+    test_mr_list_ordering();
+    test_mr_list_includes_deleted();
+    test_mr_list_pagination_limit();
+    test_mr_list_pagination_offset();
+    test_mr_list_offset_beyond_total();
+    test_mr_list_limit_one();
+
+    /* count */
+    test_mr_count_multi();
+    test_mr_count_single();
+    test_mr_count_nonexistent();
+    test_mr_count_includes_deleted();
+    test_mr_count_null_err();
+
+    /* NULL db guards */
+    test_mr_get_null_db();
+    test_mr_get_by_model_rev_null_db();
+    test_mr_list_null_db();
     test_mr_get_latest_null_db();
+    test_mr_count_null_db();
+
+    /* free / list_free */
+    test_mr_free_valid();
+    test_mr_free_null();
+    test_mr_list_free_valid();
 }
