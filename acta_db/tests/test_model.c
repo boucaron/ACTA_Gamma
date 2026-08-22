@@ -147,7 +147,29 @@ static void test_model_create_dup_child(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.10: model_get — existing ---------- */
+/* ---------- 4.10: model_create — NULL out_id ---------- */
+static void test_model_create_null_out_id(void) {
+    const char *path = "test/acta_test_m_nulloutid.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "NoOutId", .backend = "b", .model_identifier = "mid" };
+    int rc = acta_db_model_create(db, &m, NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    /* Verify the row actually landed */
+    int count = 0;
+    int err = 0;
+    model_t **items = acta_db_model_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.11: model_get — existing ---------- */
 static void test_model_get_existing(void) {
     const char *path = "test/acta_test_m_get.db";
     remove(path);
@@ -170,7 +192,7 @@ static void test_model_get_existing(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.11: model_get — non-existent ---------- */
+/* ---------- 4.12: model_get — non-existent ---------- */
 static void test_model_get_nonexistent(void) {
     const char *path = "test/acta_test_m_get404.db";
     remove(path);
@@ -184,7 +206,25 @@ static void test_model_get_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.12: model_get_live — live ---------- */
+/* ---------- 4.13: model_get — NULL err ---------- */
+static void test_model_get_null_err(void) {
+    const char *path = "test/acta_test_m_getnulerr.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    int id;
+    acta_db_model_create(db, &m, &id);
+
+    /* NULL err should not crash */
+    model_t *got = acta_db_model_get(db, id, NULL);
+    TEST_ASSERT_NOT_NULL(got);
+    acta_db_model_free(got);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.14: model_get_live — live ---------- */
 static void test_model_get_live_live(void) {
     const char *path = "test/acta_test_m_live.db";
     remove(path);
@@ -203,7 +243,7 @@ static void test_model_get_live_live(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.13: model_get_live — soft-deleted ---------- */
+/* ---------- 4.15: model_get_live — soft-deleted ---------- */
 static void test_model_get_live_deleted(void) {
     const char *path = "test/acta_test_m_livedel.db";
     remove(path);
@@ -221,7 +261,7 @@ static void test_model_get_live_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.14: model_update — change name ---------- */
+/* ---------- 4.16: model_update — change name ---------- */
 static void test_model_update_name(void) {
     const char *path = "test/acta_test_m_upname.db";
     remove(path);
@@ -242,7 +282,7 @@ static void test_model_update_name(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.15: model_update — change backend ---------- */
+/* ---------- 4.17: model_update — change backend ---------- */
 static void test_model_update_backend(void) {
     const char *path = "test/acta_test_m_upbe.db";
     remove(path);
@@ -262,7 +302,7 @@ static void test_model_update_backend(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.16: model_update — change configuration ---------- */
+/* ---------- 4.18: model_update — change configuration ---------- */
 static void test_model_update_config(void) {
     const char *path = "test/acta_test_m_upconf.db";
     remove(path);
@@ -282,7 +322,7 @@ static void test_model_update_config(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.17: model_update — no actual change ---------- */
+/* ---------- 4.19: model_update — no actual change ---------- */
 static void test_model_update_no_change(void) {
     const char *path = "test/acta_test_m_upnochange.db";
     remove(path);
@@ -303,7 +343,7 @@ static void test_model_update_no_change(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.18: model_update — on soft-deleted model ---------- */
+/* ---------- 4.20: model_update — on soft-deleted model ---------- */
 static void test_model_update_deleted(void) {
     const char *path = "test/acta_test_m_updel.db";
     remove(path);
@@ -318,6 +358,7 @@ static void test_model_update_deleted(void) {
     int rc = acta_db_model_update(db, &update);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
+    /* create=rev1, soft_delete=rev2, failed update=no new rev */
     int count = 0;
     model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, 0, -1, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
@@ -325,7 +366,19 @@ static void test_model_update_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.19: model_soft_delete — happy ---------- */
+/* ---------- 4.21: model_update — NULL args ---------- */
+static void test_model_update_null_args(void) {
+    const char *path = "test/acta_test_m_upnull.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int rc = acta_db_model_update(NULL, NULL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.22: model_soft_delete — happy ---------- */
 static void test_model_soft_delete_happy(void) {
     const char *path = "test/acta_test_m_sd.db";
     remove(path);
@@ -346,7 +399,36 @@ static void test_model_soft_delete_happy(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.20: model_soft_delete — revision with deleted_at ---------- */
+/* ---------- 4.23: model_soft_delete — non-existent ---------- */
+static void test_model_soft_delete_nonexistent(void) {
+    const char *path = "test/acta_test_m_sd404.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int rc = acta_db_model_soft_delete(db, 999999);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.24: model_soft_delete — already deleted ---------- */
+static void test_model_soft_delete_already_deleted(void) {
+    const char *path = "test/acta_test_m_sddel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    int id;
+    acta_db_model_create(db, &m, &id);
+    acta_db_model_soft_delete(db, id);
+
+    /* Second delete: WHERE deleted_at IS NULL matches 0 rows */
+    int rc = acta_db_model_soft_delete(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.25: model_soft_delete — revision with deleted_at ---------- */
 static void test_model_soft_delete_revision(void) {
     const char *path = "test/acta_test_m_sdrev.db";
     remove(path);
@@ -367,7 +449,7 @@ static void test_model_soft_delete_revision(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.21: model_list_in_folder — root ---------- */
+/* ---------- 4.26: model_list_in_folder — root ---------- */
 static void test_model_list_in_folder_root(void) {
     const char *path = "test/acta_test_m_listroot.db";
     remove(path);
@@ -384,7 +466,7 @@ static void test_model_list_in_folder_root(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.22: model_list_in_folder — specific ---------- */
+/* ---------- 4.27: model_list_in_folder — specific ---------- */
 static void test_model_list_in_folder_specific(void) {
     const char *path = "test/acta_test_m_listspec.db";
     remove(path);
@@ -407,7 +489,7 @@ static void test_model_list_in_folder_specific(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.23: model_list_in_folder — empty ---------- */
+/* ---------- 4.28: model_list_in_folder — empty ---------- */
 static void test_model_list_in_folder_empty(void) {
     const char *path = "test/acta_test_m_listempty.db";
     remove(path);
@@ -424,7 +506,7 @@ static void test_model_list_in_folder_empty(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.24: model_list_all — excludes deleted ---------- */
+/* ---------- 4.29: model_list_all — excludes deleted ---------- */
 static void test_model_list_all_excludes_deleted(void) {
     const char *path = "test/acta_test_m_ladel.db";
     remove(path);
@@ -447,7 +529,44 @@ static void test_model_list_all_excludes_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.25-4.27: free / list_free ---------- */
+/* ---------- 4.30: model_list_all — NULL out_count ---------- */
+static void test_model_list_all_null_out_count(void) {
+    const char *path = "test/acta_test_m_lanullout.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    acta_db_model_create(db, &m, &(int){0});
+
+    /* out_count = NULL should not crash */
+    int err = 0;
+    model_t **items = acta_db_model_list_all(db, 0, -1, NULL, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    /* We can't verify count here, just that it didn't crash */
+    acta_db_model_list_free(items, 1);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.31: model_list_in_folder — NULL out_count and NULL err ---------- */
+static void test_model_list_in_folder_null_outs(void) {
+    const char *path = "test/acta_test_m_lifnull.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    acta_db_model_create(db, &m, &(int){0});
+
+    /* Both out_count and err NULL */
+    model_t **items = acta_db_model_list_in_folder(db, 0, 0, -1, NULL, NULL);
+    TEST_ASSERT_NOT_NULL(items);
+    acta_db_model_list_free(items, 1);
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.32-4.34: free / list_free ---------- */
 static void test_model_free_valid(void) {
     const char *path = "test/acta_test_m_free.db";
     remove(path);
@@ -463,6 +582,11 @@ static void test_model_free_valid(void) {
 
 static void test_model_free_null(void) {
     acta_db_model_free(NULL);
+    TEST_ASSERT(1);
+}
+
+static void test_model_list_free_null(void) {
+    acta_db_model_list_free(NULL, 0);
     TEST_ASSERT(1);
 }
 
@@ -485,7 +609,7 @@ static void test_model_list_free_valid(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.28: model_restore — happy path ---------- */
+/* ---------- 4.35: model_restore — happy path ---------- */
 static void test_model_restore_happy(void) {
     const char *path = "test/acta_test_m_restore.db";
     remove(path);
@@ -510,7 +634,7 @@ static void test_model_restore_happy(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.29: model_restore — already live ---------- */
+/* ---------- 4.36: model_restore — already live ---------- */
 static void test_model_restore_already_live(void) {
     const char *path = "test/acta_test_m_restore_live.db";
     remove(path);
@@ -528,7 +652,7 @@ static void test_model_restore_already_live(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.30: model_restore — non-existent ---------- */
+/* ---------- 4.37: model_restore — non-existent ---------- */
 static void test_model_restore_nonexistent(void) {
     const char *path = "test/acta_test_m_restore_404.db";
     remove(path);
@@ -541,7 +665,7 @@ static void test_model_restore_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.31: model_restore — appears in list_all after restore ---------- */
+/* ---------- 4.38: model_restore — appears in list_all after restore ---------- */
 static void test_model_restore_in_list(void) {
     const char *path = "test/acta_test_m_restore_list.db";
     remove(path);
@@ -575,7 +699,7 @@ static void test_model_restore_in_list(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.32: model_move_to_folder — to specific folder ---------- */
+/* ---------- 4.39: model_move_to_folder — to specific folder ---------- */
 static void test_model_move_to_folder_specific(void) {
     const char *path = "test/acta_test_m_move_spec.db";
     remove(path);
@@ -611,7 +735,7 @@ static void test_model_move_to_folder_specific(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.33: model_move_to_folder — to root (folder_id = 0) ---------- */
+/* ---------- 4.40: model_move_to_folder — to root (folder_id = 0) ---------- */
 static void test_model_move_to_folder_root(void) {
     const char *path = "test/acta_test_m_move_root.db";
     remove(path);
@@ -646,7 +770,7 @@ static void test_model_move_to_folder_root(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.34: model_move_to_folder — soft-deleted model ---------- */
+/* ---------- 4.41: model_move_to_folder — soft-deleted model ---------- */
 static void test_model_move_deleted(void) {
     const char *path = "test/acta_test_m_move_del.db";
     remove(path);
@@ -667,7 +791,7 @@ static void test_model_move_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.35: model_move_to_folder — non-existent model ---------- */
+/* ---------- 4.42: model_move_to_folder — non-existent model ---------- */
 static void test_model_move_nonexistent(void) {
     const char *path = "test/acta_test_m_move_404.db";
     remove(path);
@@ -680,14 +804,13 @@ static void test_model_move_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.36: model_list_in_folder — pagination (offset) ---------- */
+/* ---------- 4.43: model_list_in_folder — pagination (offset) ---------- */
 static void test_model_list_in_folder_pagination_offset(void) {
     const char *path = "test/acta_test_m_pagen_off.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    /* Create 3 models in root */
     for (int i = 0; i < 3; i++) {
         char name[32];
         snprintf(name, sizeof(name), "Pag%d", i);
@@ -695,7 +818,6 @@ static void test_model_list_in_folder_pagination_offset(void) {
         acta_db_model_create(db, &m, &(int){0});
     }
 
-    /* offset=1, limit=1 → should return only the 2nd model */
     int count = 0;
     int err = 0;
     model_t **items = acta_db_model_list_in_folder(db, 0, 1, 1, &count, &err);
@@ -707,14 +829,13 @@ static void test_model_list_in_folder_pagination_offset(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.37: model_list_in_folder — pagination (limit) ---------- */
+/* ---------- 4.44: model_list_in_folder — pagination (limit) ---------- */
 static void test_model_list_in_folder_pagination_limit(void) {
     const char *path = "test/acta_test_m_pagen_lim.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    /* Create 5 models in root */
     for (int i = 0; i < 5; i++) {
         char name[32];
         snprintf(name, sizeof(name), "Lim%d", i);
@@ -722,7 +843,6 @@ static void test_model_list_in_folder_pagination_limit(void) {
         acta_db_model_create(db, &m, &(int){0});
     }
 
-    /* offset=0, limit=2 → first 2 only */
     int count = 0;
     int err = 0;
     model_t **items = acta_db_model_list_in_folder(db, 0, 0, 2, &count, &err);
@@ -732,7 +852,6 @@ static void test_model_list_in_folder_pagination_limit(void) {
     TEST_ASSERT_EQ_STR(items[1]->name, "Lim1");
     acta_db_model_list_free(items, count);
 
-    /* offset=2, limit=2 → items 2 and 3 */
     count = 0;
     err = 0;
     items = acta_db_model_list_in_folder(db, 0, 2, 2, &count, &err);
@@ -742,7 +861,6 @@ static void test_model_list_in_folder_pagination_limit(void) {
     TEST_ASSERT_EQ_STR(items[1]->name, "Lim3");
     acta_db_model_list_free(items, count);
 
-    /* offset=4, limit=2 → only 1 remaining */
     count = 0;
     err = 0;
     items = acta_db_model_list_in_folder(db, 0, 4, 2, &count, &err);
@@ -754,14 +872,13 @@ static void test_model_list_in_folder_pagination_limit(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.38: model_list_all — pagination ---------- */
+/* ---------- 4.45: model_list_all — pagination ---------- */
 static void test_model_list_all_pagination(void) {
     const char *path = "test/acta_test_m_pagen_all.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    /* Create 4 models in root */
     for (int i = 0; i < 4; i++) {
         char name[32];
         snprintf(name, sizeof(name), "All%d", i);
@@ -769,7 +886,6 @@ static void test_model_list_all_pagination(void) {
         acta_db_model_create(db, &m, &(int){0});
     }
 
-    /* offset=0, limit=2 */
     int count = 0;
     int err = 0;
     model_t **items = acta_db_model_list_all(db, 0, 2, &count, &err);
@@ -777,7 +893,6 @@ static void test_model_list_all_pagination(void) {
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_list_free(items, count);
 
-    /* offset=2, limit=-1 (remaining) */
     count = 0;
     err = 0;
     items = acta_db_model_list_all(db, 2, -1, &count, &err);
@@ -788,21 +903,19 @@ static void test_model_list_all_pagination(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.39: model_folder_list_children — pagination ---------- */
+/* ---------- 4.46: model_folder_list_children — pagination ---------- */
 static void test_model_folder_list_children_pagination(void) {
     const char *path = "test/acta_test_mf_pagen.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    /* Create 3 child folders under root */
     for (int i = 0; i < 3; i++) {
         char name[32];
         snprintf(name, sizeof(name), "Child%d", i);
         acta_db_model_folder_create(db, name, 0, &(int){0});
     }
 
-    /* offset=0, limit=2 → first 2 children */
     int count = 0;
     int err = 0;
     model_folder_t **items = acta_db_model_folder_list_children(db, 0, 0, 2, &count, &err);
@@ -810,7 +923,6 @@ static void test_model_folder_list_children_pagination(void) {
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_folder_list_free(items, count);
 
-    /* offset=2, limit=-1 → remaining 1 */
     count = 0;
     err = 0;
     items = acta_db_model_folder_list_children(db, 0, 2, -1, &count, &err);
@@ -821,21 +933,19 @@ static void test_model_folder_list_children_pagination(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.40: model_folder_list_all — pagination ---------- */
+/* ---------- 4.47: model_folder_list_all — pagination ---------- */
 static void test_model_folder_list_all_pagination(void) {
     const char *path = "test/acta_test_mf_pagen_all.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    /* Create 4 folders at root */
     for (int i = 0; i < 4; i++) {
         char name[32];
         snprintf(name, sizeof(name), "Folder%d", i);
         acta_db_model_folder_create(db, name, 0, &(int){0});
     }
 
-    /* offset=0, limit=3 */
     int count = 0;
     int err = 0;
     model_folder_t **items = acta_db_model_folder_list_all(db, 0, 3, &count, &err);
@@ -843,7 +953,6 @@ static void test_model_folder_list_all_pagination(void) {
     TEST_ASSERT_EQ_INT(count, 3);
     acta_db_model_folder_list_free(items, count);
 
-    /* offset=3, limit=-1 → last 1 */
     count = 0;
     err = 0;
     items = acta_db_model_folder_list_all(db, 3, -1, &count, &err);
@@ -854,8 +963,158 @@ static void test_model_folder_list_all_pagination(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 4.48: model_count — all (folder_id = 0) ---------- */
+static void test_model_count_all(void) {
+    const char *path = "test/acta_test_m_count_all.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    for (int i = 0; i < 4; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "C%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        acta_db_model_create(db, &m, &(int){0});
+    }
+
+    int err = 0;
+    int n = acta_db_model_count(db, 0, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(n, 4);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.49: model_count — in specific folder ---------- */
+static void test_model_count_in_folder(void) {
+    const char *path = "test/acta_test_m_count_folder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int f1, f2;
+    acta_db_model_folder_create(db, "A", 0, &f1);
+    acta_db_model_folder_create(db, "B", 0, &f2);
+
+    model_t ma1 = { .name = "A1", .backend = "b", .model_identifier = "mid", .folder_id = f1 };
+    model_t ma2 = { .name = "A2", .backend = "b", .model_identifier = "mid", .folder_id = f1 };
+    model_t mb1 = { .name = "B1", .backend = "b", .model_identifier = "mid", .folder_id = f2 };
+    acta_db_model_create(db, &ma1, &(int){0});
+    acta_db_model_create(db, &ma2, &(int){0});
+    acta_db_model_create(db, &mb1, &(int){0});
+
+    int err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_model_count(db, f1, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_model_count(db, f2, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_model_count(db, 0, &err), 3);  /* all */
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.50: model_count — excludes soft-deleted ---------- */
+static void test_model_count_excludes_deleted(void) {
+    const char *path = "test/acta_test_m_count_del.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m1 = { .name = "A", .backend = "b", .model_identifier = "mid" };
+    model_t m2 = { .name = "B", .backend = "b", .model_identifier = "mid" };
+    int id1, id2;
+    acta_db_model_create(db, &m1, &id1);
+    acta_db_model_create(db, &m2, &id2);
+    acta_db_model_soft_delete(db, id2);
+
+    int err = 0;
+    int n = acta_db_model_count(db, 0, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(n, 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.51: model_count — empty (no rows) ---------- */
+static void test_model_count_empty(void) {
+    const char *path = "test/acta_test_m_count_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
+    int n = acta_db_model_count(db, 0, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(n, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.52: model_count — NULL err ---------- */
+static void test_model_count_null_err(void) {
+    const char *path = "test/acta_test_m_count_nulerr.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    acta_db_model_create(db, &m, &(int){0});
+
+    int n = acta_db_model_count(db, 0, NULL);
+    TEST_ASSERT_EQ_INT(n, 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.53: model_count — NULL db ---------- */
+static void test_model_count_null_db(void) {
+    int err = 0;
+    int n = acta_db_model_count(NULL, 0, &err);
+    TEST_ASSERT_EQ_INT(n, -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 4.54: model_count — pagination round-trip ---------- */
+static void test_model_count_pagination_roundtrip(void) {
+    const char *path = "test/acta_test_m_count_page.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* Create 7 models in root */
+    for (int i = 0; i < 7; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "P%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        acta_db_model_create(db, &m, &(int){0});
+    }
+
+    int err = 0;
+    int total = acta_db_model_count(db, 0, &err);
+    TEST_ASSERT_EQ_INT(total, 7);
+
+    /* Simulate: total=7, limit=3 → pages: [0..2],[3..5],[6] */
+    int limit = 3;
+    int pages = (total + limit - 1) / limit;  /* ceil division */
+    TEST_ASSERT_EQ_INT(pages, 3);
+
+    int fetched = 0;
+    for (int page = 0; page < pages; page++) {
+        int count = 0;
+        model_t **items = acta_db_model_list_all(db, page * limit, limit, &count, &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+        fetched += count;
+        acta_db_model_list_free(items, count);
+    }
+    TEST_ASSERT_EQ_INT(fetched, total);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- runner ---------- */
+
 void run_model_tests(void) {
     fprintf(stderr, "\n=== model tests ===\n");
+
+    /* create */
     test_model_create_root();
     test_model_create_in_folder();
     test_model_create_initial_revision();
@@ -865,38 +1124,70 @@ void run_model_tests(void) {
     test_model_create_invalid_folder();
     test_model_create_dup_root();
     test_model_create_dup_child();
+    test_model_create_null_out_id();
+
+    /* get */
     test_model_get_existing();
     test_model_get_nonexistent();
+    test_model_get_null_err();
+
+    /* get_live */
     test_model_get_live_live();
     test_model_get_live_deleted();
+
+    /* update */
     test_model_update_name();
     test_model_update_backend();
     test_model_update_config();
     test_model_update_no_change();
     test_model_update_deleted();
+    test_model_update_null_args();
+
+    /* soft_delete */
     test_model_soft_delete_happy();
+    test_model_soft_delete_nonexistent();
+    test_model_soft_delete_already_deleted();
     test_model_soft_delete_revision();
+
+    /* list */
     test_model_list_in_folder_root();
     test_model_list_in_folder_specific();
     test_model_list_in_folder_empty();
     test_model_list_all_excludes_deleted();
+    test_model_list_all_null_out_count();
+    test_model_list_in_folder_null_outs();
+
+    /* free */
     test_model_free_valid();
     test_model_free_null();
+    test_model_list_free_null();
     test_model_list_free_valid();
+
     /* restore */
     test_model_restore_happy();
     test_model_restore_already_live();
     test_model_restore_nonexistent();
     test_model_restore_in_list();
+
     /* move_to_folder */
     test_model_move_to_folder_specific();
     test_model_move_to_folder_root();
     test_model_move_deleted();
     test_model_move_nonexistent();
+
     /* pagination */
     test_model_list_in_folder_pagination_offset();
     test_model_list_in_folder_pagination_limit();
     test_model_list_all_pagination();
     test_model_folder_list_children_pagination();
     test_model_folder_list_all_pagination();
+
+    /* count */
+    test_model_count_all();
+    test_model_count_in_folder();
+    test_model_count_excludes_deleted();
+    test_model_count_empty();
+    test_model_count_null_err();
+    test_model_count_null_db();
+    test_model_count_pagination_roundtrip();
 }
