@@ -1,7 +1,7 @@
-/* test_skill_folder.c — Tests for skill.h (tests 6.1 – 6.18) */
+/* test_skill_folder.c — Tests for skill_folder.h (tests 6.1 – 6.30) */
 
 #include "test_common.h"
-#include "skill.h"
+#include "skill_folder.h"
 
 /* ---------- 6.1: create — root ---------- */
 static void test_sf_create_root(void) {
@@ -473,7 +473,7 @@ static void test_sf_restore_happy(void) {
     skill_folder_t **items = acta_db_skill_folder_list_all(db, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
-    acta_db_skill_folder_list_free(items, count);
+    if (items != NULL) acta_db_skill_folder_list_free(items, count);
 
     /* Restore it */
     rc = acta_db_skill_folder_restore(db, id);
@@ -484,7 +484,7 @@ static void test_sf_restore_happy(void) {
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_STR(f->name, "Tempo");
-    TEST_ASSERT_NULL(f->deleted_at);   /* live again */
+    TEST_ASSERT_NULL(f->deleted_at);
     acta_db_skill_folder_free(f);
 
     /* list_all should now include it */
@@ -544,31 +544,270 @@ static void test_sf_restore_already_live(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 6.23: count_children — with children ---------- */
+static void test_sf_count_children_with(void) {
+    const char *path = "test/acta_test_sf_count_children.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0;
+    int rc = acta_db_skill_folder_create(db, "Parent", 0, &parent_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int child_id = 0;
+    for (int i = 0; i < 4; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Child%d", i);
+        rc = acta_db_skill_folder_create(db, name, parent_id, &child_id);
+        TEST_ASSERT_EQ_INT(rc, 0);
+    }
+
+    int err = 0;
+    int count = acta_db_skill_folder_count_children(db, parent_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 4);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.24: count_children — no children (empty) ---------- */
+static void test_sf_count_children_empty(void) {
+    const char *path = "test/acta_test_sf_count_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    int rc = acta_db_skill_folder_create(db, "Lonely", 0, &id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int err = 0;
+    int count = acta_db_skill_folder_count_children(db, id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.25: count_children — excludes soft-deleted ---------- */
+static void test_sf_count_children_excludes_deleted(void) {
+    const char *path = "test/acta_test_sf_count_children_del.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0;
+    int rc = acta_db_skill_folder_create(db, "Parent", 0, &parent_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int c1 = 0, c2 = 0, c3 = 0;
+    rc = acta_db_skill_folder_create(db, "A", parent_id, &c1);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "B", parent_id, &c2);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "C", parent_id, &c3);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* Delete one child */
+    rc = acta_db_skill_folder_soft_delete(db, c2);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int err = 0;
+    int count = acta_db_skill_folder_count_children(db, parent_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);  /* c1 and c3 remain */
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.26: count_children — NULL db ---------- */
+static void test_sf_count_children_null_db(void) {
+    int err = 0;
+    int count = acta_db_skill_folder_count_children(NULL, 1, &err);
+    TEST_ASSERT_EQ_INT(count, -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 6.27: count_children — NULL err (should not crash) ---------- */
+static void test_sf_count_children_null_err(void) {
+    const char *path = "test/acta_test_sf_count_null_err.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0;
+    int rc = acta_db_skill_folder_create(db, "P", 0, &parent_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "C", parent_id, &(int){0});
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* err=NULL: must not crash */
+    int count = acta_db_skill_folder_count_children(db, parent_id, NULL);
+    TEST_ASSERT_EQ_INT(count, 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.28: count_all — mixed (some deleted) ---------- */
+static void test_sf_count_all_mixed(void) {
+    const char *path = "test/acta_test_sf_count_all.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id1 = 0, id2 = 0, id3 = 0;
+    int rc = acta_db_skill_folder_create(db, "One", 0, &id1);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "Two", 0, &id2);
+    TEST_ASSERT_EQ_INT(rc, 0);
+    rc = acta_db_skill_folder_create(db, "Three", 0, &id3);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    /* Delete one */
+    rc = acta_db_skill_folder_soft_delete(db, id2);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int err = 0;
+    int count = acta_db_skill_folder_count_all(db, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);  /* One + Three */
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.29: count_all — empty table ---------- */
+static void test_sf_count_all_empty(void) {
+    const char *path = "test/acta_test_sf_count_all_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
+    int count = acta_db_skill_folder_count_all(db, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.30: count_all — NULL db ---------- */
+static void test_sf_count_all_null_db(void) {
+    int err = 0;
+    int count = acta_db_skill_folder_count_all(NULL, &err);
+    TEST_ASSERT_EQ_INT(count, -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* ---------- 6.31: count_all — NULL err (should not crash) ---------- */
+static void test_sf_count_all_null_err(void) {
+    const char *path = "test/acta_test_sf_count_all_null_err.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = 0;
+    int rc = acta_db_skill_folder_create(db, "Solo", 0, &id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int count = acta_db_skill_folder_count_all(db, NULL);
+    TEST_ASSERT_EQ_INT(count, 1);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.32: list_children — negative offset → INVALID ---------- */
+static void test_sf_list_children_negative_offset(void) {
+    const char *path = "test/acta_test_sf_neg_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0;
+    int rc = acta_db_skill_folder_create(db, "P", 0, &parent_id);
+    TEST_ASSERT_EQ_INT(rc, 0);
+
+    int count = 99, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_children(db, parent_id, -1, 10, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 6.33: list_all — negative offset → INVALID ---------- */
+static void test_sf_list_all_negative_offset(void) {
+    const char *path = "test/acta_test_sf_list_all_neg_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = 99, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all(db, -5, 10, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
 /* ---------- runner ---------- */
 void run_skill_folder_tests(void) {
     fprintf(stderr, "\n=== skill_folder tests ===\n");
+
+    /* create */
     test_sf_create_root();
     test_sf_create_child();
     test_sf_create_duplicate_root();
     test_sf_create_duplicate_child();
     test_sf_create_invalid_parent();
+
+    /* get */
     test_sf_get_existing();
     test_sf_get_nonexistent();
+
+    /* rename */
     test_sf_rename_happy();
     test_sf_rename_duplicate();
+
+    /* soft_delete */
     test_sf_soft_delete_happy();
     test_sf_soft_delete_has_children();
+
+    /* listers */
     test_sf_list_children_with();
     test_sf_list_children_empty();
     test_sf_list_all_excludes_deleted();
+
+    /* free */
     test_sf_free_valid();
     test_sf_free_null();
     test_sf_list_free_valid();
+
+    /* pagination */
     test_sf_list_children_paged_first();
     test_sf_list_children_paged_second();
     test_sf_list_all_paged();
+
+    /* restore */
     test_sf_restore_happy();
     test_sf_restore_nonexistent();
     test_sf_restore_null_db();
     test_sf_restore_already_live();
+
+    /* counts */
+    test_sf_count_children_with();
+    test_sf_count_children_empty();
+    test_sf_count_children_excludes_deleted();
+    test_sf_count_children_null_db();
+    test_sf_count_children_null_err();
+    test_sf_count_all_mixed();
+    test_sf_count_all_empty();
+    test_sf_count_all_null_db();
+    test_sf_count_all_null_err();
+
+    /* offset validation */
+    test_sf_list_children_negative_offset();
+    test_sf_list_all_negative_offset();
 }
