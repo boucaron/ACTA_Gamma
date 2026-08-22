@@ -199,8 +199,6 @@ skill_t *acta_db_skill_get(db_t *db, int id, int *err) {
         result = row_to_skill(stmt);
     sqlite3_finalize(stmt);
 
-    if (!result && (err == ACTA_DB_ERR_ALLOC))
-        ; /* unreachable; defensive */
     if (err) *err = ACTA_DB_OK;
     return result;
 }
@@ -235,23 +233,6 @@ skill_t *acta_db_skill_get_live(db_t *db, int id, int *err) {
  * ═══════════════════════════════════════════════════════════════════ */
 
 #define SKILL_INIT_CAP 16
-
-/* Shared helper: run a SELECT, collect rows into a growable array.
- * Returns the array (or NULL if count == 0).
- * On OOM frees everything, sets *err, returns NULL. */
-static skill_t **collect_rows(db_t *db, const char *sql,
-                             int n_bind_int, int bind_int_vals[],
-                             int n_bind_text, const char *bind_text_vals[],
-                             int *out_count, int *err)
-{
-    (void)n_bind_int;
-    (void)bind_int_vals;
-    (void)n_bind_text;
-    (void)bind_text_vals;
-    /* This helper is replaced by direct inline code below for clarity.
-       Kept as a placeholder for a future shared collector. */
-    return NULL;
-}
 
 /* ── list_in_folder ─────────────────────────────────────────────── */
 

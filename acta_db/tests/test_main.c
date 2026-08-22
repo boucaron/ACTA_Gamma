@@ -7,7 +7,14 @@ void run_integration_tests(void);
 void run_model_tests(void);
 void run_model_folder_tests(void);
 void run_model_revision_tests(void);
+
 void run_skill_tests(void);
+void run_skill_count_tests(void);
+void run_skill_crud_tests(void);
+void run_skill_pagination_tests(void);
+void run_skill_placement_tests(void);
+
+
 void run_skill_folder_tests(void);
 void run_skill_revision_tests(void);
 void run_context_tests(void);
@@ -22,11 +29,18 @@ int main(void) {
     run_model_folder_tests();
     run_model_tests();
     run_model_revision_tests();
+
     run_skill_folder_tests();
-    run_skill_tests();
-    run_skill_revision_tests();
     
-  
+    run_skill_tests(); // Split
+    run_skill_count_tests();
+    run_skill_crud_tests();
+    run_skill_pagination_tests();
+    run_skill_placement_tests();
+
+    run_skill_revision_tests(); 
+    
+
     run_execution_create_tests();
     run_execution_lifecycle_tests();
     run_execution_list_tests();
