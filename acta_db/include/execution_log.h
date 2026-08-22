@@ -54,14 +54,13 @@ execution_log_t *acta_db_execution_log_get(db_t *db,
                                            int id,
                                            int *err);
 
-
 /*
- * Lister – target pattern:  T ** foo_list(…, int *out_count, int *err);
+ * Lister – paginated rows for a given execution, ordered by id.
  *
  *   Pagination:
- *     offset  – number of rows to skip (0-based).
- *     limit   – maximum number of rows to return.
- *               Pass -1 (or INT_MAX) to fetch all remaining rows.
+ *     offset – number of rows to skip (0-based).
+ *     limit  – maximum number of rows to return.
+ *              <= 0 means no limit (return all matching rows).
  *
  *   success / rows found → returns valid execution_log_t ** (array of
  *                          heap-allocated structs), *err = ACTA_DB_OK.
@@ -73,14 +72,23 @@ execution_log_t *acta_db_execution_log_get(db_t *db,
 execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
                                                           int execution_id,
                                                           int offset, int limit,
-                                                          int *out_count,
-                                                          int *err);
+                                                          int *out_count, int *err);
 
-/* Free a single log entry (its string fields + the struct). */
+/*
+ * Count – total number of log rows for a given execution (ignoring pagination).
+ *
+ * Returns the row count (>= 0), or -1 on error (*err set).
+ * err may be NULL.
+ */
+int acta_db_execution_log_count(db_t *db,
+                                int execution_id,
+                                int *err);
+
+/* Free a single log entry (its string fields + the struct). Safe with NULL. */
 void acta_db_execution_log_free(execution_log_t *log);
 
 /* Free an array of log entries produced by the lister, plus the array itself.
- * items is the pointer returned by acta_db_execution_log_list_by_execution. */
+ * Frees each element and the pointer array. Safe with NULL. */
 void acta_db_execution_log_list_free(execution_log_t **items, int count);
 
 #ifdef __cplusplus

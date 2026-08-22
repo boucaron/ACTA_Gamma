@@ -11,9 +11,6 @@ static char *col_text_dup(sqlite3_stmt *stmt, int col) {
     return z ? strdup((const char *)z) : NULL;
 }
 
-/**
- * Returns 1 if `level` matches a known log-level constant, 0 otherwise.
- */
 static int acta_log_level_is_valid(const char *level) {
     if (!level) return 0;
     return strcmp(level, ACTA_LOG_LEVEL_DEBUG) == 0
@@ -34,12 +31,17 @@ static execution_log_t *row_to_execution_log(sqlite3_stmt *stmt) {
     log->metadata     = col_text_dup(stmt, 5);
     log->created_at   = col_text_dup(stmt, 6);
 
-    /* Required fields must have been allocated */
     if (!log->level || !log->event) {
         acta_db_execution_log_free(log);
         return NULL;
     }
     return log;
+}
+
+/* Translate the public limit contract (<= 0 = no limit) into SQLite's
+ * own sentinel (-1 = no limit, 0 = zero rows). */
+static int sql_limit(int limit) {
+    return limit <= 0 ? -1 : limit;
 }
 
 /* ------------------------------------------------------------------ */
@@ -82,7 +84,7 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
 }
 
 /* ------------------------------------------------------------------ */
-/*  Getter – fetch a single row by its primary key.                    */
+/*  Getter                                                               */
 /* ------------------------------------------------------------------ */
 
 execution_log_t *acta_db_execution_log_get(db_t *db, int id, int *err) {
@@ -111,7 +113,7 @@ execution_log_t *acta_db_execution_log_get(db_t *db, int id, int *err) {
         log  = row_to_execution_log(stmt);
         code = log ? ACTA_DB_OK : ACTA_DB_ERR_ALLOC;
     } else if (rc == SQLITE_DONE) {
-        code = ACTA_DB_ERR_NOT_FOUND;
+        code = ACTA_DB_OK;
     } else {
         code = ACTA_DB_ERR_SQL;
     }
@@ -119,16 +121,11 @@ execution_log_t *acta_db_execution_log_get(db_t *db, int id, int *err) {
     sqlite3_finalize(stmt);
 
     if (err) *err = code;
-    return log;          /* non-NULL ⇔ row found & allocated */
+    return log;
 }
 
-
-
 /* ------------------------------------------------------------------ */
-/*  Lister – returns execution_log_t ** (array of heap-allocated ptrs)   */
-/*  on success; NULL on not-found or real failure.                       */
-/*  Supports pagination via offset (rows to skip) and limit (max rows;   */
-/*  -1 means "no limit").                                               */
+/*  Lister                                                               */
 /* ------------------------------------------------------------------ */
 
 execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
@@ -142,7 +139,6 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
     }
 
     if (offset < 0) offset = 0;
-    /* limit < 0 → SQLite treats LIMIT -1 as "no upper bound". */
 
     if (out_count) *out_count = 0;
 
@@ -158,16 +154,14 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, execution_id);
-    sqlite3_bind_int(stmt, 2, limit);    /* -1 → unlimited */
-    sqlite3_bind_int(stmt, 3, offset);   /* rows to skip */
+    sqlite3_bind_int(stmt, 2, sql_limit(limit));
+    sqlite3_bind_int(stmt, 3, offset);
 
     int    count    = 0;
     size_t capacity = 0;
-    execution_log_t **items = NULL;   /* NULL until first row is seen */
+    execution_log_t **items = NULL;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        /* Grow the pointer array as needed.
-         * realloc(NULL, n) ≡ malloc(n), so the first iteration allocates. */
         if ((size_t)count >= capacity) {
             size_t new_cap = capacity ? capacity * 2 : 8;
             execution_log_t **tmp = realloc(items, new_cap * sizeof *tmp);
@@ -185,10 +179,10 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
         if (!item) {
             acta_db_execution_log_list_free(items, count);
             sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_INVALID;
+            if (err) *err = ACTA_DB_ERR_ALLOC;
             return NULL;
         }
-        items[count++] = item;       /* store the pointer directly */
+        items[count++] = item;
     }
 
     sqlite3_finalize(stmt);
@@ -196,12 +190,43 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
     if (out_count) *out_count = count;
     if (err)       *err       = ACTA_DB_OK;
 
-    /* Zero rows → not-found: release the (possibly NULL) array, return NULL. */
     if (count == 0) {
         free(items);
         return NULL;
     }
     return items;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Count                                                                */
+/* ------------------------------------------------------------------ */
+
+int acta_db_execution_log_count(db_t *db, int execution_id, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
+
+    const char *sql =
+        "SELECT COUNT(*) FROM execution_logs WHERE execution_id = ?;";
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
+
+    sqlite3_bind_int(stmt, 1, execution_id);
+    int rc = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        rc = (int)sqlite3_column_int64(stmt, 0);
+        if (err) *err = ACTA_DB_OK;
+    } else {
+        if (err) *err = ACTA_DB_ERR_SQL;
+    }
+
+    sqlite3_finalize(stmt);
+    return rc;
 }
 
 /* ------------------------------------------------------------------ */
