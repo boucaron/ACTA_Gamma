@@ -1,3 +1,4 @@
+/* model.c */
 #include "internal.h"
 #include "model.h"
 #include "db.h"
@@ -21,8 +22,6 @@ static model_t *row_to_model(sqlite3_stmt *stmt) {
     return m;
 }
 
-/* Shared: grow a dynamic array of model_t* by one slot.
- * Returns NULL on allocation failure (item is NOT freed by this helper). */
 static model_t **list_push(model_t **items, int *count, model_t *item) {
     model_t **tmp = realloc(items, sizeof(model_t *) * (size_t)(*count + 1));
     if (!tmp) return NULL;
@@ -116,6 +115,7 @@ int acta_db_model_soft_delete(db_t *db, int id) {
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
+/* FIX 3: restore – already-live is a no-op (OK), not NOT_FOUND. */
 int acta_db_model_restore(db_t *db, int id) {
     if (!db) return ACTA_DB_ERR_INVALID;
 
@@ -131,11 +131,38 @@ int acta_db_model_restore(db_t *db, int id) {
     int changes = rc == SQLITE_DONE ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+
+    /* Row was not updated: either it doesn't exist, or it is already live. */
+    sqlite3_stmt *chk;
+    const char *q = "SELECT 1 FROM models WHERE id = ? LIMIT 1;";
+    if (sqlite3_prepare_v2(db->handle, q, -1, &chk, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(chk, 1, id);
+    int exists = (sqlite3_step(chk) == SQLITE_ROW);
+    sqlite3_finalize(chk);
+
+    return exists ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
+/* FIX 4: move_to_folder – validate target folder before updating. */
 int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
     if (!db) return ACTA_DB_ERR_INVALID;
+
+    /* If moving into a named folder, verify it exists and is live. */
+    if (folder_id != 0) {
+        sqlite3_stmt *chk;
+        const char *q =
+            "SELECT 1 FROM model_folders WHERE id = ? AND deleted_at IS NULL LIMIT 1;";
+        if (sqlite3_prepare_v2(db->handle, q, -1, &chk, NULL) != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
+        sqlite3_bind_int(chk, 1, folder_id);
+        if (sqlite3_step(chk) != SQLITE_ROW) {
+            sqlite3_finalize(chk);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
+        sqlite3_finalize(chk);
+    }
 
     const char *sql =
         "UPDATE models SET folder_id = ?, updated_at = datetime('now') "
@@ -184,13 +211,12 @@ model_t *acta_db_model_get(db_t *db, int id, int *err) {
 
     if (err) {
         if (found && !result)
-            *err = ACTA_DB_ERR_ALLOC;   /* row exists but calloc failed */
+            *err = ACTA_DB_ERR_ALLOC;
         else
-            *err = ACTA_DB_OK;          /* not-found OR success */
+            *err = ACTA_DB_OK;
     }
     return result;
 }
-
 
 model_t *acta_db_model_get_live(db_t *db, int id, int *err) {
     if (!db) {
@@ -226,6 +252,7 @@ model_t *acta_db_model_get_live(db_t *db, int id, int *err) {
 
 /* ---------- listers ---------- */
 
+/* FIX 2: ORDER BY id (was ORDER BY name). */
 model_t **acta_db_model_list_in_folder(db_t *db,
                                        int folder_id,
                                        int offset, int limit,
@@ -235,16 +262,15 @@ model_t **acta_db_model_list_in_folder(db_t *db,
         return NULL;
     }
 
-    /* Build WHERE: folder filter + soft-delete filter */
     const char *sql = folder_id == 0
         ? "SELECT id, folder_id, name, description, backend, base_url, "
           "model_identifier, configuration, created_at, updated_at, deleted_at "
           "FROM models WHERE folder_id IS NULL AND deleted_at IS NULL "
-          "ORDER BY name LIMIT ? OFFSET ?;"
+          "ORDER BY id LIMIT ? OFFSET ?;"
         : "SELECT id, folder_id, name, description, backend, base_url, "
           "model_identifier, configuration, created_at, updated_at, deleted_at "
           "FROM models WHERE folder_id = ? AND deleted_at IS NULL "
-          "ORDER BY name LIMIT ? OFFSET ?;";
+          "ORDER BY id LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -255,7 +281,7 @@ model_t **acta_db_model_list_in_folder(db_t *db,
     int param = 1;
     if (folder_id != 0)
         sqlite3_bind_int(stmt, param++, folder_id);
-    sqlite3_bind_int(stmt, param++, limit > 0 ? limit : -1);   /* -1 = no limit */
+    sqlite3_bind_int(stmt, param++, limit > 0 ? limit : -1);
     sqlite3_bind_int(stmt, param,   offset > 0 ? offset : 0);
 
     int count = 0;
@@ -288,6 +314,7 @@ model_t **acta_db_model_list_in_folder(db_t *db,
     return items;
 }
 
+/* FIX 2: ORDER BY id (was ORDER BY name). */
 model_t **acta_db_model_list_all(db_t *db,
                                  int offset, int limit,
                                  int *out_count, int *err) {
@@ -300,7 +327,7 @@ model_t **acta_db_model_list_all(db_t *db,
         "SELECT id, folder_id, name, description, backend, base_url, "
         "model_identifier, configuration, created_at, updated_at, deleted_at "
         "FROM models WHERE deleted_at IS NULL "
-        "ORDER BY name LIMIT ? OFFSET ?;";
+        "ORDER BY id LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -342,16 +369,17 @@ model_t **acta_db_model_list_all(db_t *db,
 
 /* ---------- count ---------- */
 
-int acta_db_model_count(db_t *db, int folder_id, int *err) {
+/* FIX 1: split into two functions mirroring the listers. */
+
+/* Mirrors acta_db_model_list_in_folder: 0 = root only. */
+int acta_db_model_count_in_folder(db_t *db, int folder_id, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return -1;
     }
 
-    /* folder_id == 0 means "all folders" (no folder filter).
-     * This mirrors the "total" use-case for pagination UI. */
     const char *sql = folder_id == 0
-        ? "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL;"
+        ? "SELECT COUNT(*) FROM models WHERE folder_id IS NULL AND deleted_at IS NULL;"
         : "SELECT COUNT(*) FROM models WHERE folder_id = ? AND deleted_at IS NULL;";
 
     sqlite3_stmt *stmt;
@@ -361,6 +389,34 @@ int acta_db_model_count(db_t *db, int folder_id, int *err) {
     }
     if (folder_id != 0)
         sqlite3_bind_int(stmt, 1, folder_id);
+
+    int count = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        count = (int)sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    if (count < 0) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+    } else if (err) {
+        *err = ACTA_DB_OK;
+    }
+    return count;
+}
+
+/* Mirrors acta_db_model_list_all: no folder filter. */
+int acta_db_model_count_all(db_t *db, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
+
+    const char *sql =
+        "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
 
     int count = -1;
     if (sqlite3_step(stmt) == SQLITE_ROW)

@@ -152,15 +152,30 @@ model_t **acta_db_model_list_all(db_t *db,
                                  int *out_count, int *err);
 
 /*
- * Count – total number of model rows matching the given folder filter.
+ * Count – live models in a specific folder.
  *
- *   folder_id – restrict to this folder (0 = all folders, i.e. no filter).
+ *   folder_id – the folder to count (0 = root-level only).
  *
  * Returns the row count (>= 0) on success, or -1 on failure.
  * If err is non-NULL it is set to ACTA_DB_OK or a negative ACTA_DB_ERR_*.
  * err may be NULL.
+ *
+ * Mirrors acta_db_model_list_in_folder: the count equals the number of
+ * rows you would get from list_in_folder(db, folder_id, 0, -1, …).
  */
-int      acta_db_model_count(db_t *db, int folder_id, int *err);
+int      acta_db_model_count_in_folder(db_t *db, int folder_id, int *err);
+
+/*
+ * Count – all live models (across all folders).
+ *
+ * Returns the row count (>= 0) on success, or -1 on failure.
+ * If err is non-NULL it is set to ACTA_DB_OK or a negative ACTA_DB_ERR_*.
+ * err may be NULL.
+ *
+ * Mirrors acta_db_model_list_all: the count equals the number of rows
+ * you would get from list_all(db, 0, -1, …).
+ */
+int      acta_db_model_count_all(db_t *db, int *err);
 
 /* ---------- free ---------- */
 

@@ -117,6 +117,7 @@ int acta_db_skill_soft_delete(db_t *db, int id) {
     return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
+/* FIX 3: already-live is a no-op (OK), not NOT_FOUND. */
 int acta_db_skill_restore(db_t *db, int id) {
     if (!db) return ACTA_DB_ERR_INVALID;
 
@@ -135,7 +136,19 @@ int acta_db_skill_restore(db_t *db, int id) {
     }
     int changed = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+
+    /* Row was not updated: distinguish "not found" from "already live". */
+    sqlite3_stmt *chk;
+    if (sqlite3_prepare_v2(db->handle,
+                          "SELECT 1 FROM skills WHERE id = ? LIMIT 1;",
+                          -1, &chk, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(chk, 1, id);
+    int exists = (sqlite3_step(chk) == SQLITE_ROW);
+    sqlite3_finalize(chk);
+
+    return exists ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id) {
@@ -199,7 +212,12 @@ skill_t *acta_db_skill_get(db_t *db, int id, int *err) {
         result = row_to_skill(stmt);
     sqlite3_finalize(stmt);
 
-    if (err) *err = ACTA_DB_OK;
+    if (err) {
+        if (result == NULL && id > 0)
+            *err = ACTA_DB_OK;   /* not-found or alloc-fail; caller checks ptr */
+        else
+            *err = ACTA_DB_OK;
+    }
     return result;
 }
 
@@ -236,6 +254,7 @@ skill_t *acta_db_skill_get_live(db_t *db, int id, int *err) {
 
 /* ── list_in_folder ─────────────────────────────────────────────── */
 
+/* FIX 2: ORDER BY id (was ORDER BY name). */
 skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id,
                                        int offset, int limit,
                                        int *out_count, int *err)
@@ -247,30 +266,29 @@ skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id,
     }
     if (offset < 0) offset = 0;
 
-    /* Build SQL */
     char sql_buf[512];
     if (limit > 0) {
         if (folder_id == 0)
             snprintf(sql_buf, sizeof(sql_buf),
                      "SELECT " SKILL_COLS " FROM skills"
                      " WHERE folder_id IS NULL AND deleted_at IS NULL"
-                     " ORDER BY name LIMIT ? OFFSET ?;");
+                     " ORDER BY id LIMIT ? OFFSET ?;");
         else
             snprintf(sql_buf, sizeof(sql_buf),
                      "SELECT " SKILL_COLS " FROM skills"
                      " WHERE folder_id = ? AND deleted_at IS NULL"
-                     " ORDER BY name LIMIT ? OFFSET ?;");
+                     " ORDER BY id LIMIT ? OFFSET ?;");
     } else {
         if (folder_id == 0)
             snprintf(sql_buf, sizeof(sql_buf),
                      "SELECT " SKILL_COLS " FROM skills"
                      " WHERE folder_id IS NULL AND deleted_at IS NULL"
-                     " ORDER BY name;");
+                     " ORDER BY id;");
         else
             snprintf(sql_buf, sizeof(sql_buf),
                      "SELECT " SKILL_COLS " FROM skills"
                      " WHERE folder_id = ? AND deleted_at IS NULL"
-                     " ORDER BY name;");
+                     " ORDER BY id;");
     }
 
     sqlite3_stmt *stmt;
@@ -294,7 +312,7 @@ skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id,
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         if (count >= cap) {
             int new_cap = (cap == 0) ? SKILL_INIT_CAP : cap * 2;
-            skill_t **tmp = realloc(items, sizeof(skill_t *) * new_cap);
+            skill_t **tmp = realloc(items, sizeof(skill_t *) * (size_t)new_cap);
             if (!tmp) {
                 for (int i = 0; i < count; i++) acta_db_skill_free(items[i]);
                 free(items);
@@ -321,11 +339,12 @@ skill_t **acta_db_skill_list_in_folder(db_t *db, int folder_id,
 
     if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
-    return items; /* NULL if count == 0 (never allocated) */
+    return items; /* NULL if count == 0 */
 }
 
 /* ── list_all ───────────────────────────────────────────────────── */
 
+/* FIX 2: ORDER BY id (was ORDER BY name). */
 skill_t **acta_db_skill_list_all(db_t *db,
                                  int offset, int limit,
                                  int *out_count, int *err)
@@ -342,12 +361,12 @@ skill_t **acta_db_skill_list_all(db_t *db,
         snprintf(sql_buf, sizeof(sql_buf),
                  "SELECT " SKILL_COLS " FROM skills"
                  " WHERE deleted_at IS NULL"
-                 " ORDER BY name LIMIT ? OFFSET ?;");
+                 " ORDER BY id LIMIT ? OFFSET ?;");
     else
         snprintf(sql_buf, sizeof(sql_buf),
                  "SELECT " SKILL_COLS " FROM skills"
                  " WHERE deleted_at IS NULL"
-                 " ORDER BY name;");
+                 " ORDER BY id;");
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql_buf, -1, &stmt, NULL) != SQLITE_OK) {
@@ -367,7 +386,7 @@ skill_t **acta_db_skill_list_all(db_t *db,
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         if (count >= cap) {
             int new_cap = (cap == 0) ? SKILL_INIT_CAP : cap * 2;
-            skill_t **tmp = realloc(items, sizeof(skill_t *) * new_cap);
+            skill_t **tmp = realloc(items, sizeof(skill_t *) * (size_t)new_cap);
             if (!tmp) {
                 for (int i = 0; i < count; i++) acta_db_skill_free(items[i]);
                 free(items);
@@ -394,53 +413,72 @@ skill_t **acta_db_skill_list_all(db_t *db,
 
     if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
-    return items;
+    return items; /* NULL if count == 0 */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Count
  * ═══════════════════════════════════════════════════════════════════ */
 
-int acta_db_skill_count(db_t *db, int folder_id, int *err) {
-    if (err) *err = ACTA_DB_OK;
+/* FIX 1: split into two functions mirroring the listers. */
+
+/* Mirrors acta_db_skill_list_in_folder: 0 = root only. */
+int acta_db_skill_count_in_folder(db_t *db, int folder_id, int *err) {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return -1;
     }
 
-    /*
-     * folder_id semantics (mirrors the listers):
-     *   < 0  → all live skills          (matches list_all)
-     *   == 0 → root-level only          (matches list_in_folder(db, 0))
-     *   > 0  → specific folder          (matches list_in_folder(db, X))
-     */
-
-    const char *sql;
-    if (folder_id < 0)
-        sql = "SELECT COUNT(*) FROM skills WHERE deleted_at IS NULL;";
-    else if (folder_id == 0)
-        sql = "SELECT COUNT(*) FROM skills"
-              " WHERE folder_id IS NULL AND deleted_at IS NULL;";
-    else
-        sql = "SELECT COUNT(*) FROM skills"
-              " WHERE folder_id = ? AND deleted_at IS NULL;";
+    const char *sql = folder_id == 0
+        ? "SELECT COUNT(*) FROM skills WHERE folder_id IS NULL AND deleted_at IS NULL;"
+        : "SELECT COUNT(*) FROM skills WHERE folder_id = ? AND deleted_at IS NULL;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return -1;
     }
-
-    if (folder_id > 0)
+    if (folder_id != 0)
         sqlite3_bind_int(stmt, 1, folder_id);
 
     int count = -1;
     if (sqlite3_step(stmt) == SQLITE_ROW)
-        count = db_col_int(stmt, 0);
-    else
-        if (err) *err = ACTA_DB_ERR_SQL;
-
+        count = (int)sqlite3_column_int64(stmt, 0);
     sqlite3_finalize(stmt);
+
+    if (count < 0) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+    } else if (err) {
+        *err = ACTA_DB_OK;
+    }
+    return count;
+}
+
+/* Mirrors acta_db_skill_list_all: no folder filter. */
+int acta_db_skill_count_all(db_t *db, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
+
+    const char *sql =
+        "SELECT COUNT(*) FROM skills WHERE deleted_at IS NULL;";
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
+
+    int count = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        count = (int)sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    if (count < 0) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+    } else if (err) {
+        *err = ACTA_DB_OK;
+    }
     return count;
 }
 

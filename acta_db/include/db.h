@@ -28,6 +28,10 @@ extern "C" {
  * Listers:   T **foo_list_*(db, …, int offset, int limit, int *out_count, int *err);
  *            offset 0-based row offset; limit ≤ 0 means no cap (return all).
  *            Both out-params nullable; NULL return + *err==OK means empty.
+ * 
+ * Counters:  int foo_count(db, …, int *err);
+ *            returns >= 0 on success, -1 on failure.
+ *            err nullable; same codes as mutators.
  *
  * Mutators:  int foo_mutate(db, …);   returns ACTA_DB_OK or negative code.
  *

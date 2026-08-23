@@ -49,7 +49,16 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id);
  * ACTA_DB_ERR_SQL on prepare/step failure. */
 int acta_db_skill_update(db_t *db, const skill_t *s);
 
+/* Soft-delete a live skill (set deleted_at = now()).
+ * Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_NOT_FOUND if no live row matches id.
+ * ACTA_DB_ERR_SQL on failure. */
 int acta_db_skill_soft_delete(db_t *db, int id);
+
+/* Restore a soft-deleted skill (set deleted_at = NULL).
+ * Returns ACTA_DB_OK on success (including when already live – no-op).
+ * ACTA_DB_ERR_NOT_FOUND if no row matches id.
+ * ACTA_DB_ERR_SQL on failure. */
 int acta_db_skill_restore(db_t *db, int id);
 
 /* Move a live skill into a folder.
@@ -102,17 +111,27 @@ skill_t **acta_db_skill_list_all(db_t *db,
 
 /* ── Count ───────────────────────────────────────────────────────── */
 
-/* Return the total number of live skills matching the filter.
+/* Count live skills in a specific folder.
  *
- * folder_id – 0 means "all folders" (no filter);
- *             > 0 restricts to that folder (root-level only, not recursive).
+ *   folder_id – the folder to count (0 = root-level only).
  *
  * Returns the count (>= 0) on success, or -1 on error.
  * If err is non-NULL it receives ACTA_DB_OK or a negative code.
- * err may be NULL. */
-int acta_db_skill_count(db_t *db,
-                        int folder_id,
-                        int *err);
+ * err may be NULL.
+ *
+ * Mirrors acta_db_skill_list_in_folder: the count equals the number of
+ * rows you would get from list_in_folder(db, folder_id, 0, -1, …). */
+int acta_db_skill_count_in_folder(db_t *db, int folder_id, int *err);
+
+/* Count all live skills (across all folders).
+ *
+ * Returns the count (>= 0) on success, or -1 on error.
+ * If err is non-NULL it receives ACTA_DB_OK or a negative code.
+ * err may be NULL.
+ *
+ * Mirrors acta_db_skill_list_all: the count equals the number of rows
+ * you would get from list_all(db, 0, -1, …). */
+int acta_db_skill_count_all(db_t *db, int *err);
 
 /* ── Free ────────────────────────────────────────────────────────── */
 

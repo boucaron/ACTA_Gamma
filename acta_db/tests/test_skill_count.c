@@ -1,4 +1,4 @@
-/* test_skill_count.c — acta_db_skill_count */
+/* test_skill_count.c — acta_db_skill_count_in_folder / acta_db_skill_count_all */
 
 #include "test_skill_helpers.h"
 
@@ -21,7 +21,7 @@ static void test_count_all(void) {
     sk_create_skill(db, f2, "InF2a", "P", "{}");
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, &err), 5);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, &err), 5);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
@@ -41,7 +41,7 @@ static void test_count_root_only(void) {
     sk_create_skill(db, f1, "ChildA", "P", "{}");
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, 0, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 0, &err), 2);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
@@ -64,9 +64,9 @@ static void test_count_specific_folder(void) {
     sk_create_skill(db, f2, "B1", "P", "{}");
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, f1, &err), 3);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f1, &err), 3);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, f2, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f2, NULL), 1);
 
     test_db_teardown(db, path);
 }
@@ -86,7 +86,7 @@ static void test_count_excludes_deleted(void) {
     TEST_ASSERT_EQ_INT(acta_db_skill_soft_delete(db, id3), ACTA_DB_OK);
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, &err), 2);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
@@ -100,9 +100,9 @@ static void test_count_empty(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, &err), 0);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, 0, NULL), 0);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, 999, NULL), 0);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, &err), 0);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 0, NULL), 0);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 999, NULL), 0);
 
     test_db_teardown(db, path);
 }
@@ -119,13 +119,13 @@ static void test_count_after_delete(void) {
     int id3 = sk_create_skill(db, 0, "C", "P", "{}");
     TEST_ASSERT(id1 > 0 && id2 > 0 && id3 > 0);
 
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, NULL), 3);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 3);
 
     TEST_ASSERT_EQ_INT(acta_db_skill_soft_delete(db, id2), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, NULL), 2);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 2);
 
     TEST_ASSERT_EQ_INT(acta_db_skill_soft_delete(db, id1), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 1);
 
     test_db_teardown(db, path);
 }
@@ -141,10 +141,10 @@ static void test_count_after_restore(void) {
     TEST_ASSERT(id > 0);
 
     TEST_ASSERT_EQ_INT(acta_db_skill_soft_delete(db, id), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, NULL), 0);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 0);
 
     TEST_ASSERT_EQ_INT(acta_db_skill_restore(db, id), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count(db, -1, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 1);
 
     test_db_teardown(db, path);
 }
@@ -152,7 +152,7 @@ static void test_count_after_restore(void) {
 /* 7.50 */
 static void test_count_null_db(void) {
     int err = ACTA_DB_OK;
-    int n = acta_db_skill_count(NULL, -1, &err);
+    int n = acta_db_skill_count_all(NULL, &err);
     TEST_ASSERT_EQ_INT(n, -1);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
@@ -166,7 +166,7 @@ static void test_count_null_err(void) {
 
     sk_create_skill(db, 0, "NoErr", "P", "{}");
 
-    int n = acta_db_skill_count(db, -1, NULL);
+    int n = acta_db_skill_count_all(db, NULL);
     TEST_ASSERT_EQ_INT(n, 1);
 
     test_db_teardown(db, path);
@@ -182,7 +182,7 @@ static void test_count_nonexistent_folder(void) {
     sk_create_skill(db, 0, "RootSkill", "P", "{}");
 
     int err = 0;
-    int n = acta_db_skill_count(db, 99999, &err);
+    int n = acta_db_skill_count_in_folder(db, 99999, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 0);
 

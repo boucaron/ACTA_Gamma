@@ -634,7 +634,7 @@ static void test_model_restore_happy(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.36: model_restore — already live ---------- */
+/* ---------- 4.36: model_restore — already live (no-op) ---------- */
 static void test_model_restore_already_live(void) {
     const char *path = "test/acta_test_m_restore_live.db";
     remove(path);
@@ -645,12 +645,27 @@ static void test_model_restore_already_live(void) {
     int id;
     acta_db_model_create(db, &m, &id);
 
-    /* WHERE deleted_at IS NOT NULL matches 0 rows → NOT_FOUND */
+    /* Already live → no-op → OK (not NOT_FOUND). */
     int rc = acta_db_model_restore(db, id);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.36b: model_restore — non-existent id ---------- */
+static void test_model_restore_not_found(void) {
+    const char *path = "test/acta_test_m_restore_nofound.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    /* id 999999 was never created */
+    int rc = acta_db_model_restore(db, 999999);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 4.37: model_restore — non-existent ---------- */
 static void test_model_restore_nonexistent(void) {
@@ -963,7 +978,7 @@ static void test_model_folder_list_all_pagination(void) {
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.48: model_count — all (folder_id = 0) ---------- */
+/* ---------- 4.48: model_count_all ---------- */
 static void test_model_count_all(void) {
     const char *path = "test/acta_test_m_count_all.db";
     remove(path);
@@ -978,14 +993,15 @@ static void test_model_count_all(void) {
     }
 
     int err = 0;
-    int n = acta_db_model_count(db, 0, &err);
+    int n = acta_db_model_count_all(db, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 4);
 
     test_db_teardown(db, path);
 }
 
-/* ---------- 4.49: model_count — in specific folder ---------- */
+
+/* ---------- 4.49: model_count_in_folder ---------- */
 static void test_model_count_in_folder(void) {
     const char *path = "test/acta_test_m_count_folder.db";
     remove(path);
@@ -1004,12 +1020,13 @@ static void test_model_count_in_folder(void) {
     acta_db_model_create(db, &mb1, &(int){0});
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_model_count(db, f1, &err), 2);
-    TEST_ASSERT_EQ_INT(acta_db_model_count(db, f2, &err), 1);
-    TEST_ASSERT_EQ_INT(acta_db_model_count(db, 0, &err), 3);  /* all */
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder(db, f1, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder(db, f2, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_model_count_all(db, &err), 3);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 4.50: model_count — excludes soft-deleted ---------- */
 static void test_model_count_excludes_deleted(void) {
@@ -1026,12 +1043,13 @@ static void test_model_count_excludes_deleted(void) {
     acta_db_model_soft_delete(db, id2);
 
     int err = 0;
-    int n = acta_db_model_count(db, 0, &err);
+    int n = acta_db_model_count_all(db, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 1);
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- 4.51: model_count — empty (no rows) ---------- */
 static void test_model_count_empty(void) {
@@ -1041,7 +1059,7 @@ static void test_model_count_empty(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int err = 0;
-    int n = acta_db_model_count(db, 0, &err);
+    int n = acta_db_model_count_all(db, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 0);
 
@@ -1058,7 +1076,7 @@ static void test_model_count_null_err(void) {
     model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
     acta_db_model_create(db, &m, &(int){0});
 
-    int n = acta_db_model_count(db, 0, NULL);
+    int n = acta_db_model_count_all(db, NULL);
     TEST_ASSERT_EQ_INT(n, 1);
 
     test_db_teardown(db, path);
@@ -1067,7 +1085,7 @@ static void test_model_count_null_err(void) {
 /* ---------- 4.53: model_count — NULL db ---------- */
 static void test_model_count_null_db(void) {
     int err = 0;
-    int n = acta_db_model_count(NULL, 0, &err);
+    int n = acta_db_model_count_all(NULL, &err);
     TEST_ASSERT_EQ_INT(n, -1);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
@@ -1088,7 +1106,7 @@ static void test_model_count_pagination_roundtrip(void) {
     }
 
     int err = 0;
-    int total = acta_db_model_count(db, 0, &err);
+    int total = acta_db_model_count_all(db, &err);
     TEST_ASSERT_EQ_INT(total, 7);
 
     /* Simulate: total=7, limit=3 → pages: [0..2],[3..5],[6] */
@@ -1108,6 +1126,7 @@ static void test_model_count_pagination_roundtrip(void) {
 
     test_db_teardown(db, path);
 }
+
 
 /* ---------- runner ---------- */
 
@@ -1190,4 +1209,6 @@ void run_model_tests(void) {
     test_model_count_null_err();
     test_model_count_null_db();
     test_model_count_pagination_roundtrip();
+
+    test_model_restore_not_found();
 }
