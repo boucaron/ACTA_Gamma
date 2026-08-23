@@ -591,8 +591,8 @@ static void test_exec_query_by_status(void) {
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
     int e1 = exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
-    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e1), ACTA_DB_OK);
     /* e2, e3 remain pending */
 
@@ -743,10 +743,10 @@ static void test_exec_query_combined(void) {
 
     /* ctx1: pending, running */
     int e1 = exec_create(db, ctx_id,    sr_id, mr_id, "Q", 0);
-    int e2 = exec_create(db, ctx_id,    sr_id, mr_id, "Q", 0);
+    exec_create(db, ctx_id,    sr_id, mr_id, "Q", 0);
     /* ctx2: pending, running */
     int e3 = exec_create(db, ctx2_id, sr_id, mr_id, "Q", 0);
-    int e4 = exec_create(db, ctx2_id, sr_id, mr_id, "Q", 0);
+    exec_create(db, ctx2_id, sr_id, mr_id, "Q", 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e3), ACTA_DB_OK);
@@ -831,7 +831,7 @@ static void test_exec_count_by_status(void) {
 
     int e1 = exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
     int e2 = exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
-    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, "Q", 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e2), ACTA_DB_OK);
 
