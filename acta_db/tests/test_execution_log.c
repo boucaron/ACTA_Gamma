@@ -34,8 +34,8 @@ static int el_create_log(db_t *db, int execution_id, const char *level,
 }
 
 /* Uses the dedicated count API (not a lister round-trip). */
-static int el_count(db_t *db, int execution_id) {
-    return acta_db_execution_log_count(db, execution_id, NULL);
+static int el_count(db_t *db, int execution_id, const char *level) {
+    return acta_db_execution_log_count(db, execution_id, level, NULL);
 }
 
 static int el_raw_delete_execution(db_t *db, int execution_id) {
@@ -203,7 +203,7 @@ static void test_el_list_multiple(void) {
         TEST_ASSERT(id > 0);
     }
 
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 5);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 5);
 
     test_db_teardown(db, path);
 }
@@ -223,7 +223,7 @@ static void test_el_list_ordering(void) {
     TEST_ASSERT(id1 > 0 && id2 > 0 && id3 > 0);
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 0, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -243,7 +243,7 @@ static void test_el_list_no_logs(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 42, 0, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 42, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(logs);
@@ -259,7 +259,7 @@ static void test_el_list_nonexistent_execution(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 999999, 0, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 999999, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(logs);
@@ -283,7 +283,7 @@ static void test_el_list_excludes_others(void) {
     TEST_ASSERT(id_a1 > 0 && id_a2 > 0 && id_b1 > 0);
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 0, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 2);
@@ -313,7 +313,7 @@ static void test_el_free_valid(void) {
     TEST_ASSERT(id > 0);
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 0, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 1);
@@ -346,7 +346,7 @@ static void test_el_list_free_valid(void) {
     }
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 0, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 4);
@@ -374,18 +374,18 @@ static void test_el_cascade_delete(void) {
     int id2 = el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "event2", "msg", NULL);
     TEST_ASSERT(id1 > 0 && id2 > 0);
 
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 2);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 2);
 
     int rc = el_raw_delete_execution(db, 1);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 0);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 0);
 
     test_db_teardown(db, path);
 }
 
 /* ================================================================ */
-/*  10.17 – 10.21: pagination                                        */
+/*  10.17 – 10.22: pagination                                        */
 /* ================================================================ */
 
 /* ---------- 10.17: limit — returns exactly `limit` rows ---------- */
@@ -404,7 +404,7 @@ static void test_el_list_limit(void) {
 
     /* limit=2 → exactly 2 rows */
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 0, 2, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, 2, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 2);
@@ -413,7 +413,7 @@ static void test_el_list_limit(void) {
     /* limit=100 (exceeds total) → all 6 rows */
     count = 0;
     err   = 0;
-    logs  = acta_db_execution_log_list_by_execution(db, 1, 0, 100, &count, &err);
+    logs  = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, 100, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 6);
@@ -440,7 +440,7 @@ static void test_el_list_offset(void) {
 
     /* offset=2 → rows 3,4,5 */
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 2, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 2, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -466,7 +466,7 @@ static void test_el_list_offset_limit(void) {
 
     /* offset=3, limit=4 → rows 4,5,6,7 → 4 rows */
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 3, 4, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 3, 4, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 4);
@@ -475,7 +475,7 @@ static void test_el_list_offset_limit(void) {
     /* offset=8, limit=5 → only 2 rows remain */
     count = 0;
     err   = 0;
-    logs  = acta_db_execution_log_list_by_execution(db, 1, 8, 5, &count, &err);
+    logs  = acta_db_execution_log_list_by_execution(db, 1, NULL, 8, 5, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 2);
@@ -499,7 +499,7 @@ static void test_el_list_offset_beyond(void) {
     }
 
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 10, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 10, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 0);
     TEST_ASSERT_NULL(logs);
@@ -523,7 +523,7 @@ static void test_el_list_limit_zero_no_limit(void) {
 
     /* limit=0 → "no limit" per contract → all 3 rows */
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, 0, 0, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -532,7 +532,7 @@ static void test_el_list_limit_zero_no_limit(void) {
     /* limit=-1 → also "no limit" → all 3 rows */
     count = 0;
     err   = 0;
-    logs  = acta_db_execution_log_list_by_execution(db, 1, 0, -1, &count, &err);
+    logs  = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -541,7 +541,7 @@ static void test_el_list_limit_zero_no_limit(void) {
     /* limit=-5 → also "no limit" → all 3 rows */
     count = 0;
     err   = 0;
-    logs  = acta_db_execution_log_list_by_execution(db, 1, 0, -5, &count, &err);
+    logs  = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -5, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 3);
@@ -566,7 +566,7 @@ static void test_el_list_negative_offset(void) {
 
     /* offset=-100 → clamped to 0 → all 4 rows */
     int count = 0, err = 0;
-    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, -100, -1, &count, &err);
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, -100, -1, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(logs);
     TEST_ASSERT_EQ_INT(count, 4);
@@ -576,7 +576,7 @@ static void test_el_list_negative_offset(void) {
 }
 
 /* ================================================================ */
-/*  10.23 – 10.26: get                                               */
+/*  10.23 – 10.27: get                                               */
 /* ================================================================ */
 
 /* ---------- 10.23: get — happy path, all fields populated ---------- */
@@ -620,8 +620,6 @@ static void test_el_get_not_found(void) {
 
     int err;
     execution_log_t *log = acta_db_execution_log_get(db, 999999, &err);
-    /* db.h contract: getters return NULL + ACTA_DB_OK for not-found,
-     * never ACTA_DB_ERR_NOT_FOUND. */
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NULL(log);
 
@@ -709,11 +707,11 @@ static void test_el_count_happy(void) {
     }
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, &err), 7);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL, &err), 7);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 2, &err), 3);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 2, NULL, &err), 3);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
@@ -729,7 +727,7 @@ static void test_el_count_empty(void) {
     el_insert_execution(db, 1);
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, &err), 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL, &err), 0);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
@@ -743,7 +741,7 @@ static void test_el_count_nonexistent(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 999999, &err), 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 999999, NULL, &err), 0);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
@@ -752,7 +750,7 @@ static void test_el_count_nonexistent(void) {
 /* ---------- 10.31: count — NULL db ---------- */
 static void test_el_count_null_db(void) {
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(NULL, 1, &err), -1);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(NULL, 1, NULL, &err), -1);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
 
@@ -768,7 +766,7 @@ static void test_el_count_null_err(void) {
     TEST_ASSERT(id > 0);
 
     /* err is NULL — just want the number */
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL, NULL), 1);
 
     test_db_teardown(db, path);
 }
@@ -789,14 +787,14 @@ static void test_el_count_matches_pages(void) {
     }
 
     /* count says 12 */
-    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL), total);
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL, NULL), total);
 
     /* Walk through pages of 5: 5 + 5 + 2 = 12 */
     int page_sum = 0;
     for (int offset = 0; offset < total; offset += 5) {
         int count = 0, err = 0;
         execution_log_t **logs =
-            acta_db_execution_log_list_by_execution(db, 1, offset, 5, &count, &err);
+            acta_db_execution_log_list_by_execution(db, 1, NULL, offset, 5, &count, &err);
         TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
         page_sum += count;
         acta_db_execution_log_list_free(logs, count);
@@ -814,19 +812,285 @@ static void test_el_count_dynamic(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     el_insert_execution(db, 1);
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 0);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 0);
 
     int id = el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "a", "m", NULL);
     TEST_ASSERT(id > 0);
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 1);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 1);
 
     id = el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "b", "m", NULL);
     TEST_ASSERT(id > 0);
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 2);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 2);
 
     /* Cascade-delete the execution → logs vanish */
     el_raw_delete_execution(db, 1);
-    TEST_ASSERT_EQ_INT(el_count(db, 1), 0);
+    TEST_ASSERT_EQ_INT(el_count(db, 1, NULL), 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ================================================================ */
+/*  10.35 – 10.42: level filter                                      */
+/* ================================================================ */
+
+/* ---------- 10.35: list — filter by level returns only matching rows ---------- */
+static void test_el_list_filter_by_level(void) {
+    const char *path = "test/acta_test_el_list_filter_level.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    /* Insert mixed levels: 3 info, 2 error, 1 warn */
+    for (int i = 0; i < 3; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_INFO,  "info_evt",  "m", NULL) > 0);
+    for (int i = 0; i < 2; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_ERROR, "error_evt", "m", NULL) > 0);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "warn_evt", "m", NULL) > 0);
+
+    /* Filter: only errors → 2 rows */
+    int count = 0, err = 0;
+    execution_log_t **logs =
+        acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_ERROR, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(logs);
+    TEST_ASSERT_EQ_INT(count, 2);
+    for (int i = 0; i < count; i++)
+        TEST_ASSERT(strcmp(logs[i]->level, ACTA_LOG_LEVEL_ERROR) == 0);
+    acta_db_execution_log_list_free(logs, count);
+
+    /* Filter: only infos → 3 rows */
+    count = 0;
+    logs = acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_INFO, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(logs);
+    TEST_ASSERT_EQ_INT(count, 3);
+    for (int i = 0; i < count; i++)
+        TEST_ASSERT(strcmp(logs[i]->level, ACTA_LOG_LEVEL_INFO) == 0);
+    acta_db_execution_log_list_free(logs, count);
+
+    /* Filter: only warns → 1 row */
+    count = 0;
+    logs = acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_WARN, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(logs);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT(strcmp(logs[0]->level, ACTA_LOG_LEVEL_WARN) == 0);
+    acta_db_execution_log_list_free(logs, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.36: list — NULL level returns all (backward compat) ---------- */
+static void test_el_list_null_level_all(void) {
+    const char *path = "test/acta_test_el_list_nulllevel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_DEBUG, "e", "m", NULL) > 0);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_INFO,  "e", "m", NULL) > 0);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_WARN,  "e", "m", NULL) > 0);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_ERROR, "e", "m", NULL) > 0);
+
+    /* NULL → all 4 */
+    int count = 0, err = 0;
+    execution_log_t **logs = acta_db_execution_log_list_by_execution(db, 1, NULL, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(logs);
+    TEST_ASSERT_EQ_INT(count, 4);
+    acta_db_execution_log_list_free(logs, count);
+
+    /* "" (empty) → also all 4 */
+    count = 0;
+    logs = acta_db_execution_log_list_by_execution(db, 1, "", 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(logs);
+    TEST_ASSERT_EQ_INT(count, 4);
+    acta_db_execution_log_list_free(logs, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.37: list — invalid level string → ACTA_DB_ERR_INVALID ---------- */
+static void test_el_list_invalid_level(void) {
+    const char *path = "test/acta_test_el_list_badlevel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "e", "m", NULL) > 0);
+
+    int count = 0, err = 0;
+    execution_log_t **logs =
+        acta_db_execution_log_list_by_execution(db, 1, "verbose", 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_NULL(logs);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.38: list — level filter + pagination ---------- */
+static void test_el_list_filter_pagination(void) {
+    const char *path = "test/acta_test_el_list_filter_paging.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    /* 4 errors, 3 infos */
+    for (int i = 0; i < 4; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_ERROR, "err", "m", NULL) > 0);
+    for (int i = 0; i < 3; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "info", "m", NULL) > 0);
+
+    /* Filter errors, page size 2: first page → 2 */
+    int count = 0, err = 0;
+    execution_log_t **logs =
+        acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_ERROR, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_execution_log_list_free(logs, count);
+
+    /* Second page → 2 */
+    count = 0;
+    logs = acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_ERROR, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    acta_db_execution_log_list_free(logs, count);
+
+    /* offset=3 → 1 remaining */
+    count = 0;
+    logs = acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_ERROR, 3, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    acta_db_execution_log_list_free(logs, count);
+
+    /* offset=4 → 0 (past the end of filtered set) */
+    count = 0;
+    logs = acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_ERROR, 4, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(logs);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.39: list — level filter + no match → empty ---------- */
+static void test_el_list_filter_no_match(void) {
+    const char *path = "test/acta_test_el_list_filter_nomatch.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    /* Only debug rows exist */
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_DEBUG, "e", "m", NULL) > 0);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_DEBUG, "e", "m", NULL) > 0);
+
+    /* Ask for errors → none */
+    int count = 0, err = 0;
+    execution_log_t **logs =
+        acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_ERROR, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+    TEST_ASSERT_NULL(logs);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.40: count — with level filter ---------- */
+static void test_el_count_filter_by_level(void) {
+    const char *path = "test/acta_test_el_count_filter.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    for (int i = 0; i < 3; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_INFO,  "e", "m", NULL) > 0);
+    for (int i = 0; i < 2; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_ERROR, "e", "m", NULL) > 0);
+    TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "e", "m", NULL) > 0);
+
+    int err = 0;
+
+    /* NULL → all 6 */
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, NULL, &err), 6);
+
+    /* info → 3 */
+    err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, ACTA_LOG_LEVEL_INFO, &err), 3);
+
+    /* error → 2 */
+    err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, ACTA_LOG_LEVEL_ERROR, &err), 2);
+
+    /* warn → 1 */
+    err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, ACTA_LOG_LEVEL_WARN, &err), 1);
+
+    /* debug → 0 (none exist) */
+    err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_log_count(db, 1, ACTA_LOG_LEVEL_DEBUG, &err), 0);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.41: count — invalid level → ACTA_DB_ERR_INVALID ---------- */
+static void test_el_count_invalid_level(void) {
+    const char *path = "test/acta_test_el_count_badlevel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    int err = 0;
+    int rc = acta_db_execution_log_count(db, 1, "critical", &err);
+    TEST_ASSERT_EQ_INT(rc, -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 10.42: count — consistency with filtered lister ---------- */
+static void test_el_count_matches_filtered_pages(void) {
+    const char *path = "test/acta_test_el_count_filtered_pages.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    el_insert_execution(db, 1);
+
+    /* 5 warnings, 4 infos */
+    for (int i = 0; i < 5; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_WARN, "e", "m", NULL) > 0);
+    for (int i = 0; i < 4; i++)
+        TEST_ASSERT(el_create_log(db, 1, ACTA_LOG_LEVEL_INFO, "e", "m", NULL) > 0);
+
+    /* count(warn) should equal sum of paginated warn pages */
+    int total = acta_db_execution_log_count(db, 1, ACTA_LOG_LEVEL_WARN, NULL);
+    TEST_ASSERT_EQ_INT(total, 5);
+
+    int page_sum = 0;
+    for (int offset = 0; offset < total; offset += 2) {
+        int count = 0, err = 0;
+        execution_log_t **logs =
+            acta_db_execution_log_list_by_execution(db, 1, ACTA_LOG_LEVEL_WARN, offset, 2, &count, &err);
+        TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+        page_sum += count;
+        acta_db_execution_log_list_free(logs, count);
+    }
+    TEST_ASSERT_EQ_INT(page_sum, total);
 
     test_db_teardown(db, path);
 }
@@ -885,4 +1149,14 @@ void run_execution_log_tests(void) {
     test_el_count_null_err();
     test_el_count_matches_pages();
     test_el_count_dynamic();
+
+    /* level filter */
+    test_el_list_filter_by_level();
+    test_el_list_null_level_all();
+    test_el_list_invalid_level();
+    test_el_list_filter_pagination();
+    test_el_list_filter_no_match();
+    test_el_count_filter_by_level();
+    test_el_count_invalid_level();
+    test_el_count_matches_filtered_pages();
 }

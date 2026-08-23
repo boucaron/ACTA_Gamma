@@ -769,7 +769,7 @@ static void test_integration_memory_leak_sweep(void) {
         TEST_ASSERT_EQ_INT(acta_db_execution_log_create(db, &log, &log_id), 0);
 
         int log_count = 0, log_err = 0;
-        execution_log_t **logs = acta_db_execution_log_list_by_execution(db, eid, 0, -1, &log_count, &log_err);
+        execution_log_t **logs = acta_db_execution_log_list_by_execution(db, eid, NULL, 0, -1, &log_count, &log_err);
         TEST_ASSERT_EQ_INT(log_err, ACTA_DB_OK);
         acta_db_execution_log_list_free(logs, log_count);
     }
@@ -903,7 +903,7 @@ static void test_integration_null_safety(void) {
     /* execution log  (pagination API: offset=0, limit=-1) */
     {
         int cnt = 0, err = 0;
-        execution_log_t **items = acta_db_execution_log_list_by_execution(NULL, 1, 0, -1, &cnt, &err);
+        execution_log_t **items = acta_db_execution_log_list_by_execution(NULL, 1, NULL, 0, -1, &cnt, &err);
         TEST_ASSERT(err < 0);
         TEST_ASSERT_NULL(items);
     }

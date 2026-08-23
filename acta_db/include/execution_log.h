@@ -63,6 +63,11 @@ execution_log_t *acta_db_execution_log_get(db_t *db,
 /*
  * Lister – paginated rows for a given execution, ordered by id.
  *
+ *   level:
+ *     Server-side filter on the log level column.
+ *       - NULL or "" (empty string) → no filter (return all levels).
+ *       - "debug" | "info" | "warn" | "error" → only that level.
+ *
  *   Pagination:
  *     offset – number of rows to skip (0-based).
  *     limit  – maximum number of rows to return.
@@ -77,17 +82,22 @@ execution_log_t *acta_db_execution_log_get(db_t *db,
  */
 execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
                                                           int execution_id,
+                                                          const char *level,
                                                           int offset, int limit,
                                                           int *out_count, int *err);
 
 /*
  * Count – total number of log rows for a given execution (ignoring pagination).
  *
+ *   level:
+ *     Same semantics as list_by_execution: NULL or "" → count all levels.
+ *
  * Returns the row count (>= 0), or -1 on error (*err set).
  * err may be NULL.
  */
 int acta_db_execution_log_count(db_t *db,
                                 int execution_id,
+                                const char *level,
                                 int *err);
 
 /* Free a single log entry (its string fields + the struct). Safe with NULL. */
