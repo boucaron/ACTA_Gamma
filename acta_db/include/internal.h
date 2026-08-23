@@ -6,42 +6,110 @@
 #include <string.h>
 #include "db.h"
 
-/* Unpack the opaque db_t */
+/* ── Unpack the opaque db_t ────────────────────────────────────────── */
+
 struct db_t {
     sqlite3 *handle;
-    char    *last_error;   /* NULL when no error */
-    int       in_transaction;  /* 0 = idle, 1 = BEGIN issued, not yet closed */
+    /*
+     * Owned by the db layer; updated on every SQL error.
+     * acta_db_last_error() returns a const char * pointing here.
+     * The pointer is valid only until the next SQL operation on this
+     * handle overwrites the field.  Callers that need to retain the
+     * message must copy it (e.g. strdup) before the next call.
+     */
+    char    *last_error;
+    int     in_transaction; /* 0 = idle, 1 = BEGIN issued, not yet closed */
 };
 
-/* strdup that returns NULL on allocation failure (we prefer NULL over crashing) */
-static inline char *db_strdup(const char *s) {
+/* ── String helpers ────────────────────────────────────────────────── */
+
+/*
+ * Heap-copy a string.
+ *
+ *   s == NULL     → returns NULL, *err untouched
+ *                   (the "no value" case; not an error).
+ *   malloc fails  → returns NULL, *err = ACTA_DB_ERR_ALLOC.
+ *   success       → returns a heap copy; caller must free.
+ *
+ * err may be NULL (the code is then discarded).
+ */
+static inline char *db_strdup(const char *s, int *err) {
     if (!s) return NULL;
     size_t len = strlen(s) + 1;
     char *copy = malloc(len);
-    if (!copy) return NULL;
+    if (!copy) {
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
     memcpy(copy, s, len);
     return copy;
 }
 
-/* Read a text column. Returns NULL if the column is SQL NULL. */
-static inline char *db_col_text(sqlite3_stmt *stmt, int col) {
+/* ── Column readers ────────────────────────────────────────────────── */
+
+/*
+ * Read a text column into a heap-allocated copy.
+ *
+ *   SQL NULL column  → returns NULL, *err untouched
+ *   malloc failure   → returns NULL, *err = ACTA_DB_ERR_ALLOC
+ *   success          → returns a heap copy
+ *
+ * err may be NULL.
+ *
+ * Caller contract (every getter / lister):
+ *
+ *   Read all columns into the struct, passing the same &alloc_err
+ *   to each db_col_text call.  After the last column, bail if any
+ *   allocation failed:
+ *
+ *       int alloc_err = ACTA_DB_OK;
+ *       c->type      = db_col_text(stmt, 1, &alloc_err);
+ *       c->content   = db_col_text(stmt, 2, &alloc_err);
+ *       …
+ *       if (alloc_err) {
+ *           acta_db_context_free(c);   // frees the string fields set so far
+ *           free(c);
+ *           sqlite3_finalize(stmt);
+ *           if (err) *err = alloc_err;
+ *           return NULL;
+ *       }
+ */
+static inline char *db_col_text(sqlite3_stmt *stmt, int col, int *err) {
     const unsigned char *val = sqlite3_column_text(stmt, col);
-    return val ? db_strdup((const char *)val) : NULL;
+    return val ? db_strdup((const char *)val, err) : NULL;
 }
 
-/* Read an integer column. */
+/*
+ * Read an integer column.
+ *
+ * No allocation, no failure mode beyond SQLite's own.
+ * The int64 → int cast truncates on out-of-range values
+ * (implementation-defined in C, but SQLite rowids and small
+ * counters never reach INT_MAX in this codebase).
+ */
 static inline int db_col_int(sqlite3_stmt *stmt, int col) {
     return (int)sqlite3_column_int64(stmt, col);
 }
 
-/* Read an integer column, mapping SQL NULL to 0 (for parent_id / folder_id). */
+/*
+ * Read an integer column, mapping SQL NULL → 0.
+ * Used for optional FK columns (parent_id, folder_id,
+ * context_id, skill_revision_id, model_revision_id)
+ * where 0 means "unset / no parent".
+ */
 static inline int db_col_int_or_zero(sqlite3_stmt *stmt, int col) {
     if (sqlite3_column_type(stmt, col) == SQLITE_NULL) return 0;
     return db_col_int(stmt, col);
 }
 
-/* Free a struct that has N string pointers at known offsets.
- * Used by all _free functions. The caller provides a helper macro. */
-#define DB_FREE_STR(field) do { free(field); field = NULL; } while(0)
+/* ── Free helper ───────────────────────────────────────────────────── */
+
+/*
+ * Free a string pointer and NULL it out.
+ * Safe on NULL (free(NULL) is a no-op).
+ * NULL-ing protects against double-free if the struct is
+ * partially built and then freed via the entity's _free function.
+ */
+#define DB_FREE_STR(field) do { free(field); (field) = NULL; } while (0)
 
 #endif /* ACTA_DB_INTERNAL_H */

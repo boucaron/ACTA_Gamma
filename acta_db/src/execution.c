@@ -5,27 +5,15 @@
 #include <string.h>
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
+/*  Column order shared by EXEC_SELECT and row_to_execution           */
 /* ------------------------------------------------------------------ */
 
-static execution_t *row_to_execution(sqlite3_stmt *stmt) {
-    execution_t *e = calloc(1, sizeof(execution_t));
-    if (!e) return NULL;
-    e->id                  = db_col_int(stmt, 0);
-    e->context_id          = db_col_int(stmt, 1);
-    e->skill_revision_id   = db_col_int(stmt, 2);
-    e->model_revision_id   = db_col_int(stmt, 3);
-    e->prompt              = db_col_text(stmt, 4);
-    e->raw_response        = db_col_text(stmt, 5);
-    e->result              = db_col_text(stmt, 6);
-    e->status              = db_col_text(stmt, 7);
-    e->error               = db_col_text(stmt, 8);
-    e->created_at          = db_col_text(stmt, 9);
-    e->started_at          = db_col_text(stmt, 10);
-    e->completed_at        = db_col_text(stmt, 11);
-    e->parent_execution_id = db_col_int_or_zero(stmt, 12);
-    return e;
-}
+enum {
+    COL_ID = 0, COL_CONTEXT_ID, COL_SKILL_REV_ID, COL_MODEL_REV_ID,
+    COL_PROMPT, COL_RAW_RESPONSE, COL_RESULT, COL_STATUS, COL_ERROR,
+    COL_CREATED_AT, COL_STARTED_AT, COL_COMPLETED_AT, COL_PARENT_ID,
+    COL_COUNT
+};
 
 #define EXEC_SELECT \
     "SELECT id, context_id, skill_revision_id, model_revision_id, prompt, " \
@@ -33,69 +21,84 @@ static execution_t *row_to_execution(sqlite3_stmt *stmt) {
     "completed_at, parent_execution_id FROM executions"
 
 /* ------------------------------------------------------------------ */
-/*  Dynamic WHERE-clause builder (shared by query + count)            */
+/*  Row decoding (allocation-error aware)                             */
 /* ------------------------------------------------------------------ */
 
-/*
- * Builds "WHERE <conditions>" from the query struct.
- * Returns the number of bound parameters (0..5), or -1 on overflow.
- *
- * `sql` must have room for at least 384 bytes of WHERE clause
- * (5 filters × ~64 chars worst-case + padding).
- * `bind_index` is set to 1 (first param slot after the SELECT).
- */
+static execution_t *row_to_execution(sqlite3_stmt *stmt, int *err)
+{
+    execution_t *e = calloc(1, sizeof(execution_t));
+    if (!e) {
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
+
+    int alloc_err = ACTA_DB_OK;
+    e->id                  = db_col_int(stmt, COL_ID);
+    e->context_id          = db_col_int(stmt, COL_CONTEXT_ID);
+    e->skill_revision_id   = db_col_int(stmt, COL_SKILL_REV_ID);
+    e->model_revision_id   = db_col_int(stmt, COL_MODEL_REV_ID);
+    e->prompt              = db_col_text(stmt, COL_PROMPT, &alloc_err);
+    e->raw_response        = db_col_text(stmt, COL_RAW_RESPONSE, &alloc_err);
+    e->result              = db_col_text(stmt, COL_RESULT, &alloc_err);
+    e->status              = db_col_text(stmt, COL_STATUS, &alloc_err);
+    e->error               = db_col_text(stmt, COL_ERROR, &alloc_err);
+    e->created_at          = db_col_text(stmt, COL_CREATED_AT, &alloc_err);
+    e->started_at          = db_col_text(stmt, COL_STARTED_AT, &alloc_err);
+    e->completed_at        = db_col_text(stmt, COL_COMPLETED_AT, &alloc_err);
+    e->parent_execution_id = db_col_int_or_zero(stmt, COL_PARENT_ID);
+
+    if (alloc_err) {
+        acta_db_execution_free(e);
+        if (err) *err = alloc_err;
+        return NULL;
+    }
+    return e;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dynamic WHERE-clause builder (shared by query + count)            */
+/* ------------------------------------------------------------------ */
 static int exec_build_where(char *sql, size_t sql_sz,
-                            const execution_query_t *q,
-                            int *bind_index)
+                            const execution_query_t *q)
 {
     if (!sql || !sql_sz) return -1;
 
     int pos = 0;
     int n   = 0;
 
+    #define APPEND(fmt)                                             \
+        do {                                                        \
+            int rc = snprintf(sql + pos, sql_sz - (size_t)pos,       \
+                              "%s" fmt, n ? " AND " : "");           \
+            if (rc < 0 || (size_t)rc >= sql_sz - (size_t)pos)       \
+                return -1;                                          \
+            pos += rc;                                              \
+            n++;                                                    \
+        } while (0)
+
     pos += snprintf(sql + pos, sql_sz - (size_t)pos, " WHERE");
+    if (pos < 0 || (size_t)pos >= sql_sz) return -1;
 
-    /* status */
-    if (q->status) {
-        pos += snprintf(sql + pos, sql_sz - (size_t)pos,
-                        "%s status = ?", n++ ? " AND" : "");
-    }
+    if (q->status)
+        APPEND("status = ?");
+    if (q->parent_execution_id)
+        APPEND("parent_execution_id = ?");
+    if (q->context_id)
+        APPEND("context_id = ?");
+    if (q->skill_revision_id)
+        APPEND("skill_revision_id = ?");
+    if (q->model_revision_id)
+        APPEND("model_revision_id = ?");
 
-    /* parent_execution_id */
-    if (q->parent_execution_id) {
-        pos += snprintf(sql + pos, sql_sz - (size_t)pos,
-                        "%s parent_execution_id = ?", n++ ? " AND" : "");
-    }
+    #undef APPEND
 
-    /* context_id */
-    if (q->context_id) {
-        pos += snprintf(sql + pos, sql_sz - (size_t)pos,
-                        "%s context_id = ?", n++ ? " AND" : "");
-    }
-
-    /* skill_revision_id */
-    if (q->skill_revision_id) {
-        pos += snprintf(sql + pos, sql_sz - (size_t)pos,
-                        "%s skill_revision_id = ?", n++ ? " AND" : "");
-    }
-
-    /* model_revision_id */
-    if (q->model_revision_id) {
-        pos += snprintf(sql + pos, sql_sz - (size_t)pos,
-                        "%s model_revision_id = ?", n++ ? " AND" : "");
-    }
-
-    /* No filters → match all (no WHERE clause) */
-    if (n == 0) {
+    if (n == 0)
         sql[0] = '\0';
-    }
 
-    if (bind_index) *bind_index = 1;
     return n;
 }
 
-/* Bind the filter parameters (in the same order the builder emitted them).
- * Returns the index of the next free bind slot. */
+
 static int exec_bind_where(sqlite3_stmt *stmt,
                            const execution_query_t *q,
                            int start_idx)
@@ -107,6 +110,39 @@ static int exec_bind_where(sqlite3_stmt *stmt,
     if (q->skill_revision_id)   sqlite3_bind_int (stmt, i++, q->skill_revision_id);
     if (q->model_revision_id)   sqlite3_bind_int (stmt, i++, q->model_revision_id);
     return i;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Lightweight status check (replaces full-row read in transitions)  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Reads only the status column for the given id.
+ *
+ *   Returns ACTA_DB_OK           – row exists and status matches `expected`
+ *   Returns ACTA_DB_ERR_NOT_FOUND – row does not exist
+ *   Returns ACTA_DB_ERR_INVALID  – row exists but status != expected
+ *   Returns ACTA_DB_ERR_SQL      – database failure
+ */
+static int exec_verify_status(db_t *db, int id, const char *expected)
+{
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle,
+            "SELECT status FROM executions WHERE id = ?;",
+            -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+
+    sqlite3_bind_int(stmt, 1, id);
+
+    int result = ACTA_DB_ERR_NOT_FOUND;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char *s = sqlite3_column_text(stmt, 0);
+        result = (s && strcmp((const char *)s, expected) == 0)
+                   ? ACTA_DB_OK
+                   : ACTA_DB_ERR_INVALID;
+    }
+    sqlite3_finalize(stmt);
+    return result;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,22 +162,29 @@ execution_t **acta_db_execution_query(db_t *db,
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
-    if (limit <= 0) limit = -1;  /* SQLite: LIMIT -1 = no upper bound */
+    if (limit <= 0) limit = -1;
     if (out_count) *out_count = 0;
 
     /* ── build SQL ─────────────────────────────────────────────── */
     char where_clause[384];
 
     if (q) {
-        exec_build_where(where_clause, sizeof(where_clause), q, NULL);
+        if (exec_build_where(where_clause, sizeof(where_clause), q) < 0) {
+            if (err) *err = ACTA_DB_ERR_INVALID;
+            return NULL;
+        }
     } else {
         where_clause[0] = '\0';
     }
 
     char sql[600];
-    snprintf(sql, sizeof(sql),
+    int slen = snprintf(sql, sizeof(sql),
              EXEC_SELECT "%s ORDER BY id ASC LIMIT ? OFFSET ?;",
              where_clause);
+    if (slen < 0 || (size_t)slen >= sizeof(sql)) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
 
     /* ── prepare ───────────────────────────────────────────────── */
     sqlite3_stmt *stmt;
@@ -158,9 +201,9 @@ execution_t **acta_db_execution_query(db_t *db,
     sqlite3_bind_int(stmt, idx++, offset);
 
     /* ── iterate rows ──────────────────────────────────────────── */
-    int    count    = 0;
-    size_t capacity = 0;
-    execution_t **items = NULL;
+    int             count    = 0;
+    size_t          capacity = 0;
+    execution_t   **items    = NULL;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         if ((size_t)count >= capacity) {
@@ -176,11 +219,12 @@ execution_t **acta_db_execution_query(db_t *db,
             capacity = new_cap;
         }
 
-        execution_t *item = row_to_execution(stmt);
+        int row_err = ACTA_DB_OK;
+        execution_t *item = row_to_execution(stmt, &row_err);
         if (!item) {
             acta_db_execution_list_free(items, count);
             sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_ALLOC;
+            if (err) *err = row_err;
             return NULL;
         }
         items[count++] = item;
@@ -191,10 +235,7 @@ execution_t **acta_db_execution_query(db_t *db,
     if (out_count) *out_count = count;
     if (err)       *err       = ACTA_DB_OK;
 
-    if (count == 0) {
-        free(items);
-        return NULL;
-    }
+    if (count == 0) return NULL;
     return items;
 }
 
@@ -213,14 +254,21 @@ int acta_db_execution_count(db_t *db,
 
     char where_clause[384];
     if (q) {
-        exec_build_where(where_clause, sizeof(where_clause), q, NULL);
+        if (exec_build_where(where_clause, sizeof(where_clause), q) < 0) {
+            if (err) *err = ACTA_DB_ERR_INVALID;
+            return -1;
+        }
     } else {
         where_clause[0] = '\0';
     }
 
     char sql[500];
-    snprintf(sql, sizeof(sql),
+    int slen = snprintf(sql, sizeof(sql),
              "SELECT COUNT(*) FROM executions%s;", where_clause);
+    if (slen < 0 || (size_t)slen >= sizeof(sql)) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -245,27 +293,37 @@ int acta_db_execution_count(db_t *db,
 /*  Create                                                            */
 /* ------------------------------------------------------------------ */
 
-int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id) {
-    if (!db || !e || !e->status) return ACTA_DB_ERR_INVALID;
+int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
+{
+    if (!db || !e || !e->prompt || !e->status)
+        return ACTA_DB_ERR_INVALID;
+
     const char *sql =
-        "INSERT INTO executions (context_id, skill_revision_id, model_revision_id, prompt, status, parent_execution_id) "
+        "INSERT INTO executions "
+        " (context_id, skill_revision_id, model_revision_id, "
+        "  prompt, status, parent_execution_id) "
         "VALUES (?, ?, ?, ?, ?, ?);";
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
-    sqlite3_bind_int(stmt, 1, e->context_id);
-    sqlite3_bind_int(stmt, 2, e->skill_revision_id);
-    sqlite3_bind_int(stmt, 3, e->model_revision_id);
-    if (e->prompt) sqlite3_bind_text(stmt, 4, e->prompt, -1, SQLITE_TRANSIENT);
-    else           sqlite3_bind_null(stmt, 4);
-    sqlite3_bind_text(stmt, 5, e->status, -1, SQLITE_TRANSIENT);
-    if (e->parent_execution_id == 0) sqlite3_bind_null(stmt, 6);
-    else                              sqlite3_bind_int(stmt, 6, e->parent_execution_id);
+
+    sqlite3_bind_int  (stmt, 1, e->context_id);
+    sqlite3_bind_int  (stmt, 2, e->skill_revision_id);
+    sqlite3_bind_int  (stmt, 3, e->model_revision_id);
+    sqlite3_bind_text (stmt, 4, e->prompt, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text (stmt, 5, e->status, -1, SQLITE_TRANSIENT);
+    if (e->parent_execution_id == 0)
+        sqlite3_bind_null(stmt, 6);
+    else
+        sqlite3_bind_int (stmt, 6, e->parent_execution_id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
+
     if (rc == SQLITE_CONSTRAINT) return ACTA_DB_ERR_INVALID;
     if (rc != SQLITE_DONE)       return ACTA_DB_ERR_SQL;
+
     if (out_id) *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
@@ -274,7 +332,8 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id) {
 /*  Get                                                               */
 /* ------------------------------------------------------------------ */
 
-execution_t *acta_db_execution_get(db_t *db, int id, int *err) {
+execution_t *acta_db_execution_get(db_t *db, int id, int *err)
+{
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
@@ -291,89 +350,95 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err) {
 
     execution_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        result = row_to_execution(stmt);
-        if (!result) {
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_ALLOC;
-            return NULL;
-        }
+        int row_err = ACTA_DB_OK;
+        result = row_to_execution(stmt, &row_err);
+        if (!result && err) *err = row_err;
     }
     sqlite3_finalize(stmt);
 
-    if (err) *err = ACTA_DB_OK;
+    if (err && !result)
+        *err = (*err == ACTA_DB_OK) ? ACTA_DB_OK : *err;
+    else if (err)
+        *err = ACTA_DB_OK;
+
     return result;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Start / Cancel / Complete / Fail / Set raw                        */
+/*  State transitions                                                  */
+/*  Each function:                                                    */
+/*    1. Lightweight status check (1-column SELECT).                  */
+/*    2. Guarded UPDATE  WHERE id = ? AND status = ?  so the         */
+/*       transition is atomic even if the single-threaded assumption  */
+/*       is ever broken.                                              */
 /* ------------------------------------------------------------------ */
 
-int acta_db_execution_start(db_t *db, int id) {
+int acta_db_execution_start(db_t *db, int id)
+{
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    execution_t *existing = acta_db_execution_get(db, id, NULL);
-    if (!existing) return ACTA_DB_ERR_NOT_FOUND;
-
-    if (strcmp(existing->status, ACTA_EXEC_STATUS_PENDING) != 0) {
-        acta_db_execution_free(existing);
-        return ACTA_DB_ERR_INVALID;
-    }
-    acta_db_execution_free(existing);
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING);
+    if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
-        "UPDATE executions SET status = 'running', started_at = datetime('now') WHERE id = ?;";
+        "UPDATE executions "
+        "SET    status = 'running', started_at = datetime('now') "
+        "WHERE  id = ? AND status = 'pending';";
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
-    int rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) { sqlite3_finalize(stmt); return ACTA_DB_ERR_SQL; }
-    int changes = sqlite3_changes(db->handle);
+
+    int step_rc = sqlite3_step(stmt);
+    int changes = (step_rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
+
+    if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
 
-int acta_db_execution_cancel(db_t *db, int id) {
+int acta_db_execution_cancel(db_t *db, int id)
+{
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    execution_t *existing = acta_db_execution_get(db, id, NULL);
-    if (!existing) return ACTA_DB_ERR_NOT_FOUND;
-
-    if (strcmp(existing->status, ACTA_EXEC_STATUS_PENDING) != 0 &&
-        strcmp(existing->status, ACTA_EXEC_STATUS_RUNNING) != 0) {
-        acta_db_execution_free(existing);
-        return ACTA_DB_ERR_INVALID;
+    /* Allow cancel from pending or running. */
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING);
+    if (rc == ACTA_DB_ERR_NOT_FOUND) {
+        rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
     }
-    acta_db_execution_free(existing);
+    if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
-        "UPDATE executions SET status = 'cancelled', completed_at = datetime('now') WHERE id = ?;";
+        "UPDATE executions "
+        "SET    status = 'cancelled', completed_at = datetime('now') "
+        "WHERE  id = ? AND status IN ('pending', 'running');";
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
     sqlite3_bind_int(stmt, 1, id);
-    int rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) { sqlite3_finalize(stmt); return ACTA_DB_ERR_SQL; }
-    int changes = sqlite3_changes(db->handle);
+
+    int step_rc = sqlite3_step(stmt);
+    int changes = (step_rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
+
+    if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
 
-int acta_db_execution_complete(db_t *db, int id, const char *result) {
+int acta_db_execution_complete(db_t *db, int id, const char *result)
+{
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    execution_t *existing = acta_db_execution_get(db, id, NULL);
-    if (!existing) return ACTA_DB_ERR_NOT_FOUND;
-
-    if (strcmp(existing->status, ACTA_EXEC_STATUS_RUNNING) != 0) {
-        acta_db_execution_free(existing);
-        return ACTA_DB_ERR_INVALID;
-    }
-    acta_db_execution_free(existing);
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
+    if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
-        "UPDATE executions SET status = 'completed', result = ?, "
-        "completed_at = datetime('now') WHERE id = ?;";
+        "UPDATE executions "
+        "SET    status = 'completed', result = ?, completed_at = datetime('now') "
+        "WHERE  id = ? AND status = 'running';";
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -381,28 +446,26 @@ int acta_db_execution_complete(db_t *db, int id, const char *result) {
     else        sqlite3_bind_null(stmt, 1);
     sqlite3_bind_int(stmt, 2, id);
 
-    int rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) { sqlite3_finalize(stmt); return ACTA_DB_ERR_SQL; }
-    int changes = sqlite3_changes(db->handle);
+    int step_rc = sqlite3_step(stmt);
+    int changes = (step_rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
+
+    if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
 
-int acta_db_execution_fail(db_t *db, int id, const char *error) {
+int acta_db_execution_fail(db_t *db, int id, const char *error)
+{
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    execution_t *existing = acta_db_execution_get(db, id, NULL);
-    if (!existing) return ACTA_DB_ERR_NOT_FOUND;
-
-    if (strcmp(existing->status, ACTA_EXEC_STATUS_RUNNING) != 0) {
-        acta_db_execution_free(existing);
-        return ACTA_DB_ERR_INVALID;
-    }
-    acta_db_execution_free(existing);
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
+    if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
-        "UPDATE executions SET status = 'failed', error = ?, "
-        "completed_at = datetime('now') WHERE id = ?;";
+        "UPDATE executions "
+        "SET    status = 'failed', error = ?, completed_at = datetime('now') "
+        "WHERE  id = ? AND status = 'running';";
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -410,31 +473,37 @@ int acta_db_execution_fail(db_t *db, int id, const char *error) {
     else       sqlite3_bind_null(stmt, 1);
     sqlite3_bind_int(stmt, 2, id);
 
-    int rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) { sqlite3_finalize(stmt); return ACTA_DB_ERR_SQL; }
-    int changes = sqlite3_changes(db->handle);
+    int step_rc = sqlite3_step(stmt);
+    int changes = (step_rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
+
+    if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
 
-int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
+int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw)
+{
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    execution_t *existing = acta_db_execution_get(db, id, NULL);
-    if (!existing) return ACTA_DB_ERR_NOT_FOUND;
-    acta_db_execution_free(existing);
+    /*
+     * No status guard – this is a data update, not a transition.
+     * Just check existence via the UPDATE's row count.
+     */
+    const char *sql =
+        "UPDATE executions SET raw_response = ? WHERE id = ?;";
 
-    const char *sql = "UPDATE executions SET raw_response = ? WHERE id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
     if (raw) sqlite3_bind_text(stmt, 1, raw, -1, SQLITE_TRANSIENT);
     else     sqlite3_bind_null(stmt, 1);
     sqlite3_bind_int(stmt, 2, id);
-    int rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) { sqlite3_finalize(stmt); return ACTA_DB_ERR_SQL; }
-    int changes = sqlite3_changes(db->handle);
+
+    int step_rc = sqlite3_step(stmt);
+    int changes = (step_rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
+
+    if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
@@ -442,15 +511,22 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw) {
 /*  Free                                                              */
 /* ------------------------------------------------------------------ */
 
-void acta_db_execution_free(execution_t *e) {
+void acta_db_execution_free(execution_t *e)
+{
     if (!e) return;
-    free(e->prompt);       free(e->raw_response); free(e->result);
-    free(e->status);       free(e->error);
-    free(e->created_at);   free(e->started_at);   free(e->completed_at);
+    free(e->prompt);
+    free(e->raw_response);
+    free(e->result);
+    free(e->status);
+    free(e->error);
+    free(e->created_at);
+    free(e->started_at);
+    free(e->completed_at);
     free(e);
 }
 
-void acta_db_execution_list_free(execution_t **items, int count) {
+void acta_db_execution_list_free(execution_t **items, int count)
+{
     if (!items) return;
     for (int i = 0; i < count; i++)
         acta_db_execution_free(items[i]);

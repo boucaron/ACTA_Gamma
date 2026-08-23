@@ -5,20 +5,42 @@
 #include <stdio.h>
 
 /* ═══════════════════════════════════════════════════════════════════
- *  Internal helpers
+ *  Row decoder
  * ═══════════════════════════════════════════════════════════════════ */
 
-static context_t *row_to_context(sqlite3_stmt *stmt) {
+/*
+ * Decode one result row into a heap-allocated context_t.
+ *
+ * On success the caller owns the struct (free with acta_db_context_free).
+ * On failure the struct is fully freed internally and *err receives the
+ * specific code; the caller should propagate it and return NULL upward.
+ */
+static context_t *row_to_context(sqlite3_stmt *stmt, int *err) {
     context_t *c = calloc(1, sizeof(context_t));
-    if (!c) return NULL;
+    if (!c) {
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
+
+    int alloc_err = ACTA_DB_OK;
     c->id           = db_col_int(stmt, 0);
-    c->type         = db_col_text(stmt, 1);
-    c->content      = db_col_text(stmt, 2);
-    c->content_hash = db_col_text(stmt, 3);
-    c->metadata     = db_col_text(stmt, 4);
-    c->created_at   = db_col_text(stmt, 5);
+    c->type         = db_col_text(stmt, 1, &alloc_err);
+    c->content      = db_col_text(stmt, 2, &alloc_err);
+    c->content_hash = db_col_text(stmt, 3, &alloc_err);
+    c->metadata     = db_col_text(stmt, 4, &alloc_err);
+    c->created_at   = db_col_text(stmt, 5, &alloc_err);
+
+    if (alloc_err) {
+        acta_db_context_free(c);
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
     return c;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  Row collector (shared by query / legacy listers)
+ * ═══════════════════════════════════════════════════════════════════ */
 
 static context_t **collect_rows(sqlite3_stmt *stmt,
                                 int *out_count, int *err) {
@@ -26,17 +48,18 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
     context_t **items = NULL;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        context_t *item = row_to_context(stmt);
+        int row_err = ACTA_DB_OK;
+        context_t *item = row_to_context(stmt, &row_err);
         if (!item) {
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
-            if (err)       *err       = ACTA_DB_ERR_ALLOC;
+            if (err)       *err       = row_err;
             if (out_count) *out_count = 0;
             return NULL;
         }
 
         context_t **tmp = realloc(items,
-                                  sizeof(context_t *) * (count + 1));
+                                  sizeof(context_t *) * (size_t)(count + 1));
         if (!tmp) {
             acta_db_context_free(item);
             sqlite3_finalize(stmt);
@@ -51,114 +74,129 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
 
     sqlite3_finalize(stmt);
     if (out_count) *out_count = count;
-    return items;
+    if (err)       *err       = ACTA_DB_OK;
+    return items;   /* NULL when count == 0 – caller treats as "empty" */
 }
 
-/* ── Dynamic SQL builders ───────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════════════
+ *  Dynamic SQL builders
  *
- * build_select_sql writes
- *   "SELECT … FROM contexts [WHERE …] ORDER BY id [LIMIT ?] [OFFSET ?]"
- * into buf.  Returns chars written, or -1 on overflow.
+ *  Both builders write into a fixed-size buffer and return the number
+ *  of characters written, or -1 on overflow.  All user data is bound
+ *  via sqlite3_bind_*; these functions only emit static fragments and
+ *  '?' placeholders.
  *
- * build_count_sql writes
- *   "SELECT COUNT(*) FROM contexts [WHERE …]"
- * into buf.  Returns chars written, or -1 on overflow.
- *
- * Both use the same WHERE fragment (type / content_hash) so the bind
- * order is always:  [type, hash, (limit, offset)]  —  the LIMIT and
- * OFFSET parameters come after all WHERE parameters. */
+ *  Bind order (must match call sites):
+ *      [type, hash,  (limit, offset)]
+ *  i.e. WHERE params first, then LIMIT, then OFFSET.
+ * ═══════════════════════════════════════════════════════════════════ */
 
 static int build_where(char *buf, size_t sz, const context_query_t *q) {
-    int pos = 0;
-    int rc;
+    size_t pos = 0;
+    int    rc;
 
     if (q && q->type) {
         rc = snprintf(buf + pos, sz - pos, " WHERE type = ?");
         if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
+        pos += (size_t)rc;
 
         if (q->hash) {
             rc = snprintf(buf + pos, sz - pos, " AND content_hash = ?");
             if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-            pos += rc;
+            pos += (size_t)rc;
         }
     } else if (q && q->hash) {
         rc = snprintf(buf + pos, sz - pos, " WHERE content_hash = ?");
         if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
+        pos += (size_t)rc;
     }
-    return pos;
+    return (int)pos;
 }
 
 static int build_select_sql(char *buf, size_t sz,
                             const context_query_t *q,
                             int offset, int limit)
 {
-    int pos, rc;
+    size_t pos;
+    int    rc;
 
     rc = snprintf(buf, sz,
                   "SELECT id, type, content, content_hash, metadata, "
                   "created_at FROM contexts");
     if (rc < 0 || (size_t)rc >= sz) return -1;
-    pos = rc;
+    pos = (size_t)rc;
 
-    rc = build_where(buf + pos, sz - (size_t)pos, q);
+    rc = build_where(buf + pos, sz - pos, q);
     if (rc < 0) return -1;
-    pos += rc;
+    pos += (size_t)rc;
 
-    rc = snprintf(buf + pos, sz - (size_t)pos, " ORDER BY id");
-    if (rc < 0 || (size_t)rc >= sz - (size_t)pos) return -1;
-    pos += rc;
+    rc = snprintf(buf + pos, sz - pos, " ORDER BY id");
+    if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+    pos += (size_t)rc;
 
-    /* SQLite requires LIMIT before OFFSET.
-     * If only OFFSET is needed, emit "LIMIT -1". */
+    /*
+     * SQLite requires LIMIT before OFFSET.
+     * "LIMIT -1" is the idiomatic "no row cap" when OFFSET is present.
+     */
     if (limit > 0 || offset > 0) {
-        if (limit > 0)
-            rc = snprintf(buf + pos, sz - (size_t)pos, " LIMIT ?");
-        else
-            rc = snprintf(buf + pos, sz - (size_t)pos, " LIMIT -1");
-        if (rc < 0 || (size_t)rc >= sz - (size_t)pos) return -1;
-        pos += rc;
+        if (limit > 0) {
+            rc = snprintf(buf + pos, sz - pos, " LIMIT ?");
+        } else {
+            rc = snprintf(buf + pos, sz - pos, " LIMIT -1");
+        }
+        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+        pos += (size_t)rc;
 
         if (offset > 0) {
-            rc = snprintf(buf + pos, sz - (size_t)pos, " OFFSET ?");
-            if (rc < 0 || (size_t)rc >= sz - (size_t)pos) return -1;
-            pos += rc;
+            rc = snprintf(buf + pos, sz - pos, " OFFSET ?");
+            if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+            pos += (size_t)rc;
         }
     }
 
-    return pos;
+    return (int)pos;
 }
 
-static int build_count_sql(char *buf, size_t sz,
-                           const context_query_t *q)
-{
-    int pos, rc;
+static int build_count_sql(char *buf, size_t sz, const context_query_t *q) {
+    size_t pos;
+    int    rc;
 
     rc = snprintf(buf, sz, "SELECT COUNT(*) FROM contexts");
     if (rc < 0 || (size_t)rc >= sz) return -1;
-    pos = rc;
+    pos = (size_t)rc;
 
-    rc = build_where(buf + pos, sz - (size_t)pos, q);
+    rc = build_where(buf + pos, sz - pos, q);
     if (rc < 0) return -1;
-    pos += rc;
+    pos += (size_t)rc;
 
-    return pos;
+    return (int)pos;
 }
 
 /* ── Bind helpers ───────────────────────────────────────────────────
- * Binds the WHERE parameters (type, hash) in a fixed order.
- * Returns the next free bind index. */
+ * Binds the WHERE parameters (type, hash) in the same order the
+ * builder emitted them.  Returns the next free bind index so the
+ * caller can continue with LIMIT / OFFSET.
+ *
+ * Returns ACTA_DB_ERR_SQL if any bind fails, ACTA_DB_OK on success. */
 
-static int bind_where(sqlite3_stmt *stmt, const context_query_t *q) {
+static int bind_where(sqlite3_stmt *stmt, const context_query_t *q,
+                      int *next_idx) {
     int idx = 1;
+
     if (q) {
-        if (q->type)
-            sqlite3_bind_text(stmt, idx++, q->type, -1, SQLITE_TRANSIENT);
-        if (q->hash)
-            sqlite3_bind_text(stmt, idx++, q->hash, -1, SQLITE_TRANSIENT);
+        if (q->type) {
+            if (sqlite3_bind_text(stmt, idx++, q->type,
+                                  -1, SQLITE_TRANSIENT) != SQLITE_OK)
+                return ACTA_DB_ERR_SQL;
+        }
+        if (q->hash) {
+            if (sqlite3_bind_text(stmt, idx++, q->hash,
+                                  -1, SQLITE_TRANSIENT) != SQLITE_OK)
+                return ACTA_DB_ERR_SQL;
+        }
     }
-    return idx;
+    if (next_idx) *next_idx = idx;
+    return ACTA_DB_OK;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -172,26 +210,30 @@ int acta_db_context_create(db_t *db, const context_t *c, int *out_id) {
     const char *sql =
         "INSERT INTO contexts (type, content, content_hash, metadata) "
         "VALUES (?, ?, ?, ?);";
-    sqlite3_stmt *stmt;
+    sqlite3_stmt *stmt = NULL;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
 
-    sqlite3_bind_text(stmt, 1, c->type, -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, c->content, -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, c->content_hash, -1, SQLITE_TRANSIENT);
-    if (c->metadata)
-        sqlite3_bind_text(stmt, 4, c->metadata, -1, SQLITE_TRANSIENT);
-    else
-        sqlite3_bind_null(stmt, 4);
+    int rc = ACTA_DB_OK;
+    if (sqlite3_bind_text(stmt, 1, c->type, -1, SQLITE_TRANSIENT) == SQLITE_OK &&
+        sqlite3_bind_text(stmt, 2, c->content, -1, SQLITE_TRANSIENT) == SQLITE_OK &&
+        sqlite3_bind_text(stmt, 3, c->content_hash, -1, SQLITE_TRANSIENT) == SQLITE_OK &&
+        (c->metadata
+             ? sqlite3_bind_text(stmt, 4, c->metadata, -1, SQLITE_TRANSIENT)
+             : sqlite3_bind_null(stmt, 4)) == SQLITE_OK)
+    {
+        if (sqlite3_step(stmt) == SQLITE_DONE) {
+            if (out_id)
+                *out_id = (int)sqlite3_last_insert_rowid(db->handle);
+        } else {
+            rc = ACTA_DB_ERR_SQL;
+        }
+    } else {
+        rc = ACTA_DB_ERR_SQL;
+    }
 
-    int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE)
-        return ACTA_DB_ERR_SQL;
-
-    if (out_id)
-        *out_id = (int)sqlite3_last_insert_rowid(db->handle);
-    return ACTA_DB_OK;
+    return rc;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -215,16 +257,13 @@ context_t *acta_db_context_get(db_t *db, int id, int *err) {
         return NULL;
     }
 
-    sqlite3_bind_int(stmt, 1, id);
+    sqlite3_bind_int64(stmt, 1, (sqlite3_int64)id);
+
     context_t *result = NULL;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        result = row_to_context(stmt);
-        if (!result) {
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_ALLOC;
-            return NULL;
-        }
-    }
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        result = row_to_context(stmt, err);
+    /* Not found: step returns SQLITE_DONE, result stays NULL, *err stays OK */
+
     sqlite3_finalize(stmt);
     return result;
 }
@@ -264,16 +303,30 @@ context_t **acta_db_context_query(db_t *db,
         return NULL;
     }
 
-    int bind = bind_where(stmt, q);
+    int bind = 1;
+    if (bind_where(stmt, q, &bind) != ACTA_DB_OK) {
+        sqlite3_finalize(stmt);
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
 
-    if (limit  > 0)
-        sqlite3_bind_int(stmt, bind++, limit);
-    if (offset > 0)
-        sqlite3_bind_int(stmt, bind++, offset);
+    if (limit > 0) {
+        if (sqlite3_bind_int(stmt, bind++, limit) != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            if (err) *err = ACTA_DB_ERR_SQL;
+            return NULL;
+        }
+    }
+    if (offset > 0) {
+        if (sqlite3_bind_int(stmt, bind++, offset) != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            if (err) *err = ACTA_DB_ERR_SQL;
+            return NULL;
+        }
+    }
 
     return collect_rows(stmt, out_count, err);
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════
  *  count
@@ -302,9 +355,14 @@ int acta_db_context_count(db_t *db,
         return -1;
     }
 
-    bind_where(stmt, q);
+    int next = 1;
+    if (bind_where(stmt, q, &next) != ACTA_DB_OK) {
+        sqlite3_finalize(stmt);
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
 
-    int count = 0;
+    int count = -1;
     if (sqlite3_step(stmt) == SQLITE_ROW)
         count = db_col_int(stmt, 0);
     sqlite3_finalize(stmt);
@@ -364,11 +422,11 @@ context_t **acta_db_context_list_by_hash(db_t *db,
 
 void acta_db_context_free(context_t *c) {
     if (!c) return;
-    free(c->type);
-    free(c->content);
-    free(c->content_hash);
-    free(c->metadata);
-    free(c->created_at);
+    DB_FREE_STR(c->type);
+    DB_FREE_STR(c->content);
+    DB_FREE_STR(c->content_hash);
+    DB_FREE_STR(c->metadata);
+    DB_FREE_STR(c->created_at);
     free(c);
 }
 

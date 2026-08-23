@@ -3,25 +3,37 @@
 #include "db.h"
 
 /* ------------------------------------------------------------------ */
-static model_folder_t *row_to_model_folder(sqlite3_stmt *stmt)
+/*  Row decoding                                                      */
+/* ------------------------------------------------------------------ */
+
+static model_folder_t *row_to_model_folder(sqlite3_stmt *stmt, int *err)
 {
     model_folder_t *f = calloc(1, sizeof(model_folder_t));
-    if (!f) return NULL;
+    if (!f) {
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
+
+    int alloc_err = ACTA_DB_OK;
     f->id         = db_col_int(stmt, 0);
-    f->name       = db_col_text(stmt, 1);
+    f->name       = db_col_text(stmt, 1, &alloc_err);
     f->parent_id  = db_col_int_or_zero(stmt, 2);
-    f->created_at = db_col_text(stmt, 3);
-    f->updated_at = db_col_text(stmt, 4);
-    f->deleted_at = db_col_text(stmt, 5);
+    f->created_at = db_col_text(stmt, 3, &alloc_err);
+    f->updated_at = db_col_text(stmt, 4, &alloc_err);
+    f->deleted_at = db_col_text(stmt, 5, &alloc_err);
+
+    if (alloc_err) {
+        acta_db_model_folder_free(f);   /* frees strings + struct */
+        if (err) *err = alloc_err;
+        return NULL;
+    }
     return f;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Shared step-loop.  Caller must finalize stmt before returning.    */
-/*  On success (incl. zero rows): returns array (or NULL for 0),      */
-/*  *out_count set, *out_err = ACTA_DB_OK.                           */
-/*  On failure: returns NULL, *out_count = 0, *out_err set.          */
+/*  Shared step-loop                                                  */
 /* ------------------------------------------------------------------ */
+
 static model_folder_t **collect_rows(sqlite3_stmt *stmt,
                                      int *out_count,
                                      int *out_err)
@@ -31,11 +43,13 @@ static model_folder_t **collect_rows(sqlite3_stmt *stmt,
     model_folder_t **items = NULL;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        model_folder_t *item = row_to_model_folder(stmt);
+        int row_err = ACTA_DB_OK;
+        model_folder_t *item = row_to_model_folder(stmt, &row_err);
         if (!item) {
             *out_count = 0;
-            *out_err   = ACTA_DB_ERR_ALLOC;
-            for (int i = 0; i < count; i++) acta_db_model_folder_free(items[i]);
+            *out_err   = row_err;
+            for (int i = 0; i < count; i++)
+                acta_db_model_folder_free(items[i]);
             free(items);
             return NULL;
         }
@@ -47,7 +61,8 @@ static model_folder_t **collect_rows(sqlite3_stmt *stmt,
                 *out_count = 0;
                 *out_err   = ACTA_DB_ERR_ALLOC;
                 acta_db_model_folder_free(item);
-                for (int i = 0; i < count; i++) acta_db_model_folder_free(items[i]);
+                for (int i = 0; i < count; i++)
+                    acta_db_model_folder_free(items[i]);
                 free(items);
                 return NULL;
             }
@@ -57,6 +72,7 @@ static model_folder_t **collect_rows(sqlite3_stmt *stmt,
         items[count++] = item;
     }
 
+    /* Shrink to exact size (best-effort; keep larger buffer on failure). */
     if (count > 0 && count < cap) {
         model_folder_t **tmp =
             realloc(items, sizeof(model_folder_t *) * (size_t)count);
@@ -112,7 +128,7 @@ int acta_db_model_folder_rename(db_t *db, int id, const char *new_name)
     sqlite3_bind_int(stmt, 2, id);
 
     int rc = sqlite3_step(stmt);
-    int changes = rc == SQLITE_DONE ? sqlite3_changes(db->handle) : 0;
+    int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
@@ -123,21 +139,24 @@ int acta_db_model_folder_soft_delete(db_t *db, int id)
 {
     if (!db || id <= 0) return ACTA_DB_ERR_INVALID;
 
-    /* Reject if the folder has live children */
-    const char *check_sql =
-        "SELECT COUNT(*) FROM model_folders"
-        " WHERE parent_id = ? AND deleted_at IS NULL;";
-    sqlite3_stmt *check;
-    if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK)
-        return ACTA_DB_ERR_SQL;
-    sqlite3_bind_int(check, 1, id);
+    /* Reject if the folder has live child sub-folders. */
+    {
+        const char *check_sql =
+            "SELECT COUNT(*) FROM model_folders"
+            " WHERE parent_id = ? AND deleted_at IS NULL;";
+        sqlite3_stmt *check;
+        if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL)
+            != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
+        sqlite3_bind_int(check, 1, id);
 
-    int child_count = 0;
-    if (sqlite3_step(check) == SQLITE_ROW)
-        child_count = (int)sqlite3_column_int64(check, 0);
-    sqlite3_finalize(check);
+        int child_count = 0;
+        if (sqlite3_step(check) == SQLITE_ROW)
+            child_count = (int)sqlite3_column_int64(check, 0);
+        sqlite3_finalize(check);
 
-    if (child_count > 0) return ACTA_DB_ERR_INVALID;
+        if (child_count > 0) return ACTA_DB_ERR_INVALID;
+    }
 
     const char *sql =
         "UPDATE model_folders"
@@ -149,8 +168,9 @@ int acta_db_model_folder_soft_delete(db_t *db, int id)
     sqlite3_bind_int(stmt, 1, id);
 
     int rc = sqlite3_step(stmt);
-    int changes = rc == SQLITE_DONE ? sqlite3_changes(db->handle) : 0;
+    int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
+
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
@@ -170,36 +190,40 @@ int acta_db_model_folder_restore(db_t *db, int id)
 
     sqlite3_bind_int(stmt, 1, id);
 
-    int rc      = sqlite3_step(stmt);
-    int changes = rc == SQLITE_DONE ? sqlite3_changes(db->handle) : 0;
+    int rc = sqlite3_step(stmt);
+    int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
-/*
- * Walk the ancestor chain starting from `start_id`.
- * Returns 1 if `target_id` is found among the ancestors (cycle detected),
- * 0 if the chain reaches root without hitting it,
- * -1 on SQL error.
- */
+/* ------------------------------------------------------------------ */
+/*  Cycle detection: does `target_id` appear in the ancestor chain    */
+/*  starting at `start_id`?                                           */
+/* ------------------------------------------------------------------ */
+
 static int ancestor_reaches(db_t *db, int start_id, int target_id)
 {
     const char *sql =
-        "SELECT parent_id FROM model_folders WHERE id = ? AND deleted_at IS NULL;";
+        "SELECT parent_id FROM model_folders "
+        "WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return -1;
 
-    int cur = start_id;
+    int cur   = start_id;
     int found = 0;
-    while (cur > 0) {
+    int depth = 0;
+    const int MAX_DEPTH = 10000;   /* guard against corrupted circular data */
+
+    while (cur > 0 && depth < MAX_DEPTH) {
         if (cur == target_id) { found = 1; break; }
         sqlite3_reset(stmt);
         sqlite3_bind_int(stmt, 1, cur);
         if (sqlite3_step(stmt) != SQLITE_ROW) break;
         cur = db_col_int_or_zero(stmt, 0);
+        depth++;
     }
     sqlite3_finalize(stmt);
     return found;
@@ -210,6 +234,7 @@ int acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id)
     if (!db || folder_id <= 0) return ACTA_DB_ERR_INVALID;
 
     /* 1. Source folder must exist and be live. */
+    int cur_parent;
     {
         const char *sql =
             "SELECT parent_id FROM model_folders "
@@ -219,15 +244,13 @@ int acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id)
             return ACTA_DB_ERR_SQL;
         sqlite3_bind_int(stmt, 1, folder_id);
 
-        int cur_parent = -1;
+        cur_parent = -1;
         if (sqlite3_step(stmt) == SQLITE_ROW)
             cur_parent = db_col_int_or_zero(stmt, 0);
         sqlite3_finalize(stmt);
 
         if (cur_parent < 0) return ACTA_DB_ERR_NOT_FOUND;
-
-        /* Already in the right place – no-op. */
-        if (cur_parent == new_parent_id) return ACTA_DB_OK;
+        if (cur_parent == new_parent_id) return ACTA_DB_OK;  /* no-op */
     }
 
     /* 2. Target parent must exist and be live (if not root). */
@@ -244,32 +267,35 @@ int acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id)
         if (rc != SQLITE_ROW) return ACTA_DB_ERR_NOT_FOUND;
     }
 
-    /* 3. Cycle check: new_parent_id must not be a descendant of folder_id. */
+    /* 3. Cycle check. */
     if (new_parent_id > 0) {
         int cycle = ancestor_reaches(db, new_parent_id, folder_id);
         if (cycle < 0) return ACTA_DB_ERR_SQL;
         if (cycle > 0) return ACTA_DB_ERR_INVALID;
     }
 
-    /* 4. Perform the update. */
-    const char *sql =
-        "UPDATE model_folders SET parent_id = ?, updated_at = datetime('now') "
-        "WHERE id = ? AND deleted_at IS NULL;";
-    sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
-        return ACTA_DB_ERR_SQL;
-    if (new_parent_id == 0)
-        sqlite3_bind_null(stmt, 1);
-    else
-        sqlite3_bind_int(stmt, 1, new_parent_id);
-    sqlite3_bind_int(stmt, 2, folder_id);
+    /* 4. Update. */
+    {
+        const char *sql =
+            "UPDATE model_folders SET parent_id = ?, "
+            "updated_at = datetime('now') "
+            "WHERE id = ? AND deleted_at IS NULL;";
+        sqlite3_stmt *stmt;
+        if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
+        if (new_parent_id == 0)
+            sqlite3_bind_null(stmt, 1);
+        else
+            sqlite3_bind_int(stmt, 1, new_parent_id);
+        sqlite3_bind_int(stmt, 2, folder_id);
 
-    int rc = sqlite3_step(stmt);
-    int changes = rc == SQLITE_DONE ? sqlite3_changes(db->handle) : 0;
-    sqlite3_finalize(stmt);
+        int rc = sqlite3_step(stmt);
+        int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
+        sqlite3_finalize(stmt);
 
-    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+        if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+        return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    }
 }
 
 /* ================================================================== */
@@ -293,20 +319,19 @@ model_folder_t *acta_db_model_folder_get(db_t *db, int id, int *err)
     }
     sqlite3_bind_int(stmt, 1, id);
 
-    int      has_row = 0;
     model_folder_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        has_row = 1;
-        result = row_to_model_folder(stmt);
+        int decode_err = ACTA_DB_OK;
+        result = row_to_model_folder(stmt, &decode_err);
+        if (err) *err = result ? ACTA_DB_OK : decode_err;
+    } else {
+        if (err) *err = ACTA_DB_OK;   /* not found – not an error */
     }
     sqlite3_finalize(stmt);
 
-    if (err) {
-        if (!result && has_row)      *err = ACTA_DB_ERR_ALLOC;
-        else                         *err = ACTA_DB_OK;
-    }
-    return result;   /* NULL = not found (or alloc failure, see err) */
+    return result;
 }
+
 
 /* ================================================================== */
 /*  Listers                                                           */
@@ -322,13 +347,15 @@ model_folder_t **acta_db_model_folder_list_children(
         return NULL;
     }
 
-    const char *sql = parent_id == 0
+    const char *sql = (parent_id == 0)
         ? "SELECT id, name, parent_id, created_at, updated_at, deleted_at "
-          "FROM model_folders WHERE parent_id IS NULL AND deleted_at IS NULL "
-          "ORDER BY name LIMIT ? OFFSET ?;"
+          "FROM model_folders "
+          "WHERE parent_id IS NULL AND deleted_at IS NULL "
+          "ORDER BY id LIMIT ? OFFSET ?;"
         : "SELECT id, name, parent_id, created_at, updated_at, deleted_at "
-          "FROM model_folders WHERE parent_id = ? AND deleted_at IS NULL "
-          "ORDER BY name LIMIT ? OFFSET ?;";
+          "FROM model_folders "
+          "WHERE parent_id = ? AND deleted_at IS NULL "
+          "ORDER BY id LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -363,8 +390,9 @@ model_folder_t **acta_db_model_folder_list_all(
 
     const char *sql =
         "SELECT id, name, parent_id, created_at, updated_at, deleted_at "
-        "FROM model_folders WHERE deleted_at IS NULL "
-        "ORDER BY name LIMIT ? OFFSET ?;";
+        "FROM model_folders "
+        "WHERE deleted_at IS NULL "
+        "ORDER BY id LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -385,7 +413,7 @@ model_folder_t **acta_db_model_folder_list_all(
 }
 
 /* ================================================================== */
-/*  Count                                                             */
+/*  Counts                                                            */
 /* ================================================================== */
 
 int acta_db_model_folder_count_children(db_t *db, int parent_id, int *err)
@@ -395,13 +423,11 @@ int acta_db_model_folder_count_children(db_t *db, int parent_id, int *err)
         return -1;
     }
 
-    const char *sql;
-    if (parent_id == 0)
-        sql = "SELECT COUNT(*) FROM model_folders "
-              "WHERE parent_id IS NULL AND deleted_at IS NULL;";
-    else
-        sql = "SELECT COUNT(*) FROM model_folders "
-              "WHERE parent_id = ? AND deleted_at IS NULL;";
+    const char *sql = (parent_id == 0)
+        ? "SELECT COUNT(*) FROM model_folders "
+          "WHERE parent_id IS NULL AND deleted_at IS NULL;"
+        : "SELECT COUNT(*) FROM model_folders "
+          "WHERE parent_id = ? AND deleted_at IS NULL;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -411,11 +437,15 @@ int acta_db_model_folder_count_children(db_t *db, int parent_id, int *err)
     if (parent_id != 0)
         sqlite3_bind_int(stmt, 1, parent_id);
 
-    int count = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-        count = (int)sqlite3_column_int64(stmt, 0);
+    int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
+    if (rc != SQLITE_ROW) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
+
+    int count = (int)sqlite3_column_int64(stmt, 0);
     if (err) *err = ACTA_DB_OK;
     return count;
 }
@@ -436,11 +466,15 @@ int acta_db_model_folder_count_all(db_t *db, int *err)
         return -1;
     }
 
-    int count = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-        count = (int)sqlite3_column_int64(stmt, 0);
+    int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
+    if (rc != SQLITE_ROW) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
+
+    int count = (int)sqlite3_column_int64(stmt, 0);
     if (err) *err = ACTA_DB_OK;
     return count;
 }
@@ -452,10 +486,10 @@ int acta_db_model_folder_count_all(db_t *db, int *err)
 void acta_db_model_folder_free(model_folder_t *f)
 {
     if (!f) return;
-    free(f->name);
-    free(f->created_at);
-    free(f->updated_at);
-    free(f->deleted_at);
+    DB_FREE_STR(f->name);
+    DB_FREE_STR(f->created_at);
+    DB_FREE_STR(f->updated_at);
+    DB_FREE_STR(f->deleted_at);
     free(f);
 }
 

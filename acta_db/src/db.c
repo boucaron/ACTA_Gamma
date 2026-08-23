@@ -19,6 +19,23 @@ const char *acta_db_strerror(int code)
 }
 
 /* ------------------------------------------------------------------ */
+/*  Internal: run a one-shot SQL statement, capturing the error string.
+ *
+ *  Returns SQLITE_OK or a SQLite error code.
+ *  On failure, *last_error is set to a sqlite3_malloc'd string that
+ *  the caller owns (free with sqlite3_free).
+ * ------------------------------------------------------------------ */
+static int db_exec_capture(db_t *db, const char *sql) {
+    /* Free any previous error string before running a new statement. */
+    sqlite3_free(db->last_error);
+    db->last_error = NULL;
+
+    int rc = sqlite3_exec(db->handle, sql, NULL, NULL,
+                          (char **)&db->last_error);
+    return rc;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Lifecycle                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -30,14 +47,19 @@ db_t *acta_db_open(const char *path, int *err) {
 
     sqlite3 *handle;
     if (sqlite3_open(path, &handle) != SQLITE_OK) {
-        sqlite3_close(handle);
+        if (handle) sqlite3_close(handle);
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
     }
 
-    /* Enable WAL and foreign keys */
+    /*
+     * PRAGMAs are best-effort.  WAL is not supported on :memory: or
+     * some network filesystems; the DB still opens without it.
+     * We do not treat a PRAGMA failure as fatal here; the caller
+     * can query PRAGMA journal_mode if it needs to verify.
+     */
     sqlite3_exec(handle, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL);
-    sqlite3_exec(handle, "PRAGMA foreign_keys=ON;", NULL, NULL, NULL);
+    sqlite3_exec(handle, "PRAGMA foreign_keys=ON;",  NULL, NULL, NULL);
 
     db_t *db = malloc(sizeof(db_t));
     if (!db) {
@@ -52,23 +74,31 @@ db_t *acta_db_open(const char *path, int *err) {
     return db;
 }
 
-/* Close the database and free the handle.
- * Returns ACTA_DB_OK on success, ACTA_DB_ERR_SQL if the close failed
- * (e.g. outstanding prepared statements still hold the handle).
- */
 int acta_db_close(db_t *db) {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    /* Implicit rollback if the caller forgot to commit/rollback. */
+    /* Best-effort rollback if the caller forgot to commit/rollback. */
     if (db->in_transaction) {
         sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL);
         db->in_transaction = 0;
     }
 
-    free(db->last_error);
+    sqlite3_free(db->last_error);   /* allocated by sqlite3_exec */
+    db->last_error = NULL;
 
-    int rc = sqlite3_close(db->handle);
-    free(db);
+    /*
+     * close_v2 finalizes any outstanding prepared statements before
+     * closing, so a leaked stmt in library code cannot prevent the
+     * handle from being released.  (sqlite3_close would fail in that
+     * case, leaking the handle with no recovery path.)
+     *
+     * close_v2 still returns an error if the close itself fails
+     * (e.g. I/O error flushing the WAL), in which case we report it
+     * but still free our C-level allocations.
+     */
+    int rc = sqlite3_close_v2(db->handle);
+
+    free(db);   /* C-level struct is always reclaimed */
     return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
@@ -80,16 +110,8 @@ int acta_db_close(db_t *db) {
 int acta_db_exec(db_t *db, const char *sql) {
     if (!db || !sql) return ACTA_DB_ERR_INVALID;
 
-    free(db->last_error);
-    db->last_error = NULL;
-
-    char *err = NULL;
-    int rc = sqlite3_exec(db->handle, sql, NULL, NULL, &err);
-    if (rc != SQLITE_OK) {
-        db->last_error = err;   /* take ownership of sqlite-allocated string */
-        return ACTA_DB_ERR_SQL;
-    }
-    return ACTA_DB_OK;
+    int rc = db_exec_capture(db, sql);
+    return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
 const char *acta_db_last_error(db_t *db) {
@@ -103,24 +125,28 @@ const char *acta_db_last_error(db_t *db) {
 
 int acta_db_transaction(db_t *db, int (*fn)(db_t *, void *), void *user_data) {
     if (!db || !fn) return ACTA_DB_ERR_INVALID;
-    if (db->in_transaction) return ACTA_DB_ERR_INVALID;  /* no nesting */
+    if (db->in_transaction) return ACTA_DB_ERR_INVALID;
 
-    db->in_transaction = 1;
-
-    if (sqlite3_exec(db->handle, "BEGIN;", NULL, NULL, NULL) != SQLITE_OK) {
-        db->in_transaction = 0;
+    if (db_exec_capture(db, "BEGIN") != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
-    }
+    db->in_transaction = 1;
 
     int result = fn(db, user_data);
 
-    if (result == ACTA_DB_OK) {
-        sqlite3_exec(db->handle, "COMMIT;", NULL, NULL, NULL);
-    } else {
-        sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL);
+    /*
+     * The callback (or code it calls) may have already committed or
+     * rolled back via acta_db_commit / acta_db_rollback.  In that
+     * case in_transaction is 0 and no further action is needed.
+     */
+    if (db->in_transaction) {
+        db->in_transaction = 0;   /* clear before SQL so retry is possible */
+
+        const char *sql = (result == ACTA_DB_OK) ? "COMMIT" : "ROLLBACK";
+        int rc = db_exec_capture(db, sql);
+        if (rc != SQLITE_OK)
+            result = ACTA_DB_ERR_SQL;
     }
 
-    db->in_transaction = 0;
     return result;
 }
 
@@ -130,9 +156,9 @@ int acta_db_transaction(db_t *db, int (*fn)(db_t *, void *), void *user_data) {
 
 int acta_db_begin(db_t *db) {
     if (!db) return ACTA_DB_ERR_INVALID;
-    if (db->in_transaction) return ACTA_DB_ERR_INVALID;  /* already in txn */
+    if (db->in_transaction) return ACTA_DB_ERR_INVALID;
 
-    if (sqlite3_exec(db->handle, "BEGIN;", NULL, NULL, NULL) != SQLITE_OK)
+    if (db_exec_capture(db, "BEGIN") != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
 
     db->in_transaction = 1;
@@ -141,24 +167,24 @@ int acta_db_begin(db_t *db) {
 
 int acta_db_commit(db_t *db) {
     if (!db) return ACTA_DB_ERR_INVALID;
-    if (!db->in_transaction) return ACTA_DB_ERR_INVALID;  /* nothing to commit */
+    if (!db->in_transaction) return ACTA_DB_ERR_INVALID;
+
+    int rc = db_exec_capture(db, "COMMIT");
+    if (rc != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;   /* flag stays 1 → caller can retry/rollback */
 
     db->in_transaction = 0;
-
-    if (sqlite3_exec(db->handle, "COMMIT;", NULL, NULL, NULL) != SQLITE_OK)
-        return ACTA_DB_ERR_SQL;
-
     return ACTA_DB_OK;
 }
 
 int acta_db_rollback(db_t *db) {
     if (!db) return ACTA_DB_ERR_INVALID;
-    if (!db->in_transaction) return ACTA_DB_ERR_INVALID;  /* nothing to roll back */
+    if (!db->in_transaction) return ACTA_DB_ERR_INVALID;
+
+    int rc = db_exec_capture(db, "ROLLBACK");
+    if (rc != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;   /* flag stays 1 → caller can retry */
 
     db->in_transaction = 0;
-
-    if (sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL) != SQLITE_OK)
-        return ACTA_DB_ERR_SQL;
-
     return ACTA_DB_OK;
 }
