@@ -143,6 +143,8 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
 /*
  * Return a page of executions matching `q`, ordered by id ASC.
  *
+ * q – filter criteria; NULL is equivalent to &ACTA_EXEC_QUERY_ANY.
+ *
  * Pagination:
  *   offset – number of rows to skip (0-based; 0 = first row).
  *            Must be >= 0; negative → ACTA_DB_ERR_INVALID.
@@ -184,12 +186,15 @@ execution_t **acta_db_execution_query(db_t *db,
                                       int offset, int limit,
                                       int *out_count, int *err);
 
+
 /* ── Count ────────────────────────────────────────────────────────── */
 
 /* Return the total number of execution rows matching `q`
  * (ignoring pagination).  Useful for computing total_pages,
  * rendering "Page X of Y", or deciding whether a lister is exhausted
  * without fetching the next page.
+ *
+ * q – filter criteria; NULL is equivalent to &ACTA_EXEC_QUERY_ANY.
  *
  * Returns:
  *   >= 0  on success (the row count; 0 is valid)
@@ -199,6 +204,7 @@ execution_t **acta_db_execution_query(db_t *db,
 int acta_db_execution_count(db_t *db,
                             const execution_query_t *q,
                             int *err);
+
 
 /* ── Free ─────────────────────────────────────────────────────────── */
 

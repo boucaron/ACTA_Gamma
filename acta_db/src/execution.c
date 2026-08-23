@@ -140,7 +140,7 @@ execution_t **acta_db_execution_query(db_t *db,
 
     char sql[600];
     snprintf(sql, sizeof(sql),
-             EXEC_SELECT "%s ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?;",
+             EXEC_SELECT "%s ORDER BY id ASC LIMIT ? OFFSET ?;",
              where_clause);
 
     /* ── prepare ───────────────────────────────────────────────── */
