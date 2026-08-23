@@ -36,8 +36,9 @@ typedef struct {
 /* ── Query filter ─────────────────────────────────────────────────── */
 
 /* All fields are optional.  A zero / NULL field means "do not filter
- * on that dimension".  Every combination is valid, including all-fields-
- * unset (equivalent to the old list_all).
+ * on that dimension".  Multiple non-default fields are AND-ed:
+ * the row must match every field you set.  Every combination is
+ * valid, including all-fields-unset (matches everything).
  *
  *   status             – exact match, e.g. "running"
  *   parent_execution_id– 0 = any (no parent filter);
@@ -56,7 +57,7 @@ typedef struct {
     int         model_revision_id;   /* 0 = any           */
 } execution_query_t;
 
-/* Convenience: a query that matches every row (replaces list_all). */
+/* Convenience: a query that matches every row. */
 #define ACTA_EXEC_QUERY_ANY \
     (execution_query_t){ .status = NULL, .parent_execution_id = 0, \
                           .context_id = 0, .skill_revision_id = 0, \
@@ -158,27 +159,25 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
  *
  * Both out_count and err may be NULL.
  *
- * This function replaces the former list_all / list_by_status /
- * list_children / list_by_context / list_by_skill_revision /
- * list_by_model_revision variants.  Map old calls as follows:
+ * ── Examples ──────────────────────────────────────────────────────
  *
- *   list_all(db, off, lim, …)
- *       → query(db, &ACTA_EXEC_QUERY_ANY, off, lim, …)
+ *   All rows:
+ *       query(db, &ACTA_EXEC_QUERY_ANY, off, lim, …)
  *
- *   list_by_status(db, "running", off, lim, …)
- *       → query(db, &(execution_query_t){ .status = "running" }, …)
+ *   Single filter:
+ *       query(db, &(execution_query_t){ .status = "running" }, …)
+ *       query(db, &(execution_query_t){ .parent_execution_id = 42 }, …)
+ *       query(db, &(execution_query_t){ .context_id = 7 }, …)
+ *       query(db, &(execution_query_t){ .skill_revision_id = 12 }, …)
+ *       query(db, &(execution_query_t){ .model_revision_id = 5 }, …)
  *
- *   list_children(db, 42, off, lim, …)
- *       → query(db, &(execution_query_t){ .parent_execution_id = 42 }, …)
- *
- *   list_by_context(db, 7, off, lim, …)
- *       → query(db, &(execution_query_t){ .context_id = 7 }, …)
- *
- *   list_by_skill_revision(db, 12, off, lim, …)
- *       → query(db, &(execution_query_t){ .skill_revision_id = 12 }, …)
- *
- *   list_by_model_revision(db, 5, off, lim, …)
- *       → query(db, &(execution_query_t){ .model_revision_id = 5 }, …)
+ *   Combined (AND):
+ *       // running executions belonging to context 7
+ *       query(db, &(execution_query_t){
+ *           .status = "running",
+ *           .context_id = 7
+ *       }, 0, 50, &n, &err);
+ * ────────────────────────────────────────────────────────────────────
  */
 execution_t **acta_db_execution_query(db_t *db,
                                       const execution_query_t *q,
@@ -200,40 +199,6 @@ execution_t **acta_db_execution_query(db_t *db,
 int acta_db_execution_count(db_t *db,
                             const execution_query_t *q,
                             int *err);
-
-/* ── Deprecated listers (removed in v2) ──────────────────────────── */
-
-/* Deprecated: use acta_db_execution_query with ACTA_EXEC_QUERY_ANY. */
-execution_t **acta_db_execution_list_all(db_t *db,
-                                          int offset, int limit,
-                                          int *out_count, int *err);
-
-/* Deprecated: use acta_db_execution_query with .status set. */
-execution_t **acta_db_execution_list_by_status(db_t *db, const char *status,
-                                                int offset, int limit,
-                                                int *out_count, int *err);
-
-/* Deprecated: use acta_db_execution_query with .parent_execution_id set. */
-execution_t **acta_db_execution_list_children(db_t *db, int parent_id,
-                                               int offset, int limit,
-                                               int *out_count, int *err);
-
-/* Deprecated: use acta_db_execution_query with .context_id set. */
-execution_t **acta_db_execution_list_by_context(db_t *db, int context_id,
-                                                int offset, int limit,
-                                                int *out_count, int *err);
-
-/* Deprecated: use acta_db_execution_query with .skill_revision_id set. */
-execution_t **acta_db_execution_list_by_skill_revision(db_t *db,
-                                                        int skill_revision_id,
-                                                        int offset, int limit,
-                                                        int *out_count, int *err);
-
-/* Deprecated: use acta_db_execution_query with .model_revision_id set. */
-execution_t **acta_db_execution_list_by_model_revision(db_t *db,
-                                                        int model_revision_id,
-                                                        int offset, int limit,
-                                                        int *out_count, int *err);
 
 /* ── Free ─────────────────────────────────────────────────────────── */
 

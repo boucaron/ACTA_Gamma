@@ -507,7 +507,7 @@ static void test_exec_query_by_status(void) {
 
     int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
     int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    (void)e1; (void)e2;
+    (void)e1;
     acta_db_execution_start(db, e2);
     acta_db_execution_complete(db, e2, "done");
 
@@ -601,7 +601,6 @@ static void test_exec_query_by_context(void) {
     test_db_teardown(db, path);
 }
 
-
 /* ---------- 9.24: query — combined filters (status + context) ---------- */
 static void test_exec_query_combined(void) {
     const char *path = "test/acta_test_exec_q_combined.db";
@@ -651,7 +650,6 @@ static void test_exec_query_combined(void) {
     test_db_teardown(db, path);
 }
 
-
 /* ---------- 9.25: query — pagination (offset + limit) ---------- */
 static void test_exec_query_pagination(void) {
     const char *path = "test/acta_test_exec_q_paging.db";
@@ -695,7 +693,7 @@ static void test_exec_query_pagination(void) {
     /* page 4: offset 7 → empty */
     int n4 = 0;
     acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
-                                7, 3, &n4, &err);
+                            7, 3, &n4, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n4, 0);
 
@@ -879,7 +877,6 @@ static void test_exec_count_combined(void) {
     test_db_teardown(db, path);
 }
 
-
 /* ---------- 9.44: count — empty table ---------- */
 static void test_exec_count_empty(void) {
     const char *path = "test/acta_test_exec_count_empty.db";
@@ -933,78 +930,6 @@ static void test_exec_count_null_err(void) {
     /* must not crash with NULL err */
     int rc = acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY, NULL);
     TEST_ASSERT_EQ_INT(rc, 1);
-
-    test_db_teardown(db, path);
-}
-
-/* ================================================================== */
-/*  Deprecated wrappers (verify they still route to query)            */
-/* ================================================================== */
-
-/* ---------- 9.50: list_all wrapper ---------- */
-static void test_exec_wrapper_list_all(void) {
-    const char *path = "test/acta_test_exec_w_all.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "A", 0) > 0);
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "B", 0) > 0);
-
-    int n = 0, err = 0;
-    execution_t **items = acta_db_execution_list_all(db, 0, 0, &n, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(n, 2);
-    acta_db_execution_list_free(items, n);
-
-    test_db_teardown(db, path);
-}
-
-/* ---------- 9.51: list_by_status wrapper ---------- */
-static void test_exec_wrapper_list_by_status(void) {
-    const char *path = "test/acta_test_exec_w_status.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    acta_db_execution_start(db, e1);
-
-    int n = 0, err = 0;
-    execution_t **items = acta_db_execution_list_by_status(
-        db, ACTA_EXEC_STATUS_RUNNING, 0, 0, &n, &err);
-    TEST_ASSERT_EQ_INT(n, 1);
-    acta_db_execution_list_free(items, n);
-
-    test_db_teardown(db, path);
-}
-
-/* ---------- 9.52: list_children wrapper ---------- */
-static void test_exec_wrapper_list_children(void) {
-    const char *path = "test/acta_test_exec_w_children.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int parent = exec_create(db, ctx_id, sr_id, mr_id, "P", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C1", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "C2", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "Other", 0);
-
-    int n = 0, err = 0;
-    execution_t **items = acta_db_execution_list_children(db, parent, 0, 0, &n, &err);
-    TEST_ASSERT_EQ_INT(n, 2);
-    acta_db_execution_list_free(items, n);
 
     test_db_teardown(db, path);
 }
@@ -1152,13 +1077,6 @@ void run_execution_count_tests(void) {
     test_exec_count_null_err();
 }
 
-void run_execution_wrapper_tests(void) {
-    fprintf(stderr, "\n=== execution deprecated wrapper tests ===\n");
-    test_exec_wrapper_list_all();
-    test_exec_wrapper_list_by_status();
-    test_exec_wrapper_list_children();
-}
-
 void run_execution_free_tests(void) {
     fprintf(stderr, "\n=== execution free tests ===\n");
     test_exec_free_valid();
@@ -1168,15 +1086,13 @@ void run_execution_free_tests(void) {
     test_exec_raw_insert();
 }
 
- void run_execution_create_tests(void) {
-   fprintf(stderr, "\n=== execution create/get/free tests ===\n");
-    
-   run_execution_create_only_tests();
-   run_execution_get_tests();
-   run_execution_state_tests();
-   run_execution_query_tests();
-   run_execution_count_tests();
-   run_execution_wrapper_tests();
-   run_execution_free_tests();
+void run_execution_create_tests(void) {
+    fprintf(stderr, "\n=== execution create/get/free tests ===\n");
 
- }
+    run_execution_create_only_tests();
+    run_execution_get_tests();
+    run_execution_state_tests();
+    run_execution_query_tests();
+    run_execution_count_tests();
+    run_execution_free_tests();
+}
