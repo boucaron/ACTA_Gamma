@@ -6,7 +6,7 @@
 
 #include "context.h"
 #include "db.h"
-#include "test_common.h" 
+#include "test_common.h"
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Fixture helper
@@ -44,8 +44,8 @@ static void ctx_fixture(db_t *db)
         context_t c;
         memset(&c, 0, sizeof(c));
         c.type         = (char *)rows[i][0];
-        c.content_hash = (char *)rows[i][1];  
-        c.content      = (char *)rows[i][2];  
+        c.content_hash = (char *)rows[i][1];
+        c.content      = (char *)rows[i][2];
         c.metadata     = NULL;
 
         int id = 0;
@@ -184,7 +184,7 @@ static void test_ctx_get_null_err(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  query – no filter, no page
+ *  query – no filter, no paging
  * ═══════════════════════════════════════════════════════════════════ */
 
 static void test_ctx_query_all(void)
@@ -196,30 +196,12 @@ static void test_ctx_query_all(void)
     ctx_fixture(db);
 
     int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, NULL, &n, &err);
+    context_t **rows = acta_db_context_query(db, NULL, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(rows);
     TEST_ASSERT_EQ_INT(n, FIXTURE_ROWS);
     TEST_ASSERT_EQ_INT(rows[0]->id, 1);
     TEST_ASSERT_EQ_INT(rows[7]->id, 8);
-    acta_db_context_list_free(rows, n);
-
-    test_db_teardown(db, path);
-}
-
-static void test_ctx_query_zero_page(void)
-{
-    const char *path = "test/acta_test_ctx_query_zp.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-    ctx_fixture(db);
-
-    context_page_t p = { .offset = 0, .limit = 0, .after_id = 0 };
-    int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(n, FIXTURE_ROWS);
     acta_db_context_list_free(rows, n);
 
     test_db_teardown(db, path);
@@ -239,7 +221,7 @@ static void test_ctx_query_by_type(void)
 
     context_query_t q = { .type = "note", .hash = NULL };
     int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    context_t **rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 3);
     TEST_ASSERT_EQ_INT(rows[0]->id, 1);
@@ -250,21 +232,21 @@ static void test_ctx_query_by_type(void)
     /* email */
     q.type = "email";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 3);
     acta_db_context_list_free(rows, n);
 
     /* doc */
     q.type = "doc";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 2);
     acta_db_context_list_free(rows, n);
 
     /* unknown → 0 */
     q.type = "nonexistent";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 0);
     if (rows) acta_db_context_list_free(rows, n);
@@ -286,7 +268,7 @@ static void test_ctx_query_by_hash(void)
 
     context_query_t q = { .type = NULL, .hash = "h1" };
     int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    context_t **rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 3);
     TEST_ASSERT_EQ_INT(rows[0]->id, 1);
@@ -297,7 +279,7 @@ static void test_ctx_query_by_hash(void)
     /* single match */
     q.hash = "h6";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(rows[0]->id, 8);
     acta_db_context_list_free(rows, n);
@@ -305,7 +287,7 @@ static void test_ctx_query_by_hash(void)
     /* no match */
     q.hash = "h_nope";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 0);
     if (rows) acta_db_context_list_free(rows, n);
 
@@ -326,21 +308,21 @@ static void test_ctx_query_combined(void)
 
     context_query_t q = { .type = "note", .hash = "h1" };
     int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    context_t **rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(rows[0]->id, 1);
     acta_db_context_list_free(rows, n);
 
     q.type = "email";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(rows[0]->id, 4);
     acta_db_context_list_free(rows, n);
 
     q.type = "doc";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(rows[0]->id, 7);
     acta_db_context_list_free(rows, n);
@@ -348,7 +330,7 @@ static void test_ctx_query_combined(void)
     /* no intersection */
     q.type = "note"; q.hash = "h4";
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, NULL, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(n, 0);
     if (rows) acta_db_context_list_free(rows, n);
 
@@ -371,44 +353,39 @@ static void test_ctx_query_offset_limit(void)
     int n = 0, err = 0;
     context_t **rows;
 
-    /* page 1 */
-    context_page_t p = { .offset = 0, .limit = 2, .after_id = 0 };
+    /* page 1: offset=0 limit=2 → ids 1,2 */
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
+    rows = acta_db_context_query(db, &q, 0, 2, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 2);
     TEST_ASSERT_EQ_INT(rows[0]->id, 1);
     TEST_ASSERT_EQ_INT(rows[1]->id, 2);
     acta_db_context_list_free(rows, n);
 
-    /* page 2 */
-    p.offset = 2;
+    /* page 2: offset=2 limit=1 → id 3 */
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
+    rows = acta_db_context_query(db, &q, 2, 1, &n, &err);
     TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(rows[0]->id, 3);
     acta_db_context_list_free(rows, n);
 
     /* past the end */
-    p.offset = 10;
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
+    rows = acta_db_context_query(db, &q, 10, 5, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n, 0);
     if (rows) acta_db_context_list_free(rows, n);
 
     /* limit > remaining */
-    p.offset = 1; p.limit = 100;
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
+    rows = acta_db_context_query(db, &q, 1, 100, &n, &err);
     TEST_ASSERT_EQ_INT(n, 2);
     acta_db_context_list_free(rows, n);
 
     /* unfiltered, limit 1 */
-    q.type = NULL;
-    p = (context_page_t){ .offset = 0, .limit = 1, .after_id = 0 };
+    context_query_t q0 = { .type = NULL, .hash = NULL };
     n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
+    rows = acta_db_context_query(db, &q0, 0, 1, &n, &err);
     TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(rows[0]->id, 1);
     acta_db_context_list_free(rows, n);
@@ -417,64 +394,22 @@ static void test_ctx_query_offset_limit(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  query – keyset (after_id)
+ *  query – negative limit means "no limit"
  * ═══════════════════════════════════════════════════════════════════ */
 
-static void test_ctx_query_keyset(void)
+static void test_ctx_query_neg_limit_ok(void)
 {
-    const char *path = "test/acta_test_ctx_query_ks.db";
+    const char *path = "test/acta_test_ctx_query_nlim.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
     ctx_fixture(db);
 
-    context_query_t q = { .type = NULL, .hash = NULL };
+    /* limit <= 0 → no cap, returns all */
     int n = 0, err = 0;
-    context_t **rows;
-
-    /* after 3, limit 2 → ids 4,5 */
-    context_page_t p = { .offset = 0, .limit = 2, .after_id = 3 };
-    n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
+    context_t **rows = acta_db_context_query(db, NULL, 0, -1, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(n, 2);
-    TEST_ASSERT_EQ_INT(rows[0]->id, 4);
-    TEST_ASSERT_EQ_INT(rows[1]->id, 5);
-    acta_db_context_list_free(rows, n);
-
-    /* continue: after 5, limit 3 → ids 6,7,8 */
-    p.after_id = 5; p.limit = 3;
-    n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(n, 3);
-    TEST_ASSERT_EQ_INT(rows[0]->id, 6);
-    TEST_ASSERT_EQ_INT(rows[1]->id, 7);
-    TEST_ASSERT_EQ_INT(rows[2]->id, 8);
-    acta_db_context_list_free(rows, n);
-
-    /* past the end */
-    p.after_id = 100;
-    n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(n, 0);
-    if (rows) acta_db_context_list_free(rows, n);
-
-    /* keyset + type filter: after 2, type=note → id 3 only */
-    q.type = "note";
-    p.after_id = 2; p.limit = 5;
-    n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(n, 1);
-    TEST_ASSERT_EQ_INT(rows[0]->id, 3);
-    acta_db_context_list_free(rows, n);
-
-    /* keyset + hash: after 0, hash=h1 → ids 1,4,7 */
-    q.type = NULL;
-    q.hash = "h1";
-    p.after_id = 0; p.limit = 10;
-    n = 0; err = 0;
-    rows = acta_db_context_query(db, &q, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(n, 3);
+    TEST_ASSERT_EQ_INT(n, FIXTURE_ROWS);
     acta_db_context_list_free(rows, n);
 
     test_db_teardown(db, path);
@@ -487,7 +422,7 @@ static void test_ctx_query_keyset(void)
 static void test_ctx_query_invalid_db(void)
 {
     int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(NULL, NULL, NULL, &n, &err);
+    context_t **rows = acta_db_context_query(NULL, NULL, 0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
     TEST_ASSERT_NULL(rows);
     TEST_ASSERT_EQ_INT(n, 0);
@@ -501,65 +436,10 @@ static void test_ctx_query_neg_offset(void)
     TEST_ASSERT_NOT_NULL(db);
     ctx_fixture(db);
 
-    context_page_t p = { .offset = -1, .limit = 10, .after_id = 0 };
     int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, &p, &n, &err);
+    context_t **rows = acta_db_context_query(db, NULL, -1, 10, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
     TEST_ASSERT_NULL(rows);
-
-    test_db_teardown(db, path);
-}
-
-static void test_ctx_query_neg_after_id(void)
-{
-    const char *path = "test/acta_test_ctx_query_naid.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-    ctx_fixture(db);
-
-    context_page_t p = { .offset = 0, .limit = 10, .after_id = -1 };
-    int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
-    TEST_ASSERT_NULL(rows);
-
-    test_db_teardown(db, path);
-}
-
-static void test_ctx_query_offset_and_after(void)
-{
-    const char *path = "test/acta_test_ctx_query_oa.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-    ctx_fixture(db);
-
-    /* offset AND after_id → mutually exclusive */
-    context_page_t p = { .offset = 10, .limit = 5, .after_id = 3 };
-    int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
-    TEST_ASSERT_NULL(rows);
-
-    test_db_teardown(db, path);
-}
-
-static void test_ctx_query_neg_limit_ok(void)
-{
-    const char *path = "test/acta_test_ctx_query_nlim.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-    ctx_fixture(db);
-
-    /* limit <= 0 means "no limit" – valid, returns all */
-    context_page_t p = { .offset = 0, .limit = -1, .after_id = 0 };
-    int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, &p, &n, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(n, FIXTURE_ROWS);
-    acta_db_context_list_free(rows, n);
 
     test_db_teardown(db, path);
 }
@@ -576,21 +456,40 @@ static void test_ctx_query_null_out_params(void)
     TEST_ASSERT_NOT_NULL(db);
     ctx_fixture(db);
 
-    /* both NULL */
-    context_t **rows = acta_db_context_query(db, NULL, NULL, NULL, NULL);
+    /* both out_count and err NULL */
+    context_t **rows = acta_db_context_query(db, NULL, 0, 0, NULL, NULL);
     TEST_ASSERT_NOT_NULL(rows);
-    {
-        int n2 = 0, e2 = 0;
-        acta_db_context_query(db, NULL, NULL, &n2, &e2);
-        acta_db_context_list_free(rows, n2);
-    }
+    /* count via a second call to know how to free */
+    int n = 0, err = 0;
+    acta_db_context_query(db, NULL, 0, 0, &n, &err);
+    acta_db_context_list_free(rows, n);
 
     /* only err NULL */
-    int n = 0;
-    rows = acta_db_context_query(db, NULL, NULL, &n, NULL);
+    n = 0;
+    rows = acta_db_context_query(db, NULL, 0, 0, &n, NULL);
     TEST_ASSERT_NOT_NULL(rows);
     TEST_ASSERT_EQ_INT(n, FIXTURE_ROWS);
     acta_db_context_list_free(rows, n);
+
+    test_db_teardown(db, path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  query on empty table
+ * ═══════════════════════════════════════════════════════════════════ */
+
+static void test_ctx_query_empty(void)
+{
+    const char *path = "test/acta_test_ctx_query_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int n = 0, err = 0;
+    context_t **rows = acta_db_context_query(db, NULL, 0, 0, &n, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(n, 0);
+    if (rows) acta_db_context_list_free(rows, n);
 
     test_db_teardown(db, path);
 }
@@ -705,7 +604,6 @@ static void test_ctx_count_null_err(void)
     TEST_ASSERT_NOT_NULL(db);
     ctx_fixture(db);
 
-    /* NULL err – must not crash */
     TEST_ASSERT_EQ_INT(acta_db_context_count(db, NULL, NULL), FIXTURE_ROWS);
 
     test_db_teardown(db, path);
@@ -729,33 +627,11 @@ static void test_ctx_count_empty(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  query on empty table
- * ═══════════════════════════════════════════════════════════════════ */
-
-static void test_ctx_query_empty(void)
-{
-    const char *path = "test/acta_test_ctx_query_empty.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int n = 0, err = 0;
-    context_t **rows = acta_db_context_query(db, NULL, NULL, &n, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(n, 0);
-    if (rows) acta_db_context_list_free(rows, n);
-
-    test_db_teardown(db, path);
-}
-
-
-/* ═══════════════════════════════════════════════════════════════════
  *  free / list_free
  * ═══════════════════════════════════════════════════════════════════ */
 
 static void test_ctx_free_null(void)
 {
-    /* must not crash */
     acta_db_context_free(NULL);
     acta_db_context_list_free(NULL, 0);
     acta_db_context_list_free(NULL, 5);
@@ -769,15 +645,13 @@ static void test_ctx_free_valid(void)
     TEST_ASSERT_NOT_NULL(db);
     ctx_fixture(db);
 
-    /* free a single row */
     int err = 0;
     context_t *c = acta_db_context_get(db, 1, &err);
     TEST_ASSERT_NOT_NULL(c);
     acta_db_context_free(c);
 
-    /* free a list */
     int n = 0;
-    context_t **rows = acta_db_context_query(db, NULL, NULL, &n, &err);
+    context_t **rows = acta_db_context_query(db, NULL, 0, 0, &n, &err);
     TEST_ASSERT_NOT_NULL(rows);
     acta_db_context_list_free(rows, n);
 
@@ -802,17 +676,13 @@ void run_context_tests(void)
 
     /* query */
     test_ctx_query_all();
-    test_ctx_query_zero_page();
     test_ctx_query_by_type();
     test_ctx_query_by_hash();
     test_ctx_query_combined();
     test_ctx_query_offset_limit();
-    test_ctx_query_keyset();
+    test_ctx_query_neg_limit_ok();
     test_ctx_query_invalid_db();
     test_ctx_query_neg_offset();
-    test_ctx_query_neg_after_id();
-    test_ctx_query_offset_and_after();
-    test_ctx_query_neg_limit_ok();
     test_ctx_query_null_out_params();
     test_ctx_query_empty();
 

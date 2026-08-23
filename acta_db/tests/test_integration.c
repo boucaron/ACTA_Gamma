@@ -458,13 +458,9 @@ static void test_integration_context_reuse(void) {
     context_query_t cq;
     cq.type = NULL;
     cq.hash = "shared_hash";
-    context_page_t cp;
-    cp.offset   = 0;
-    cp.limit    = 0;   /* no cap */
-    cp.after_id = 0;
 
     int ctx_count = 0, ctx_err = 0;
-    context_t **ctx_list = acta_db_context_query(db, &cq, &cp, &ctx_count, &ctx_err);
+    context_t **ctx_list = acta_db_context_query(db, &cq, 0, 0, &ctx_count, &ctx_err);
     TEST_ASSERT_EQ_INT(ctx_err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(ctx_count, 1);
     acta_db_context_list_free(ctx_list, ctx_count);
@@ -473,7 +469,6 @@ static void test_integration_context_reuse(void) {
     acta_db_skill_revision_free(srev);
     test_db_teardown(db, path);
 }
-
 
 /* ---------- 11.6: Nested executions ---------- */
 static void test_integration_nested_executions(void) {
@@ -817,7 +812,7 @@ static void test_integration_memory_leak_sweep(void) {
 static void test_integration_null_safety(void) {
     /* context */
     TEST_ASSERT_NULL(acta_db_context_get(NULL, 1, NULL));
-    TEST_ASSERT_NULL(acta_db_context_query(NULL, NULL, NULL, NULL, NULL));
+    TEST_ASSERT_NULL(acta_db_context_query(NULL, NULL, 0, 0, NULL, NULL));
     acta_db_context_free(NULL);
     acta_db_context_list_free(NULL, 0);
 
@@ -914,8 +909,6 @@ static void test_integration_null_safety(void) {
     acta_db_close(NULL);
     TEST_ASSERT(1);
 }
-
-
 
 /* ---------- 11.14: Repeated open/close ---------- */
 static void test_integration_repeated_open_close(void) {

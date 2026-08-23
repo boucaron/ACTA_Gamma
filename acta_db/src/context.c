@@ -54,127 +54,111 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
     return items;
 }
 
-/* ── Dynamic SQL builder ────────────────────────────────────────────
+/* ── Dynamic SQL builders ───────────────────────────────────────────
  *
- * Builds a "SELECT … FROM contexts [WHERE …] [AND id > ?]
- *          ORDER BY id [LIMIT ?] [OFFSET ?]" statement into buf.
+ * build_select_sql writes
+ *   "SELECT … FROM contexts [WHERE …] ORDER BY id [LIMIT ?] [OFFSET ?]"
+ * into buf.  Returns chars written, or -1 on overflow.
  *
- * Returns the number of characters written, or -1 on overflow.
- * *out_n_where receives the count of WHERE-clause parameters
- * (type, hash, after_id – in that order) so the caller knows
- * where the LIMIT/OFFSET parameters start. */
-static int build_select_sql(char *buf, size_t sz,
-                            const context_query_t *q,
-                            const context_page_t  *p,
-                            int *out_n_where)
-{
-    int pos       = 0;
-    int n_where   = 0;
-    int has_where = 0;
+ * build_count_sql writes
+ *   "SELECT COUNT(*) FROM contexts [WHERE …]"
+ * into buf.  Returns chars written, or -1 on overflow.
+ *
+ * Both use the same WHERE fragment (type / content_hash) so the bind
+ * order is always:  [type, hash, (limit, offset)]  —  the LIMIT and
+ * OFFSET parameters come after all WHERE parameters. */
+
+static int build_where(char *buf, size_t sz, const context_query_t *q) {
+    int pos = 0;
     int rc;
 
-    rc = snprintf(buf + pos, sz - pos,
+    if (q && q->type) {
+        rc = snprintf(buf + pos, sz - pos, " WHERE type = ?");
+        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+        pos += rc;
+
+        if (q->hash) {
+            rc = snprintf(buf + pos, sz - pos, " AND content_hash = ?");
+            if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+            pos += rc;
+        }
+    } else if (q && q->hash) {
+        rc = snprintf(buf + pos, sz - pos, " WHERE content_hash = ?");
+        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+        pos += rc;
+    }
+    return pos;
+}
+
+static int build_select_sql(char *buf, size_t sz,
+                            const context_query_t *q,
+                            int offset, int limit)
+{
+    int pos, rc;
+
+    rc = snprintf(buf, sz,
                   "SELECT id, type, content, content_hash, metadata, "
                   "created_at FROM contexts");
     if (rc < 0 || (size_t)rc >= sz) return -1;
+    pos = rc;
+
+    rc = build_where(buf + pos, sz - (size_t)pos, q);
+    if (rc < 0) return -1;
     pos += rc;
 
-    /* WHERE type = ? */
-    if (q && q->type) {
-        rc = snprintf(buf + pos, sz - pos,
-                      has_where ? " AND type = ?"
-                                : " WHERE type = ?");
-        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
-        has_where = 1;
-        n_where++;
-    }
-
-    /* WHERE content_hash = ? */
-    if (q && q->hash) {
-        rc = snprintf(buf + pos, sz - pos,
-                      has_where ? " AND content_hash = ?"
-                                : " WHERE content_hash = ?");
-        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
-        has_where = 1;
-        n_where++;
-    }
-
-    /* Keyset: AND id > ? */
-    if (p && p->after_id > 0) {
-        rc = snprintf(buf + pos, sz - pos,
-                      has_where ? " AND id > ?"
-                                : " WHERE id > ?");
-        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
-        has_where = 1;
-        n_where++;
-    }
-
-    rc = snprintf(buf + pos, sz - pos, " ORDER BY id");
-    if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+    rc = snprintf(buf + pos, sz - (size_t)pos, " ORDER BY id");
+    if (rc < 0 || (size_t)rc >= sz - (size_t)pos) return -1;
     pos += rc;
 
-    /* LIMIT / OFFSET
-     * SQLite requires a LIMIT expression before OFFSET.
-     * If OFFSET is needed but no LIMIT, emit "LIMIT -1 OFFSET ?". */
-    int has_limit  = (p && p->limit  > 0);
-    int has_offset = (p && p->offset > 0);
-
-    if (has_limit || has_offset) {
-        if (has_limit) {
-            rc = snprintf(buf + pos, sz - pos, " LIMIT ?");
-        } else {
-            rc = snprintf(buf + pos, sz - pos, " LIMIT -1");
-        }
-        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+    /* SQLite requires LIMIT before OFFSET.
+     * If only OFFSET is needed, emit "LIMIT -1". */
+    if (limit > 0 || offset > 0) {
+        if (limit > 0)
+            rc = snprintf(buf + pos, sz - (size_t)pos, " LIMIT ?");
+        else
+            rc = snprintf(buf + pos, sz - (size_t)pos, " LIMIT -1");
+        if (rc < 0 || (size_t)rc >= sz - (size_t)pos) return -1;
         pos += rc;
 
-        if (has_offset) {
-            rc = snprintf(buf + pos, sz - pos, " OFFSET ?");
-            if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+        if (offset > 0) {
+            rc = snprintf(buf + pos, sz - (size_t)pos, " OFFSET ?");
+            if (rc < 0 || (size_t)rc >= sz - (size_t)pos) return -1;
             pos += rc;
         }
     }
 
-    *out_n_where = n_where;
     return pos;
 }
 
-
-/* Builds a "SELECT COUNT(*) FROM contexts [WHERE …]" statement.
- * Returns chars written or -1. */
 static int build_count_sql(char *buf, size_t sz,
                            const context_query_t *q)
 {
-    int pos = 0;
-    int has_where = 0;
-    int rc;
+    int pos, rc;
 
-    rc = snprintf(buf + pos, sz - pos,
-                  "SELECT COUNT(*) FROM contexts");
+    rc = snprintf(buf, sz, "SELECT COUNT(*) FROM contexts");
     if (rc < 0 || (size_t)rc >= sz) return -1;
+    pos = rc;
+
+    rc = build_where(buf + pos, sz - (size_t)pos, q);
+    if (rc < 0) return -1;
     pos += rc;
 
-    if (q && q->type) {
-        rc = snprintf(buf + pos, sz - pos,
-                      has_where ? " AND type = ?"
-                                : " WHERE type = ?");
-        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
-        has_where = 1;
-    }
-
-    if (q && q->hash) {
-        rc = snprintf(buf + pos, sz - pos,
-                      has_where ? " AND content_hash = ?"
-                                : " WHERE content_hash = ?");
-        if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-        pos += rc;
-    }
-
     return pos;
+}
+
+/* ── Bind helpers ───────────────────────────────────────────────────
+ * Binds the WHERE parameters (type, hash) in a fixed order.
+ * Returns the next free bind index. */
+
+static int bind_where(sqlite3_stmt *stmt, const context_query_t *q) {
+    int idx = 1;
+    if (q) {
+        if (q->type)
+            sqlite3_bind_text(stmt, idx++, q->type, -1, SQLITE_TRANSIENT);
+        if (q->hash)
+            sqlite3_bind_text(stmt, idx++, q->hash, -1, SQLITE_TRANSIENT);
+    }
+    return idx;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -246,40 +230,30 @@ context_t *acta_db_context_get(db_t *db, int id, int *err) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  query  (unified paginated fetch)
+ *  query  (paginated fetch)
  * ═══════════════════════════════════════════════════════════════════ */
 
 context_t **acta_db_context_query(db_t *db,
                                   const context_query_t *q,
-                                  const context_page_t  *p,
+                                  int offset,
+                                  int limit,
                                   int *out_count,
                                   int *err)
 {
     if (err)       *err       = ACTA_DB_OK;
     if (out_count) *out_count = 0;
 
-    /* ── validate ─────────────────────────────────────────────────── */
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
-    if (p) {
-        if (p->offset < 0 || p->after_id < 0) {
-            if (err) *err = ACTA_DB_ERR_INVALID;
-            return NULL;
-        }
-        if (p->offset > 0 && p->after_id > 0) {
-            /* mutually exclusive */
-            if (err) *err = ACTA_DB_ERR_INVALID;
-            return NULL;
-        }
+    if (offset < 0) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
     }
 
-
-    /* ── build SQL ────────────────────────────────────────────────── */
     char sql[512];
-    int n_where;
-    if (build_select_sql(sql, sizeof(sql), q, p, &n_where) < 0) {
+    if (build_select_sql(sql, sizeof(sql), q, offset, limit) < 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
@@ -290,32 +264,16 @@ context_t **acta_db_context_query(db_t *db,
         return NULL;
     }
 
-    /* ── bind WHERE params (1-based, in clause order) ────────────── */
-    int bind = 1;
+    int bind = bind_where(stmt, q);
 
-    if (q && q->type) {
-        sqlite3_bind_text(stmt, bind++, q->type, -1, SQLITE_TRANSIENT);
-    }
-    if (q && q->hash) {
-        sqlite3_bind_text(stmt, bind++, q->hash, -1, SQLITE_TRANSIENT);
-    }
-    if (p && p->after_id > 0) {
-        sqlite3_bind_int(stmt, bind++, p->after_id);
-    }
+    if (limit  > 0)
+        sqlite3_bind_int(stmt, bind++, limit);
+    if (offset > 0)
+        sqlite3_bind_int(stmt, bind++, offset);
 
-    /* ── bind LIMIT / OFFSET ─────────────────────────────────────── */
-    if (p && p->limit > 0) {
-        sqlite3_bind_int(stmt, bind++, p->limit);
-    }
-    if (p && p->offset > 0) {
-        sqlite3_bind_int(stmt, bind++, p->offset);
-    }
-
-    (void)n_where;  /* used implicitly via bind order */
-
-    /* ── collect ──────────────────────────────────────────────────── */
     return collect_rows(stmt, out_count, err);
 }
+
 
 /* ═══════════════════════════════════════════════════════════════════
  *  count
@@ -344,11 +302,7 @@ int acta_db_context_count(db_t *db,
         return -1;
     }
 
-    int bind = 1;
-    if (q && q->type)
-        sqlite3_bind_text(stmt, bind++, q->type, -1, SQLITE_TRANSIENT);
-    if (q && q->hash)
-        sqlite3_bind_text(stmt, bind++, q->hash, -1, SQLITE_TRANSIENT);
+    bind_where(stmt, q);
 
     int count = 0;
     if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -366,10 +320,8 @@ context_t **acta_db_context_list_all(db_t *db,
                                      int offset, int limit,
                                      int *out_count, int *err)
 {
-    context_page_t p = { .offset = offset,
-                         .limit  = limit,
-                         .after_id = 0 };
-    return acta_db_context_query(db, NULL, &p, out_count, err);
+    return acta_db_context_query(db, NULL, offset, limit,
+                                 out_count, err);
 }
 
 context_t **acta_db_context_list_by_type(db_t *db,
@@ -385,10 +337,8 @@ context_t **acta_db_context_list_by_type(db_t *db,
     }
 
     context_query_t q = { .type = type, .hash = NULL };
-    context_page_t  p = { .offset = offset,
-                          .limit  = limit,
-                          .after_id = 0 };
-    return acta_db_context_query(db, &q, &p, out_count, err);
+    return acta_db_context_query(db, &q, offset, limit,
+                                 out_count, err);
 }
 
 context_t **acta_db_context_list_by_hash(db_t *db,
@@ -404,10 +354,8 @@ context_t **acta_db_context_list_by_hash(db_t *db,
     }
 
     context_query_t q = { .type = NULL, .hash = hash };
-    context_page_t  p = { .offset = offset,
-                          .limit  = limit,
-                          .after_id = 0 };
-    return acta_db_context_query(db, &q, &p, out_count, err);
+    return acta_db_context_query(db, &q, offset, limit,
+                                 out_count, err);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
