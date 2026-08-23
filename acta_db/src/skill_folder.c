@@ -167,7 +167,7 @@ int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name)
     return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
-int acta_db_skill_folder_move(db_t *db, int id, int new_parent_id)
+int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id)
 {
     if (!db || id <= 0) return ACTA_DB_ERR_INVALID;
 

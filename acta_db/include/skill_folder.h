@@ -46,7 +46,7 @@ int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name);
  * ACTA_DB_ERR_NOT_FOUND if no live folder matches id, or if
  *   new_parent_id does not reference a live folder.
  * ACTA_DB_ERR_SQL on prepare/step failure. */
-int acta_db_skill_folder_move(db_t *db, int id, int new_parent_id);
+int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id);
 
 /**
  * Soft-delete a skill_folder (sets deleted_at = now).

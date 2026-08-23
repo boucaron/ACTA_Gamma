@@ -768,7 +768,7 @@ static void test_sf_move_to_root(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Move child to root */
-    rc = acta_db_skill_folder_move(db, child_id, 0);
+    rc = acta_db_skill_folder_move_to(db, child_id, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     /* Verify */
@@ -803,7 +803,7 @@ static void test_sf_move_to_new_parent(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Move child from PA to PB */
-    rc = acta_db_skill_folder_move(db, child, pb);
+    rc = acta_db_skill_folder_move_to(db, child, pb);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int err = 0;
@@ -831,7 +831,7 @@ static void test_sf_move_to_self(void) {
     int rc = acta_db_skill_folder_create(db, "Self", 0, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    rc = acta_db_skill_folder_move(db, id, id);
+    rc = acta_db_skill_folder_move_to(db, id, id);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
 
     test_db_teardown(db, path);
@@ -853,7 +853,7 @@ static void test_sf_move_to_descendant(void) {
     rc = acta_db_skill_folder_create(db, "C", b, &c);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    rc = acta_db_skill_folder_move(db, a, c);
+    rc = acta_db_skill_folder_move_to(db, a, c);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
 
     test_db_teardown(db, path);
@@ -873,7 +873,7 @@ static void test_sf_move_to_direct_child(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Move A under its own child B */
-    rc = acta_db_skill_folder_move(db, a, b);
+    rc = acta_db_skill_folder_move_to(db, a, b);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
 
     test_db_teardown(db, path);
@@ -886,7 +886,7 @@ static void test_sf_move_nonexistent(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    int rc = acta_db_skill_folder_move(db, 99999, 0);
+    int rc = acta_db_skill_folder_move_to(db, 99999, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
@@ -903,7 +903,7 @@ static void test_sf_move_to_nonexistent_parent(void) {
     int rc = acta_db_skill_folder_create(db, "MoveMe", 0, &id);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    rc = acta_db_skill_folder_move(db, id, 99999);
+    rc = acta_db_skill_folder_move_to(db, id, 99999);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
@@ -911,7 +911,7 @@ static void test_sf_move_to_nonexistent_parent(void) {
 
 /* ---------- 6.42: move — NULL db → INVALID ---------- */
 static void test_sf_move_null_db(void) {
-    int rc = acta_db_skill_folder_move(NULL, 1, 0);
+    int rc = acta_db_skill_folder_move_to(NULL, 1, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
 }
 
@@ -922,7 +922,7 @@ static void test_sf_move_invalid_id(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    int rc = acta_db_skill_folder_move(db, 0, 0);
+    int rc = acta_db_skill_folder_move_to(db, 0, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_INVALID);
 
     test_db_teardown(db, path);
@@ -945,7 +945,7 @@ static void test_sf_move_deleted_folder(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Moving a deleted folder should fail */
-    rc = acta_db_skill_folder_move(db, child, 0);
+    rc = acta_db_skill_folder_move_to(db, child, 0);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
@@ -965,7 +965,7 @@ static void test_sf_move_same_parent_noop(void) {
     TEST_ASSERT_EQ_INT(rc, 0);
 
     /* Move to the same parent it already has */
-    rc = acta_db_skill_folder_move(db, child, parent);
+    rc = acta_db_skill_folder_move_to(db, child, parent);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int err = 0;
@@ -997,7 +997,7 @@ static void test_sf_move_deep_chain_valid(void) {
     rc = acta_db_skill_folder_create(db, "b", a, &b);
     TEST_ASSERT_EQ_INT(rc, 0);
 
-    rc = acta_db_skill_folder_move(db, b, y);
+    rc = acta_db_skill_folder_move_to(db, b, y);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     int err = 0;

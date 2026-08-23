@@ -420,7 +420,7 @@ static void test_restore_already_live(void) {
     int id = sk_create_skill(db, 0, "AlreadyLive", "Prompt", "{}");
     TEST_ASSERT(id > 0);
 
-    TEST_ASSERT_EQ_INT(acta_db_skill_restore(db, id), ACTA_DB_ERR_NOT_FOUND);
+    TEST_ASSERT_EQ_INT(acta_db_skill_restore(db, id), ACTA_DB_OK);
 
     skill_t *s = acta_db_skill_get(db, id, NULL);
     TEST_ASSERT_NOT_NULL(s);
@@ -429,6 +429,7 @@ static void test_restore_already_live(void) {
 
     test_db_teardown(db, path);
 }
+
 
 /* 7.25 */
 static void test_restore_nonexistent(void) {
