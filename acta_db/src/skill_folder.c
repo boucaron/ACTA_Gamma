@@ -177,6 +177,19 @@ int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name)
     return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
+/**
+ * Soft-delete a skill_folder by setting deleted_at.
+ *
+ * Invariant (shared with model_folder_soft_delete):
+ *   A folder that still has live (non-deleted) children cannot be
+ *   deleted — the caller must delete or re-parent the children first.
+ *
+ * Returns:
+ *   ACTA_DB_OK          row was soft-deleted
+ *   ACTA_DB_ERR_INVALID db handle is NULL, OR the folder has live children
+ *   ACTA_DB_ERR_NOT_FOUND no live row with that id
+ *   ACTA_DB_ERR_SQL   any SQLite failure
+ */
 int acta_db_skill_folder_soft_delete(db_t *db, int id)
 {
     if (!db) return ACTA_DB_ERR_INVALID;

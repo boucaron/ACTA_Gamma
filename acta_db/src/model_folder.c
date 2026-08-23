@@ -118,24 +118,55 @@ int acta_db_model_folder_rename(db_t *db, int id, const char *new_name)
     return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
 
+/**
+ * Soft-delete a model_folder by setting deleted_at.
+ *
+ * Invariant (shared with skill_folder_soft_delete):
+ *   A folder that still has live (non-deleted) children cannot be
+ *   deleted — the caller must delete or re-parent the children first.
+ *
+ * Returns:
+ *   ACTA_DB_OK          row was soft-deleted
+ *   ACTA_DB_ERR_INVALID db handle is NULL, OR the folder has live children
+ *   ACTA_DB_ERR_NOT_FOUND no live row with that id
+ *   ACTA_DB_ERR_SQL   any SQLite failure
+ */
 int acta_db_model_folder_soft_delete(db_t *db, int id)
 {
-    if (!db || id <= 0) return ACTA_DB_ERR_INVALID;
+    if (!db) return ACTA_DB_ERR_INVALID;
+
+    /* Reject if the folder has live children */
+    const char *check_sql =
+        "SELECT COUNT(*) FROM model_folders"
+        " WHERE parent_id = ? AND deleted_at IS NULL;";
+    sqlite3_stmt *check;
+    if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(check, 1, id);
+
+    int child_count = 0;
+    if (sqlite3_step(check) == SQLITE_ROW)
+        child_count = (int)sqlite3_column_int64(check, 0);
+    sqlite3_finalize(check);
+
+    if (child_count > 0) return ACTA_DB_ERR_INVALID;
 
     const char *sql =
-        "UPDATE model_folders SET deleted_at = datetime('now'), "
-        "updated_at = datetime('now') "
-        "WHERE id = ? AND deleted_at IS NULL;";
+        "UPDATE model_folders"
+        " SET deleted_at = datetime('now'), updated_at = datetime('now')"
+        " WHERE id = ? AND deleted_at IS NULL;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
-
     sqlite3_bind_int(stmt, 1, id);
 
     int rc = sqlite3_step(stmt);
+    int changes = rc == SQLITE_DONE ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
+    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
+
 
 int acta_db_model_folder_restore(db_t *db, int id)
 {

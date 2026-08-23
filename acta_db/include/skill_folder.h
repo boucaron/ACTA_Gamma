@@ -35,10 +35,19 @@ int acta_db_skill_folder_create(db_t *db,
  * ACTA_DB_ERR_SQL on prepare/step failure. */
 int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name);
 
-/* Returns ACTA_DB_OK on success.
- * ACTA_DB_ERR_INVALID if db is NULL or folder has live children.
- * ACTA_DB_ERR_NOT_FOUND if no folder matches id.
- * ACTA_DB_ERR_SQL on prepare/step failure. */
+/**
+ * Soft-delete a skill_folder (sets deleted_at = now).
+ *
+ * Rejects the delete if the folder still has live (non-deleted)
+ * children — delete or re-parent them first.
+ *
+ * Returns:
+ *   ACTA_DB_OK           folder was soft-deleted.
+ *   ACTA_DB_ERR_INVALID  db is NULL, or the folder has live children.
+ *   ACTA_DB_ERR_NOT_FOUND no live row with that id (absent or already
+ *                         soft-deleted).
+ *   ACTA_DB_ERR_SQL      SQLite prepare/step failure.
+ */
 int acta_db_skill_folder_soft_delete(db_t *db, int id);
 
 /* Returns ACTA_DB_OK on success.
