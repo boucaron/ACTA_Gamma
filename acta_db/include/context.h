@@ -114,36 +114,6 @@ int acta_db_context_count(db_t *db,
                           const context_query_t *q,
                           int *err);
 
-/* ── Legacy listers (deprecated) ──────────────────────────────────── */
-/* These are thin wrappers around acta_db_context_query.
- * Prefer the query + count API for new code. */
-
-/* [[deprecated("use acta_db_context_query")]]
- * Return a page of contexts ordered by id.
- * limit <= 0 means no limit. */
-context_t **acta_db_context_list_all(db_t *db,
-                                     int offset, int limit,
-                                     int *out_count, int *err);
-
-/* [[deprecated("use acta_db_context_query")]]
- * Return a page of contexts matching the given type, ordered by id.
- * If type is NULL the function fails with ACTA_DB_ERR_INVALID.
- * limit <= 0 means no limit. */
-context_t **acta_db_context_list_by_type(db_t *db,
-                                         const char *type,
-                                         int offset, int limit,
-                                         int *out_count,
-                                         int *err);
-
-/* [[deprecated("use acta_db_context_query")]]
- * Return a page of contexts matching the given content hash, ordered by id.
- * If hash is NULL the function fails with ACTA_DB_ERR_INVALID.
- * limit <= 0 means no limit. */
-context_t **acta_db_context_list_by_hash(db_t *db,
-                                         const char *hash,
-                                         int offset, int limit,
-                                         int *out_count,
-                                         int *err);
 
 /* ── Ownership / cleanup ──────────────────────────────────────────── */
 
