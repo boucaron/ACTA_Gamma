@@ -168,11 +168,13 @@ static void test_rename_soft_deleted(void)
     acta_db_model_folder_soft_delete(g_db, id);
 
     int rc = acta_db_model_folder_rename(g_db, id, "Ghost");
-    T_ASSERT(rc == ACTA_DB_OK, "rename on deleted still OK (no-op)");
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "rename on deleted → NOT_FOUND");
+}
 
-    model_folder_t *f = acta_db_model_folder_get(g_db, id, NULL);
-    T_ASSERT(f && strcmp(f->name, "ToDelete") == 0, "name unchanged");
-    acta_db_model_folder_free(f);
+static void test_rename_not_found(void)
+{
+    int rc = acta_db_model_folder_rename(g_db, 99999, "x");
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "nonexistent id → NOT_FOUND");
 }
 
 static void test_rename_null_name(void)
@@ -270,6 +272,154 @@ static void test_soft_delete_invalid_id(void)
     T_ASSERT(rc == ACTA_DB_ERR_INVALID, "id=0 → INVALID");
 }
 
+/* ── move_to ─────────────────────────────────────────────────────── */
+
+static void test_move_to_basic(void)
+{
+    int p1, p2, child;
+    make_folder("P1", 0, &p1);
+    make_folder("P2", 0, &p2);
+    make_folder("Child", p1, &child);
+
+    int rc = acta_db_model_folder_move_to(g_db, child, p2);
+    T_ASSERT(rc == ACTA_DB_OK, "move ok");
+
+    model_folder_t *f = acta_db_model_folder_get(g_db, child, NULL);
+    T_ASSERT(f != NULL, "row exists");
+    T_ASSERT(f->parent_id == p2, "parent changed to p2");
+    acta_db_model_folder_free(f);
+}
+
+static void test_move_to_root(void)
+{
+    int parent, child;
+    make_folder("Parent", 0, &parent);
+    make_folder("Child", parent, &child);
+
+    int rc = acta_db_model_folder_move_to(g_db, child, 0);
+    T_ASSERT(rc == ACTA_DB_OK, "move to root ok");
+
+    model_folder_t *f = acta_db_model_folder_get(g_db, child, NULL);
+    T_ASSERT(f->parent_id == 0, "parent is now root");
+    acta_db_model_folder_free(f);
+}
+
+static void test_move_to_same_parent_noop(void)
+{
+    int parent, child;
+    make_folder("Parent", 0, &parent);
+    make_folder("Child", parent, &child);
+
+    int rc = acta_db_model_folder_move_to(g_db, child, parent);
+    T_ASSERT(rc == ACTA_DB_OK, "no-op returns OK");
+
+    model_folder_t *f = acta_db_model_folder_get(g_db, child, NULL);
+    T_ASSERT(f->parent_id == parent, "unchanged");
+    acta_db_model_folder_free(f);
+}
+
+static void test_move_to_own_child_cycle(void)
+{
+    int a, b;
+    make_folder("A", 0, &a);
+    make_folder("B", a, &b);
+
+    int rc = acta_db_model_folder_move_to(g_db, a, b);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "move to own child → INVALID");
+}
+
+static void test_move_to_grandchild_cycle(void)
+{
+    int a, b, c;
+    make_folder("A", 0, &a);
+    make_folder("B", a, &b);
+    make_folder("C", b, &c);
+
+    int rc = acta_db_model_folder_move_to(g_db, a, c);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "move to grandchild → INVALID");
+}
+
+static void test_move_to_nonexistent_folder(void)
+{
+    int parent;
+    make_folder("P", 0, &parent);
+    int rc = acta_db_model_folder_move_to(g_db, 99999, parent);
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "missing source → NOT_FOUND");
+}
+
+static void test_move_to_nonexistent_target(void)
+{
+    int child;
+    make_folder("Child", 0, &child);
+    int rc = acta_db_model_folder_move_to(g_db, child, 99999);
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "missing target → NOT_FOUND");
+}
+
+static void test_move_soft_deleted_folder(void)
+{
+    int parent, target;
+    make_folder("P", 0, &parent);
+    make_folder("T", 0, &target);
+    int id;
+    make_folder("Dead", parent, &id);
+    acta_db_model_folder_soft_delete(g_db, id);
+
+    int rc = acta_db_model_folder_move_to(g_db, id, target);
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "deleted source → NOT_FOUND");
+}
+
+static void test_move_to_soft_deleted_target(void)
+{
+    int parent, target, child;
+    make_folder("P", 0, &parent);
+    make_folder("T", 0, &target);
+    make_folder("Child", parent, &child);
+    acta_db_model_folder_soft_delete(g_db, target);
+
+    int rc = acta_db_model_folder_move_to(g_db, child, target);
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "deleted target → NOT_FOUND");
+}
+
+static void test_move_null_db(void)
+{
+    int rc = acta_db_model_folder_move_to(NULL, 1, 0);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "NULL db → INVALID");
+}
+
+static void test_move_invalid_folder_id(void)
+{
+    int rc = acta_db_model_folder_move_to(g_db, 0, 0);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "folder_id=0 → INVALID");
+}
+
+static void test_move_invalid_negative_id(void)
+{
+    int rc = acta_db_model_folder_move_to(g_db, -1, 0);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "negative id → INVALID");
+}
+
+static void test_move_updates_reflected_in_list(void)
+{
+    int p1, p2, child;
+    make_folder("P1", 0, &p1);
+    make_folder("P2", 0, &p2);
+    make_folder("Child", p1, &child);
+
+    acta_db_model_folder_move_to(g_db, child, p2);
+
+    int count1 = -1;
+    model_folder_t **items =
+        acta_db_model_folder_list_children(g_db, p1, 0, -1, &count1, NULL);
+    T_ASSERT(count1 == 0, "p1 has no children after move");
+    acta_db_model_folder_list_free(items, count1);
+
+    int count2 = -1;
+    items = acta_db_model_folder_list_children(g_db, p2, 0, -1, &count2, NULL);
+    T_ASSERT(count2 == 1, "p2 has 1 child after move");
+    T_ASSERT(strcmp(items[0]->name, "Child") == 0, "it's the moved child");
+    acta_db_model_folder_list_free(items, count2);
+}
+
 /* ── list_children ───────────────────────────────────────────────── */
 
 static void test_list_children_basic(void)
@@ -294,7 +444,6 @@ static void test_list_children_basic(void)
 
 static void test_list_children_root_level(void)
 {
-    /* parent_id == 0 → root-level folders */
     make_folder("RootA", 0, NULL);
     make_folder("RootB", 0, NULL);
     int inner;
@@ -607,11 +756,9 @@ static void test_count_children_root_level(void)
     int n = acta_db_model_folder_count_children(g_db, 0, NULL);
     T_ASSERT(n == 3, "3 root-level, not the nested one");
 
-    /* And the nested one is counted under its real parent: */
     int nested = acta_db_model_folder_count_children(g_db, inner, NULL);
     T_ASSERT(nested == 1, "Inner has exactly 1 child");
 }
-
 
 static void test_count_children_null_db(void)
 {
@@ -685,12 +832,22 @@ static void test_count_all_consistent_with_list_all(void)
     acta_db_model_folder_list_free(items, count_lst);
 }
 
+static void test_move_then_soft_delete_parent(void)
+{
+    int parent, child, other;
+    make_folder("Parent", 0, &parent);
+    make_folder("Child", parent, &child);
+    make_folder("Other", 0, &other);
 
+    acta_db_model_folder_move_to(g_db, child, other);
+
+    int rc = acta_db_model_folder_soft_delete(g_db, parent);
+    T_ASSERT(rc == ACTA_DB_OK, "parent has no live children after move");
+}
 
 /* ================================================================== */
 /*  Runner                                                            */
 /* ================================================================== */
-
 
 int run_model_folder_tests(void)
 {
@@ -712,6 +869,7 @@ int run_model_folder_tests(void)
         /* rename */
         {"rename",                      test_rename},
         {"rename_soft_deleted",         test_rename_soft_deleted},
+        {"rename_not_found",            test_rename_not_found},
         {"rename_null_name",            test_rename_null_name},
         {"rename_null_db",              test_rename_null_db},
         {"rename_invalid_id",           test_rename_invalid_id},
@@ -724,6 +882,22 @@ int run_model_folder_tests(void)
         {"restore_null_db",             test_restore_null_db},
         {"restore_invalid_id",          test_restore_invalid_id},
         {"restore_already_live",        test_restore_already_live},
+
+        /* move_to */
+        {"move_to_basic",               test_move_to_basic},
+        {"move_to_root",               test_move_to_root},
+        {"move_to_same_parent_noop",   test_move_to_same_parent_noop},
+        {"move_to_own_child_cycle",    test_move_to_own_child_cycle},
+        {"move_to_grandchild_cycle",   test_move_to_grandchild_cycle},
+        {"move_to_nonexistent_folder", test_move_to_nonexistent_folder},
+        {"move_to_nonexistent_target", test_move_to_nonexistent_target},
+        {"move_soft_deleted_folder",   test_move_soft_deleted_folder},
+        {"move_to_soft_deleted_target",test_move_to_soft_deleted_target},
+        {"move_null_db",               test_move_null_db},
+        {"move_invalid_folder_id",     test_move_invalid_folder_id},
+        {"move_invalid_negative_id",   test_move_invalid_negative_id},
+        {"move_updates_list",          test_move_updates_reflected_in_list},
+        {"move_then_soft_delete_parent",test_move_then_soft_delete_parent},
 
         /* list_children */
         {"list_children_basic",         test_list_children_basic},
@@ -767,7 +941,7 @@ int run_model_folder_tests(void)
 
         /* integration */
         {"count_all_matches_lister",    test_count_all_matches_lister},
-        {"count_all_consistent_listall", test_count_all_consistent_with_list_all},
+        {"count_all_consistent_listall",test_count_all_consistent_with_list_all},
     };
 
     int total = (int)(sizeof(tests) / sizeof(tests[0]));

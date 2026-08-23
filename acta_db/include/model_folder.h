@@ -86,6 +86,28 @@ int acta_db_model_folder_soft_delete(db_t *db, int id);
  * ACTA_DB_ERR_SQL on failure. */
 int  acta_db_model_folder_restore(db_t *db, int id);
 
+/*
+ * Reparent a live folder to a different parent.
+ *
+ *   folder_id     – the folder to move (must be live).
+ *   new_parent_id – target parent, or 0 for root-level.
+ *
+ * Validation (in order, first failure wins):
+ *   db is NULL                         → ACTA_DB_ERR_INVALID
+ *   folder not found / soft-deleted   → ACTA_DB_ERR_NOT_FOUND
+ *   new_parent_id > 0 but that folder
+ *     does not exist / is deleted     → ACTA_DB_ERR_NOT_FOUND
+ *   new_parent_id is a descendant of
+ *     folder_id (cycle)              → ACTA_DB_ERR_INVALID
+ *   folder is already under
+ *     new_parent_id (no-op)          → ACTA_DB_OK
+ *
+ * On success the folder's parent_id and updated_at are updated.
+ *
+ * Returns ACTA_DB_OK on success, or a negative ACTA_DB_ERR_* code.
+ */
+int  acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id);
+
 /* --- Getters ───────────────────────────────────────────────────────── */
 
 /* Fetch a single folder by primary key.
@@ -104,9 +126,10 @@ model_folder_t *acta_db_model_folder_get(db_t *db, int id, int *err);
 
 /* --- Listers ───────────────────────────────────────────────────────── */
 
-/* Return a page of child folders of the given parent, ordered by id.
+/* Return a page of live child folders of the given parent, ordered by id.
  *
  * If parent_id is 0 returns root-level folders (parent IS NULL in SQL).
+ * Soft-deleted children are excluded.
  *
  * Pagination: see common contract above. */
 model_folder_t **acta_db_model_folder_list_children(db_t *db,
@@ -114,7 +137,9 @@ model_folder_t **acta_db_model_folder_list_children(db_t *db,
                                                     int offset, int limit,
                                                     int *out_count, int *err);
 
-/* Return a page of all folders, ordered by id.
+/* Return a page of all live folders, ordered by id.
+ *
+ * Soft-deleted rows are excluded.
  *
  * Pagination: see common contract above. */
 model_folder_t **acta_db_model_folder_list_all(db_t *db,
@@ -123,7 +148,7 @@ model_folder_t **acta_db_model_folder_list_all(db_t *db,
 
 /* --- Counts ----------------------------------------------------------- */
 
-/* Return the number of direct children of the given folder.
+/* Return the number of live direct children of the given folder.
  * Mirrors the WHERE clause of list_children (no pagination).
  *
  * Returns the count (>= 0) on success, or -1 on error (*err set).
@@ -132,7 +157,7 @@ int acta_db_model_folder_count_children(db_t *db,
                                         int  parent_id,
                                         int *err);
 
-/* Return the total number of folders in the table.
+/* Return the total number of live folders.
  * Mirrors the WHERE clause of list_all (none – full table).
  *
  * Returns the count (>= 0) on success, or -1 on error (*err set).
