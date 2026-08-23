@@ -25,13 +25,6 @@ static skill_folder_t *row_to_skill_folder(sqlite3_stmt *stmt)
  *  Shared lister helper
  * ================================================================ */
 
-/* Drive a prepared statement and collect rows into a growable array.
- * Frees `stmt` on exit.  Returns:
- *   valid array  – one or more rows collected
- *   NULL + *err = ACTA_DB_OK       – zero rows (normal)
- *   NULL + *err = ACTA_DB_ERR_ALLOC– OOM
- *   NULL + *err = ACTA_DB_ERR_SQL  – step failure
- */
 static skill_folder_t **collect_rows(sqlite3_stmt *stmt,
                                      int *out_count, int *err)
 {
@@ -59,7 +52,6 @@ static skill_folder_t **collect_rows(sqlite3_stmt *stmt,
     return items;
 
 alloc_fail:
-    /* current row could not be allocated */
     for (int i = 0; i < count; i++) acta_db_skill_folder_free(items[i]);
     free(items);
     sqlite3_finalize(stmt);
@@ -74,8 +66,6 @@ alloc_fail_existing:
     return NULL;
 }
 
-/* Build "SELECT … FROM skill_folders WHERE … ORDER BY name [LIMIT ? OFFSET ?];"
- * and run it.  Returns a prepared+bound statement ready to step, or NULL. */
 static sqlite3_stmt *prepare_folder_query(db_t *db,
                                           int parent_id,
                                           int has_parent_filter,
@@ -85,7 +75,6 @@ static sqlite3_stmt *prepare_folder_query(db_t *db,
 {
     char sql[512];
 
-    /* SELECT list + table + WHERE */
     const char *where;
     if (has_parent_filter && parent_id == 0)
         where = " WHERE parent_id IS NULL AND deleted_at IS NULL";
@@ -131,7 +120,7 @@ static sqlite3_stmt *prepare_folder_query(db_t *db,
 int acta_db_skill_folder_create(db_t *db, const char *name,
                                int parent_id, int *out_id)
 {
-    if (!db || !name || !out_id) return ACTA_DB_ERR_INVALID;
+    if (!db || !name) return ACTA_DB_ERR_INVALID;
 
     const char *sql =
         "INSERT INTO skill_folders (name, parent_id) VALUES (?, ?);";
@@ -149,7 +138,8 @@ int acta_db_skill_folder_create(db_t *db, const char *name,
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
 
-    *out_id = (int)sqlite3_last_insert_rowid(db->handle);
+    if (out_id)
+        *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
 
@@ -177,19 +167,92 @@ int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name)
     return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
 
-/**
- * Soft-delete a skill_folder by setting deleted_at.
- *
- * Invariant (shared with model_folder_soft_delete):
- *   A folder that still has live (non-deleted) children cannot be
- *   deleted — the caller must delete or re-parent the children first.
- *
- * Returns:
- *   ACTA_DB_OK          row was soft-deleted
- *   ACTA_DB_ERR_INVALID db handle is NULL, OR the folder has live children
- *   ACTA_DB_ERR_NOT_FOUND no live row with that id
- *   ACTA_DB_ERR_SQL   any SQLite failure
- */
+int acta_db_skill_folder_move(db_t *db, int id, int new_parent_id)
+{
+    if (!db || id <= 0) return ACTA_DB_ERR_INVALID;
+
+    /* Verify the folder exists and is live */
+    {
+        const char *sql =
+            "SELECT 1 FROM skill_folders WHERE id = ? AND deleted_at IS NULL;";
+        sqlite3_stmt *stmt;
+        if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
+        sqlite3_bind_int(stmt, 1, id);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        if (rc != SQLITE_ROW) return ACTA_DB_ERR_NOT_FOUND;
+    }
+
+    if (new_parent_id != 0) {
+        /* Verify target parent exists and is live */
+        {
+            const char *sql =
+                "SELECT 1 FROM skill_folders WHERE id = ? AND deleted_at IS NULL;";
+            sqlite3_stmt *stmt;
+            if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+                return ACTA_DB_ERR_SQL;
+            sqlite3_bind_int(stmt, 1, new_parent_id);
+            int rc = sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+            if (rc != SQLITE_ROW) return ACTA_DB_ERR_NOT_FOUND;
+        }
+
+        /* Cycle detection: walk up from new_parent_id to root.
+         * If we encounter `id`, moving would create a cycle. */
+        int cursor = new_parent_id;
+        for (int depth = 0; depth < 1024; depth++) {
+            if (cursor == id) return ACTA_DB_ERR_INVALID;
+
+            const char *sql =
+                "SELECT parent_id FROM skill_folders WHERE id = ?;";
+            sqlite3_stmt *stmt;
+            if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+                return ACTA_DB_ERR_SQL;
+            sqlite3_bind_int(stmt, 1, cursor);
+
+            int next = 0;
+            int has_parent = 0;
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                if (sqlite3_column_type(stmt, 0) != SQLITE_NULL) {
+                    next = (int)sqlite3_column_int64(stmt, 0);
+                    has_parent = 1;
+                }
+            }
+            sqlite3_finalize(stmt);
+
+            if (!has_parent) break;   /* reached root (parent IS NULL) */
+            cursor = next;
+        }
+    }
+
+    /* Perform the move */
+    {
+        const char *sql =
+            "UPDATE skill_folders"
+            " SET parent_id = ?,"
+            "     updated_at = datetime('now')"
+            " WHERE id = ? AND deleted_at IS NULL;";
+        sqlite3_stmt *stmt;
+        if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
+        if (new_parent_id == 0)
+            sqlite3_bind_null(stmt, 1);
+        else
+            sqlite3_bind_int(stmt, 1, new_parent_id);
+        sqlite3_bind_int(stmt, 2, id);
+
+        int rc = sqlite3_step(stmt);
+        if (rc != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            return ACTA_DB_ERR_SQL;
+        }
+        int changed = sqlite3_changes(db->handle);
+        sqlite3_finalize(stmt);
+        return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    }
+}
+
 int acta_db_skill_folder_soft_delete(db_t *db, int id)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
@@ -281,11 +344,7 @@ skill_folder_t *acta_db_skill_folder_get(db_t *db, int id, int *err)
     }
     sqlite3_finalize(stmt);
 
-    if (!result && err) {
-        *err = ACTA_DB_OK;   /* not-found is "success" */
-    } else if (err) {
-        *err = ACTA_DB_OK;
-    }
+    if (err) *err = ACTA_DB_OK;
     return result;
 }
 
@@ -352,15 +411,21 @@ int acta_db_skill_folder_count_children(db_t *db, int parent_id, int *err)
         return -1;
     }
 
-    const char *sql =
-        "SELECT COUNT(*) FROM skill_folders"
-        " WHERE parent_id = ? AND deleted_at IS NULL;";
+    const char *sql;
+    if (parent_id == 0)
+        sql = "SELECT COUNT(*) FROM skill_folders"
+              " WHERE parent_id IS NULL AND deleted_at IS NULL;";
+    else
+        sql = "SELECT COUNT(*) FROM skill_folders"
+              " WHERE parent_id = ? AND deleted_at IS NULL;";
+
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return -1;
     }
-    sqlite3_bind_int(stmt, 1, parent_id);
+    if (parent_id != 0)
+        sqlite3_bind_int(stmt, 1, parent_id);
 
     int result = -1;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -388,14 +453,13 @@ int acta_db_skill_folder_count_all(db_t *db, int *err)
         return -1;
     }
 
-    int result = -1;
+    int result = 0;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         result = (int)sqlite3_column_int64(stmt, 0);
     }
     sqlite3_finalize(stmt);
 
-    if (result >= 0 && err) *err = ACTA_DB_OK;
-    else if (err) *err = ACTA_DB_ERR_SQL;
+    if (err) *err = ACTA_DB_OK;
     return result;
 }
 

@@ -22,8 +22,9 @@ typedef struct {
 /* --- Mutators -------------------------------------------------------- */
 
 /* Returns ACTA_DB_OK on success.
- * ACTA_DB_ERR_INVALID if db, name, or out_id is NULL.
- * ACTA_DB_ERR_SQL on prepare/step failure. */
+ * ACTA_DB_ERR_INVALID if db is NULL or name is NULL/empty.
+ * ACTA_DB_ERR_SQL on prepare/step failure.
+ * out_id may be NULL. */
 int acta_db_skill_folder_create(db_t *db,
                                const char *name,
                                int parent_id,
@@ -34,6 +35,18 @@ int acta_db_skill_folder_create(db_t *db,
  * ACTA_DB_ERR_NOT_FOUND if no live folder matches id.
  * ACTA_DB_ERR_SQL on prepare/step failure. */
 int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name);
+
+/* Move a live folder to a different parent.
+ * new_parent_id = 0 → move to root (NULL parent).
+ *
+ * Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_INVALID if db is NULL, id <= 0, or the move would
+ *   create a cycle (new_parent_id is a descendant of id, or id ==
+ *   new_parent_id).
+ * ACTA_DB_ERR_NOT_FOUND if no live folder matches id, or if
+ *   new_parent_id does not reference a live folder.
+ * ACTA_DB_ERR_SQL on prepare/step failure. */
+int acta_db_skill_folder_move(db_t *db, int id, int new_parent_id);
 
 /**
  * Soft-delete a skill_folder (sets deleted_at = now).
@@ -67,7 +80,8 @@ skill_folder_t *acta_db_skill_folder_get(db_t *db, int id, int *err);
 
 /* --- Listers ---------------------------------------------------------- */
 
-/* Return a page of child folders (WHERE parent_id = ?) ordered by id.
+/* Return a page of live child folders (WHERE parent_id = ?)
+ * ordered by id.
  *
  * offset – rows to skip (>= 0; negative → ACTA_DB_ERR_INVALID).
  * limit  – max rows to return; <= 0 means no limit (return all).
@@ -81,7 +95,7 @@ skill_folder_t **acta_db_skill_folder_list_children(db_t *db,
                                                     int *out_count,
                                                     int *err);
 
-/* Return a page of all folders ordered by id.
+/* Return a page of all live folders ordered by id.
  *
  * offset – rows to skip (>= 0; negative → ACTA_DB_ERR_INVALID).
  * limit  – max rows to return; <= 0 means no limit (return all).
@@ -96,7 +110,7 @@ skill_folder_t **acta_db_skill_folder_list_all(db_t *db,
 
 /* --- Counts ----------------------------------------------------------- */
 
-/* Return the total number of child folders for the given parent.
+/* Return the total number of live child folders for the given parent.
  * Mirrors the WHERE clause of list_children (no pagination).
  *
  * Returns the count (>= 0) on success, or -1 on error (*err set).
@@ -105,7 +119,7 @@ int acta_db_skill_folder_count_children(db_t *db,
                                         int parent_id,
                                         int *err);
 
-/* Return the total number of all folders.
+/* Return the total number of live folders.
  * Mirrors the WHERE clause of list_all (none – full table).
  *
  * Returns the count (>= 0) on success, or -1 on error (*err set).
