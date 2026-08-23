@@ -7,11 +7,15 @@
 extern "C" {
 #endif
 
+/* ── Status constants ─────────────────────────────────────────────── */
+
 #define ACTA_EXEC_STATUS_PENDING   "pending"
 #define ACTA_EXEC_STATUS_RUNNING   "running"
 #define ACTA_EXEC_STATUS_COMPLETED "completed"
 #define ACTA_EXEC_STATUS_FAILED    "failed"
 #define ACTA_EXEC_STATUS_CANCELLED "cancelled"
+
+/* ── Row ──────────────────────────────────────────────────────────── */
 
 typedef struct {
     int     id;
@@ -26,19 +30,50 @@ typedef struct {
     char   *created_at;
     char   *started_at;
     char   *completed_at;
-    int     parent_execution_id;
+    int     parent_execution_id;   /* 0 = root execution */
 } execution_t;
 
-/*
- * ── Execution state machine ──────────────────────────────────────────────────
+/* ── Query filter ─────────────────────────────────────────────────── */
+
+/* All fields are optional.  A zero / NULL field means "do not filter
+ * on that dimension".  Every combination is valid, including all-fields-
+ * unset (equivalent to the old list_all).
  *
- *   pending ──start()──────────▶ running ──complete()──▶ completed   (terminal)
+ *   status             – exact match, e.g. "running"
+ *   parent_execution_id– 0 = any (no parent filter);
+ *                        > 0 → WHERE parent_execution_id = ?
+ *   context_id         – 0 = any;        > 0 → WHERE context_id = ?
+ *   skill_revision_id  – 0 = any;        > 0 → WHERE skill_revision_id = ?
+ *   model_revision_id  – 0 = any;        > 0 → WHERE model_revision_id = ?
+ *
+ * The struct is stack-allocated and read-only; no allocation or
+ * ownership is involved. */
+typedef struct {
+    const char *status;           /* NULL = any            */
+    int         parent_execution_id; /* 0 = any           */
+    int         context_id;      /* 0 = any               */
+    int         skill_revision_id;   /* 0 = any           */
+    int         model_revision_id;   /* 0 = any           */
+} execution_query_t;
+
+/* Convenience: a query that matches every row (replaces list_all). */
+#define ACTA_EXEC_QUERY_ANY \
+    (execution_query_t){ .status = NULL, .parent_execution_id = 0, \
+                          .context_id = 0, .skill_revision_id = 0, \
+                          .model_revision_id = 0 }
+
+/* ── State machine ────────────────────────────────────────────────── */
+
+/*
+ * ── Execution state machine ──────────────────────────────────────────
+ *
+ *   pending ──start()──────────▶ running ──complete()──▶ completed  (terminal)
  *                     │               │
  *                     │          fail()
  *                     │               ▼
- *                     └──cancel()───▶ failed        (terminal)
+ *                     └──cancel()───▶ failed       (terminal)
  *                              ▼
- *                         cancelled                (terminal)
+ *                         cancelled               (terminal)
  *
  *  Transition rules (enforced in the C layer, not in SQL):
  *
@@ -51,52 +86,157 @@ typedef struct {
  *  no function will modify a row in a terminal state.
  *
  *  set_raw_response() has NO status restriction — it updates a data
- *  field, not a state transition, and may be called from any non-terminal
- *  (or even terminal) state.
+ *  field, not a state transition, and may be called from any state.
  *
- *  The caller does NOT need to pre-check status.  Each transition function
- *  validates the current state internally and returns ACTA_DB_ERR_INVALID
- *  if the transition is illegal.
+ *  The caller does NOT need to pre-check status.  Each transition
+ *  function validates the current state internally and returns
+ *  ACTA_DB_ERR_INVALID if the transition is illegal.
  *
- *  ⚠  The SELECT-then-UPDATE pattern is not atomic.  This is safe under
- *  the project's single-threaded DB usage model.  If the handle is ever
- *  shared across threads, fold the status guard into the UPDATE itself
- *  (  WHERE id = ? AND status = ?  ) and rely on sqlite3_changes().
- * ─────────────────────────────────────────────────────────────────────────────
+ *  ⚠  The SELECT-then-UPDATE pattern is not atomic.  This is safe
+ *  under the project's single-threaded DB usage model.  If the handle
+ *  is ever shared across threads, fold the status guard into the
+ *  UPDATE itself (  WHERE id = ? AND status = ?  ) and rely on
+ *  sqlite3_changes().
+ * ─────────────────────────────────────────────────────────────────────
  */
 
-/* --- action / mutation functions (return int status directly) --- */
+/* ── Mutators (return int status directly) ────────────────────────── */
+
+/* Insert a new execution row (status defaults to "pending").
+ * Returns ACTA_DB_OK on success; *out_id receives the new row id.
+ * Returns ACTA_DB_ERR_INVALID if db or e is NULL or required fields
+ * (context_id, prompt) are missing. */
 int  acta_db_execution_create(db_t *db, const execution_t *e, int *out_id);
+
+/* Transition pending → running. Sets started_at. */
 int  acta_db_execution_start(db_t *db, int id);
-int  acta_db_execution_cancel(db_t* db, int id);
+
+/* Transition pending|running → cancelled. */
+int  acta_db_execution_cancel(db_t *db, int id);
+
+/* Transition running → completed. Stores the result string. */
 int  acta_db_execution_complete(db_t *db, int id, const char *result);
+
+/* Transition running → failed. Stores the error string. */
 int  acta_db_execution_fail(db_t *db, int id, const char *error);
+
+/* Data update, NOT a state transition. May be called from any state. */
 int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
 
-/* --- getters / listers (standardised err pattern) --- */
-execution_t  *acta_db_execution_get(db_t *db, int id, int *err);
+/* ── Getter ───────────────────────────────────────────────────────── */
+
+/* Fetch a single execution by primary key.
+ *
+ * Returns a heap-allocated execution_t (free with
+ * acta_db_execution_free), or NULL.
+ *
+ *   NULL + *err == ACTA_DB_OK       → row not found
+ *   NULL + *err == ACTA_DB_ERR_*    → real failure
+ *   non-NULL + *err == ACTA_DB_OK   → row found
+ *
+ * err may be NULL. */
+execution_t *acta_db_execution_get(db_t *db, int id, int *err);
+
+/* ── Unified lister ───────────────────────────────────────────────── */
+
+/*
+ * Return a page of executions matching `q`, ordered by id ASC.
+ *
+ * Pagination:
+ *   offset – number of rows to skip (0-based; 0 = first row).
+ *            Must be >= 0; negative → ACTA_DB_ERR_INVALID.
+ *   limit  – maximum number of rows to return.
+ *            <= 0 means no limit (return all matching rows).
+ *
+ * Returns:
+ *   heap-allocated array of execution_t* (free with
+ *   acta_db_execution_list_free), or NULL.
+ *
+ *   non-NULL + *out_count > 0  → rows returned
+ *   NULL     + *err == OK      → no rows (normal, not an error)
+ *   NULL     + *err <  0       → real failure
+ *
+ * Both out_count and err may be NULL.
+ *
+ * This function replaces the former list_all / list_by_status /
+ * list_children / list_by_context / list_by_skill_revision /
+ * list_by_model_revision variants.  Map old calls as follows:
+ *
+ *   list_all(db, off, lim, …)
+ *       → query(db, &ACTA_EXEC_QUERY_ANY, off, lim, …)
+ *
+ *   list_by_status(db, "running", off, lim, …)
+ *       → query(db, &(execution_query_t){ .status = "running" }, …)
+ *
+ *   list_children(db, 42, off, lim, …)
+ *       → query(db, &(execution_query_t){ .parent_execution_id = 42 }, …)
+ *
+ *   list_by_context(db, 7, off, lim, …)
+ *       → query(db, &(execution_query_t){ .context_id = 7 }, …)
+ *
+ *   list_by_skill_revision(db, 12, off, lim, …)
+ *       → query(db, &(execution_query_t){ .skill_revision_id = 12 }, …)
+ *
+ *   list_by_model_revision(db, 5, off, lim, …)
+ *       → query(db, &(execution_query_t){ .model_revision_id = 5 }, …)
+ */
+execution_t **acta_db_execution_query(db_t *db,
+                                      const execution_query_t *q,
+                                      int offset, int limit,
+                                      int *out_count, int *err);
+
+/* ── Count ────────────────────────────────────────────────────────── */
+
+/* Return the total number of execution rows matching `q`
+ * (ignoring pagination).  Useful for computing total_pages,
+ * rendering "Page X of Y", or deciding whether a lister is exhausted
+ * without fetching the next page.
+ *
+ * Returns:
+ *   >= 0  on success (the row count; 0 is valid)
+ *   -1    on failure (*err set to a negative ACTA_DB_ERR_* code)
+ *
+ * err may be NULL. */
+int acta_db_execution_count(db_t *db,
+                            const execution_query_t *q,
+                            int *err);
+
+/* ── Deprecated listers (removed in v2) ──────────────────────────── */
+
+/* Deprecated: use acta_db_execution_query with ACTA_EXEC_QUERY_ANY. */
 execution_t **acta_db_execution_list_all(db_t *db,
                                           int offset, int limit,
                                           int *out_count, int *err);
+
+/* Deprecated: use acta_db_execution_query with .status set. */
 execution_t **acta_db_execution_list_by_status(db_t *db, const char *status,
                                                 int offset, int limit,
                                                 int *out_count, int *err);
+
+/* Deprecated: use acta_db_execution_query with .parent_execution_id set. */
 execution_t **acta_db_execution_list_children(db_t *db, int parent_id,
                                                int offset, int limit,
                                                int *out_count, int *err);
+
+/* Deprecated: use acta_db_execution_query with .context_id set. */
 execution_t **acta_db_execution_list_by_context(db_t *db, int context_id,
                                                 int offset, int limit,
                                                 int *out_count, int *err);
+
+/* Deprecated: use acta_db_execution_query with .skill_revision_id set. */
 execution_t **acta_db_execution_list_by_skill_revision(db_t *db,
                                                         int skill_revision_id,
                                                         int offset, int limit,
                                                         int *out_count, int *err);
+
+/* Deprecated: use acta_db_execution_query with .model_revision_id set. */
 execution_t **acta_db_execution_list_by_model_revision(db_t *db,
                                                         int model_revision_id,
                                                         int offset, int limit,
                                                         int *out_count, int *err);
 
-/* --- free --- */
+/* ── Free ─────────────────────────────────────────────────────────── */
+
 void acta_db_execution_free(execution_t *e);
 void acta_db_execution_list_free(execution_t **items, int count);
 
@@ -104,4 +244,4 @@ void acta_db_execution_list_free(execution_t **items, int count);
 }
 #endif
 
-#endif
+#endif /* ACTA_DB_EXECUTION_H */
