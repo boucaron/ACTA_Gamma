@@ -281,24 +281,32 @@ model_folder_t **acta_db_model_folder_list_all(
 /*  Count                                                             */
 /* ================================================================== */
 
-int acta_db_model_folder_count(db_t *db, int parent_id, int *err)
+int acta_db_model_folder_count_children(db_t *db, int parent_id, int *err)
 {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return -1;
     }
 
-    const char *sql = parent_id > 0
-        ? "SELECT COUNT(*) FROM model_folders "
-          "WHERE parent_id = ? AND deleted_at IS NULL;"
-        : "SELECT COUNT(*) FROM model_folders WHERE deleted_at IS NULL;";
+    /*
+     * parent_id == 0 is the "no parent" marker (root level).
+     * In the DB the column is NULL, not 0, so we must use IS NULL.
+     * This mirrors list_children.
+     */
+    const char *sql;
+    if (parent_id == 0)
+        sql = "SELECT COUNT(*) FROM model_folders "
+              "WHERE parent_id IS NULL AND deleted_at IS NULL;";
+    else
+        sql = "SELECT COUNT(*) FROM model_folders "
+              "WHERE parent_id = ? AND deleted_at IS NULL;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return -1;
     }
-    if (parent_id > 0)
+    if (parent_id != 0)
         sqlite3_bind_int(stmt, 1, parent_id);
 
     int count = 0;
@@ -309,6 +317,33 @@ int acta_db_model_folder_count(db_t *db, int parent_id, int *err)
     if (err) *err = ACTA_DB_OK;
     return count;
 }
+
+
+int acta_db_model_folder_count_all(db_t *db, int *err)
+{
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
+
+    const char *sql =
+        "SELECT COUNT(*) FROM model_folders WHERE deleted_at IS NULL;";
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
+
+    int count = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        count = (int)sqlite3_column_int64(stmt, 0);
+
+    sqlite3_finalize(stmt);
+    if (err) *err = ACTA_DB_OK;
+    return count;
+}
+
 
 /* ================================================================== */
 /*  Free                                                              */

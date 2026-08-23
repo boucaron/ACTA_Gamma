@@ -40,19 +40,25 @@ int acta_db_execution_log_create(db_t *db,
 /*
  * Getter – fetch a single row by its primary key.
  *
- *   Return value:
- *     NULL                  – failure or row not found; *err set to a
- *                             negative ACTA_DB_ERR_* code.
- *     heap-allocated pointer – row found; *err set to ACTA_DB_OK (0).
+ *   Return value / *err:
+ *     non-NULL pointer + *err == ACTA_DB_OK  – row found (heap-allocated).
+ *     NULL         + *err == ACTA_DB_OK       – row NOT found (no error).
+ *     NULL         + *err == ACTA_DB_ERR_*    – genuine failure
+ *                                               (bad handle, SQL, alloc, …).
+ *
+ *   The caller MUST inspect *err to distinguish "not found" from an
+ *   actual error.  A NULL return alone is ambiguous.
  *
  * err may be NULL if the caller only needs the pointer (e.g. an
- * existence check via a NULL result).
+ * existence check via a NULL result), but then the not-found / error
+ * distinction is lost.
  *
  * Free the result with acta_db_execution_log_free().
  */
 execution_log_t *acta_db_execution_log_get(db_t *db,
                                            int id,
                                            int *err);
+
 
 /*
  * Lister – paginated rows for a given execution, ordered by id.

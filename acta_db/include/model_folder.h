@@ -108,19 +108,24 @@ model_folder_t **acta_db_model_folder_list_all(db_t *db,
                                                int offset, int limit,
                                                int *out_count, int *err);
 
-/* --- Count ─────────────────────────────────────────────────────────── */
+/* --- Counts ----------------------------------------------------------- */
 
-/* Return the total number of folder rows matching the given parent.
+/* Return the number of direct children of the given folder.
+ * Mirrors the WHERE clause of list_children (no pagination).
  *
- * If parent_id is 0 counts all folders (equivalent to list_all).
- * If parent_id > 0 counts only direct children of that folder
- * (equivalent to list_children).
- *
- * Returns the row count (>= 0) on success, or -1 on failure.
- * If err is non-NULL it is set to ACTA_DB_OK on success or a
- * negative ACTA_DB_ERR_* code on failure.
+ * Returns the count (>= 0) on success, or -1 on error (*err set).
  * err may be NULL. */
-int  acta_db_model_folder_count(db_t *db, int parent_id, int *err);
+int acta_db_model_folder_count_children(db_t *db,
+                                        int  parent_id,
+                                        int *err);
+
+/* Return the total number of folders in the table.
+ * Mirrors the WHERE clause of list_all (none – full table).
+ *
+ * Returns the count (>= 0) on success, or -1 on error (*err set).
+ * err may be NULL. */
+int acta_db_model_folder_count_all(db_t *db,
+                                   int  *err);
 
 /* --- Free ──────────────────────────────────────────────────────────── */
 
