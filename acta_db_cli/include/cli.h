@@ -2,6 +2,7 @@
 #define ACTA_CLI_H
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 
 /* ---- version ---- */
@@ -18,24 +19,51 @@
 
 /* ---- global options (filled by parse_globals) ---- */
 typedef struct {
+    /* input / source */
     const char *db;          /* --db */
     const char *fields;      /* --fields */
+    const char *json_input;  /* --json */
+    int         from_stdin;  /* --stdin */
+    const char *from_file;   /* --from-file */
+
+    /* output shaping */
     int         no_nulls;    /* --no-nulls */
     int         id_only;     /* --id-only */
     int         count;       /* --count */
     int         table;       /* --table */
     int         pretty;      /* --pretty */
-    const char *json_input;  /* --json */
-    int         from_stdin;  /* --stdin */
-    const char *from_file;   /* --from-file */
+
+    /* meta */
     int         show_version;/* --version */
     int         show_help;   /* --help */
     int         show_tools;  /* --tools */
+
+    /* diagnostics */
+    int         verbose;     /* -v / --verbose (0–3) */
 
     /* remaining argv after global extraction */
     int   argc;
     char **argv;
 } global_opts_t;
+
+/* ---- verbose helpers ---- */
+
+/*
+ * vdbg(GO, LEVEL, "fmt", ...)
+ *   Prints to stderr only when GO->verbose >= LEVEL.
+ *   LEVEL 1 = info,  2 = debug,  3 = trace.
+ *
+ *   GO is a global_opts_t * (may be NULL → no-op).
+ */
+#define vdbg(GO, LEVEL, ...) do { \
+    if ((GO) && (GO)->verbose >= (LEVEL)) { \
+        fprintf(stderr, "[v" #LEVEL "] "); \
+        fprintf(stderr, __VA_ARGS__); \
+        fprintf(stderr, "\n"); \
+    } \
+} while (0)
+
+
 
 /* ---- resolved DB path ---- */
 const char *resolve_db_path(const char *flag_db);

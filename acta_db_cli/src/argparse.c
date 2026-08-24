@@ -1,6 +1,7 @@
 #include "argparse.h"
 #include <string.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 /* ------------------------------------------------------------------ */
 /*  helpers                                                            */
@@ -112,6 +113,29 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (strcmp(a, "--table") == 0)    { g->table = 1;    continue; }
         /* ---- --pretty ---- */
         if (strcmp(a, "--pretty") == 0)   { g->pretty = 1;   continue; }
+        /* ---- --verbose / -v (stackable, 0–3) ---- */
+        if (strcmp(a, "--verbose") == 0 || strcmp(a, "-v") == 0) {
+            if (g->verbose < 3) g->verbose++;
+            continue;
+        }
+        if (flag_prefix_match(a, "verbose")) {
+            /* --verbose=N form (explicit level) */
+            if (a[10] == '=') {
+                int lvl = atoi(a + 11);
+                g->verbose = (lvl >= 1 && lvl <= 3) ? lvl : 3;
+            } else {
+                /* --verbose <N> (space form, treat N as level) */
+                if (i + 1 < argc) {
+                    int lvl = atoi(argv[i + 1]);
+                    if (lvl >= 1 && lvl <= 3) g->verbose = lvl;
+                    else g->verbose = 3;
+                    i++;
+                } else if (g->verbose < 3) {
+                    g->verbose++;
+                }
+            }
+            continue;
+        }
         /* ---- --json <blob> ---- */
         if (flag_prefix_match(a, "json")) {
             if (a[6] == '=') g->json_input = a + 7;

@@ -1,36 +1,54 @@
 #include "commands.h"
 #include "argparse.h"
+#include "cli.h"
+
 #include <string.h>
 #include <stdio.h>
-
 
 #ifndef ACTA_DB_GIT_HASH
 #define ACTA_DB_GIT_HASH "unknown"
 #endif
 
 /* ------------------------------------------------------------------ */
-/*  local dispatch per entity                                         */
+/*  entity dispatch table                                              */
 /* ------------------------------------------------------------------ */
 
-static int dispatch_entity(const char *entity, const char *action,
-                           cmd_args_t *ga, const global_opts_t *gopts) {
-    /*
-     * Each entity handler is a simple if/else on `action`.
-     * For the POC we just route to the stub.
-     */
-    if (strcmp(entity, "db") == 0)           return cmd_db(action, ga, gopts);
-    if (strcmp(entity, "context") == 0)     return cmd_context(action, ga, gopts);
-    if (strcmp(entity, "model") == 0)       return cmd_model(action, ga, gopts);
-    if (strcmp(entity, "model-folder") == 0)return cmd_model_folder(action, ga, gopts);
-    if (strcmp(entity, "model-rev") == 0)   return cmd_model_rev(action, ga, gopts);
-    if (strcmp(entity, "skill") == 0)       return cmd_skill(action, ga, gopts);
-    if (strcmp(entity, "skill-folder") == 0)return cmd_skill_folder(action, ga, gopts);
-    if (strcmp(entity, "skill-rev") == 0)   return cmd_skill_rev(action, ga, gopts);
-    if (strcmp(entity, "exec") == 0)        return cmd_exec(action, ga, gopts);
-    if (strcmp(entity, "log") == 0)         return cmd_log(action, ga, gopts);
+typedef int (*entity_fn)(const char *action, cmd_args_t *ga,
+                         const global_opts_t *gopts);
 
-    /* unknown entity */
-    fprintf(stderr, "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,\"message\":\"unknown entity: %s\"}\n", entity);
+typedef struct {
+    const char *name;
+    entity_fn   fn;
+} entity_entry_t;
+
+static const entity_entry_t entity_table[] = {
+    { "db",             cmd_db           },
+    { "context",        cmd_context      },
+    { "model",          cmd_model        },
+    { "model-folder",   cmd_model_folder },
+    { "model-rev",      cmd_model_rev    },
+    { "skill",          cmd_skill        },
+    { "skill-folder",   cmd_skill_folder },
+    { "skill-rev",      cmd_skill_rev    },
+    { "exec",           cmd_exec         },
+    { "log",            cmd_log          },
+};
+
+#define ENTITY_COUNT (sizeof(entity_table) / sizeof(entity_table[0]))
+
+static entity_fn lookup_entity(const char *entity) {
+    for (size_t i = 0; i < ENTITY_COUNT; ++i) {
+        if (strcmp(entity_table[i].name, entity) == 0)
+            return entity_table[i].fn;
+    }
+    return NULL;
+}
+
+static int entity_not_found(const char *entity) {
+    fprintf(stderr,
+        "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
+        "\"message\":\"unknown entity: %s\"}\n",
+        entity);
     return EXIT_CLI;
 }
 
@@ -39,23 +57,30 @@ static int dispatch_entity(const char *entity, const char *action,
 /* ------------------------------------------------------------------ */
 
 int commands_dispatch(const char *entity, const char *action,
-                      cmd_args_t *ga, const global_opts_t *gopts) {
+                      cmd_args_t *ga, const global_opts_t *gopts)
+{
     (void)action; /* entity handlers parse action themselves for now */
-    return dispatch_entity(entity, action, ga, gopts);
+
+    entity_fn fn = lookup_entity(entity);
+    if (!fn)
+        return entity_not_found(entity);
+
+    vdbg(gopts, 2, "dispatch → %s", entity);   /* needs a local `opts` alias or a vdbg overload */
+    return fn(entity, ga, gopts);
 }
 
 /* ------------------------------------------------------------------ */
-/*  --version / --help / --tools                                      */
+/*  --version / --help / --tools                                       */
 /* ------------------------------------------------------------------ */
 
-
-void version_print(FILE *out) {
+void version_print(FILE *out)
+{
     fprintf(out, "actagamma_db %s (%s | libacta_db 0.1.0, sqlite 3.x.x)\n",
             ACTA_DB_CLI_VERSION, ACTA_DB_GIT_HASH);
 }
 
-
-void help_print(FILE *out) {
+void help_print(FILE *out)
+{
     fprintf(out,
         "usage: actagamma_db [global-flags] <entity> <action> [args]\n"
         "\n"
@@ -76,11 +101,13 @@ void help_print(FILE *out) {
         "  --version          print version\n"
         "  --help, -h         this help\n"
         "  --tools            JSON tool schema\n"
+        "  --verbose, -v      increase verbosity (repeatable, 1-3)\n"
         "\n"
         "see --tools for full command reference.\n");
 }
 
-int tools_print(FILE *out) {
+int tools_print(FILE *out)
+{
     /* TODO: emit the full JSON array from spec §11 */
     fprintf(out, "[]");
     return EXIT_OK;
