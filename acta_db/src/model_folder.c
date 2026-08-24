@@ -438,17 +438,18 @@ int acta_db_model_folder_count_children(db_t *db, int parent_id, int *err)
         sqlite3_bind_int(stmt, 1, parent_id);
 
     int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-
     if (rc != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
         if (err) *err = ACTA_DB_ERR_SQL;
         return -1;
     }
 
     int count = (int)sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
     if (err) *err = ACTA_DB_OK;
     return count;
 }
+
 
 int acta_db_model_folder_count_all(db_t *db, int *err)
 {
@@ -467,17 +468,18 @@ int acta_db_model_folder_count_all(db_t *db, int *err)
     }
 
     int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-
     if (rc != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
         if (err) *err = ACTA_DB_ERR_SQL;
         return -1;
     }
 
     int count = (int)sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
     if (err) *err = ACTA_DB_OK;
     return count;
 }
+
 
 /* ================================================================== */
 /*  Free                                                              */

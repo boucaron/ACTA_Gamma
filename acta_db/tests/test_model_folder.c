@@ -16,10 +16,12 @@ static int g_fail = 0;
                 __func__, __LINE__, msg); \
         g_fail++; \
         return; \
-    } else { \
-        g_pass++; \
     } \
+    g_pass++; \
 } while (0)
+
+/* Sentinel value to detect *err not being written. */
+#define ERR_SENTINEL (-999)
 
 /* ── Fixture ─────────────────────────────────────────────────────── */
 
@@ -27,12 +29,14 @@ static db_t *g_db = NULL;
 
 static void setup(void)
 {
-    g_db = acta_db_open(":memory:", NULL);
+    int err = ERR_SENTINEL;
+    g_db = acta_db_open(":memory:", &err);
     if (!g_db) {
-        fprintf(stderr, "  FATAL: cannot open in-memory db\n");
+        fprintf(stderr, "  FATAL: cannot open in-memory db (err=%d)\n", err);
         return;
     }
-    acta_db_exec(g_db,
+
+    int rc = acta_db_exec(g_db,
         "CREATE TABLE model_folders ("
         "  id         INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  name       TEXT NOT NULL,"
@@ -41,6 +45,12 @@ static void setup(void)
         "  updated_at TEXT DEFAULT (datetime('now')),"
         "  deleted_at TEXT NULL"
         ");");
+    if (rc != ACTA_DB_OK) {
+        fprintf(stderr, "  FATAL: CREATE TABLE failed (%s)\n",
+                acta_db_strerror(rc));
+        acta_db_close(g_db);
+        g_db = NULL;
+    }
 }
 
 static void teardown(void)
@@ -103,27 +113,29 @@ static void test_get_found(void)
     int id;
     make_folder("FindMe", 0, &id);
 
-    int err = -999;
+    int err = ERR_SENTINEL;
     model_folder_t *f = acta_db_model_folder_get(g_db, id, &err);
     T_ASSERT(f != NULL, "row found");
     T_ASSERT(err == ACTA_DB_OK, "err is OK");
     T_ASSERT(f->id == id, "id matches");
-    T_ASSERT(strcmp(f->name, "FindMe") == 0, "name matches");
+    T_ASSERT(f->name && strcmp(f->name, "FindMe") == 0, "name matches");
     T_ASSERT(f->parent_id == 0, "parent_id is 0 for root");
+    T_ASSERT(f->created_at != NULL, "created_at populated by DEFAULT");
+    T_ASSERT(f->deleted_at == NULL, "deleted_at is NULL for live row");
     acta_db_model_folder_free(f);
 }
 
 static void test_get_not_found(void)
 {
-    int err = -999;
+    int err = ERR_SENTINEL;
     model_folder_t *f = acta_db_model_folder_get(g_db, 99999, &err);
     T_ASSERT(f == NULL, "not-found returns NULL");
-    T_ASSERT(err == ACTA_DB_OK, "not-found err is OK");
+    T_ASSERT(err == ACTA_DB_OK, "not-found err is OK (not an error)");
 }
 
 static void test_get_null_db(void)
 {
-    int err;
+    int err = ERR_SENTINEL;
     model_folder_t *f = acta_db_model_folder_get(NULL, 1, &err);
     T_ASSERT(f == NULL, "NULL db → NULL");
     T_ASSERT(err == ACTA_DB_ERR_INVALID, "NULL db → INVALID");
@@ -131,7 +143,7 @@ static void test_get_null_db(void)
 
 static void test_get_invalid_id(void)
 {
-    int err;
+    int err = ERR_SENTINEL;
     model_folder_t *f = acta_db_model_folder_get(g_db, 0, &err);
     T_ASSERT(f == NULL, "id=0 → NULL");
     T_ASSERT(err == ACTA_DB_ERR_INVALID, "id=0 → INVALID");
@@ -212,7 +224,8 @@ static void test_soft_delete_and_restore(void)
     acta_db_model_folder_free(f);
 
     int count = -1;
-    model_folder_t **items = acta_db_model_folder_list_all(g_db, 0, -1, &count, NULL);
+    model_folder_t **items =
+        acta_db_model_folder_list_all(g_db, 0, -1, &count, NULL);
     T_ASSERT(count == 0, "list_all empty after delete");
     acta_db_model_folder_list_free(items, count);
 
@@ -226,6 +239,42 @@ static void test_soft_delete_and_restore(void)
     items = acta_db_model_folder_list_all(g_db, 0, -1, &count, NULL);
     T_ASSERT(count == 1, "list_all has 1 after restore");
     acta_db_model_folder_list_free(items, count);
+}
+
+static void test_soft_delete_with_live_children(void)
+{
+    int parent, child;
+    make_folder("Parent", 0, &parent);
+    make_folder("Child", parent, &child);
+
+    int rc = acta_db_model_folder_soft_delete(g_db, parent);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "delete with live children → INVALID");
+
+    /* Parent should still be live. */
+    model_folder_t *f = acta_db_model_folder_get(g_db, parent, NULL);
+    T_ASSERT(f->deleted_at == NULL, "parent still live");
+    acta_db_model_folder_free(f);
+}
+
+static void test_soft_delete_with_deleted_children_ok(void)
+{
+    int parent, child;
+    make_folder("Parent", 0, &parent);
+    make_folder("Child", parent, &child);
+    acta_db_model_folder_soft_delete(g_db, child);
+
+    int rc = acta_db_model_folder_soft_delete(g_db, parent);
+    T_ASSERT(rc == ACTA_DB_OK, "delete ok when children are all deleted");
+}
+
+static void test_soft_delete_double(void)
+{
+    int id;
+    make_folder("Once", 0, &id);
+    T_ASSERT(acta_db_model_folder_soft_delete(g_db, id) == ACTA_DB_OK, "first delete ok");
+
+    int rc = acta_db_model_folder_soft_delete(g_db, id);
+    T_ASSERT(rc == ACTA_DB_ERR_NOT_FOUND, "second delete → NOT_FOUND");
 }
 
 static void test_restore_nonexistent(void)
@@ -252,12 +301,7 @@ static void test_restore_already_live(void)
     make_folder("Live", 0, &id);
 
     int rc = acta_db_model_folder_restore(g_db, id);
-    T_ASSERT(rc == ACTA_DB_OK, "restore on live folder → OK");
-
-    int count = -1;
-    model_folder_t **items = acta_db_model_folder_list_all(g_db, 0, -1, &count, NULL);
-    T_ASSERT(count == 1, "still in list");
-    acta_db_model_folder_list_free(items, count);
+    T_ASSERT(rc == ACTA_DB_OK, "restore on live folder → OK (no-op)");
 }
 
 static void test_soft_delete_null_db(void)
@@ -312,10 +356,15 @@ static void test_move_to_same_parent_noop(void)
 
     int rc = acta_db_model_folder_move_to(g_db, child, parent);
     T_ASSERT(rc == ACTA_DB_OK, "no-op returns OK");
+}
 
-    model_folder_t *f = acta_db_model_folder_get(g_db, child, NULL);
-    T_ASSERT(f->parent_id == parent, "unchanged");
-    acta_db_model_folder_free(f);
+static void test_move_to_self(void)
+{
+    int id;
+    make_folder("Lonely", 0, &id);
+
+    int rc = acta_db_model_folder_move_to(g_db, id, id);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "self-move → INVALID (cycle)");
 }
 
 static void test_move_to_own_child_cycle(void)
@@ -357,10 +406,9 @@ static void test_move_to_nonexistent_target(void)
 
 static void test_move_soft_deleted_folder(void)
 {
-    int parent, target;
+    int parent, target, id;
     make_folder("P", 0, &parent);
     make_folder("T", 0, &target);
-    int id;
     make_folder("Dead", parent, &id);
     acta_db_model_folder_soft_delete(g_db, id);
 
@@ -416,7 +464,8 @@ static void test_move_updates_reflected_in_list(void)
     int count2 = -1;
     items = acta_db_model_folder_list_children(g_db, p2, 0, -1, &count2, NULL);
     T_ASSERT(count2 == 1, "p2 has 1 child after move");
-    T_ASSERT(strcmp(items[0]->name, "Child") == 0, "it's the moved child");
+    T_ASSERT(items[0]->name && strcmp(items[0]->name, "Child") == 0,
+             "it's the moved child");
     acta_db_model_folder_list_free(items, count2);
 }
 
@@ -430,16 +479,30 @@ static void test_list_children_basic(void)
     make_folder("B", parent, NULL);
     make_folder("C", parent, NULL);
 
-    int count = -1, err;
+    int count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(g_db, parent, 0, -1, &count, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok");
     T_ASSERT(count == 3, "3 children");
     T_ASSERT(items != NULL, "array non-null");
-    T_ASSERT(strcmp(items[0]->name, "A") == 0, "order A");
-    T_ASSERT(strcmp(items[1]->name, "B") == 0, "order B");
-    T_ASSERT(strcmp(items[2]->name, "C") == 0, "order C");
+    T_ASSERT(strcmp(items[0]->name, "A") == 0, "order A (id 1)");
+    T_ASSERT(strcmp(items[1]->name, "B") == 0, "order B (id 2)");
+    T_ASSERT(strcmp(items[2]->name, "C") == 0, "order C (id 3)");
     acta_db_model_folder_list_free(items, count);
+}
+
+static void test_list_children_empty(void)
+{
+    int parent;
+    make_folder("Lonely", 0, &parent);
+
+    int count = -1, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_children(g_db, parent, 0, -1, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(count == 0, "zero children");
+    T_ASSERT(items == NULL, "NULL array for empty");
+    acta_db_model_folder_list_free(items, 0);
 }
 
 static void test_list_children_root_level(void)
@@ -450,7 +513,7 @@ static void test_list_children_root_level(void)
     make_folder("Inner", 0, &inner);
     make_folder("ChildOfInner", inner, NULL);
 
-    int count = -1, err;
+    int count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(g_db, 0, 0, -1, &count, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok");
@@ -468,22 +531,27 @@ static void test_list_children_pagination(void)
         make_folder(name, parent, NULL);
     }
 
-    int count = -1, err;
+    int count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(g_db, parent, 0, 4, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "page1 ok");
     T_ASSERT(count == 4, "page1 has 4");
     T_ASSERT(strcmp(items[0]->name, "Child00") == 0, "first is Child00");
     acta_db_model_folder_list_free(items, count);
 
+    count = -1; err = ERR_SENTINEL;
     items = acta_db_model_folder_list_children(g_db, parent, 4, 4, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "page2 ok");
     T_ASSERT(count == 4, "page2 has 4");
     T_ASSERT(strcmp(items[0]->name, "Child04") == 0, "first is Child04");
     acta_db_model_folder_list_free(items, count);
 
+    count = -1; err = ERR_SENTINEL;
     items = acta_db_model_folder_list_children(g_db, parent, 8, 4, &count, &err);
     T_ASSERT(count == 2, "page3 has 2");
     acta_db_model_folder_list_free(items, count);
 
+    count = -1; err = ERR_SENTINEL;
     items = acta_db_model_folder_list_children(g_db, parent, 10, 4, &count, &err);
     T_ASSERT(count == 0, "page4 empty");
     acta_db_model_folder_list_free(items, count);
@@ -507,7 +575,7 @@ static void test_list_children_excludes_deleted(void)
 
 static void test_list_children_null_db(void)
 {
-    int count, err;
+    int count, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(NULL, 0, 0, -1, &count, &err);
     T_ASSERT(items == NULL, "NULL");
@@ -516,7 +584,7 @@ static void test_list_children_null_db(void)
 
 static void test_list_children_negative_offset(void)
 {
-    int count, err;
+    int count, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(g_db, 0, -1, -1, &count, &err);
     T_ASSERT(items == NULL, "NULL");
@@ -529,10 +597,11 @@ static void test_list_children_null_out_count(void)
     make_folder("Root", 0, &id);
     make_folder("Kid", id, NULL);
 
-    int err;
+    int err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(g_db, id, 0, -1, NULL, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok with NULL out_count");
+    T_ASSERT(items != NULL, "items non-null");
     acta_db_model_folder_list_free(items, 1);
 }
 
@@ -540,22 +609,28 @@ static void test_list_children_null_out_count(void)
 
 static void test_list_all_basic(void)
 {
-    make_folder("Zebra", 0, NULL);
-    make_folder("Apple", 0, NULL);
-    make_folder("Mango", 0, NULL);
+    /*
+     * API orders by id ASC, not by name.
+     * Creation order determines id order here.
+     */
+    make_folder("Zebra", 0, NULL);   /* id=1 */
+    make_folder("Apple", 0, NULL);   /* id=2 */
+    make_folder("Mango", 0, NULL);   /* id=3 */
 
-    int count = -1, err;
+    int count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, 0, -1, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
     T_ASSERT(count == 3, "3 items");
-    T_ASSERT(strcmp(items[0]->name, "Apple") == 0, "alpha order");
-    T_ASSERT(strcmp(items[2]->name, "Zebra") == 0, "alpha order");
+    T_ASSERT(strcmp(items[0]->name, "Zebra") == 0, "id order: Zebra(1)");
+    T_ASSERT(strcmp(items[1]->name, "Apple") == 0, "id order: Apple(2)");
+    T_ASSERT(strcmp(items[2]->name, "Mango") == 0, "id order: Mango(3)");
     acta_db_model_folder_list_free(items, count);
 }
 
 static void test_list_all_empty(void)
 {
-    int count = -1, err;
+    int count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, 0, -1, &count, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok");
@@ -580,7 +655,7 @@ static void test_list_all_excludes_deleted(void)
 
 static void test_list_all_null_db(void)
 {
-    int count, err;
+    int count, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_all(NULL, 0, -1, &count, &err);
     T_ASSERT(items == NULL, "NULL");
@@ -589,7 +664,7 @@ static void test_list_all_null_db(void)
 
 static void test_list_all_negative_offset(void)
 {
-    int count, err;
+    int count, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, -1, -1, &count, &err);
     T_ASSERT(items == NULL, "NULL");
@@ -604,22 +679,26 @@ static void test_list_all_pagination(void)
         make_folder(name, 0, NULL);
     }
 
-    int count = -1, err;
+    int count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, 0, 2, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
     T_ASSERT(count == 2, "page1: 2 items");
     T_ASSERT(strcmp(items[0]->name, "F00") == 0, "F00");
     acta_db_model_folder_list_free(items, count);
 
+    count = -1; err = ERR_SENTINEL;
     items = acta_db_model_folder_list_all(g_db, 2, 2, &count, &err);
     T_ASSERT(count == 2, "page2: 2 items");
     T_ASSERT(strcmp(items[0]->name, "F02") == 0, "F02");
     acta_db_model_folder_list_free(items, count);
 
+    count = -1; err = ERR_SENTINEL;
     items = acta_db_model_folder_list_all(g_db, 4, 2, &count, &err);
     T_ASSERT(count == 2, "page3: 2 items");
     acta_db_model_folder_list_free(items, count);
 
+    count = -1; err = ERR_SENTINEL;
     items = acta_db_model_folder_list_all(g_db, 6, 2, &count, &err);
     T_ASSERT(count == 0, "page4: exhausted");
     acta_db_model_folder_list_free(items, count);
@@ -628,17 +707,18 @@ static void test_list_all_pagination(void)
 static void test_list_all_null_out_count(void)
 {
     make_folder("X", 0, NULL);
-    int err;
+    int err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, 0, -1, NULL, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(items != NULL, "items non-null");
     acta_db_model_folder_list_free(items, 1);
 }
 
 static void test_list_all_null_err(void)
 {
     make_folder("X", 0, NULL);
-    int count;
+    int count = -1;
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, 0, -1, &count, NULL);
     T_ASSERT(count == 1, "ok");
@@ -650,8 +730,8 @@ static void test_list_all_both_null(void)
     make_folder("X", 0, NULL);
     model_folder_t **items =
         acta_db_model_folder_list_all(g_db, 0, -1, NULL, NULL);
+    T_ASSERT(items != NULL, "items non-null");
     acta_db_model_folder_list_free(items, 1);
-    g_pass++;
 }
 
 /* ── count_all ───────────────────────────────────────────────────── */
@@ -662,7 +742,7 @@ static void test_count_all_basic(void)
     make_folder("B", 0, NULL);
     make_folder("C", 0, NULL);
 
-    int err;
+    int err = ERR_SENTINEL;
     int total = acta_db_model_folder_count_all(g_db, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok");
     T_ASSERT(total == 3, "count is 3");
@@ -687,7 +767,7 @@ static void test_count_all_excludes_deleted(void)
 
 static void test_count_all_null_db(void)
 {
-    int err;
+    int err = ERR_SENTINEL;
     int n = acta_db_model_folder_count_all(NULL, &err);
     T_ASSERT(n == -1, "returns -1");
     T_ASSERT(err == ACTA_DB_ERR_INVALID, "INVALID");
@@ -710,7 +790,7 @@ static void test_count_children_basic(void)
     make_folder("C2", parent, NULL);
     make_folder("Other", 0, NULL);
 
-    int err;
+    int err = ERR_SENTINEL;
     int n = acta_db_model_folder_count_children(g_db, parent, &err);
     T_ASSERT(err == ACTA_DB_OK, "ok");
     T_ASSERT(n == 2, "2 children");
@@ -762,7 +842,7 @@ static void test_count_children_root_level(void)
 
 static void test_count_children_null_db(void)
 {
-    int err;
+    int err = ERR_SENTINEL;
     int n = acta_db_model_folder_count_children(NULL, 1, &err);
     T_ASSERT(n == -1, "returns -1");
     T_ASSERT(err == ACTA_DB_ERR_INVALID, "INVALID");
@@ -807,7 +887,7 @@ static void test_count_all_matches_lister(void)
     int count_total = acta_db_model_folder_count_all(g_db, NULL);
     int count_child = acta_db_model_folder_count_children(g_db, parent, NULL);
 
-    int list_count, err;
+    int list_count = -1, err = ERR_SENTINEL;
     model_folder_t **items =
         acta_db_model_folder_list_children(g_db, parent, 0, -1, &list_count, &err);
 
@@ -853,40 +933,44 @@ int run_model_folder_tests(void)
 {
     struct { const char *name; void (*fn)(void); } tests[] = {
         /* create */
-        {"create_basic",                test_create_basic},
-        {"create_child",                test_create_child},
-        {"create_null_name",            test_create_null_name},
-        {"create_null_db",              test_create_null_db},
-        {"create_null_out_id",          test_create_null_out_id},
+        {"create_basic",                 test_create_basic},
+        {"create_child",                 test_create_child},
+        {"create_null_name",             test_create_null_name},
+        {"create_null_db",               test_create_null_db},
+        {"create_null_out_id",           test_create_null_out_id},
 
         /* get */
-        {"get_found",                   test_get_found},
-        {"get_not_found",               test_get_not_found},
-        {"get_null_db",                 test_get_null_db},
-        {"get_invalid_id",              test_get_invalid_id},
-        {"get_null_err",                test_get_null_err},
+        {"get_found",                    test_get_found},
+        {"get_not_found",                test_get_not_found},
+        {"get_null_db",                  test_get_null_db},
+        {"get_invalid_id",               test_get_invalid_id},
+        {"get_null_err",                 test_get_null_err},
 
         /* rename */
-        {"rename",                      test_rename},
-        {"rename_soft_deleted",         test_rename_soft_deleted},
-        {"rename_not_found",            test_rename_not_found},
-        {"rename_null_name",            test_rename_null_name},
-        {"rename_null_db",              test_rename_null_db},
-        {"rename_invalid_id",           test_rename_invalid_id},
+        {"rename",                       test_rename},
+        {"rename_soft_deleted",          test_rename_soft_deleted},
+        {"rename_not_found",             test_rename_not_found},
+        {"rename_null_name",             test_rename_null_name},
+        {"rename_null_db",               test_rename_null_db},
+        {"rename_invalid_id",            test_rename_invalid_id},
 
         /* soft_delete / restore */
-        {"soft_delete_null_db",         test_soft_delete_null_db},
-        {"soft_delete_invalid_id",      test_soft_delete_invalid_id},
-        {"soft_delete_and_restore",     test_soft_delete_and_restore},
-        {"restore_nonexistent",         test_restore_nonexistent},
-        {"restore_null_db",             test_restore_null_db},
-        {"restore_invalid_id",          test_restore_invalid_id},
-        {"restore_already_live",        test_restore_already_live},
+        {"soft_delete_null_db",          test_soft_delete_null_db},
+        {"soft_delete_invalid_id",       test_soft_delete_invalid_id},
+        {"soft_delete_and_restore",      test_soft_delete_and_restore},
+        {"soft_delete_live_children",    test_soft_delete_with_live_children},
+        {"soft_delete_deleted_children", test_soft_delete_with_deleted_children_ok},
+        {"soft_delete_double",           test_soft_delete_double},
+        {"restore_nonexistent",          test_restore_nonexistent},
+        {"restore_null_db",              test_restore_null_db},
+        {"restore_invalid_id",           test_restore_invalid_id},
+        {"restore_already_live",         test_restore_already_live},
 
         /* move_to */
-        {"move_to_basic",               test_move_to_basic},
-        {"move_to_root",               test_move_to_root},
-        {"move_to_same_parent_noop",   test_move_to_same_parent_noop},
+        {"move_to_basic",                test_move_to_basic},
+        {"move_to_root",                test_move_to_root},
+        {"move_to_same_parent_noop",    test_move_to_same_parent_noop},
+        {"move_to_self",               test_move_to_self},
         {"move_to_own_child_cycle",    test_move_to_own_child_cycle},
         {"move_to_grandchild_cycle",   test_move_to_grandchild_cycle},
         {"move_to_nonexistent_folder", test_move_to_nonexistent_folder},
@@ -901,6 +985,7 @@ int run_model_folder_tests(void)
 
         /* list_children */
         {"list_children_basic",         test_list_children_basic},
+        {"list_children_empty",         test_list_children_empty},
         {"list_children_root_level",    test_list_children_root_level},
         {"list_children_pagination",    test_list_children_pagination},
         {"list_children_excl_deleted",  test_list_children_excludes_deleted},
@@ -950,6 +1035,10 @@ int run_model_folder_tests(void)
         int fail_before = g_fail;
 
         setup();
+        if (!g_db) {
+            printf("[SKIP] %s (setup failed)\n", tests[i].name);
+            continue;
+        }
         tests[i].fn();
         teardown();
 

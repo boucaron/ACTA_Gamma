@@ -459,13 +459,10 @@ static void test_ctx_query_null_out_params(void)
     /* both out_count and err NULL */
     context_t **rows = acta_db_context_query(db, NULL, 0, 0, NULL, NULL);
     TEST_ASSERT_NOT_NULL(rows);
-    /* count via a second call to know how to free */
-    int n = 0, err = 0;
-    acta_db_context_query(db, NULL, 0, 0, &n, &err);
-    acta_db_context_list_free(rows, n);
+    acta_db_context_list_free(rows, FIXTURE_ROWS);
 
     /* only err NULL */
-    n = 0;
+    int n = 0;
     rows = acta_db_context_query(db, NULL, 0, 0, &n, NULL);
     TEST_ASSERT_NOT_NULL(rows);
     TEST_ASSERT_EQ_INT(n, FIXTURE_ROWS);
@@ -473,6 +470,7 @@ static void test_ctx_query_null_out_params(void)
 
     test_db_teardown(db, path);
 }
+
 
 /* ═══════════════════════════════════════════════════════════════════
  *  query on empty table
@@ -658,6 +656,44 @@ static void test_ctx_free_valid(void)
     test_db_teardown(db, path);
 }
 
+
+/* ── create: NULL db ─────────────────────────────────────────────── */
+
+static void test_ctx_create_null_db(void)
+{
+    context_t c;
+    memset(&c, 0, sizeof(c));
+    c.type         = (char *)"note";
+    c.content      = (char *)"x";
+    c.content_hash = (char *)"h";
+
+    int id = -1;
+    TEST_ASSERT_EQ_INT(acta_db_context_create(NULL, &c, &id),
+                       ACTA_DB_ERR_INVALID);
+}
+
+/* ── create: NULL out_id ─────────────────────────────────────────── */
+
+static void test_ctx_create_null_out_id(void)
+{
+    const char *path = "test/acta_test_ctx_create_noid.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    context_t c;
+    memset(&c, 0, sizeof(c));
+    c.type         = (char *)"note";
+    c.content      = (char *)"x";
+    c.content_hash = (char *)"h";
+
+    /* out_id may be NULL per the API contract */
+    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &c, NULL), ACTA_DB_OK);
+
+    test_db_teardown(db, path);
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════
  *  Entry point
  * ═══════════════════════════════════════════════════════════════════ */
@@ -667,10 +703,12 @@ void run_context_tests(void)
     /* create */
     test_ctx_create_valid();
     test_ctx_create_invalid();
+     test_ctx_create_null_db();
+    test_ctx_create_null_out_id();
 
     /* get */
     test_ctx_get_valid();
-    test_ctx_get_not_found();
+    test_ctx_get_not_found();    
     test_ctx_get_null_db();
     test_ctx_get_null_err();
 

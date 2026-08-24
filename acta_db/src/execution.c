@@ -66,17 +66,18 @@ static int exec_build_where(char *sql, size_t sql_sz,
     int pos = 0;
     int n   = 0;
 
-    #define APPEND(fmt)                                             \
+       #define APPEND(fmt)                                             \
         do {                                                        \
             int rc = snprintf(sql + pos, sql_sz - (size_t)pos,       \
-                              "%s" fmt, n ? " AND " : "");           \
+                              "%s" fmt, n ? " AND " : " ");          \
             if (rc < 0 || (size_t)rc >= sql_sz - (size_t)pos)       \
                 return -1;                                          \
             pos += rc;                                              \
             n++;                                                    \
         } while (0)
 
-    pos += snprintf(sql + pos, sql_sz - (size_t)pos, " WHERE");
+
+    pos += snprintf(sql + pos, sql_sz - (size_t)pos, " WHERE ");
     if (pos < 0 || (size_t)pos >= sql_sz) return -1;
 
     if (q->status)

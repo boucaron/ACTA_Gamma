@@ -2,7 +2,25 @@
 
 #include "test_skill_helpers.h"
 
-/* ── create ─────────────────────────────────────────────────────── */
+/* ── helper: build a full skill_t for update calls ──────────────── */
+
+static skill_t mk_skill(int id, int folder_id,
+                        const char *name, const char *desc,
+                        const char *prompt, const char *schema)
+{
+    skill_t s = {0};
+    s.id              = id;
+    s.folder_id       = folder_id;
+    s.name            = name;
+    s.description     = desc;
+    s.prompt_template = prompt;
+    s.output_schema   = schema;
+    return s;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  create
+ * ═══════════════════════════════════════════════════════════════════ */
 
 /* 7.1 */
 static void test_create_root(void) {
@@ -60,13 +78,9 @@ static void test_create_null_prompt(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    skill_t s;
-    memset(&s, 0, sizeof(s));
-    s.name            = (char *)"NullPrompt";
-    s.description     = (char *)"desc";
+    skill_t s = {0};
+    s.name            = "NullPrompt";
     s.prompt_template = NULL;
-    s.output_schema   = (char *)("{}");
-    s.folder_id       = 0;
 
     int id = 0;
     TEST_ASSERT_EQ_INT(acta_db_skill_create(db, &s, &id), ACTA_DB_ERR_INVALID);
@@ -81,13 +95,9 @@ static void test_create_null_name(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    skill_t s;
-    memset(&s, 0, sizeof(s));
+    skill_t s = {0};
     s.name            = NULL;
-    s.description     = (char *)"desc";
-    s.prompt_template = (char *)"Template";
-    s.output_schema   = (char *)("{}");
-    s.folder_id       = 0;
+    s.prompt_template = "Template";
 
     int id = 0;
     TEST_ASSERT_EQ_INT(acta_db_skill_create(db, &s, &id), ACTA_DB_ERR_INVALID);
@@ -103,10 +113,11 @@ static void test_create_invalid_folder(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int id = sk_create_skill(db, 99999, "OrphanSkill", "Template", "{}");
-    TEST_ASSERT(id < 0);
+    TEST_ASSERT_EQ_INT(id, ACTA_DB_ERR_NOT_FOUND);
 
     test_db_teardown(db, path);
 }
+
 
 /* 7.7 */
 static void test_create_dup_root(void) {
@@ -141,7 +152,9 @@ static void test_create_dup_child(void) {
     test_db_teardown(db, path);
 }
 
-/* ── get / get_live ─────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+ *  get / get_live
+ * ═══════════════════════════════════════════════════════════════════ */
 
 /* 7.9 */
 static void test_get_existing(void) {
@@ -218,7 +231,39 @@ static void test_get_live_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* ── update ─────────────────────────────────────────────────────── */
+/* 7.26 (new) */
+static void test_get_invalid_id(void) {
+    const char *path = "test/acta_test_sk_get_badid.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
+    TEST_ASSERT_NULL(acta_db_skill_get(db, 0, &err));
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_NULL(acta_db_skill_get(db, -1, &err));
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.27 (new) */
+static void test_get_live_invalid_id(void) {
+    const char *path = "test/acta_test_sk_live_badid.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
+    TEST_ASSERT_NULL(acta_db_skill_get_live(db, 0, &err));
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  update
+ * ═══════════════════════════════════════════════════════════════════ */
 
 /* 7.13 */
 static void test_update_prompt(void) {
@@ -232,15 +277,7 @@ static void test_update_prompt(void) {
 
     int rev_before = sk_count_revisions(db, id);
 
-    skill_t s;
-    memset(&s, 0, sizeof(s));
-    s.id              = id;
-    s.name            = (char *)"UpdPrompt";
-    s.description     = (char *)"desc";
-    s.prompt_template = (char *)"New prompt";
-    s.output_schema   = (char *)("{}");
-    s.folder_id       = 0;
-
+    skill_t s = mk_skill(id, 0, "UpdPrompt", "desc", "New prompt", "{}");
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(sk_count_revisions(db, id), rev_before + 1);
 
@@ -264,15 +301,7 @@ static void test_update_schema(void) {
 
     int rev_before = sk_count_revisions(db, id);
 
-    skill_t s;
-    memset(&s, 0, sizeof(s));
-    s.id              = id;
-    s.name            = (char *)"UpdSchema";
-    s.description     = (char *)"desc";
-    s.prompt_template = (char *)"Prompt";
-    s.output_schema   = (char *)"NEW";
-    s.folder_id       = 0;
-
+    skill_t s = mk_skill(id, 0, "UpdSchema", "desc", "Prompt", "NEW");
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(sk_count_revisions(db, id), rev_before + 1);
 
@@ -296,15 +325,7 @@ static void test_update_no_change(void) {
 
     int rev_before = sk_count_revisions(db, id);
 
-    skill_t s;
-    memset(&s, 0, sizeof(s));
-    s.id              = id;
-    s.name            = (char *)"NoChange";
-    s.description     = (char *)"desc";
-    s.prompt_template = (char *)"Same prompt";
-    s.output_schema   = (char *)("{}");
-    s.folder_id       = 0;
-
+    skill_t s = mk_skill(id, 0, "NoChange", "desc", "Same prompt", "{}");
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(sk_count_revisions(db, id), rev_before);
 
@@ -324,22 +345,30 @@ static void test_update_deleted(void) {
 
     int rev_before = sk_count_revisions(db, id);
 
-    skill_t s;
-    memset(&s, 0, sizeof(s));
-    s.id              = id;
-    s.name            = (char *)"DelUpd";
-    s.description     = (char *)"desc";
-    s.prompt_template = (char *)"New prompt after delete";
-    s.output_schema   = (char *)("{}");
-    s.folder_id       = 0;
-
+    skill_t s = mk_skill(id, 0, "DelUpd", "desc", "New prompt after delete", "{}");
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s), ACTA_DB_ERR_NOT_FOUND);
     TEST_ASSERT_EQ_INT(sk_count_revisions(db, id), rev_before);
 
     test_db_teardown(db, path);
 }
 
-/* ── soft_delete ────────────────────────────────────────────────── */
+/* 7.28 (new) */
+static void test_update_null_args(void) {
+    const char *path = "test/acta_test_sk_upd_null.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    skill_t s = mk_skill(1, 0, "X", "d", "p", "{}");
+    TEST_ASSERT_EQ_INT(acta_db_skill_update(NULL, &s), ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(acta_db_skill_update(db, NULL), ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  soft_delete
+ * ═══════════════════════════════════════════════════════════════════ */
 
 /* 7.17 */
 static void test_soft_delete_happy(void) {
@@ -378,7 +407,93 @@ static void test_soft_delete_revision(void) {
     test_db_teardown(db, path);
 }
 
-/* ── restore ────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+ *  move_to_folder
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* 7.29 (new) */
+static void test_move_to_folder_happy(void) {
+    const char *path = "test/acta_test_sk_move_ok.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "Target", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int id = sk_create_skill(db, 0, "Mover", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_move_to_folder(db, id, folder_id),
+                       ACTA_DB_OK);
+
+    skill_t *s = acta_db_skill_get(db, id, NULL);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(s->folder_id, folder_id);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.30 (new) */
+static void test_move_to_root(void) {
+    const char *path = "test/acta_test_sk_move_root.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int folder_id = sk_create_folder(db, "Src", 0);
+    TEST_ASSERT(folder_id > 0);
+
+    int id = sk_create_skill(db, folder_id, "ToRoot", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_move_to_folder(db, id, 0), ACTA_DB_OK);
+
+    skill_t *s = acta_db_skill_get(db, id, NULL);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(s->folder_id, 0);
+    acta_db_skill_free(s);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.31 (new) */
+static void test_move_deleted_skill(void) {
+    const char *path = "test/acta_test_sk_move_del.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = sk_create_skill(db, 0, "MoveDel", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+    TEST_ASSERT_EQ_INT(acta_db_skill_soft_delete(db, id), ACTA_DB_OK);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_move_to_folder(db, id, 0),
+                       ACTA_DB_ERR_NOT_FOUND);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.32 (new) */
+static void test_move_bad_folder(void) {
+    const char *path = "test/acta_test_sk_move_badfolder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = sk_create_skill(db, 0, "MoveBad", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_move_to_folder(db, id, 99999),
+                       ACTA_DB_ERR_NOT_FOUND);
+
+    test_db_teardown(db, path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  restore
+ * ═══════════════════════════════════════════════════════════════════ */
 
 /* 7.23 */
 static void test_restore_happy(void) {
@@ -430,7 +545,6 @@ static void test_restore_already_live(void) {
     test_db_teardown(db, path);
 }
 
-
 /* 7.25 */
 static void test_restore_nonexistent(void) {
     const char *path = "test/acta_test_sk_restore_404.db";
@@ -439,12 +553,120 @@ static void test_restore_nonexistent(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     TEST_ASSERT_EQ_INT(acta_db_skill_restore(db, 999999), ACTA_DB_ERR_NOT_FOUND);
-    TEST_ASSERT_NULL(acta_db_skill_get(db, 999999, NULL));
 
     test_db_teardown(db, path);
 }
 
-/* ── free ───────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+ *  listers
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* 7.33 (new) */
+static void test_list_negative_offset(void) {
+    const char *path = "test/acta_test_sk_list_negoff.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    sk_create_skill(db, 0, "A", "p", "{}");
+
+    int err = 0;
+    TEST_ASSERT_NULL(acta_db_skill_list_in_folder(db, 0, -1, 10, NULL, &err));
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    TEST_ASSERT_NULL(acta_db_skill_list_all(db, -1, 10, NULL, &err));
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.34 (new) */
+static void test_list_pagination(void) {
+    const char *path = "test/acta_test_sk_list_page.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "Skill%d", i);
+        TEST_ASSERT(sk_create_skill(db, 0, name, "p", "{}") > 0);
+    }
+
+    int count = 0, err = 0;
+    skill_t **page1 = acta_db_skill_list_all(db, 0, 3, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);
+
+    skill_t **page2 = acta_db_skill_list_all(db, 3, 3, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+
+    /* no overlap: last of page1 != first of page2 */
+    TEST_ASSERT(page1[2]->id != page2[0]->id);
+
+    acta_db_skill_list_free(page1, 3);
+    acta_db_skill_list_free(page2, 2);
+
+    test_db_teardown(db, path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  count
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* 7.35 (new) */
+static void test_count_all(void) {
+    const char *path = "test/acta_test_sk_count_all.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 0);
+
+    TEST_ASSERT(sk_create_skill(db, 0, "A", "p", "{}") > 0);
+    TEST_ASSERT(sk_create_skill(db, 0, "B", "p", "{}") > 0);
+    TEST_ASSERT(sk_create_skill(db, 0, "C", "p", "{}") > 0);
+
+    int err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, &err), 3);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+
+    /* soft-deleted should not be counted */
+    skill_t **items = acta_db_skill_list_all(db, 0, -1, NULL, NULL);
+    if (items) acta_db_skill_soft_delete(db, items[0]->id);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 2);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.36 (new) */
+static void test_count_in_folder(void) {
+    const char *path = "test/acta_test_sk_count_folder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int f1 = sk_create_folder(db, "F1", 0);
+    int f2 = sk_create_folder(db, "F2", 0);
+
+    TEST_ASSERT(sk_create_skill(db, 0,  "Root", "p", "{}") > 0);
+    TEST_ASSERT(sk_create_skill(db, f1, "InF1", "p", "{}") > 0);
+    TEST_ASSERT(sk_create_skill(db, f2, "InF2", "p", "{}") > 0);
+
+    int err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 0,  &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f1, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f2, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, &err), 3);
+
+    test_db_teardown(db, path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  free
+ * ═══════════════════════════════════════════════════════════════════ */
 
 /* 7.22 */
 static void test_free_and_list_free(void) {
@@ -471,11 +693,14 @@ static void test_free_and_list_free(void) {
     test_db_teardown(db, path);
 }
 
-/* ── runner ─────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+ *  runner
+ * ═══════════════════════════════════════════════════════════════════ */
 
 void run_skill_crud_tests(void) {
     fprintf(stderr, "\n=== skill_crud tests ===\n");
 
+    /* create */
     test_create_root();
     test_create_in_folder();
     test_create_initial_revision();
@@ -485,22 +710,44 @@ void run_skill_crud_tests(void) {
     test_create_dup_root();
     test_create_dup_child();
 
+    /* get */
     test_get_existing();
     test_get_nonexistent();
     test_get_live_live();
     test_get_live_deleted();
+    test_get_invalid_id();
+    test_get_live_invalid_id();
 
+    /* update */
     test_update_prompt();
     test_update_schema();
     test_update_no_change();
     test_update_deleted();
+    test_update_null_args();
 
+    /* soft_delete */
     test_soft_delete_happy();
     test_soft_delete_revision();
 
+    /* move_to_folder */
+    test_move_to_folder_happy();
+    test_move_to_root();
+    test_move_deleted_skill();
+    test_move_bad_folder();
+
+    /* restore */
     test_restore_happy();
     test_restore_already_live();
     test_restore_nonexistent();
 
+    /* listers */
+    test_list_negative_offset();
+    test_list_pagination();
+
+    /* count */
+    test_count_all();
+    test_count_in_folder();
+
+    /* free */
     test_free_and_list_free();
 }

@@ -3,955 +3,777 @@
 #include <stdio.h>
 
 /* ========================================================================== */
-/*  acta_db_execution_query (unified lister)                                */
+/*  Fixture                                                                  */
 /* ========================================================================== */
 
-/* ---------- query — no filter (ACTA_EXEC_QUERY_ANY) ---------- */
+typedef struct {
+    const char *path;
+    db_t       *db;
+    int         ctx_id;
+    int         sr_id;
+    int         mr_id;
+} fx_t;
+
+/* Opens the DB, runs exec_setup, and returns a populated fixture.
+ * Aborts (via TEST_ASSERT) on any failure. */
+static fx_t fx_open(const char *path) {
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+    int ctx_id = 0, sr_id = 0, mr_id = 0;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    fx_t fx = { .path = path, .db = db,
+                .ctx_id = ctx_id, .sr_id = sr_id, .mr_id = mr_id };
+    return fx;
+}
+
+static void fx_close(fx_t *fx) {
+    test_db_teardown(fx->db, fx->path);
+}
+
+/* ── Secondary-entity helpers (eliminate repeated raw-SQL / struct init) ── */
+
+/* Create and return a second context. */
+static int fx_add_ctx(fx_t *fx) {
+    context_t c = {0};
+    c.type         = (char *)"t2";
+    c.content      = (char *)"c2";
+    c.content_hash = (char *)"h2";
+    int id = 0;
+    TEST_ASSERT_EQ_INT(acta_db_context_create(fx->db, &c, &id), ACTA_DB_OK);
+    return id;
+}
+
+/* Create a second skill revision (revision = 2) via direct SQL and
+ * return its row id. */
+static int fx_add_skill_rev(fx_t *fx) {
+    TEST_ASSERT_EQ_INT(acta_db_exec(fx->db,
+        "INSERT INTO skill_revisions (skill_id, revision, name, description, "
+        "prompt_template, output_schema) "
+        "VALUES (1, 2, 's2', 'd', 't', '{}')"), ACTA_DB_OK);
+    int e = 0;
+    skill_revision_t *sr = acta_db_skill_revision_get_by_skill_and_rev(
+        fx->db, 1, 2, &e);
+    TEST_ASSERT_NOT_NULL(sr);
+    int id = sr->id;
+    acta_db_skill_revision_free(sr);
+    return id;
+}
+
+/* Create a second model revision (revision = 2) via direct SQL and
+ * return its row id. */
+static int fx_add_model_rev(fx_t *fx) {
+    TEST_ASSERT_EQ_INT(acta_db_exec(fx->db,
+        "INSERT INTO model_revisions (model_id, revision, name, description, "
+        "backend, base_url, model_identifier, configuration) "
+        "VALUES (1, 2, 'm2', 'd', 'openai', 'u', 'mid2', '{}')"), ACTA_DB_OK);
+    int e = 0;
+    model_revision_t *mr = acta_db_model_revision_get_by_model_and_rev(
+        fx->db, 1, 2, &e);
+    TEST_ASSERT_NOT_NULL(mr);
+    int id = mr->id;
+    acta_db_model_revision_free(mr);
+    return id;
+}
+
+/* Create `n` filler executions (all pending, root, ctx/sr/mr from fixture).
+ * Aborts on any failed insert. */
+static void fx_fill(fx_t *fx, int n) {
+    for (int i = 0; i < n; i++) {
+        int id = exec_create(fx->db, fx->ctx_id, fx->sr_id, fx->mr_id, "X", 0);
+        TEST_ASSERT_EQ_INT(id > 0, 1);
+    }
+}
+
+
+/* ========================================================================== */
+/*  acta_db_execution_query                                                 */
+/* ========================================================================== */
+
 static void test_exec_query_any(void) {
-    const char *path = "test/acta_test_exec_q_any.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_any.db");
+    fx_fill(&fx, 3);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
-
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &ACTA_EXEC_QUERY_ANY, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 3);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 3);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — NULL query (same as ANY) ---------- */
 static void test_exec_query_null_query(void) {
-    const char *path = "test/acta_test_exec_q_null.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_null.db");
+    fx_fill(&fx, 2);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, NULL, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, NULL, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 2);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by status: pending ---------- */
 static void test_exec_query_by_status_pending(void) {
-    const char *path = "test/acta_test_exec_q_st_pend.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "P1", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "P2", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "P3", 0);
-    int r1 = exec_create(db, ctx_id, sr_id, mr_id, "R1", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, r1), ACTA_DB_OK);
+    fx_t fx = fx_open("test/acta_test_exec_q_st_pend.db");
+    fx_fill(&fx, 3);
+    int r1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "R1", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, r1), ACTA_DB_OK);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_PENDING;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 3);
-    for (int i = 0; i < out_count; i++)
+    TEST_ASSERT_EQ_INT(n, 3);
+    for (int i = 0; i < n; i++)
         TEST_ASSERT_EQ_STR(items[i]->status, ACTA_EXEC_STATUS_PENDING);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by status: completed ---------- */
 static void test_exec_query_by_status_completed(void) {
-    const char *path = "test/acta_test_exec_q_st_comp.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_st_comp.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int c1 = exec_create(db, ctx_id, sr_id, mr_id, "C1", 0);
-    int c2 = exec_create(db, ctx_id, sr_id, mr_id, "C2", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, c1), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, c1, "ok"), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, c2), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, c2, "done"), ACTA_DB_OK);
-    exec_create(db, ctx_id, sr_id, mr_id, "P1", 0);
+    int c1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", 0);
+    int c2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C2", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c1), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c1, "ok"), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c2), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c2, "done"), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P1", 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_COMPLETED;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
         TEST_ASSERT_EQ_STR(items[i]->status, ACTA_EXEC_STATUS_COMPLETED);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by status: cancelled ---------- */
 static void test_exec_query_by_status_cancelled(void) {
-    const char *path = "test/acta_test_exec_q_st_canc.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_st_canc.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    int a = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    int b = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(fx.db, a), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(fx.db, b), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Pend", 0);
 
-    int a = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    int b = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, a), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, b), ACTA_DB_OK);
-    exec_create(db, ctx_id, sr_id, mr_id, "Pend", 0);
-    int c = exec_create(db, ctx_id, sr_id, mr_id, "Comp", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, c), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, c, "ok"), ACTA_DB_OK);
+    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Comp", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c, "ok"), ACTA_DB_OK);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_CANCELLED;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
         TEST_ASSERT_EQ_STR(items[i]->status, ACTA_EXEC_STATUS_CANCELLED);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by status: no matches ---------- */
-static void test_exec_query_by_status_no_match(void) {
-    const char *path = "test/acta_test_exec_q_st_nomatch.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+static void test_exec_query_by_status_failed(void) {
+    fx_t fx = fx_open("test/acta_test_exec_q_st_failed.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    int f1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "F1", 0);
+    int f2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "F2", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, f1), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_fail(fx.db, f1, "boom"), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, f2), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_fail(fx.db, f2, "oops"), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P", 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_FAILED;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++) {
+        TEST_ASSERT_EQ_STR(items[i]->status, ACTA_EXEC_STATUS_FAILED);
+        TEST_ASSERT_NOT_NULL(items[i]->error);
+    }
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by context_id ---------- */
-static void test_exec_query_by_context(void) {
-    const char *path = "test/acta_test_exec_q_ctx.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    context_t ctx2 = {0};
-    ctx2.type         = (char *)"t2";
-    ctx2.content      = (char *)"c2";
-    ctx2.content_hash = (char *)"h2";
-    int ctx2_id = 0;
-    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &ctx2, &ctx2_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id,  sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id,  sr_id, mr_id, "B", 0);
-    exec_create(db, ctx2_id, sr_id, mr_id, "C", 0);
+static void test_exec_query_by_status_no_match(void) {
+    fx_t fx = fx_open("test/acta_test_exec_q_st_nomatch.db");
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "X", 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-    q.context_id = ctx_id;
+    q.status = ACTA_EXEC_STATUS_FAILED;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
-        TEST_ASSERT_EQ_INT(items[i]->context_id, ctx_id);
-    acta_db_execution_list_free(items, out_count);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    /* verify ctx2 */
-    q.context_id = ctx2_id;
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 1);
-    TEST_ASSERT_EQ_INT(items[0]->context_id, ctx2_id);
-    acta_db_execution_list_free(items, out_count);
-
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by context_id: no match ---------- */
+static void test_exec_query_by_context(void) {
+    fx_t fx = fx_open("test/acta_test_exec_q_ctx.db");
+    int ctx2 = fx_add_ctx(&fx);
+
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    exec_create(fx.db, ctx2,        fx.sr_id, fx.mr_id, "C", 0);
+
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
+    q.context_id = fx.ctx_id;
+
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
+        TEST_ASSERT_EQ_INT(items[i]->context_id, fx.ctx_id);
+    acta_db_execution_list_free(items, n);
+
+    q.context_id = ctx2;
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 1);
+    TEST_ASSERT_EQ_INT(items[0]->context_id, ctx2);
+    acta_db_execution_list_free(items, n);
+
+    fx_close(&fx);
+}
+
 static void test_exec_query_by_context_no_match(void) {
-    const char *path = "test/acta_test_exec_q_ctx_nomatch.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    fx_t fx = fx_open("test/acta_test_exec_q_ctx_nomatch.db");
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "X", 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = 99999;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by parent_execution_id ---------- */
 static void test_exec_query_by_parent(void) {
-    const char *path = "test/acta_test_exec_q_parent.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_parent.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int parent = exec_create(db, ctx_id, sr_id, mr_id, "P", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C1", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "C2", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "C3", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "Unrelated", 0);
+    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C2", parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C3", parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Unrelated", 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 3);
-    for (int i = 0; i < out_count; i++)
+    TEST_ASSERT_EQ_INT(n, 3);
+    for (int i = 0; i < n; i++)
         TEST_ASSERT_EQ_INT(items[i]->parent_execution_id, parent);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by parent: no children ---------- */
 static void test_exec_query_by_parent_none(void) {
-    const char *path = "test/acta_test_exec_q_parent_none.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int leaf = exec_create(db, ctx_id, sr_id, mr_id, "Leaf", 0);
+    fx_t fx = fx_open("test/acta_test_exec_q_parent_none.db");
+    int leaf = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Leaf", 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = leaf;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by skill_revision ---------- */
 static void test_exec_query_by_skill_revision(void) {
-    const char *path = "test/acta_test_exec_q_skillrev.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_skillrev.db");
+    int sr2 = fx_add_skill_rev(&fx);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A1", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A2", 0);
+    exec_create(fx.db, fx.ctx_id, sr2,        fx.mr_id, "B1", 0);
+    exec_create(fx.db, fx.ctx_id, sr2,        fx.mr_id, "B2", 0);
 
-    /* second skill revision */
-    int rv = acta_db_exec(db,
-        "INSERT INTO skill_revisions (skill_id, revision, name, description, "
-        "prompt_template, output_schema) VALUES (1, 2, 'skill2', 'd', 't', '{}')");
-    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
-    int err2 = 0;
-    skill_revision_t *srev2 = acta_db_skill_revision_get_by_skill_and_rev(db, 1, 2, &err2);
-    TEST_ASSERT_NOT_NULL(srev2);
-    int sr2 = srev2->id;
-    acta_db_skill_revision_free(srev2);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "A1", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "A2", 0);
-    exec_create(db, ctx_id, sr2,   mr_id, "B1", 0);
-    exec_create(db, ctx_id, sr2,   mr_id, "B2", 0);
-
-    /* filter by sr_id → 2 */
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-    q.skill_revision_id = sr_id;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    q.skill_revision_id = fx.sr_id;
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
-        TEST_ASSERT_EQ_INT(items[i]->skill_revision_id, sr_id);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
+        TEST_ASSERT_EQ_INT(items[i]->skill_revision_id, fx.sr_id);
+    acta_db_execution_list_free(items, n);
 
-    /* filter by sr2 → 2 */
     q.skill_revision_id = sr2;
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
         TEST_ASSERT_EQ_INT(items[i]->skill_revision_id, sr2);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    /* nonexistent revision → 0 */
     q.skill_revision_id = 99999;
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — filter by model_revision ---------- */
 static void test_exec_query_by_model_revision(void) {
-    const char *path = "test/acta_test_exec_q_modrev.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_modrev.db");
+    int mr2 = fx_add_model_rev(&fx);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A1", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A2", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2,   "B1", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2,   "B2", 0);
 
-    /* second model revision */
-    int rv = acta_db_exec(db,
-        "INSERT INTO model_revisions (model_id, revision, name, description, "
-        "backend, base_url, model_identifier, configuration) "
-        "VALUES (1, 2, 'model2', 'd', 'openai', 'u', 'mid2', '{}')");
-    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
-    int err2 = 0;
-    model_revision_t *mrev2 = acta_db_model_revision_get_by_model_and_rev(db, 1, 2, &err2);
-    TEST_ASSERT_NOT_NULL(mrev2);
-    int mr2 = mrev2->id;
-    acta_db_model_revision_free(mrev2);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "A1", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "A2", 0);
-    exec_create(db, ctx_id, sr_id, mr2,   "B1", 0);
-    exec_create(db, ctx_id, sr_id, mr2,   "B2", 0);
-
-    /* filter by mr_id → 2 */
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-    q.model_revision_id = mr_id;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    q.model_revision_id = fx.mr_id;
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
-        TEST_ASSERT_EQ_INT(items[i]->model_revision_id, mr_id);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
+        TEST_ASSERT_EQ_INT(items[i]->model_revision_id, fx.mr_id);
+    acta_db_execution_list_free(items, n);
 
-    /* filter by mr2 → 2 */
     q.model_revision_id = mr2;
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    for (int i = 0; i < out_count; i++)
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 2);
+    for (int i = 0; i < n; i++)
         TEST_ASSERT_EQ_INT(items[i]->model_revision_id, mr2);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    /* nonexistent revision → 0 */
     q.model_revision_id = 99999;
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — combined: status + context_id ---------- */
 static void test_exec_query_combined_two(void) {
-    const char *path = "test/acta_test_exec_q_combo2.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_combo2.db");
+    int ctx2 = fx_add_ctx(&fx);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c), ACTA_DB_OK);
 
-    context_t ctx2 = {0};
-    ctx2.type         = (char *)"t2";
-    ctx2.content      = (char *)"c2";
-    ctx2.content_hash = (char *)"h2";
-    int ctx2_id = 0;
-    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &ctx2, &ctx2_id), ACTA_DB_OK);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, "D", 0);
+    int e_id = exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, "E", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, e_id), ACTA_DB_OK);
 
-    /* ctx1: 2 pending, 1 running */
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    int c = exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, c), ACTA_DB_OK);
-
-    /* ctx2: 1 pending, 1 running */
-    exec_create(db, ctx2_id, sr_id, mr_id, "D", 0);
-    int e = exec_create(db, ctx2_id, sr_id, mr_id, "E", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e), ACTA_DB_OK);
-
-    /* ctx1 + pending → 2 */
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-    q.context_id = ctx_id;
+
+    q.context_id = fx.ctx_id;
     q.status     = ACTA_EXEC_STATUS_PENDING;
-
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 2);
+    acta_db_execution_list_free(items, n);
 
-    /* ctx2 + running → 1 */
-    q.context_id = ctx2_id;
+    q.context_id = ctx2;
     q.status     = ACTA_EXEC_STATUS_RUNNING;
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 1);
-    TEST_ASSERT_EQ_INT(items[0]->id, e);
-    acta_db_execution_list_free(items, out_count);
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 1);
+    TEST_ASSERT_EQ_INT(items[0]->id, e_id);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — combined: all five filters ---------- */
 static void test_exec_query_combined_all(void) {
-    const char *path = "test/acta_test_exec_q_combo5.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_combo5.db");
+    int sr2  = fx_add_skill_rev(&fx);
+    int mr2  = fx_add_model_rev(&fx);
+    int ctx2 = fx_add_ctx(&fx);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    exec_create(fx.db, ctx2,    fx.sr_id, fx.mr_id, "WRONG_CTX", 0);
+    exec_create(fx.db, fx.ctx_id, sr2,    fx.mr_id, "WRONG_SR",  0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2,    "WRONG_MR",  0);
 
-    /* Create a second skill revision and model revision for "wrong" rows */
-    int rv = acta_db_exec(db,
-        "INSERT INTO skill_revisions (skill_id, revision, name, description, "
-        "prompt_template, output_schema) VALUES (1, 2, 's2', 'd', 't', '{}')");
-    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
-    rv = acta_db_exec(db,
-        "INSERT INTO model_revisions (model_id, revision, name, description, "
-        "backend, base_url, model_identifier, configuration) "
-        "VALUES (1, 2, 'm2', 'd', 'openai', 'u', 'mid', '{}')");
-    TEST_ASSERT_EQ_INT(rv, ACTA_DB_OK);
-
-    int err2 = 0;
-    skill_revision_t *sr2 = acta_db_skill_revision_get_by_skill_and_rev(db, 1, 2, &err2);
-    model_revision_t *mr2 = acta_db_model_revision_get_by_model_and_rev(db, 1, 2, &err2);
-    TEST_ASSERT_NOT_NULL(sr2);
-    TEST_ASSERT_NOT_NULL(mr2);
-    int sr2_id = sr2->id, mr2_id = mr2->id;
-    acta_db_skill_revision_free(sr2);
-    acta_db_model_revision_free(mr2);
-
-    int ctx2_id = 0;
-    context_t ctx2 = {0};
-    ctx2.type = (char *)"t2"; ctx2.content = (char *)"c2"; ctx2.content_hash = (char *)"h2";
-    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &ctx2, &ctx2_id), ACTA_DB_OK);
-
-    /* "Wrong" rows differing in one dimension each */
-    exec_create(db, ctx2_id, sr_id, mr_id, "WRONG_CTX", 0);
-    exec_create(db, ctx_id, sr2_id, mr_id, "WRONG_SR", 0);
-    exec_create(db, ctx_id, sr_id, mr2_id, "WRONG_MR", 0);
-
-    /* The one matching row: running, parent set, ctx_id, sr_id, mr_id */
-    int parent = exec_create(db, ctx_id, sr_id, mr_id, "PARENT", 0);
-    int child  = exec_create(db, ctx_id, sr_id, mr_id, "CHILD", parent);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, child), ACTA_DB_OK);
+    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "PARENT", 0);
+    int child  = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "CHILD", parent);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, child), ACTA_DB_OK);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status              = ACTA_EXEC_STATUS_RUNNING;
     q.parent_execution_id = parent;
-    q.context_id          = ctx_id;
-    q.skill_revision_id   = sr_id;
-    q.model_revision_id   = mr_id;
+    q.context_id          = fx.ctx_id;
+    q.skill_revision_id   = fx.sr_id;
+    q.model_revision_id   = fx.mr_id;
 
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 1);
+    TEST_ASSERT_EQ_INT(n, 1);
     TEST_ASSERT_EQ_INT(items[0]->id, child);
-    acta_db_execution_list_free(items, out_count);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — pagination: limit ---------- */
+/* ── pagination ── */
+
 static void test_exec_query_limit(void) {
-    const char *path = "test/acta_test_exec_q_limit.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    for (int i = 0; i < 7; i++)
-        exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    fx_t fx = fx_open("test/acta_test_exec_q_limit.db");
+    fx_fill(&fx, 7);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 3, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 3, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 3);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 3);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — pagination: offset ---------- */
 static void test_exec_query_offset(void) {
-    const char *path = "test/acta_test_exec_q_offset.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    for (int i = 0; i < 7; i++)
-        exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    fx_t fx = fx_open("test/acta_test_exec_q_offset.db");
+    fx_fill(&fx, 7);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
 
-    /* skip 5, no limit → 2 remaining */
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 5, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 5, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 2);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 2);
+    acta_db_execution_list_free(items, n);
 
-    /* offset beyond end → 0 */
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 10, 3, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 10, 3, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — pagination: offset + limit combined ---------- */
 static void test_exec_query_offset_limit(void) {
-    const char *path = "test/acta_test_exec_q_pag.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    for (int i = 0; i < 7; i++)
-        exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
+    fx_t fx = fx_open("test/acta_test_exec_q_pag.db");
+    fx_fill(&fx, 7);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
 
-    /* page 1: offset=0, limit=3 → 3 */
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 3, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 3);
-    acta_db_execution_list_free(items, out_count);
+    int n = 0, e = 0;
+    execution_t **items;
 
-    /* page 2: offset=3, limit=3 → 3 */
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 3, 3, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 3);
-    acta_db_execution_list_free(items, out_count);
+    items = acta_db_execution_query(fx.db, &q, 0, 3, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 3);
+    acta_db_execution_list_free(items, n);
 
-    /* page 3: offset=6, limit=3 → 1 */
-    out_count = 0; err = 0;
-    items = acta_db_execution_query(db, &q, 6, 3, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 1);
-    acta_db_execution_list_free(items, out_count);
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 3, 3, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 3);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    n = 0; e = 0;
+    items = acta_db_execution_query(fx.db, &q, 6, 3, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 1);
+    acta_db_execution_list_free(items, n);
+
+    fx_close(&fx);
 }
 
-/* ---------- query — null db ---------- */
+/* ── edge cases ── */
+
 static void test_exec_query_null_db(void) {
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(NULL, &ACTA_EXEC_QUERY_ANY, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(NULL, &ACTA_EXEC_QUERY_ANY, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_ERR_INVALID);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 }
 
-/* ---------- query — negative offset ---------- */
 static void test_exec_query_negative_offset(void) {
-    const char *path = "test/acta_test_exec_q_negoff.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_negoff.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY, -1, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &ACTA_EXEC_QUERY_ANY, -1, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_ERR_INVALID);
     TEST_ASSERT_NULL(items);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — empty table ---------- */
 static void test_exec_query_empty_table(void) {
-    const char *path = "test/acta_test_exec_q_empty.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_empty.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &ACTA_EXEC_QUERY_ANY, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 0);
+    TEST_ASSERT_EQ_INT(n, 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- query — mixed statuses, no filter (returns all) ---------- */
 static void test_exec_query_all_statuses(void) {
-    const char *path = "test/acta_test_exec_q_allstat.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_q_allstat.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    int e1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    int e2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    fx_fill(&fx, 3);   /* C, D, E → pending */
 
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "D", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "E", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, e1), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, e2), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, e2, "ok"), ACTA_DB_OK);
 
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e1), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e2), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, e2, "ok"), ACTA_DB_OK);
-
-    /* 5 rows total: 1 running, 1 completed, 3 pending */
-    int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    int n = 0, e = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &ACTA_EXEC_QUERY_ANY, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
-    TEST_ASSERT_EQ_INT(out_count, 5);
-    acta_db_execution_list_free(items, out_count);
+    TEST_ASSERT_EQ_INT(n, 5);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-
 /* ========================================================================== */
-/*  acta_db_execution_count                                                   */
+/*  acta_db_execution_count                                                  */
 /* ========================================================================== */
 
-/* ---------- count — no filter ---------- */
 static void test_exec_count_any(void) {
-    const char *path = "test/acta_test_exec_cnt_any.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_any.db");
+    fx_fill(&fx, 3);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    int e = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &ACTA_EXEC_QUERY_ANY, &e), 3);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
 
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
-
-    int err = 0;
-    int total = acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(total, 3);
-
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — filter by status ---------- */
 static void test_exec_count_by_status(void) {
-    const char *path = "test/acta_test_exec_cnt_status.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_status.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    fx_fill(&fx, 2);   /* 2 pending */
+    int r1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "R1", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, r1), ACTA_DB_OK);
+    int c1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c1), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c1, "ok"), ACTA_DB_OK);
 
-    exec_create(db, ctx_id, sr_id, mr_id, "P1", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "P2", 0);
-    int r1 = exec_create(db, ctx_id, sr_id, mr_id, "R1", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, r1), ACTA_DB_OK);
-    int c1 = exec_create(db, ctx_id, sr_id, mr_id, "C1", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, c1), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_complete(db, c1, "ok"), ACTA_DB_OK);
-
-    int err = 0;
-
+    int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
+
     q.status = ACTA_EXEC_STATUS_PENDING;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 2);
-
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 2);
     q.status = ACTA_EXEC_STATUS_RUNNING;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 1);
-
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 1);
     q.status = ACTA_EXEC_STATUS_COMPLETED;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 1);
-
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 1);
     q.status = ACTA_EXEC_STATUS_FAILED;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 0);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — filter by context_id ---------- */
 static void test_exec_count_by_context(void) {
-    const char *path = "test/acta_test_exec_cnt_ctx.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_ctx.db");
+    int ctx2 = fx_add_ctx(&fx);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    exec_create(fx.db, ctx2,        fx.sr_id, fx.mr_id, "C", 0);
 
-    context_t ctx2 = {0};
-    ctx2.type = (char *)"t2"; ctx2.content = (char *)"c2"; ctx2.content_hash = (char *)"h2";
-    int ctx2_id = 0;
-    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &ctx2, &ctx2_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id,  sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id,  sr_id, mr_id, "B", 0);
-    exec_create(db, ctx2_id, sr_id, mr_id, "C", 0);
-
-    int err = 0;
+    int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-    q.context_id = ctx_id;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 2);
+    q.context_id = fx.ctx_id;
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 2);
+    q.context_id = ctx2;
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 1);
 
-    q.context_id = ctx2_id;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 1);
-
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — filter by parent_execution_id ---------- */
 static void test_exec_count_by_parent(void) {
-    const char *path = "test/acta_test_exec_cnt_parent.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_parent.db");
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C2", parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C3", parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Root", 0);
 
-    int parent = exec_create(db, ctx_id, sr_id, mr_id, "P", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C1", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "C2", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "C3", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "Root", 0);
-
-    int err = 0;
+    int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 3);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 3);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — combined filters ---------- */
 static void test_exec_count_combined(void) {
-    const char *path = "test/acta_test_exec_cnt_combo.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_combo.db");
+    int ctx2 = fx_add_ctx(&fx);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c), ACTA_DB_OK);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, "D", 0);
 
-    context_t ctx2 = {0};
-    ctx2.type = (char *)"t2"; ctx2.content = (char *)"c2"; ctx2.content_hash = (char *)"h2";
-    int ctx2_id = 0;
-    TEST_ASSERT_EQ_INT(acta_db_context_create(db, &ctx2, &ctx2_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id,  sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id,  sr_id, mr_id, "B", 0);
-    int c = exec_create(db, ctx_id,  sr_id, mr_id, "C", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, c), ACTA_DB_OK);
-
-    exec_create(db, ctx2_id, sr_id, mr_id, "D", 0);
-
-    int err = 0;
+    int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
-    q.context_id = ctx_id;
+
+    q.context_id = fx.ctx_id;
     q.status     = ACTA_EXEC_STATUS_PENDING;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 2);
 
     q.status = ACTA_EXEC_STATUS_RUNNING;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 1);
 
-    q.context_id = ctx2_id;
+    q.context_id = ctx2;
     q.status     = ACTA_EXEC_STATUS_PENDING;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 1);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — no matches returns 0 ---------- */
 static void test_exec_count_zero(void) {
-    const char *path = "test/acta_test_exec_cnt_zero.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_zero.db");
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-
-    int err = 0;
+    int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = 99999;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 0);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 0);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — null db ---------- */
 static void test_exec_count_null_db(void) {
-    int err = 0;
-    int total = acta_db_execution_count(NULL, &ACTA_EXEC_QUERY_ANY, &err);
-    TEST_ASSERT_EQ_INT(total, -1);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    int e = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(NULL, &ACTA_EXEC_QUERY_ANY, &e), -1);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_ERR_INVALID);
 }
 
-/* ---------- count — NULL query (same as ANY) ---------- */
 static void test_exec_count_null_query(void) {
-    const char *path = "test/acta_test_exec_cnt_nullq.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_nullq.db");
+    fx_fill(&fx, 2);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+    int e = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, NULL, &e), 2);
+    TEST_ASSERT_EQ_INT(e, ACTA_DB_OK);
 
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-
-    int err = 0;
-    int total = acta_db_execution_count(db, NULL, &err);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(total, 2);
-
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-/* ---------- count — matches lister (cross-check) ---------- */
 static void test_exec_count_matches_lister(void) {
-    const char *path = "test/acta_test_exec_cnt_xcheck.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
+    fx_t fx = fx_open("test/acta_test_exec_cnt_xcheck.db");
+    fx_fill(&fx, 10);
+    int r = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "R", 0);
+    TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, r), ACTA_DB_OK);
 
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    for (int i = 0; i < 10; i++)
-        exec_create(db, ctx_id, sr_id, mr_id, "X", 0);
-    int r = exec_create(db, ctx_id, sr_id, mr_id, "R", 0);
-    TEST_ASSERT_EQ_INT(acta_db_execution_start(db, r), ACTA_DB_OK);
-
-    int err = 0;
+    int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_PENDING;
 
-    int total = acta_db_execution_count(db, &q, &err);
-    TEST_ASSERT_EQ_INT(total, 10);
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(fx.db, &q, &e), 10);
 
-    int out_count = 0;
-    execution_t **items = acta_db_execution_query(db, &q, 0, 0, &out_count, &err);
-    TEST_ASSERT_EQ_INT(out_count, 10);
-    acta_db_execution_list_free(items, out_count);
+    int n = 0;
+    execution_t **items =
+        acta_db_execution_query(fx.db, &q, 0, 0, &n, &e);
+    TEST_ASSERT_EQ_INT(n, 10);
+    acta_db_execution_list_free(items, n);
 
-    test_db_teardown(db, path);
+    fx_close(&fx);
 }
 
-
 /* ========================================================================== */
-/*  Runner                                                                  */
+/*  Runner                                                                   */
 /* ========================================================================== */
 
 void run_execution_list_tests(void) {
     fprintf(stderr, "\n=== execution query/count tests ===\n");
 
-    /* ── acta_db_execution_query ── */
     test_exec_query_any();
     test_exec_query_null_query();
     test_exec_query_by_status_pending();
     test_exec_query_by_status_completed();
     test_exec_query_by_status_cancelled();
+    test_exec_query_by_status_failed();
     test_exec_query_by_status_no_match();
     test_exec_query_by_context();
     test_exec_query_by_context_no_match();
@@ -969,7 +791,6 @@ void run_execution_list_tests(void) {
     test_exec_query_empty_table();
     test_exec_query_all_statuses();
 
-    /* ── acta_db_execution_count ── */
     test_exec_count_any();
     test_exec_count_by_status();
     test_exec_count_by_context();

@@ -2,7 +2,6 @@
 
 #include "test_skill_helpers.h"
 
-/* 7.43 */
 static void test_count_all(void) {
     const char *path = "test/acta_test_sk_count_all.db";
     remove(path);
@@ -27,7 +26,6 @@ static void test_count_all(void) {
     test_db_teardown(db, path);
 }
 
-/* 7.44 */
 static void test_count_root_only(void) {
     const char *path = "test/acta_test_sk_count_root.db";
     remove(path);
@@ -47,7 +45,6 @@ static void test_count_root_only(void) {
     test_db_teardown(db, path);
 }
 
-/* 7.45 */
 static void test_count_specific_folder(void) {
     const char *path = "test/acta_test_sk_count_folder.db";
     remove(path);
@@ -66,12 +63,12 @@ static void test_count_specific_folder(void) {
     int err = 0;
     TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f1, &err), 3);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f2, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f2, &err), 1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
 
-/* 7.46 */
 static void test_count_excludes_deleted(void) {
     const char *path = "test/acta_test_sk_count_deleted.db";
     remove(path);
@@ -92,7 +89,6 @@ static void test_count_excludes_deleted(void) {
     test_db_teardown(db, path);
 }
 
-/* 7.47 */
 static void test_count_empty(void) {
     const char *path = "test/acta_test_sk_count_empty.db";
     remove(path);
@@ -101,13 +97,14 @@ static void test_count_empty(void) {
 
     int err = 0;
     TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, &err), 0);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 0, NULL), 0);
-    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 999, NULL), 0);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 0, &err), 0);
+    /* Folder that has never had any skills. */
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 999, &err), 0);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
 
-/* 7.48 */
 static void test_count_after_delete(void) {
     const char *path = "test/acta_test_sk_count_after_del.db";
     remove(path);
@@ -130,7 +127,6 @@ static void test_count_after_delete(void) {
     test_db_teardown(db, path);
 }
 
-/* 7.49 */
 static void test_count_after_restore(void) {
     const char *path = "test/acta_test_sk_count_after_restore.db";
     remove(path);
@@ -149,15 +145,52 @@ static void test_count_after_restore(void) {
     test_db_teardown(db, path);
 }
 
-/* 7.50 */
+static void test_count_move_shifts_folders(void) {
+    const char *path = "test/acta_test_sk_count_move.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int f1 = sk_create_folder(db, "F1", 0);
+    int f2 = sk_create_folder(db, "F2", 0);
+    TEST_ASSERT(f1 > 0 && f2 > 0);
+
+    sk_create_skill(db, f1, "InF1a", "P", "{}");
+    sk_create_skill(db, f1, "InF1b", "P", "{}");
+    sk_create_skill(db, f2, "InF2a", "P", "{}");
+
+    int err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f1, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f2, &err), 1);
+
+    /* Move one skill from f1 → f2. */
+    int n = 0;
+    skill_t **s = acta_db_skill_list_in_folder(db, f1, 0, 1, &n, &err);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQ_INT(n, 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_move_to_folder(db, s[0]->id, f2), ACTA_DB_OK);
+    acta_db_skill_list_free(s, n);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f1, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, f2, NULL), 2);
+    /* Total unchanged. */
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 3);
+
+    test_db_teardown(db, path);
+}
+
+
 static void test_count_null_db(void) {
     int err = ACTA_DB_OK;
-    int n = acta_db_skill_count_all(NULL, &err);
-    TEST_ASSERT_EQ_INT(n, -1);
+
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(NULL, &err), -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    err = ACTA_DB_OK;
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(NULL, 0, &err), -1);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
 
-/* 7.51 */
 static void test_count_null_err(void) {
     const char *path = "test/acta_test_sk_count_null_err.db";
     remove(path);
@@ -166,13 +199,12 @@ static void test_count_null_err(void) {
 
     sk_create_skill(db, 0, "NoErr", "P", "{}");
 
-    int n = acta_db_skill_count_all(db, NULL);
-    TEST_ASSERT_EQ_INT(n, 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_all(db, NULL), 1);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 0, NULL), 1);
 
     test_db_teardown(db, path);
 }
 
-/* 7.52 */
 static void test_count_nonexistent_folder(void) {
     const char *path = "test/acta_test_sk_count_badfolder.db";
     remove(path);
@@ -182,9 +214,8 @@ static void test_count_nonexistent_folder(void) {
     sk_create_skill(db, 0, "RootSkill", "P", "{}");
 
     int err = 0;
-    int n = acta_db_skill_count_in_folder(db, 99999, &err);
+    TEST_ASSERT_EQ_INT(acta_db_skill_count_in_folder(db, 99999, &err), 0);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(n, 0);
 
     test_db_teardown(db, path);
 }
@@ -201,6 +232,7 @@ void run_skill_count_tests(void) {
     test_count_empty();
     test_count_after_delete();
     test_count_after_restore();
+    test_count_move_shifts_folders();
     test_count_null_db();
     test_count_null_err();
     test_count_nonexistent_folder();
