@@ -8,6 +8,8 @@ extern "C" {
 #endif
 
 
+
+
 /* --- Error codes (db.h) --- */
 #define ACTA_DB_OK             0
 /* ACTA_DB_ERR_NOT_FOUND: returned only by mutators when the target
@@ -19,6 +21,19 @@ extern "C" {
 #define ACTA_DB_ERR_ALLOC     (-3)
 #define ACTA_DB_ERR_INVALID   (-4)
 
+/**
+ * Hard upper bound on rows a single lister call may return.
+ *
+ * If the caller passes limit <= 0 ("no cap") the implementation
+ * clamps to ACTA_DB_MAX_PAGE.  Passing a value above this ceiling
+ * is also clamped.  To retrieve the remaining rows the caller
+ * pages forward with successive offset values.
+ *
+ * Chosen so that even on a table with wide rows (e.g. execution_log
+ * with a multi-KB message column) one page stays well under a few MB.
+ */
+#define ACTA_DB_MAX_PAGE  10000
+
 /*
  * ACTA DB – uniform calling conventions
  *
@@ -26,8 +41,10 @@ extern "C" {
  *            err nullable; NULL return + *err==OK means not-found.
  *
  * Listers:   T **foo_list_*(db, …, int offset, int limit, int *out_count, int *err);
- *            offset 0-based row offset; limit ≤ 0 means no cap (return all).
- *            Both out-params nullable; NULL return + *err==OK means empty.
+ *            offset 0-based row offset;
+ *            limit  max rows for this call.
+ *                   ≤ 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE.
+ *                   To fetch all rows, page with successive offset values.
  * 
  * Counters:  int foo_count(db, …, int *err);
  *            returns >= 0 on success, -1 on failure.
@@ -39,6 +56,8 @@ extern "C" {
  *            void foo_list_free(T **items, int count);  (array, NULL-safe)
  */
 
+
+/* db.h — public, near the other #defines */
 
 
 /* Return a short human-readable string for an error code.

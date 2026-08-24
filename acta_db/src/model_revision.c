@@ -15,15 +15,6 @@
 
 /* ── internal helpers ─────────────────────────────────────────────── */
 
-/*
- * Decode the current row of a prepared statement into a new
- * model_revision_t.  All string columns are heap-allocated.
- *
- * On allocation failure the partial struct is freed and NULL is
- * returned; *err receives ACTA_DB_ERR_ALLOC.
- *
- * The caller must ensure sqlite3_step has returned SQLITE_ROW.
- */
 static model_revision_t *row_to_model_revision(sqlite3_stmt *stmt, int *err)
 {
     model_revision_t *r = calloc(1, sizeof(model_revision_t));
@@ -56,10 +47,6 @@ static model_revision_t *row_to_model_revision(sqlite3_stmt *stmt, int *err)
     return r;
 }
 
-/*
- * Build a SQL string from REV_SELECT + suffix.
- * Returns 0 on success, -1 if the buffer is too small.
- */
 static int rev_build_sql(char *buf, size_t buf_sz, const char *suffix)
 {
     int n = snprintf(buf, buf_sz, "%s %s;", REV_SELECT, suffix);
@@ -187,6 +174,8 @@ model_revision_t **acta_db_model_revision_list_by_model(
         return NULL;
     }
 
+    int effective_limit = db_clamp_limit(limit);   /* ← was: limit > 0 ? limit : -1 */
+
     char sql[REV_SQL_BUF];
     if (rev_build_sql(sql, sizeof(sql),
                       "WHERE model_id = ? ORDER BY revision LIMIT ? OFFSET ?")
@@ -201,7 +190,7 @@ model_revision_t **acta_db_model_revision_list_by_model(
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, model_id);
-    sqlite3_bind_int(stmt, 2, limit > 0 ? limit : -1);
+    sqlite3_bind_int(stmt, 2, effective_limit);
     sqlite3_bind_int(stmt, 3, offset);
 
     int               count = 0;
@@ -227,7 +216,6 @@ model_revision_t **acta_db_model_revision_list_by_model(
             return NULL;
         }
 
-        /* grow: 8, 16, 32, …  (amortised O(1)) */
         if (count >= cap) {
             int new_cap = (cap == 0) ? 8 : cap * 2;
             model_revision_t **tmp =

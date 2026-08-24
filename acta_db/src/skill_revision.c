@@ -77,7 +77,8 @@ skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(
 
     sqlite3_stmt *stmt = NULL;
     skill_revision_t *result = NULL;
-    const char *sql = SKILL_REV_SELECT " WHERE skill_id = ? AND revision = ?;";
+    const char *sql = SKILL_REV_SELECT
+                      " WHERE skill_id = ? AND revision = ?;";
 
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
@@ -97,7 +98,8 @@ skill_revision_t *acta_db_skill_revision_get_by_skill_and_rev(
     return result;
 }
 
-skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id, int *err) {
+skill_revision_t *acta_db_skill_revision_get_latest(
+        db_t *db, int skill_id, int *err) {
     if (err) *err = ACTA_DB_OK;
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
@@ -131,6 +133,7 @@ skill_revision_t *acta_db_skill_revision_get_latest(db_t *db, int skill_id, int 
 skill_revision_t **acta_db_skill_revision_list_by_skill(
         db_t *db, int skill_id, int offset, int limit,
         int *out_count, int *err) {
+
     if (err) *err = ACTA_DB_OK;
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
@@ -143,9 +146,10 @@ skill_revision_t **acta_db_skill_revision_list_by_skill(
         return NULL;
     }
 
-    const char *sql = (limit > 0)
-        ? SKILL_REV_SELECT " WHERE skill_id = ? ORDER BY revision LIMIT ? OFFSET ?;"
-        : SKILL_REV_SELECT " WHERE skill_id = ? ORDER BY revision;";
+    int eff_limit = db_clamp_limit(limit);
+
+    const char *sql = SKILL_REV_SELECT
+        " WHERE skill_id = ? ORDER BY revision LIMIT ? OFFSET ?;";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -154,22 +158,19 @@ skill_revision_t **acta_db_skill_revision_list_by_skill(
         return NULL;
     }
     sqlite3_bind_int(stmt, 1, skill_id);
-    if (limit > 0) {
-        sqlite3_bind_int(stmt, 2, limit);
-        sqlite3_bind_int(stmt, 3, offset);
-    }
+    sqlite3_bind_int(stmt, 2, eff_limit);
+    sqlite3_bind_int(stmt, 3, offset);
 
-    int      count = 0;
-    int      cap   = 0;
-    int      step_rc;
+    int               count = 0;
+    int               cap   = 0;
     skill_revision_t **items = NULL;
+    int               step_rc;
 
     while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        /* Grow geometrically: 8, 16, 32, … */
         if (count >= cap) {
             int new_cap = (cap == 0) ? 8 : cap * 2;
-            skill_revision_t **tmp = realloc(items,
-                sizeof(skill_revision_t *) * (size_t)new_cap);
+            skill_revision_t **tmp = realloc(
+                items, sizeof(skill_revision_t *) * (size_t)new_cap);
             if (!tmp) {
                 if (err) *err = ACTA_DB_ERR_ALLOC;
                 acta_db_skill_revision_list_free(items, count);
@@ -202,7 +203,7 @@ skill_revision_t **acta_db_skill_revision_list_by_skill(
     sqlite3_finalize(stmt);
     if (out_count) *out_count = count;
     if (err) *err = ACTA_DB_OK;
-    return items;   /* NULL when count == 0 (empty, not an error) */
+    return items;
 }
 
 /* ── Count ───────────────────────────────────────────────────────────────── */
@@ -214,7 +215,8 @@ int acta_db_skill_revision_count(db_t *db, int skill_id, int *err) {
         return -1;
     }
 
-    const char *sql = "SELECT COUNT(*) FROM skill_revisions WHERE skill_id = ?;";
+    const char *sql =
+        "SELECT COUNT(*) FROM skill_revisions WHERE skill_id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
@@ -246,7 +248,6 @@ void acta_db_skill_revision_free(skill_revision_t *r) {
     DB_FREE_STR(r->deleted_at);
     free(r);
 }
-
 
 void acta_db_skill_revision_list_free(skill_revision_t **items, int count) {
     if (!items) return;

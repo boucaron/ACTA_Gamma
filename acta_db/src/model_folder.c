@@ -8,7 +8,7 @@
 
 static model_folder_t *row_to_model_folder(sqlite3_stmt *stmt, int *err)
 {
-    model_folder_t *f = calloc(1, sizeof(model_folder_t));
+    model_folder_t *f = calloc(1, sizeof *f);
     if (!f) {
         if (err) *err = ACTA_DB_ERR_ALLOC;
         return NULL;
@@ -23,7 +23,7 @@ static model_folder_t *row_to_model_folder(sqlite3_stmt *stmt, int *err)
     f->deleted_at = db_col_text(stmt, 5, &alloc_err);
 
     if (alloc_err) {
-        acta_db_model_folder_free(f);   /* frees strings + struct */
+        acta_db_model_folder_free(f);
         if (err) *err = alloc_err;
         return NULL;
     }
@@ -56,7 +56,7 @@ static model_folder_t **collect_rows(sqlite3_stmt *stmt,
         if (count == cap) {
             int new_cap = cap ? cap * 2 : 8;
             model_folder_t **tmp =
-                realloc(items, sizeof(model_folder_t *) * (size_t)new_cap);
+                realloc(items, sizeof *items * (size_t)new_cap);
             if (!tmp) {
                 *out_count = 0;
                 *out_err   = ACTA_DB_ERR_ALLOC;
@@ -75,7 +75,7 @@ static model_folder_t **collect_rows(sqlite3_stmt *stmt,
     /* Shrink to exact size (best-effort; keep larger buffer on failure). */
     if (count > 0 && count < cap) {
         model_folder_t **tmp =
-            realloc(items, sizeof(model_folder_t *) * (size_t)count);
+            realloc(items, sizeof *items * (size_t)count);
         if (tmp) items = tmp;
     }
 
@@ -332,7 +332,6 @@ model_folder_t *acta_db_model_folder_get(db_t *db, int id, int *err)
     return result;
 }
 
-
 /* ================================================================== */
 /*  Listers                                                           */
 /* ================================================================== */
@@ -366,7 +365,7 @@ model_folder_t **acta_db_model_folder_list_children(
     int param = 1;
     if (parent_id != 0)
         sqlite3_bind_int(stmt, param++, parent_id);
-    sqlite3_bind_int(stmt, param++, limit > 0 ? limit : -1);
+    sqlite3_bind_int(stmt, param++, db_clamp_limit(limit));
     sqlite3_bind_int(stmt, param,    offset);
 
     int count = 0;
@@ -399,7 +398,7 @@ model_folder_t **acta_db_model_folder_list_all(
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
     }
-    sqlite3_bind_int(stmt, 1, limit > 0 ? limit : -1);
+    sqlite3_bind_int(stmt, 1, db_clamp_limit(limit));
     sqlite3_bind_int(stmt, 2, offset);
 
     int count = 0;
@@ -450,7 +449,6 @@ int acta_db_model_folder_count_children(db_t *db, int parent_id, int *err)
     return count;
 }
 
-
 int acta_db_model_folder_count_all(db_t *db, int *err)
 {
     if (!db) {
@@ -479,7 +477,6 @@ int acta_db_model_folder_count_all(db_t *db, int *err)
     if (err) *err = ACTA_DB_OK;
     return count;
 }
-
 
 /* ================================================================== */
 /*  Free                                                              */

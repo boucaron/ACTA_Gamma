@@ -112,4 +112,12 @@ static inline int db_col_int_or_zero(sqlite3_stmt *stmt, int col) {
  */
 #define DB_FREE_STR(field) do { free(field); (field) = NULL; } while (0)
 
+
+static inline int db_clamp_limit(int limit)
+{
+    if (limit <= 0 || limit > ACTA_DB_MAX_PAGE)
+        return ACTA_DB_MAX_PAGE;
+    return limit;
+}
+
 #endif /* ACTA_DB_INTERNAL_H */

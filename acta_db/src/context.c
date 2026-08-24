@@ -8,13 +8,6 @@
  *  Row decoder
  * ═══════════════════════════════════════════════════════════════════ */
 
-/*
- * Decode one result row into a heap-allocated context_t.
- *
- * On success the caller owns the struct (free with acta_db_context_free).
- * On failure the struct is fully freed internally and *err receives the
- * specific code; the caller should propagate it and return NULL upward.
- */
 static context_t *row_to_context(sqlite3_stmt *stmt, int *err) {
     context_t *c = calloc(1, sizeof(context_t));
     if (!c) {
@@ -86,8 +79,11 @@ static context_t **collect_rows(sqlite3_stmt *stmt,
  *  via sqlite3_bind_*; these functions only emit static fragments and
  *  '?' placeholders.
  *
+ *  Precondition (enforced by the caller):
+ *      limit  – already clamped to [1, ACTA_DB_MAX_PAGE].
+ *
  *  Bind order (must match call sites):
- *      [type, hash,  (limit, offset)]
+ *      [type, hash, limit, (offset)]
  *  i.e. WHERE params first, then LIMIT, then OFFSET.
  * ═══════════════════════════════════════════════════════════════════ */
 
@@ -120,6 +116,9 @@ static int build_select_sql(char *buf, size_t sz,
     size_t pos;
     int    rc;
 
+    /* limit is guaranteed > 0 by db_clamp_limit at the call site. */
+    (void)limit;   /* silence unused-param warning if compiler inlines */
+
     rc = snprintf(buf, sz,
                   "SELECT id, type, content, content_hash, metadata, "
                   "created_at FROM contexts");
@@ -134,24 +133,15 @@ static int build_select_sql(char *buf, size_t sz,
     if (rc < 0 || (size_t)rc >= sz - pos) return -1;
     pos += (size_t)rc;
 
-    /*
-     * SQLite requires LIMIT before OFFSET.
-     * "LIMIT -1" is the idiomatic "no row cap" when OFFSET is present.
-     */
-    if (limit > 0 || offset > 0) {
-        if (limit > 0) {
-            rc = snprintf(buf + pos, sz - pos, " LIMIT ?");
-        } else {
-            rc = snprintf(buf + pos, sz - pos, " LIMIT -1");
-        }
+    /* Always emit LIMIT; the clamp guarantees a positive value. */
+    rc = snprintf(buf + pos, sz - pos, " LIMIT ?");
+    if (rc < 0 || (size_t)rc >= sz - pos) return -1;
+    pos += (size_t)rc;
+
+    if (offset > 0) {
+        rc = snprintf(buf + pos, sz - pos, " OFFSET ?");
         if (rc < 0 || (size_t)rc >= sz - pos) return -1;
         pos += (size_t)rc;
-
-        if (offset > 0) {
-            rc = snprintf(buf + pos, sz - pos, " OFFSET ?");
-            if (rc < 0 || (size_t)rc >= sz - pos) return -1;
-            pos += (size_t)rc;
-        }
     }
 
     return (int)pos;
@@ -262,7 +252,6 @@ context_t *acta_db_context_get(db_t *db, int id, int *err) {
     context_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW)
         result = row_to_context(stmt, err);
-    /* Not found: step returns SQLITE_DONE, result stays NULL, *err stays OK */
 
     sqlite3_finalize(stmt);
     return result;
@@ -291,6 +280,9 @@ context_t **acta_db_context_query(db_t *db,
         return NULL;
     }
 
+    /* Enforce the hard page cap. */
+    limit = db_clamp_limit(limit);
+
     char sql[512];
     if (build_select_sql(sql, sizeof(sql), q, offset, limit) < 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
@@ -310,12 +302,11 @@ context_t **acta_db_context_query(db_t *db,
         return NULL;
     }
 
-    if (limit > 0) {
-        if (sqlite3_bind_int(stmt, bind++, limit) != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_SQL;
-            return NULL;
-        }
+    /* limit is always > 0 after the clamp – bind unconditionally. */
+    if (sqlite3_bind_int(stmt, bind++, limit) != SQLITE_OK) {
+        sqlite3_finalize(stmt);
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
     }
     if (offset > 0) {
         if (sqlite3_bind_int(stmt, bind++, offset) != SQLITE_OK) {

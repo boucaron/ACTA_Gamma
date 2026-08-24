@@ -60,19 +60,39 @@ static execution_log_t *row_to_execution_log(sqlite3_stmt *stmt, int *err) {
     return log;
 }
 
-/* Translate the public limit contract (<= 0 = no limit) into
- * SQLite's own sentinel (-1 = no limit). */
-static int sql_limit(int limit) {
-    return limit <= 0 ? -1 : limit;
-}
+/* ------------------------------------------------------------------ */
+/*  SQL templates (static – no runtime formatting, no truncation risk)  */
+/* ------------------------------------------------------------------ */
+
+static const char SQL_LIST_BY_EXEC_WITH_LEVEL[] =
+    "SELECT id, execution_id, level, event, message, metadata, created_at"
+    " FROM execution_logs"
+    " WHERE execution_id = ? AND level = ?"
+    " ORDER BY created_at, id"
+    " LIMIT ? OFFSET ?;";
+
+static const char SQL_LIST_BY_EXEC[] =
+    "SELECT id, execution_id, level, event, message, metadata, created_at"
+    " FROM execution_logs"
+    " WHERE execution_id = ?"
+    " ORDER BY created_at, id"
+    " LIMIT ? OFFSET ?;";
+
+static const char SQL_COUNT_WITH_LEVEL[] =
+    "SELECT COUNT(*) FROM execution_logs"
+    " WHERE execution_id = ? AND level = ?;";
+
+static const char SQL_COUNT[] =
+    "SELECT COUNT(*) FROM execution_logs"
+    " WHERE execution_id = ?;";
 
 /* ------------------------------------------------------------------ */
 /*  Public API                                                          */
 /* ------------------------------------------------------------------ */
 
 int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_id) {
-    if (!db || !log)                 return ACTA_DB_ERR_INVALID;
-    if (!log->level || !log->event)  return ACTA_DB_ERR_INVALID;
+    if (!db || !log)                        return ACTA_DB_ERR_INVALID;
+    if (!log->level || !log->event)        return ACTA_DB_ERR_INVALID;
     if (!acta_log_level_is_valid(log->level)) return ACTA_DB_ERR_INVALID;
 
     const char *sql =
@@ -108,11 +128,7 @@ int acta_db_execution_log_create(db_t *db, const execution_log_t *log, int *out_
 /* ------------------------------------------------------------------ */
 
 execution_log_t *acta_db_execution_log_get(db_t *db, int id, int *err) {
-    if (!db) {
-        if (err) *err = ACTA_DB_ERR_INVALID;
-        return NULL;
-    }
-    if (id <= 0) {
+    if (!db || id <= 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
@@ -172,24 +188,10 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
     }
     if (out_count) *out_count = 0;
 
-    int has_level = level_active(level);
-    char sql[512];
-
-    if (has_level) {
-        snprintf(sql, sizeof sql,
-                 "SELECT id, execution_id, level, event, message, metadata, created_at"
-                 " FROM execution_logs"
-                 " WHERE execution_id = ? AND level = ?"
-                 " ORDER BY created_at, id"
-                 " LIMIT ? OFFSET ?;");
-    } else {
-        snprintf(sql, sizeof sql,
-                 "SELECT id, execution_id, level, event, message, metadata, created_at"
-                 " FROM execution_logs"
-                 " WHERE execution_id = ?"
-                 " ORDER BY created_at, id"
-                 " LIMIT ? OFFSET ?;");
-    }
+    int  has_level  = level_active(level);
+    int  eff_limit  = db_clamp_limit(limit);   /* ≤ 0 or > MAX → MAX_PAGE */
+    const char *sql = has_level ? SQL_LIST_BY_EXEC_WITH_LEVEL
+                                : SQL_LIST_BY_EXEC;
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
@@ -201,7 +203,7 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
     sqlite3_bind_int (stmt, param++, execution_id);
     if (has_level)
         sqlite3_bind_text(stmt, param++, level, -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int (stmt, param++, sql_limit(limit));
+    sqlite3_bind_int (stmt, param++, eff_limit);
     sqlite3_bind_int (stmt, param++, offset);
 
     int    count    = 0;
@@ -210,7 +212,7 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         if ((size_t)count >= capacity) {
-            size_t new_cap = capacity ? capacity * 2 : 8;
+            size_t new_cap = capacity ? capacity * 2 : 64;
             execution_log_t **tmp = realloc(items, new_cap * sizeof *tmp);
             if (!tmp) {
                 acta_db_execution_log_list_free(items, (int)count);
@@ -225,7 +227,7 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
         int row_err = ACTA_DB_OK;
         execution_log_t *item = row_to_execution_log(stmt, &row_err);
         if (!item) {
-            acta_db_execution_log_list_free(items, count);
+            acta_db_execution_log_list_free(items, (int)count);
             sqlite3_finalize(stmt);
             if (err) *err = row_err;
             return NULL;
@@ -262,18 +264,8 @@ int acta_db_execution_log_count(db_t *db,
         return -1;
     }
 
-    int has_level = level_active(level);
-    char sql[256];
-
-    if (has_level) {
-        snprintf(sql, sizeof sql,
-                 "SELECT COUNT(*) FROM execution_logs"
-                 " WHERE execution_id = ? AND level = ?;");
-    } else {
-        snprintf(sql, sizeof sql,
-                 "SELECT COUNT(*) FROM execution_logs"
-                 " WHERE execution_id = ?;");
-    }
+    int has_level  = level_active(level);
+    const char *sql = has_level ? SQL_COUNT_WITH_LEVEL : SQL_COUNT;
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
