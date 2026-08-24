@@ -20,36 +20,10 @@ static int flag_prefix_match(const char *token, const char *name) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  global flag table                                                  */
-/* ------------------------------------------------------------------ */
-
-typedef struct {
-    const char *name;
-    int         has_value;   /* 1 = takes a value, 0 = boolean */
-    int        *field_i;     /* index into global_opts_t for int fields */
-    const char **field_s;    /* index for string fields */
-} gflag_def_t;
-
-/*
- * We use a small fixed table.  Field pointers are set in
- * parse_globals() so we don't need a static table with pointers.
- * Simpler: just do a manual loop.
- */
-
-static void set_gstring(global_opts_t *g, char ***dest, const char *val) {
-    *dest[0] = val;
-}
-static void set_gint(global_opts_t *g, int **dest, const char *val) {
-    (void)val;
-    *dest[0] = 1;
-}
-
-/* ------------------------------------------------------------------ */
 /*  parse_globals                                                      */
 /* ------------------------------------------------------------------ */
 
 int parse_globals(int argc, char **argv, global_opts_t *g) {
-    /* zero-init */
     memset(g, 0, sizeof(*g));
 
     /* temp buffer for non-global args */
@@ -58,7 +32,7 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
     int rest_n = 0;
 
     for (int i = 1; i < argc; i++) {
-        const char *a = argv[i];
+        char *a = argv[i];
 
         /* ---- --version ---- */
         if (strcmp(a, "--version") == 0) {
@@ -120,8 +94,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         if (flag_prefix_match(a, "verbose")) {
             /* --verbose=N form (explicit level) */
-            if (a[10] == '=') {
-                int lvl = atoi(a + 11);
+            if (a[9] == '=') {
+                int lvl = atoi(a + 10);
                 g->verbose = (lvl >= 1 && lvl <= 3) ? lvl : 3;
             } else {
                 /* --verbose <N> (space form, treat N as level) */
@@ -149,7 +123,7 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (strcmp(a, "--stdin") == 0)    { g->from_stdin = 1;  continue; }
         /* ---- --from-file <path> ---- */
         if (flag_prefix_match(a, "from-file")) {
-            if (a[12] == '=') g->from_file = a + 13;
+            if (a[11] == '=') g->from_file = a + 12;
             else {
                 if (i + 1 >= argc) { free(rest); return EXIT_CLI; }
                 g->from_file = argv[++i];
@@ -164,7 +138,7 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
     }
 
     g->argc = rest_n;
-    g->argv = rest;   /* caller frees via free(g->argv) or leaks (POC) */
+    g->argv = rest;   /* caller frees via free(g->argv) */
 
     /* need at least entity + action */
     if (rest_n < 2) return EXIT_CLI;
@@ -190,52 +164,15 @@ static int peek(cmd_args_t *it, const char **tok) {
     return 1;
 }
 
-/*
- * If the current token is --<name> or --<name>=<val>, consume it
- * (and the value token if present) and return the value (or NULL
- * for boolean).  Otherwise return NULL without consuming.
- */
-static const char *try_consume_flag(cmd_args_t *it, const char *name,
-                                    int has_value) {
-    const char *tok;
-    if (!peek(it, &tok)) return NULL;
-
-    if (!flag_prefix_match(tok, name)) return NULL;
-
-    /* matched */
-    size_t nlen = strlen(name);
-    char next_char = tok[2 + nlen];
-
-    if (next_char == '=') {
-        /* --name=value form */
-        const char *val = tok + 2 + nlen + 1;
-        it->pos++;
-        return val;
-    }
-
-    /* --name form */
-    it->pos++;
-    if (has_value) {
-        const char *v;
-        if (peek(it, &v)) {
-            it->pos++;
-            return v;
-        }
-        return NULL;   /* flag present but no value → treat as absent */
-    }
-    return NULL;       /* boolean */
-}
-
 const char *cmd_args_next_positional(cmd_args_t *it) {
-    for (; it->pos < it->argc; it->pos++) {
+    while (it->pos < it->argc) {
         const char *tok = it->argv[it->pos];
         if (!is_flag(tok)) {
             it->pos++;
             return tok;
         }
-        /* it's a flag; skip flag + optional value */
-        /* we don't know which flag it is, so heuristic:
-         * if next token exists and does NOT start with --, it's the value */
+        /* it's a flag; skip flag + optional value (heuristic:
+         * next non-flag token is its value) */
         it->pos++;
         if (it->pos < it->argc) {
             const char *nxt = it->argv[it->pos];
@@ -246,7 +183,6 @@ const char *cmd_args_next_positional(cmd_args_t *it) {
 }
 
 const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value) {
-    /* single pass: find the flag */
     for (; it->pos < it->argc; it->pos++) {
         const char *tok = it->argv[it->pos];
         if (flag_prefix_match(tok, name)) {

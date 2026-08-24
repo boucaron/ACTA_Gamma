@@ -6,7 +6,8 @@
  * Real implementation will call acta_db_open, acta_db_exec, etc.
  */
 
-int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts) {
+int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
+                      db_t *db) {
     (void)ga; (void)gopts;
 
     if (strcmp(action, "open") == 0) {

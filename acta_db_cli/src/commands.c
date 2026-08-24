@@ -14,7 +14,7 @@
 /* ------------------------------------------------------------------ */
 
 typedef int (*entity_fn)(const char *action, cmd_args_t *ga,
-                         const global_opts_t *gopts);
+                         const global_opts_t *gopts, db_t *db);
 
 typedef struct {
     const char *name;
@@ -57,7 +57,8 @@ static int entity_not_found(const char *entity) {
 /* ------------------------------------------------------------------ */
 
 int commands_dispatch(const char *entity, const char *action,
-                      cmd_args_t *ga, const global_opts_t *gopts)
+                      cmd_args_t *ga, const global_opts_t *gopts,
+                      db_t *db)
 {
     (void)action; /* entity handlers parse action themselves for now */
 
@@ -65,8 +66,8 @@ int commands_dispatch(const char *entity, const char *action,
     if (!fn)
         return entity_not_found(entity);
 
-    vdbg(gopts, 2, "dispatch → %s", entity);   /* needs a local `opts` alias or a vdbg overload */
-    return fn(entity, ga, gopts);
+    vdbg(gopts, 2, "dispatch → %s", entity);
+    return fn(action, ga, gopts, db);
 }
 
 /* ------------------------------------------------------------------ */

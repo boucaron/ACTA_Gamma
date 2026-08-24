@@ -1,5 +1,5 @@
-#ifndef ACTA_ARGPARSE_H
-#define ACTA_ARGPARSE_H
+#ifndef ACTA_DB_CLI_ARGPARSE_H
+#define ACTA_DB_CLI_ARGPARSE_H
 
 #include "cli.h"
 

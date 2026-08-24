@@ -10,7 +10,7 @@
 #   ../libacta_db.a
 
 CC      ?= cc
-CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g -Iinclude
+CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g -Iinclude -I../acta_db/include
 LDFLAGS += ../acta_db/libacta_db.a -lsqlite3
 
 # ---- build metadata (auto-injected) ----

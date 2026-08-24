@@ -1,5 +1,5 @@
-#ifndef ACTA_CLI_H
-#define ACTA_CLI_H
+#ifndef ACTA_DB_CLI_H
+#define ACTA_DB_CLI_H
 
 #include <stdio.h>
 #include <stdarg.h>

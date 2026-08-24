@@ -5,8 +5,10 @@
  *   1. parse_globals  → extract --db, --version, --help, --tools, etc.
  *   2. early-exit     → version / help / tools
  *   3. resolve DB path
- *   4. dispatch       → commands_dispatch(entity, action, args, opts)
- *   5. exit
+ *   4. open DB
+ *   5. dispatch       → commands_dispatch(entity, action, args, opts, db)
+ *   6. close DB
+ *   7. exit
  */
 
 #include <stdio.h>
@@ -15,9 +17,10 @@
 
 #include <stdarg.h>
 
-#include "cli.h"
+#include "cli.h"        /* global_opts_t, cmd_args_t, EXIT_* codes */
 #include "argparse.h"
 #include "commands.h"
+#include "acta_db.h"
 
 /*
  * Resolve DB path per spec §3:
@@ -57,13 +60,12 @@ int main(int argc, char **argv) {
     /* ---- pass 1: global flags ---- */
     int rc = parse_globals(argc, argv, &gopts);
     if (rc == EXIT_CLI) {
-        /* usage error (e.g. missing entity) */
         cli_error(EXIT_CLI, "ACTA_CLI_ERR", -10,
                   "missing entity and/or action. See --help.");
         return EXIT_CLI;
     }
 
-    /* ---- early exits ---- */
+    /* ---- early exits (no DB needed) ---- */
     if (gopts.show_version) { version_print(stdout);  return EXIT_OK; }
     if (gopts.show_help)    { help_print(stdout);     return EXIT_OK; }
     if (gopts.show_tools)   { tools_print(stdout);    return EXIT_OK; }
@@ -78,20 +80,34 @@ int main(int argc, char **argv) {
     const char *entity = gopts.argv[0];
     const char *action = gopts.argv[1];
 
-    /*
-     * Positional args + entity flags start at gopts.argv[2].
-     * For POC we pass them as a sub-argv to the handler.
-     */
     cmd_args_t ga;
     cmd_args_init(&ga, gopts.argc - 2, gopts.argv + 2);
 
-    /* ---- resolve DB (handlers will use gopts.db / env / default) ---- */
-    const char *db = resolve_db_path(gopts.db);
-    (void)db; /* TODO: open DB here or pass path to handlers */
+    /* ---- resolve DB path ---- */
+    const char *db_path = resolve_db_path(gopts.db);
 
-    /* ---- dispatch ---- */
-    rc = commands_dispatch(entity, action, &ga, &gopts);
+    /* ---- open database ---- */
+    int db_err = ACTA_DB_OK;
+    db_t *db = acta_db_open(db_path, &db_err);
+    if (!db) {
+        cli_error(EXIT_DB_OPEN, "ACTA_DB_OPEN_FAIL", db_err,
+                  "cannot open database '%s' (%s)",
+                  db_path, acta_db_strerror(db_err));
+        free(gopts.argv);
+        return EXIT_DB_OPEN;
+    }
 
-    free(gopts.argv);   /* parse_globals allocated this */
+    /* ---- dispatch (handlers receive the open db handle) ---- */
+    rc = commands_dispatch(entity, action, &ga, &gopts, db);
+
+    /* ---- close database ---- */
+    int close_rc = acta_db_close(db);
+    if (close_rc != ACTA_DB_OK) {
+        fprintf(stderr, "[warn] db close returned %s\n",
+                acta_db_strerror(close_rc));
+        acta_db_force_close(db);
+    }
+
+    free(gopts.argv);
     return rc;
 }
