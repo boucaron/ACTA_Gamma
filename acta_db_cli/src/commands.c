@@ -3,6 +3,11 @@
 #include <string.h>
 #include <stdio.h>
 
+
+#ifndef ACTA_DB_GIT_HASH
+#define ACTA_DB_GIT_HASH "unknown"
+#endif
+
 /* ------------------------------------------------------------------ */
 /*  local dispatch per entity                                         */
 /* ------------------------------------------------------------------ */
@@ -43,10 +48,12 @@ int commands_dispatch(const char *entity, const char *action,
 /*  --version / --help / --tools                                      */
 /* ------------------------------------------------------------------ */
 
+
 void version_print(FILE *out) {
-    fprintf(out, "actagamma_db %s (libacta_db 0.1.0, sqlite 3.x.x)\n",
-            ACTA_DB_CLI_VERSION);
+    fprintf(out, "actagamma_db %s (%s | libacta_db 0.1.0, sqlite 3.x.x)\n",
+            ACTA_DB_CLI_VERSION, ACTA_DB_GIT_HASH);
 }
+
 
 void help_print(FILE *out) {
     fprintf(out,
