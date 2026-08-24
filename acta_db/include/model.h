@@ -59,22 +59,29 @@ model_t *acta_db_model_get(db_t *db, int id, int *err);
 model_t *acta_db_model_get_live(db_t *db, int id, int *err);
 
 /*
- * Mutator – full-row update.
+ * Mutator – full-row update (replace, not merge).
  *
- * All fields are written; pass the complete struct.
- * NULL optional fields (description, base_url, configuration) are stored
- * as SQL NULL, overwriting any previous value.  folder_id == 0 is stored
- * as NULL.
+ * Every column in the SET clause is written from the corresponding
+ * struct field.  There is no partial / "only non-NULL" variant.
  *
- * name, backend, and model_identifier must be non-NULL; passing NULL for
- * any of them is undefined behaviour.
+ *   • Optional fields (description, base_url, configuration):
+ *       NULL in struct  →  SQL NULL in column, overwriting prior value.
+ *   • folder_id == 0  →  SQL NULL (sentinel for "no folder").
+ *   • Required fields (name, backend, model_identifier):
+ *       NULL  →  call rejected, returns ACTA_DB_ERR_INVALID.
  *
- * To change a single field, first read the row (acta_db_model_get),
- * modify that field, then call this function with the full struct.
+ * An AFTER UPDATE trigger snapshots the prior row into model_revision,
+ * so an accidental NULL-out is recoverable from the journal — but that
+ * is a safety net, not a workflow.  Populate the full struct.
+ *
+ * To change a single field:
+ *   1. acta_db_model_get(db, id, &m);
+ *   2. modify the one field;
+ *   3. call acta_db_model_update(db, &m) with the fully-populated struct.
  *
  * Returns:
  *   ACTA_DB_OK           – success
- *   ACTA_DB_ERR_INVALID  – db is NULL or m is NULL
+ *   ACTA_DB_ERR_INVALID  – db is NULL, or a required field is NULL
  *   ACTA_DB_ERR_NOT_FOUND– no live row matches m->id
  *   ACTA_DB_ERR_SQL      – prepare/step failure
  */

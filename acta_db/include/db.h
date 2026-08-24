@@ -53,9 +53,51 @@ typedef struct db_t db_t;
 db_t *acta_db_open(const char *path, int *err);
 
 /* Close the database and free the handle.
- * Returns ACTA_DB_OK on success, ACTA_DB_ERR_SQL if the close failed
- * (e.g. outstanding prepared statements still hold the handle). */
+ *
+ * Behaviour:
+ *   - Best-effort ROLLBACK if a transaction is still open.
+ *   - Attempts sqlite3_close (strict close).
+ *
+ * Return values:
+ *   ACTA_DB_OK      – clean close; db was freed.  Pointer is now invalid.
+ *   ACTA_DB_ERR_SQL – one of:
+ *       • SQLITE_BUSY: outstanding prepared statement(s) still reference
+ *         the handle.  db is NOT freed; db->handle is still valid.
+ *         The caller must finalise every sqlite3_stmt* it created,
+ *         then call acta_db_close again.
+ *       • Other SQLite error (I/O, etc.): the handle *is* released by
+ *         SQLite internally, so db is freed.  Pointer is now invalid.
+ *
+ * In the SQLITE_BUSY retry loop the caller is responsible for locating
+ * and finalising its own statements.  If it cannot do so (e.g. the
+ * stmt pointers were lost), use acta_db_force_close instead.
+ *
+ * NULL-safe: a NULL db is treated as ACTA_DB_ERR_INVALID. */
 int acta_db_close(db_t *db);
+
+/* Force-close the database: always releases resources, never returns
+ * an error other than ACTA_DB_ERR_INVALID for a NULL argument.
+ *
+ * Uses sqlite3_close_v2, which auto-finalises any open prepared
+ * statements before releasing the handle.  db is unconditionally
+ * freed (except when db == NULL).
+ *
+ * Prefer acta_db_close in normal code.  Reach for force_close only
+ * when:
+ *   - the caller has lost track of its sqlite3_stmt* handles and
+ *     cannot finalise them individually, or
+ *   - you are tearing down / shutting down and need a guaranteed
+ *     resource release (atexit, signal handler, error unwind).
+ *
+ * Note: auto-finalised statements may leave partially-written rows
+ * in an incomplete state if a transaction was in progress.  The
+ * implicit ROLLBACK is attempted, but no guarantee is made if the
+ * underlying I/O is already failing.
+ *
+ * Return value: ACTA_DB_OK on success (including the NULL case,
+ * which returns ACTA_DB_ERR_INVALID). */
+int acta_db_force_close(db_t *db);
+
 
 
 /* Execute a SQL statement (or script). Returns ACTA_DB_OK on success,

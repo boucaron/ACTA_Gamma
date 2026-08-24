@@ -39,14 +39,34 @@ typedef struct {
  */
 int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id);
 
-/* Full-row update. All fields are written; pass the complete struct.
- * NULL optional fields overwrite the stored value with SQL NULL.
- * folder_id == 0 is stored as NULL.
+/*
+ * Mutator – full-row update (replace, not merge).
  *
- * Returns ACTA_DB_OK on success.
- * ACTA_DB_ERR_INVALID if db or s is NULL.
- * ACTA_DB_ERR_NOT_FOUND if no live row matches s->id.
- * ACTA_DB_ERR_SQL on prepare/step failure. */
+ * Every column in the SET clause is written from the corresponding
+ * struct field.  There is no partial / "only non-NULL" variant.
+ *
+ *   • Optional fields (description, output_schema):
+ *       NULL in struct  →  SQL NULL in column, overwriting prior value.
+ *   • folder_id == 0  →  SQL NULL (sentinel for "no folder").
+ *   • Required fields (name, prompt_template):
+ *       NULL  →  call rejected, returns ACTA_DB_ERR_INVALID.
+ *
+ * An AFTER UPDATE trigger snapshots the prior row into skill_revision,
+ * so an accidental NULL-out is recoverable from the journal — but that
+ * is a safety net, not a workflow.  Populate the full struct.
+ *
+ * To change a single field:
+ *   1. acta_db_skill_get(db, id, &s);
+ *   2. modify the one field;
+ *   3. call acta_db_skill_update(db, &s) with the fully-populated struct.
+ *
+ * Returns:
+ *   ACTA_DB_OK           – success
+ *   ACTA_DB_ERR_INVALID  – db/s is NULL, s->id <= 0, or a required
+ *                          field (name, prompt_template) is NULL
+ *   ACTA_DB_ERR_NOT_FOUND– no live row matches s->id
+ *   ACTA_DB_ERR_SQL      – prepare/step failure
+ */
 int acta_db_skill_update(db_t *db, const skill_t *s);
 
 /* Soft-delete a live skill (set deleted_at = now()).

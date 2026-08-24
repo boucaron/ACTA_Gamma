@@ -78,35 +78,35 @@ int acta_db_close(db_t *db)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    /* Best-effort rollback if the caller forgot to commit/rollback. */
     if (db->in_transaction) {
         sqlite3_exec(db->handle, "ROLLBACK;", NULL, NULL, NULL);
         db->in_transaction = 0;
     }
 
-    sqlite3_free(db->last_error);
-    db->last_error = NULL;
-
-    /*
-     * sqlite3_close (NOT close_v2):
-     *   • SQLITE_BUSY  – a prepared statement is still open; the handle
-     *     is *not* released, so we must NOT free db.  The caller finalizes
-     *     the statement(s) and retries.
-     *   • SQLITE_OK    – clean close; safe to free.
-     *   • other        – I/O error, etc.; handle *is* released by SQLite,
-     *     so we can still free our C-level struct.
-     */
     int rc = sqlite3_close(db->handle);
 
     if (rc == SQLITE_BUSY) {
-        /* Outstanding prepared statement(s) – handle still valid.
-         * Do NOT free db; caller can finalize stmts then retry. */
+        /* Handle still valid – caller must finalise stmts and retry.
+         * Preserve error string for diagnostics. */
         return ACTA_DB_ERR_SQL;
     }
 
-    free(db);   /* SQLITE_OK or hard error: struct is no longer needed */
+    /* Clean or hard-error: handle is gone, free our struct. */
+    sqlite3_free(db->last_error);
+    free(db);
     return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
+
+int acta_db_force_close(db_t *db)   /* never fails to release */
+{
+    if (!db) return ACTA_DB_ERR_INVALID;
+    sqlite3_close_v2(db->handle);    /* auto-finalises open stmts */
+    sqlite3_free(db->last_error);
+    free(db);
+    return ACTA_DB_OK;
+}
+
+
 
 
 
