@@ -74,7 +74,8 @@ db_t *acta_db_open(const char *path, int *err) {
     return db;
 }
 
-int acta_db_close(db_t *db) {
+int acta_db_close(db_t *db)
+{
     if (!db) return ACTA_DB_ERR_INVALID;
 
     /* Best-effort rollback if the caller forgot to commit/rollback. */
@@ -83,24 +84,30 @@ int acta_db_close(db_t *db) {
         db->in_transaction = 0;
     }
 
-    sqlite3_free(db->last_error);   /* allocated by sqlite3_exec */
+    sqlite3_free(db->last_error);
     db->last_error = NULL;
 
     /*
-     * close_v2 finalizes any outstanding prepared statements before
-     * closing, so a leaked stmt in library code cannot prevent the
-     * handle from being released.  (sqlite3_close would fail in that
-     * case, leaking the handle with no recovery path.)
-     *
-     * close_v2 still returns an error if the close itself fails
-     * (e.g. I/O error flushing the WAL), in which case we report it
-     * but still free our C-level allocations.
+     * sqlite3_close (NOT close_v2):
+     *   • SQLITE_BUSY  – a prepared statement is still open; the handle
+     *     is *not* released, so we must NOT free db.  The caller finalizes
+     *     the statement(s) and retries.
+     *   • SQLITE_OK    – clean close; safe to free.
+     *   • other        – I/O error, etc.; handle *is* released by SQLite,
+     *     so we can still free our C-level struct.
      */
-    int rc = sqlite3_close_v2(db->handle);
+    int rc = sqlite3_close(db->handle);
 
-    free(db);   /* C-level struct is always reclaimed */
+    if (rc == SQLITE_BUSY) {
+        /* Outstanding prepared statement(s) – handle still valid.
+         * Do NOT free db; caller can finalize stmts then retry. */
+        return ACTA_DB_ERR_SQL;
+    }
+
+    free(db);   /* SQLITE_OK or hard error: struct is no longer needed */
     return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
+
 
 
 /* ------------------------------------------------------------------ */

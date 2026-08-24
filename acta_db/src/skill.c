@@ -108,7 +108,8 @@ static skill_t **collect_skill_rows(sqlite3_stmt *stmt,
  *  Mutators
  * ═══════════════════════════════════════════════════════════════════ */
 
-int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
+int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id)
+{
     if (!db || !s || !s->name || !s->prompt_template)
         return ACTA_DB_ERR_INVALID;
 
@@ -133,15 +134,20 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE)
-        return ACTA_DB_ERR_SQL;
+    if (rc != SQLITE_DONE) {
+        if (rc == SQLITE_CONSTRAINT)
+            return ACTA_DB_ERR_NOT_FOUND;   /* dangling folder_id → -1 */
+        return ACTA_DB_ERR_SQL;             /* other SQL error     → -2 */
+    }
 
     if (out_id)
         *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
 
-int acta_db_skill_update(db_t *db, const skill_t *s) {
+
+int acta_db_skill_update(db_t *db, const skill_t *s)
+{
     if (!db || !s || s->id <= 0)
         return ACTA_DB_ERR_INVALID;
     if (!s->name || !s->prompt_template)
@@ -170,14 +176,18 @@ int acta_db_skill_update(db_t *db, const skill_t *s) {
     sqlite3_bind_int(stmt, 6, s->id);
 
     int rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) {
-        sqlite3_finalize(stmt);
-        return ACTA_DB_ERR_SQL;
-    }
-    int changed = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) {
+        if (rc == SQLITE_CONSTRAINT)
+            return ACTA_DB_ERR_NOT_FOUND;   /* dangling folder_id → -1 */
+        return ACTA_DB_ERR_SQL;             /* other SQL error     → -2 */
+    }
+
+    int changed = sqlite3_changes(db->handle);
     return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
 }
+
+
 
 int acta_db_skill_soft_delete(db_t *db, int id) {
     if (!db) return ACTA_DB_ERR_INVALID;
