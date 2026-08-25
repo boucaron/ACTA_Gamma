@@ -154,65 +154,91 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
-        const char *f_name     = cmd_args_flag(ga, "name", 1);
-        const char *f_prompt   = cmd_args_flag(ga, "prompt-template", 1);
-        const char *f_folder   = cmd_args_flag(ga, "folder-id", 1);
-        const char *f_desc     = cmd_args_flag(ga, "description", 1);
-        const char *f_schema   = cmd_args_flag(ga, "output-schema", 1);
+        skill_t s = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
-        VLOG(1, "skill create: name=%s prompt_template=%s",
-             f_name   ? f_name   : "(missing)",
-             f_prompt ? f_prompt : "(missing)");
+        if (gopts->json_input) {
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "skill create: JSON input (%zu bytes)", strlen(blob));
 
-        VLOG(2, "  params: name=%s folder_id=%s description=%s "
+            if (json_parse_skill(blob, &s) != 0) {
+                VLOG(1, "  JSON parse error");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            const char *f_name    = cmd_args_flag(ga, "name", 1);
+            const char *f_prompt  = cmd_args_flag(ga, "prompt_template", 1);
+            const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
+            const char *f_desc    = cmd_args_flag(ga, "description", 1);
+            const char *f_schema  = cmd_args_flag(ga, "output_schema", 1);
+
+            s.name            = (char *)f_name;
+            s.prompt_template = (char *)f_prompt;
+            s.description     = (char *)f_desc;
+            s.output_schema   = (char *)f_schema;
+            s.folder_id       = f_folder ? atoi(f_folder) : 0;
+        }
+
+        VLOG(1, "skill create: name=%s prompt_template=%s folder_id=%d",
+             s.name ? s.name : "(missing)",
+             s.prompt_template ? s.prompt_template : "(missing)",
+             s.folder_id);
+
+        VLOG(2, "  params: name=%s folder_id=%d description=%s "
                 "prompt_template=%s output_schema=%s "
                 "fields=%s no_nulls=%d id_only=%d table=%d",
-             f_name    ? f_name    : "(null)",
-             f_folder  ? f_folder  : "(null)",
-             f_desc    ? f_desc    : "(null)",
-             f_prompt  ? f_prompt  : "(null)",
-             f_schema  ? f_schema  : "(null)",
+             s.name ? s.name : "(null)",
+             s.folder_id,
+             s.description ? s.description : "(null)",
+             s.prompt_template ? s.prompt_template : "(null)",
+             s.output_schema ? s.output_schema : "(null)",
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p name=%p prompt=%p folder=%p desc=%p schema=%p",
-             (const void *)ga, (const void *)f_name,
-             (const void *)f_prompt, (const void *)f_folder,
-             (const void *)f_desc, (const void *)f_schema);
+        VLOG(3, "  raw: ga=%p json_owned=%d s=%p name=%p prompt=%p "
+                "folder=%d desc=%p schema=%p",
+             (const void *)ga, json_owned, (const void *)&s,
+             (const void *)s.name,
+             (const void *)s.prompt_template,
+             s.folder_id,
+             (const void *)s.description,
+             (const void *)s.output_schema);
 
-        if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for skill\"}\n");
-            return EXIT_INVALID;
-        }
-
-        if (!f_name) {
+        /* ── required-field validation (handler, not parser) ─────── */
+        if (!s.name || !*s.name) {
             VLOG(1, "  ERROR: missing required field 'name'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_skill_create;
         }
-        if (!f_prompt) {
-            VLOG(1, "  ERROR: missing required field 'prompt-template'");
+        if (!s.prompt_template || !*s.prompt_template) {
+            VLOG(1, "  ERROR: missing required field 'prompt_template'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: prompt-template\"}\n");
-            return EXIT_INVALID;
+                "\"message\":\"missing required field: prompt_template\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_skill_create;
         }
 
-        skill_t s = {0};
-        if (f_folder) s.folder_id = atoi(f_folder);
-        s.name            = (char *)f_name;
-        s.description     = (char *)f_desc;
-        s.prompt_template = (char *)f_prompt;
-        s.output_schema   = (char *)f_schema;
+        /* ── optional-field validation ───────────────────────────── */
+        if (s.folder_id < 0) s.folder_id = 0;
 
         vlog_skill_fields("  pre-create", &s);
-        VLOG(3, "  s=%p &out_id=%p",
-             (const void *)&s, (const void *)&s.id);
 
         int out_id = 0;
         int rc = acta_db_skill_create(db, &s, &out_id);
@@ -221,7 +247,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_skill_create;
         }
 
         VLOG(1, "  created skill id=%d", out_id);
@@ -230,8 +257,24 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_skill_create;
+
+    cleanup_skill_create:
+        if (json_owned) {
+            free(s.name);
+            free(s.description);
+            free(s.prompt_template);
+            free(s.output_schema);
+            free(s.created_at);
+            free(s.updated_at);
+            free(s.deleted_at);
+        }
+        return ret;
     }
+
+
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
@@ -305,8 +348,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         const char *f_name    = cmd_args_flag(ga, "name", 1);
-        const char *f_prompt  = cmd_args_flag(ga, "prompt-template", 1);
-        const char *f_folder  = cmd_args_flag(ga, "folder-id", 1);
+        const char *f_prompt  = cmd_args_flag(ga, "prompt_template", 1);
+        const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
         const char *f_desc    = cmd_args_flag(ga, "description", 1);
         const char *f_schema  = cmd_args_flag(ga, "output-schema", 1);
 
@@ -345,10 +388,10 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
         if (!f_prompt) {
-            VLOG(1, "  ERROR: missing required field 'prompt-template'");
+            VLOG(1, "  ERROR: missing required field 'prompt_template'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: prompt-template\"}\n");
+                "\"message\":\"missing required field: prompt_template\"}\n");
             return EXIT_INVALID;
         }
 
@@ -440,7 +483,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* ── move <skill_id> --folder-id <folder_id> ──────────────────── */
+    /* ── move <skill_id> --folder_id <folder_id> ──────────────────── */
     if (strcmp(action, "move") == 0) {
         const char *skill_id_str = cmd_args_next_positional(ga);
         if (!skill_id_str) {
@@ -456,7 +499,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        const char *f_folder = cmd_args_flag(ga, "folder-id", 1);
+        const char *f_folder = cmd_args_flag(ga, "folder_id", 1);
         int folder_id = 0;  /* 0 = root (no folder) */
         if (f_folder) folder_id = atoi(f_folder);
 
@@ -485,7 +528,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *f_folder  = cmd_args_flag(ga, "folder-id", 0);
+        const char *f_folder  = cmd_args_flag(ga, "folder_id", 0);
         const char *s_off     = cmd_args_flag(ga, "offset", 1);
         const char *s_lim     = cmd_args_flag(ga, "limit", 1);
         const char *s_count   = cmd_args_flag(ga, "count", 0);
@@ -596,7 +639,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *f_folder = cmd_args_flag(ga, "folder-id", 0);
+        const char *f_folder = cmd_args_flag(ga, "folder_id", 0);
         const char *f_all    = cmd_args_flag(ga, "all", 0);
 
         int folder_id = 0;
