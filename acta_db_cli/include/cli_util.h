@@ -108,6 +108,22 @@ static inline void json_str(FILE *f, const char *s)
     fputc('"', f);
 }
 
+/* ── verbose logging to stderr (levels are cumulative) ────────────── */
+
+
+
+#define VERBOSE(filt, lvl, ...)                                          \
+    do {                                                                 \
+        if ((gopts_local)->verbose >= (lvl)) {                           \
+            fprintf(stderr, "[v" #lvl "] " filt, ##__VA_ARGS__);        \
+        }                                                                \
+    } while (0)
+
+/* Small inline wrapper so call-sites read naturally.
+ * The macro needs the local gopts pointer; we alias it at the
+ * top of cmd_context and use it throughout. */
+
+
 
 
 
