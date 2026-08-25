@@ -166,59 +166,134 @@ static const action_def_t exec_actions[] = {
 };
 #define EXEC_ACTIONS (sizeof(exec_actions) / sizeof(exec_actions[0]))
 
+/* ── valid_status ─────────────────────────────────────────────────── */
+static int valid_status(const char *s)
+{
+    if (!s)
+        return 0;
+    return strcmp(s, "pending")   == 0 ||
+           strcmp(s, "running")   == 0 ||
+           strcmp(s, "completed") == 0 ||
+           strcmp(s, "failed")    == 0 ||
+           strcmp(s, "cancelled") == 0;
+}
+
+
 int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              db_t *db)
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
 
     /* ── create ───────────────────────────────────────────────────── */
+         /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
-        const char *f_prompt      = cmd_args_flag(ga, "prompt", 1);
-        const char *f_ctx_id      = cmd_args_flag(ga, "context-id", 1);
-        const char *f_skill_id    = cmd_args_flag(ga, "skill-revision-id", 1);
-        const char *f_model_id    = cmd_args_flag(ga, "model-revision-id", 1);
-        const char *f_parent_id   = cmd_args_flag(ga, "parent-execution-id", 1);
+        execution_t exec = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
-        VLOG(1, "exec create: prompt=%s",
-             f_prompt ? f_prompt : "(missing)");
+        if (gopts->json_input) {
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "exec create: JSON input (%zu bytes)", strlen(blob));
 
-        VLOG(2, "  params: prompt=%s context_id=%s skill_rev=%s model_rev=%s "
-                "parent=%s fields=%s no_nulls=%d id_only=%d table=%d",
-             f_prompt   ? f_prompt   : "(null)",
-             f_ctx_id   ? f_ctx_id   : "(null)",
-             f_skill_id ? f_skill_id : "(null)",
-             f_model_id ? f_model_id : "(null)",
-             f_parent_id? f_parent_id: "(null)",
+            if (json_parse_execution(blob, &exec) != 0) {
+                VLOG(1, "  JSON parse error");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            const char *f_prompt          = cmd_args_flag(ga, "prompt", 1);
+            const char *f_ctx_id          = cmd_args_flag(ga, "context_id", 1);
+            const char *f_skill_id        = cmd_args_flag(ga, "skill_revision_id", 1);
+            const char *f_model_id        = cmd_args_flag(ga, "model_revision_id", 1);
+            const char *f_parent_id       = cmd_args_flag(ga, "parent_execution_id", 1);
+            const char *f_status          = cmd_args_flag(ga, "status", 1);
+
+            exec.prompt             = (char *)f_prompt;
+            exec.status             = (char *)f_status;
+            exec.context_id         = f_ctx_id    ? atoi(f_ctx_id)    : 0;
+            exec.skill_revision_id  = f_skill_id  ? atoi(f_skill_id)  : 0;
+            exec.model_revision_id  = f_model_id  ? atoi(f_model_id)  : 0;
+            exec.parent_execution_id = f_parent_id ? atoi(f_parent_id) : 0;
+        }
+
+        VLOG(1, "exec create: prompt=%s context_id=%d skill_revision_id=%d "
+                "model_revision_id=%d parent_execution_id=%d status=%s",
+             exec.prompt ? exec.prompt : "(missing)",
+             exec.context_id, exec.skill_revision_id,
+             exec.model_revision_id, exec.parent_execution_id,
+             exec.status ? exec.status : "(default)");
+
+        VLOG(2, "  params: prompt=%s context_id=%d skill_revision_id=%d "
+                "model_revision_id=%d parent_execution_id=%d status=%s "
+                "fields=%s no_nulls=%d id_only=%d table=%d",
+             exec.prompt ? exec.prompt : "(null)",
+             exec.context_id, exec.skill_revision_id,
+             exec.model_revision_id, exec.parent_execution_id,
+             exec.status ? exec.status : "(null)",
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p f_prompt=%p f_ctx_id=%p f_skill_id=%p f_model_id=%p f_parent_id=%p",
-             (const void *)ga, (const void *)f_prompt,
-             (const void *)f_ctx_id, (const void *)f_skill_id,
-             (const void *)f_model_id, (const void *)f_parent_id);
+        VLOG(3, "  raw: ga=%p json_owned=%d exec=%p prompt=%p status=%p",
+             (const void *)ga, json_owned, (const void *)&exec,
+             (const void *)exec.prompt, (const void *)exec.status);
 
-        if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for exec\"}\n");
-            return EXIT_INVALID;
-        }
-
-        if (!f_prompt) {
+        /* ── required-field validation ────────────────────────────── */
+        if (!exec.prompt) {
             VLOG(1, "  ERROR: missing required field 'prompt'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: prompt\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_exec_create;
+        }
+        if (exec.context_id <= 0) {
+            VLOG(1, "  ERROR: missing required field 'context_id'");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required field: context_id\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_exec_create;
+        }
+        if (exec.skill_revision_id <= 0) {
+            VLOG(1, "  ERROR: missing required field 'skill_revision_id'");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required field: skill_revision_id\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_exec_create;
+        }
+        if (exec.model_revision_id <= 0) {
+            VLOG(1, "  ERROR: missing required field 'model_revision_id'");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required field: model_revision_id\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_exec_create;
         }
 
-        execution_t exec = {0};
-        exec.prompt              = (char *)f_prompt;
-        exec.context_id          = f_ctx_id    ? atoi(f_ctx_id)    : 0;
-        exec.skill_revision_id   = f_skill_id  ? atoi(f_skill_id)  : 0;
-        exec.model_revision_id   = f_model_id  ? atoi(f_model_id)  : 0;
-        exec.parent_execution_id = f_parent_id ? atoi(f_parent_id) : 0;
+        /* ── optional-field validation ────────────────────────────── */
+        if (exec.status && !valid_status(exec.status)) {
+            VLOG(1, "  ERROR: 'status' must be one of: pending, running, "
+                    "completed, failed, cancelled (got '%s')",
+                    exec.status);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"status must be one of: pending, running, "
+                "completed, failed, cancelled\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_exec_create;
+        }
 
         vlog_exec_fields("  pre-create", &exec);
         VLOG(3, "  exec=%p &out_id=%p",
@@ -231,7 +306,8 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_exec_create;
         }
 
         VLOG(1, "  created exec id=%d", out_id);
@@ -240,8 +316,18 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_exec_create;
+
+    cleanup_exec_create:
+        if (json_owned) {
+            free(exec.prompt);
+            free((void *)exec.status);
+        }
+        return ret;
     }
+
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
