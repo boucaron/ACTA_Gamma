@@ -52,7 +52,7 @@ static void test_db_open_createmode0_missing_file(void) {
     int err = 0;
     db_t *db = acta_db_open(path, &err, 0);
     TEST_ASSERT_NULL(db);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOTFOUND);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID_DB);
 
     remove(path);
 }
@@ -74,7 +74,7 @@ static void test_db_open_createmode0_empty_file(void) {
     int err = 0;
     db_t *db = acta_db_open(path, &err, 0);
     TEST_ASSERT_NULL(db);
-    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOTFOUND);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID_DB);
 
     remove(path);
 }

@@ -20,7 +20,7 @@ extern "C" {
 #define ACTA_DB_ERR_SQL       (-2)
 #define ACTA_DB_ERR_ALLOC     (-3)
 #define ACTA_DB_ERR_INVALID   (-4)
-#define ACTA_DB_ERR_NOTFOUND  (-5)
+#define ACTA_DB_ERR_INVALID_DB  (-5) // Not an SQLite DB
 
 /**
  * Hard upper bound on rows a single lister call may return.
@@ -69,7 +69,7 @@ const char *acta_db_strerror(int code);
 typedef struct db_t db_t;
 
 /* Open (or create) a database at the given path.
- * If creationMode is set to 0, we check this is a SQLite DB
+ * If creationMode is set to 0, we check if this is a SQLite DB
  * Returns NULL on failure; if err is non-NULL it receives the error code. */
 db_t *acta_db_open(const char *path, int *err, int creationMode);
 

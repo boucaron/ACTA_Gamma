@@ -14,6 +14,7 @@ const char *acta_db_strerror(int code)
     case ACTA_DB_ERR_SQL:       return "sql error";
     case ACTA_DB_ERR_ALLOC:     return "allocation failure";
     case ACTA_DB_ERR_INVALID:   return "invalid argument";
+    case ACTA_DB_ERR_INVALID_DB: return "invalid sqlitedb file";
     default:                    return "unknown error";
     }
 }
@@ -95,7 +96,7 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
 
         if (ntables == 0) {
             sqlite3_close(handle);
-            if (err) *err = ACTA_DB_ERR_NOTFOUND;
+            if (err) *err = ACTA_DB_ERR_INVALID_DB;
             return NULL;
         }
     }
