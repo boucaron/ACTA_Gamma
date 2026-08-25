@@ -140,51 +140,76 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
-        const char *f_name      = cmd_args_flag(ga, "name", 1);
-        const char *f_parent   = cmd_args_flag(ga, "parent-id", 1);
+        skill_folder_t sf = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
-        int parent_id = 0;
-        if (f_parent) {
-            parent_id = atoi(f_parent);
-            if (parent_id < 0) parent_id = 0;
+        if (gopts->json_input) {
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "skill_folder create: JSON input (%zu bytes)", strlen(blob));
+
+            if (json_parse_skill_folder(blob, &sf) != 0) {
+                VLOG(1, "  JSON parse error");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            const char *f_name    = cmd_args_flag(ga, "name", 1);
+            const char *f_parent  = cmd_args_flag(ga, "parent_id", 1);
+
+            sf.name      = (char *)f_name;
+            sf.parent_id = f_parent ? atoi(f_parent) : 0;
         }
 
-        VLOG(1, "folder create: name=%s parent_id=%d",
-             f_name ? f_name : "(missing)", parent_id);
+        VLOG(1, "skill_folder create: name=%s parent_id=%d",
+             sf.name ? sf.name : "(missing)",
+             sf.parent_id);
 
         VLOG(2, "  params: name=%s parent_id=%d fields=%s "
                 "no_nulls=%d id_only=%d table=%d",
-             f_name ? f_name : "(null)", parent_id,
+             sf.name ? sf.name : "(null)", sf.parent_id,
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p f_name=%p f_parent=%p",
-             (const void *)ga, (const void *)f_name, (const void *)f_parent);
+        VLOG(3, "  raw: ga=%p json_owned=%d sf=%p name=%p",
+             (const void *)ga, json_owned, (const void *)&sf,
+             (const void *)sf.name);
 
-        if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for skill_folder\"}\n");
-            return EXIT_INVALID;
-        }
-
-        if (!f_name || !*f_name) {
+        /* ── required-field validation ────────────────────────────── */
+        if (!sf.name || !*sf.name) {
             VLOG(1, "  ERROR: missing required field 'name'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_sf_create;
+        }
+
+        /* ── optional-field validation ────────────────────────────── */
+        if (sf.parent_id < 0) {
+            sf.parent_id = 0;
         }
 
         int out_id = 0;
-        int rc = acta_db_skill_folder_create(db, f_name, parent_id, &out_id);
+        int rc = acta_db_skill_folder_create(db, sf.name, sf.parent_id, &out_id);
 
         VLOG(3, "  acta_db_skill_folder_create → rc=%d out_id=%d", rc, out_id);
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_sf_create;
         }
 
         VLOG(1, "  created folder id=%d", out_id);
@@ -193,8 +218,17 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_sf_create;
+
+    cleanup_sf_create:
+        if (json_owned) {
+            free(sf.name);
+        }
+        return ret;
     }
+
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
@@ -445,7 +479,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         return EXIT_OK;
     }
 
-    /* ── move <id> --parent-id <pid> ──────────────────────────────── */
+    /* ── move <id> --parent_id <pid> ──────────────────────────────── */
     if (strcmp(action, "move") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
@@ -461,7 +495,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return EXIT_INVALID;
         }
 
-        const char *f_parent = cmd_args_flag(ga, "parent-id", 1);
+        const char *f_parent = cmd_args_flag(ga, "parent_id", 1);
         int new_parent_id = 0;
         if (f_parent) {
             new_parent_id = atoi(f_parent);
