@@ -30,7 +30,7 @@ static db_t *g_db = NULL;
 static void setup(void)
 {
     int err = ERR_SENTINEL;
-    g_db = acta_db_open(":memory:", &err);
+    g_db = acta_db_open(":memory:", &err, 1);
     if (!g_db) {
         fprintf(stderr, "  FATAL: cannot open in-memory db (err=%d)\n", err);
         return;

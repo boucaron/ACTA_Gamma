@@ -39,7 +39,21 @@ static int db_exec_capture(db_t *db, const char *sql) {
 /*  Lifecycle                                                          */
 /* ------------------------------------------------------------------ */
 
-db_t *acta_db_open(const char *path, int *err) {
+/* ── tiny callback: count rows (returns 0 to keep iterating) ────── */
+static int vlog_count_rows(void *ctx, int ncol, char **vals, char **names)
+{
+    (void)ncol; (void)vals; (void)names;
+    *(int *)ctx += 1;
+    return 0;
+}
+
+/* ── open (or verify) an existing database ─────────────────────────
+ *
+ *  Returns ACTA_DB_ERR_NOTFOUND when the file did not exist and
+ *  sqlite3_open() silently created an empty 0-byte database.
+ */
+db_t *acta_db_open(const char *path, int *err, int creationMode)
+{
     if (!path) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
@@ -55,11 +69,36 @@ db_t *acta_db_open(const char *path, int *err) {
     /*
      * PRAGMAs are best-effort.  WAL is not supported on :memory: or
      * some network filesystems; the DB still opens without it.
-     * We do not treat a PRAGMA failure as fatal here; the caller
-     * can query PRAGMA journal_mode if it needs to verify.
      */
     sqlite3_exec(handle, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL);
     sqlite3_exec(handle, "PRAGMA foreign_keys=ON;",  NULL, NULL, NULL);
+
+    /*
+     * Guard against sqlite3_open() auto-creating an empty file.
+     * A real database must contain at least one user table; a
+     * freshly-created 0-byte file has none (only sqlite_% internals).
+     */
+    if ( creationMode == 0) {
+        int ntables = 0;
+        char *errmsg = NULL;
+        int rc = sqlite3_exec(handle,
+            "SELECT name FROM sqlite_master "
+            " WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+            vlog_count_rows, &ntables, &errmsg);
+
+        if (rc != SQLITE_OK) {
+            sqlite3_free(errmsg);
+            sqlite3_close(handle);
+            if (err) *err = ACTA_DB_ERR_SQL;
+            return NULL;
+        }
+
+        if (ntables == 0) {
+            sqlite3_close(handle);
+            if (err) *err = ACTA_DB_ERR_NOTFOUND;
+            return NULL;
+        }
+    }
 
     db_t *db = malloc(sizeof(db_t));
     if (!db) {
@@ -73,6 +112,7 @@ db_t *acta_db_open(const char *path, int *err) {
     if (err) *err = ACTA_DB_OK;
     return db;
 }
+
 
 int acta_db_close(db_t *db)
 {

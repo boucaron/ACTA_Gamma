@@ -27,7 +27,7 @@ static void test_db_open_existing(void) {
 /* ---------- 1.3: acta_db_open — invalid path ---------- */
 static void test_db_open_invalid_path(void) {
     int err = 0;
-    db_t *db = acta_db_open("/nonexistent/dir/sub/file.db", &err);
+    db_t *db = acta_db_open("/nonexistent/dir/sub/file.db", &err, 0);
     TEST_ASSERT_NULL(db);
     TEST_ASSERT(err < 0);
 }
@@ -35,10 +35,94 @@ static void test_db_open_invalid_path(void) {
 /* ---------- 1.4: acta_db_open — NULL path ---------- */
 static void test_db_open_null_path(void) {
     int err = 0;
-    db_t *db = acta_db_open(NULL, &err);
+    db_t *db = acta_db_open(NULL, &err, 1);
     TEST_ASSERT_NULL(db);
     TEST_ASSERT(err < 0);
 }
+
+/* ---------- 1.4a: creationMode=0 — file does not yet exist ----------
+ *
+ * sqlite3_open() auto-creates a 0-byte file; the subsequent
+ * SELECT on sqlite_master finds no user tables → NOTFOUND.
+ */
+static void test_db_open_createmode0_missing_file(void) {
+    const char *path = "test/acta_test_cm0_missing.db";
+    remove(path);
+
+    int err = 0;
+    db_t *db = acta_db_open(path, &err, 0);
+    TEST_ASSERT_NULL(db);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOTFOUND);
+
+    remove(path);
+}
+
+/* ---------- 1.4b: creationMode=0 — pre-created 0-byte file ----------
+ *
+ * Explicitly creates an empty file so we are not relying on
+ * sqlite3_open's auto-creation behaviour.
+ */
+static void test_db_open_createmode0_empty_file(void) {
+    const char *path = "test/acta_test_cm0_empty.db";
+    remove(path);
+
+    /* Create a genuine 0-byte file. */
+    FILE *f = fopen(path, "wb");
+    TEST_ASSERT_NOT_NULL(f);
+    fclose(f);
+
+    int err = 0;
+    db_t *db = acta_db_open(path, &err, 0);
+    TEST_ASSERT_NULL(db);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_NOTFOUND);
+
+    remove(path);
+}
+
+/* ---------- 1.4c: creationMode=0 — valid existing DB (has tables) ----------
+ *
+ * Creates a real DB first (creationMode=1), closes it, then re-opens
+ * with creationMode=0.  The table check must pass and the handle
+ * is returned.
+ */
+static void test_db_open_createmode0_existing_valid(void) {
+    const char *path = "test/acta_test_cm0_valid.db";
+    remove(path);
+
+    /* First open: create mode, add a table. */
+    db_t *db1 = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db1);
+    acta_db_exec(db1, "CREATE TABLE sentinel (id INTEGER);");
+    acta_db_close(db1);
+
+    /* Second open: verify mode. */
+    int err = 0;
+    db_t *db2 = acta_db_open(path, &err, 0);
+    TEST_ASSERT_NOT_NULL(db2);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+
+    test_db_teardown(db2, path);
+}
+
+
+/* ---------- 1.4e: NULL path with err == NULL (no crash) ---------- */
+static void test_db_open_null_path_null_err(void) {
+    /* Must not dereference a NULL err pointer. */
+    db_t *db = acta_db_open(NULL, NULL, 0);
+    TEST_ASSERT_NULL(db);
+}
+
+/* ---------- 1.4f: success path with err == NULL (no crash) ---------- */
+static void test_db_open_success_null_err(void) {
+    const char *path = "test/acta_test_cm0_nullerr.db";
+    remove(path);
+
+    db_t *db = acta_db_open(path, NULL, 1);
+    TEST_ASSERT_NOT_NULL(db);
+    test_db_teardown(db, path);
+}
+
+
 
 /* ---------- 1.5: acta_db_close — valid handle ---------- */
 static void test_db_close_valid(void) {
@@ -534,6 +618,11 @@ void run_db_tests(void) {
     test_db_open_existing();
     test_db_open_invalid_path();
     test_db_open_null_path();
+    test_db_open_createmode0_missing_file();
+    test_db_open_createmode0_empty_file();
+    test_db_open_createmode0_existing_valid();    
+    test_db_open_null_path_null_err();
+    test_db_open_success_null_err();
     test_db_close_valid();
     test_db_close_null();
     test_db_close_outstanding_stmts();
