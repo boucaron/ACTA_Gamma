@@ -21,6 +21,9 @@ extern "C" {
 #define ACTA_DB_ERR_ALLOC     (-3)
 #define ACTA_DB_ERR_INVALID   (-4)
 #define ACTA_DB_ERR_INVALID_DB  (-5) // Not an SQLite DB
+#define ACTA_DB_ERR_DUPLICATE  (-6)
+#define ACTA_DB_ERR_FK  (-7)
+
 
 /**
  * Hard upper bound on rows a single lister call may return.

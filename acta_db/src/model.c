@@ -118,7 +118,8 @@ static model_t **run_model_query(sqlite3_stmt *stmt,
 
 /* ---------- mutators ---------- */
 
-int acta_db_model_create(db_t *db, const model_t *m, int *out_id) {
+int acta_db_model_create(db_t *db, const model_t *m, int *out_id)
+{
     if (!db || !m || !m->name || !m->backend || !m->model_identifier)
         return ACTA_DB_ERR_INVALID;
 
@@ -141,13 +142,22 @@ int acta_db_model_create(db_t *db, const model_t *m, int *out_id) {
     sqlite3_bind_text(stmt, 6, m->model_identifier, -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 7, m->configuration, -1, SQLITE_TRANSIENT);
 
-    int rc = sqlite3_step(stmt);
+    int step_rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+
+    if (step_rc != SQLITE_DONE) {
+        const char *msg = sqlite3_errmsg(db->handle);
+        if (strstr(msg, "UNIQUE constraint failed"))
+            return ACTA_DB_ERR_DUPLICATE;
+        if (strstr(msg, "FOREIGN KEY"))
+            return ACTA_DB_ERR_FK;
+        return ACTA_DB_ERR_SQL;
+    }
 
     if (out_id) *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
 }
+
 
 int acta_db_model_update(db_t *db, const model_t *m) {
     if (!db || !m || !m->name || !m->backend || !m->model_identifier)
