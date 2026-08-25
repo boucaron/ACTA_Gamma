@@ -5,13 +5,27 @@
 #
 # Layout:
 #   include/   headers
-#   src/       top-level .c
+#   src/       top-level .c  (acta_json.c, cli_util.c, …)
 #   src/commands/  per-entity .c
-#   ../libacta_db.a
+#   ../acta_db/libacta_db.a
+#
+# cJSON:
+#   System install (pkg-config or /usr/include/cjson/cJSON.h) works out
+#   of the box.  Override the paths if it lives elsewhere:
+#     make CJSON_DIR=/opt/cjson/include CJSON_LIB=/opt/cjson/lib/libcjson.a
 
 CC      ?= cc
-CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g -Iinclude -I../acta_db/include
-LDFLAGS += ../acta_db/libacta_db.a -lsqlite3
+CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
+           -Iinclude -I../acta_db/include
+
+# ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
+CJSON_DIR ?=
+CJSON_LIB ?= -lcjson
+ifneq ($(CJSON_DIR),)
+CFLAGS   += -I$(CJSON_DIR)
+endif
+
+LDFLAGS += ../acta_db/libacta_db.a -lsqlite3 $(CJSON_LIB)
 
 # ---- build metadata (auto-injected) ----
 GIT_HASH    := $(shell git rev-parse --short=8 HEAD 2>/dev/null)
