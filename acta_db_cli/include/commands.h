@@ -65,5 +65,30 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
 
 
+/* Read everything remaining on stdin into a NUL-terminated malloc'd
+* buffer.  Returns NULL on OOM, otherwise the buffer (free it). */
+static char *read_stdin_all(void)
+{
+    size_t cap = 8192;
+    size_t len = 0;
+    char  *buf = (char *)malloc(cap);
+    if (!buf) return NULL;
+
+    for (;;) {
+        if (len >= cap) {
+            cap *= 2;
+            char *nb = (char *)realloc(buf, cap);
+            if (!nb) { free(buf); return NULL; }
+            buf = nb;
+        }
+        size_t r = fread(buf + len, 1, cap - len - 1, stdin);
+        len += r;
+        if (r == 0) break;   /* EOF */
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+
 
 #endif

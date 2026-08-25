@@ -170,101 +170,117 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
 
-    /* ── create ───────────────────────────────────────────────────── */
+       /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
-        const char *f_name        = cmd_args_flag(ga, "name", 1);
-        const char *f_folder_id   = cmd_args_flag(ga, "folder-id", 1);
-        const char *f_description = cmd_args_flag(ga, "description", 1);
-        const char *f_backend     = cmd_args_flag(ga, "backend", 1);
-        const char *f_base_url    = cmd_args_flag(ga, "base-url", 1);
-        const char *f_model_ident = cmd_args_flag(ga, "model-identifier", 1);
-        const char *f_config      = cmd_args_flag(ga, "configuration", 1);
-
-        VLOG(1, "model create: name=%s backend=%s model_identifier=%s",
-             f_name        ? f_name        : "(missing)",
-             f_backend     ? f_backend     : "(missing)",
-             f_model_ident ? f_model_ident : "(missing)");
-
-        VLOG(2, "  params: name=%s folder_id=%s description=%s backend=%s "
-                "base_url=%s model_identifier=%s configuration=%s "
-                "fields=%s no_nulls=%d id_only=%d table=%d",
-             f_name        ? f_name        : "(null)",
-             f_folder_id   ? f_folder_id   : "(null)",
-             f_description ? f_description : "(null)",
-             f_backend     ? f_backend     : "(null)",
-             f_base_url    ? f_base_url    : "(null)",
-             f_model_ident ? f_model_ident : "(null)",
-             f_config      ? f_config      : "(null)",
-             gopts->fields ? gopts->fields : "(all)",
-             gopts->no_nulls, gopts->id_only, gopts->table);
-
-        VLOG(3, "  raw: ga=%p name=%p folder_id=%p backend=%p "
-                "model_ident=%p config=%p",
-             (const void *)ga, (const void *)f_name,
-             (const void *)f_folder_id, (const void *)f_backend,
-             (const void *)f_model_ident, (const void *)f_config);
+        model_t m = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
         if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for model\"}\n");
-            return EXIT_INVALID;
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "model create: JSON input (%zu bytes)", strlen(blob));
+
+            if (json_parse_model(blob, &m) != 0) {
+                VLOG(1, "  JSON parse error");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            m.name             = (char *)cmd_args_flag(ga, "name", 1);
+            m.folder_id        = atoi(cmd_args_flag(ga, "folder-id", 1));
+            m.description      = (char *)cmd_args_flag(ga, "description", 1);
+            m.backend          = (char *)cmd_args_flag(ga, "backend", 1);
+            m.base_url         = (char *)cmd_args_flag(ga, "base-url", 1);
+            m.model_identifier = (char *)cmd_args_flag(ga, "model-identifier", 1);
+            m.configuration    = (char *)cmd_args_flag(ga, "configuration", 1);
         }
 
-        if (!f_name) {
+        VLOG(1, "model create: name=%s backend=%s model_identifier=%s",
+             m.name ? m.name : "(missing)",
+             m.backend ? m.backend : "(missing)",
+             m.model_identifier ? m.model_identifier : "(missing)");
+
+        VLOG(2, "  params: name=%s folder_id=%d description=%s backend=%s "
+                "base_url=%s model_identifier=%s configuration=%s",
+             m.name             ? m.name             : "(null)",
+             m.folder_id,
+             m.description      ? m.description      : "(null)",
+             m.backend          ? m.backend          : "(null)",
+             m.base_url         ? m.base_url         : "(null)",
+             m.model_identifier ? m.model_identifier : "(null)",
+             m.configuration    ? m.configuration    : "(null)");
+
+        VLOG(3, "  m=%p json_owned=%d", (const void *)&m, json_owned);
+
+        if (!m.name) {
             VLOG(1, "  ERROR: missing required field 'name'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
-        if (!f_backend) {
+        if (!m.backend) {
             VLOG(1, "  ERROR: missing required field 'backend'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: backend\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
-        if (!f_model_ident) {
+        if (!m.model_identifier) {
             VLOG(1, "  ERROR: missing required field 'model-identifier'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: model-identifier\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
 
-        model_t m = {0};
-        m.name             = (char *)f_name;
-        m.folder_id        = f_folder_id ? atoi(f_folder_id) : 0;
-        m.description      = (char *)f_description;
-        m.backend          = (char *)f_backend;
-        m.base_url         = (char *)f_base_url;
-        m.model_identifier = (char *)f_model_ident;
-        m.configuration    = (char *)f_config;
-
         vlog_model_fields("  pre-create", &m);
-        VLOG(3, "  m=%p &out_id=%p",
-             (const void *)&m, (const void *)&m.id);
 
         int out_id = 0;
         int rc = acta_db_model_create(db, &m, &out_id);
-
         VLOG(3, "  acta_db_model_create → rc=%d out_id=%d", rc, out_id);
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_create;
         }
 
         VLOG(1, "  created model id=%d", out_id);
-
         if (gopts->id_only)
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_create;
+
+    cleanup_create:
+        if (json_owned) {
+            free(m.name);
+            free(m.description);
+            free(m.backend);
+            free(m.base_url);
+            free(m.model_identifier);
+            free(m.configuration);
+        }
+        return ret;
     }
+
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
