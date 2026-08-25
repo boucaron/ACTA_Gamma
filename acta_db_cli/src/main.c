@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 
     /* ---- open database ---- */
     int db_err = ACTA_DB_OK;
-    db_t *db = acta_db_open(db_path, &db_err);
+    db_t *db = acta_db_open(db_path, &db_err, 0);
     if (!db) {
         cli_error(EXIT_DB_OPEN, "ACTA_DB_OPEN_FAIL", db_err,
                   "cannot open database '%s' (%s)",
