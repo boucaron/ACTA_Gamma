@@ -174,6 +174,13 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 "\"message\":\"missing required field: content\"}\n");
             return EXIT_INVALID;
         }
+         if (!hash) {
+            VLOG(1, "  ERROR: missing required field 'hash'");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required field: hash\"}\n");
+            return EXIT_INVALID;
+        }
 
         context_t ctx = {0};
         ctx.type         = (char *)type;
