@@ -137,68 +137,90 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
-        const char *f_exec_id = cmd_args_flag(ga, "execution-id", 1);
-        const char *f_level   = cmd_args_flag(ga, "level", 1);
-        const char *f_event   = cmd_args_flag(ga, "event", 1);
-        const char *f_message = cmd_args_flag(ga, "message", 1);
-        const char *f_metadata= cmd_args_flag(ga, "metadata", 1);
+        execution_log_t el = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
-        VLOG(1, "log create: execution_id=%s level=%s event=%s",
-             f_exec_id ? f_exec_id : "(missing)",
-             f_level   ? f_level   : "(missing)",
-             f_event   ? f_event   : "(missing)");
+        if (gopts->json_input) {
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "log create: JSON input (%zu bytes)", strlen(blob));
 
-        VLOG(2, "  params: execution_id=%s level=%s event=%s message=%s metadata=%s "
+            if (json_parse_execution_log(blob, &el) != 0) {
+                VLOG(1, "  JSON parse error");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            const char *f_exec_id  = cmd_args_flag(ga, "execution-id", 1);
+            const char *f_level    = cmd_args_flag(ga, "level", 1);
+            const char *f_event    = cmd_args_flag(ga, "event", 1);
+            const char *f_message  = cmd_args_flag(ga, "message", 1);
+            const char *f_metadata = cmd_args_flag(ga, "metadata", 1);
+
+            el.execution_id = f_exec_id ? atoi(f_exec_id) : 0;
+            el.level        = (char *)f_level;
+            el.event        = (char *)f_event;
+            el.message      = (char *)f_message;
+            el.metadata     = (char *)f_metadata;
+        }
+
+        VLOG(1, "log create: execution_id=%d level=%s event=%s",
+             el.execution_id,
+             el.level  ? el.level  : "(missing)",
+             el.event  ? el.event  : "(missing)");
+
+        VLOG(2, "  params: execution_id=%d level=%s event=%s message=%s metadata=%s "
                 "fields=%s no_nulls=%d id_only=%d table=%d",
-             f_exec_id  ? f_exec_id  : "(null)",
-             f_level    ? f_level    : "(null)",
-             f_event    ? f_event    : "(null)",
-             f_message  ? f_message  : "(null)",
-             f_metadata ? f_metadata : "(null)",
+             el.execution_id,
+             el.level    ? el.level    : "(null)",
+             el.event    ? el.event    : "(null)",
+             el.message  ? el.message  : "(null)",
+             el.metadata ? el.metadata : "(null)",
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p f_exec_id=%p f_level=%p f_event=%p f_message=%p f_metadata=%p",
-             (const void *)ga, (const void *)f_exec_id,
-             (const void *)f_level, (const void *)f_event,
-             (const void *)f_message, (const void *)f_metadata);
+        VLOG(3, "  raw: ga=%p json_owned=%d el=%p level=%p event=%p message=%p metadata=%p",
+             (const void *)ga, json_owned, (const void *)&el,
+             (const void *)el.level, (const void *)el.event,
+             (const void *)el.message, (const void *)el.metadata);
 
-        if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for execution_log\"}\n");
-            return EXIT_INVALID;
-        }
-
-        if (!f_exec_id) {
-            VLOG(1, "  ERROR: missing required field 'execution-id'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: execution-id\"}\n");
-            return EXIT_INVALID;
-        }
-        if (!f_level) {
+        /* required-field validation */
+        if (!el.level) {
             VLOG(1, "  ERROR: missing required field 'level'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: level\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
-        if (!f_event) {
+        if (!el.event) {
             VLOG(1, "  ERROR: missing required field 'event'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: event\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
+        }
+        if (el.execution_id <= 0) {
+            VLOG(1, "  ERROR: missing required field 'execution-id'");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required field: execution-id\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
 
-        execution_log_t el = {0};
-        el.execution_id = atoi(f_exec_id);
-        el.level        = (char *)f_level;
-        el.event        = (char *)f_event;
-        el.message      = (char *)f_message;
-        el.metadata     = (char *)f_metadata;
 
         vlog_el_fields("  pre-create", &el);
         VLOG(3, "  el=%p &out_id=%p",
@@ -211,7 +233,8 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_create;
         }
 
         VLOG(1, "  created log entry id=%d", out_id);
@@ -220,8 +243,20 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_create;
+
+    cleanup_create:
+        if (json_owned) {
+            free(el.level);
+            free(el.event);
+            free(el.message);
+            free(el.metadata);
+        }
+        return ret;
     }
+
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
