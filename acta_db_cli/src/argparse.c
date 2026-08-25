@@ -182,27 +182,28 @@ const char *cmd_args_next_positional(cmd_args_t *it) {
     return NULL;
 }
 
-const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value) {
-    for (; it->pos < it->argc; it->pos++) {
-        const char *tok = it->argv[it->pos];
-        if (flag_prefix_match(tok, name)) {
-            size_t nlen = strlen(name);
-            char nc = tok[2 + nlen];
-            if (nc == '=') {
-                const char *val = tok + 2 + nlen + 1;
-                it->pos++;
-                return val;
-            }
-            it->pos++;
-            if (has_value) {
-                const char *v;
-                if (peek(it, &v)) { it->pos++; return v; }
-            }
-            return NULL; /* boolean or missing value */
+const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value)
+{
+    for (int i = 0; i < it->argc; i++) {
+        const char *tok = it->argv[i];
+        if (!flag_prefix_match(tok, name))
+            continue;
+
+        size_t nlen = strlen(name);
+        char nc = tok[2 + nlen];
+
+        if (nc == '=') {
+            return tok + 2 + nlen + 1;
         }
+
+        if (has_value && i + 1 < it->argc) {
+            return it->argv[i + 1];
+        }
+        return NULL;
     }
     return NULL;
 }
+
 
 int cmd_args_has_flag(cmd_args_t *it, const char *name) {
     for (int i = it->pos; i < it->argc; i++) {

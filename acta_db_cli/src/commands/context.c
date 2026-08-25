@@ -269,8 +269,27 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *s_lim   = cmd_args_flag(ga, "limit", 1);
         const char *s_count = cmd_args_flag(ga, "count", 0);
 
-        int offset = s_off ? atoi(s_off) : 0;
-        int limit  = s_lim ? atoi(s_lim) : 0;
+        int offset = 0, limit = 0;
+
+        if (s_off) {
+            char *end;
+            long v = strtol(s_off, &end, 10);
+            if (*end || v < 0) {
+                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                return EXIT_INVALID;
+            }
+            offset = (int)v;
+        }
+        if (s_lim) {
+            char *end;
+            long v = strtol(s_lim, &end, 10);
+            if (*end || v < 0) {
+                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                return EXIT_INVALID;
+            }
+            limit = (int)v;   /* 0 = no limit (documented) */
+        }
+
 
         context_query_t q = { .type = f_type, .hash = f_hash };
 
