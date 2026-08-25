@@ -22,16 +22,16 @@ typedef struct {
 } entity_entry_t;
 
 static const entity_entry_t entity_table[] = {
-    { "db",             cmd_db           },
-    { "context",        cmd_context      },
-    { "model",          cmd_model        },
-    { "model-folder",   cmd_model_folder },
-    { "model-rev",      cmd_model_rev    },
-    { "skill",          cmd_skill        },
-    { "skill-folder",   cmd_skill_folder },
-    { "skill-rev",      cmd_skill_rev    },
-    { "exec",           cmd_exec         },
-    { "log",            cmd_execution_log          },
+    { "db",                 cmd_db           },
+    { "context",            cmd_context      },
+    { "model",              cmd_model        },
+    { "model_folder",       cmd_model_folder },
+    { "model_revision",     cmd_model_rev    },
+    { "skill",              cmd_skill        },
+    { "skill_folder",       cmd_skill_folder },
+    { "skill_revision",     cmd_skill_rev    },
+    { "exec",               cmd_exec         },
+    { "log",                cmd_execution_log},
 };
 
 #define ENTITY_COUNT (sizeof(entity_table) / sizeof(entity_table[0]))
@@ -85,8 +85,8 @@ void help_print(FILE *out)
     fprintf(out,
         "usage: actagamma_db [global-flags] <entity> <action> [args]\n"
         "\n"
-        "entities: db, context, model, model-folder, model-rev,\n"
-        "          skill, skill-folder, skill-rev, exec, log\n"
+        "entities: db, context, model, model_folder, model_revision,\n"
+        "          skill, skill_folder, skill_revision, exec, log\n"
         "\n"
         "global flags:\n"
         "  --db <path>        database file\n"

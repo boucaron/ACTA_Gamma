@@ -45,6 +45,7 @@ int json_parse_skill(const char *blob, void *out);
 int json_parse_context(const char *blob, void *out);
 int json_parse_execution(const char *blob, void *out);
 int json_parse_execution_log(const char *blob, void *out);
+int json_parse_model_folder(const char *blob, void *out);
 
 /* ---- raw pass-through (for db exec results etc.) ---- */
 /*

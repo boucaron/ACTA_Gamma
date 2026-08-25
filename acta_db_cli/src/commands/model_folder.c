@@ -137,57 +137,85 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
-        const char *name      = cmd_args_flag(ga, "name", 1);
-        const char *s_parent  = cmd_args_flag(ga, "parent-id", 1);
+        model_folder_t mf = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
-        VLOG(1, "model_folder create: name=%s parent_id=%s",
-             name ? name : "(missing)",
-             s_parent ? s_parent : "(root)");
+        if (gopts->json_input) {
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "model_folder create: JSON input (%zu bytes)", strlen(blob));
 
-        VLOG(2, "  params: name=%s parent_id=%s fields=%s no_nulls=%d id_only=%d table=%d",
-             name ? name : "(null)",
-             s_parent ? s_parent : "(root)",
+            if (json_parse_model_folder(blob, &mf) != 0) {
+                VLOG(1, "  JSON parse error");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            const char *f_name     = cmd_args_flag(ga, "name", 1);
+            const char *f_parent   = cmd_args_flag(ga, "parent_id", 1);
+
+            mf.name      = (char *)f_name;
+            mf.parent_id = f_parent ? atoi(f_parent) : 0;
+        }
+
+        VLOG(1, "model_folder create: name=%s parent_id=%d",
+             mf.name ? mf.name : "(missing)",
+             mf.parent_id);
+
+        VLOG(2, "  params: name=%s parent_id=%d fields=%s no_nulls=%d id_only=%d table=%d",
+             mf.name ? mf.name : "(null)",
+             mf.parent_id,
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p name=%p s_parent=%p",
-             (const void *)ga, (const void *)name, (const void *)s_parent);
+        VLOG(3, "  raw: ga=%p json_owned=%d mf=%p name=%p",
+             (const void *)ga, json_owned, (const void *)&mf,
+             (const void *)mf.name);
 
-        if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for model_folder\"}\n");
-            return EXIT_INVALID;
-        }
-
-        if (!name) {
+        /* ── required-field validation ────────────────────────────── */
+        if (!mf.name) {
             VLOG(1, "  ERROR: missing required field 'name'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_mf_create;
         }
 
-        int parent_id = 0;
-        if (s_parent) {
-            parent_id = atoi(s_parent);
-            if (parent_id < 0) {
-                VLOG(1, "  ERROR: --parent-id must be non-negative, got '%s'", s_parent);
-                return EXIT_INVALID;
-            }
+        /* ── optional-field validation ────────────────────────────── */
+        if (mf.parent_id < 0) {
+            VLOG(1, "  ERROR: 'parent_id' must be non-negative, got %d",
+                  mf.parent_id);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"parent_id must be non-negative\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_mf_create;
         }
 
-        VLOG(1, "  creating folder name='%s' parent_id=%d", name, parent_id);
+        VLOG(1, "  creating folder name='%s' parent_id=%d",
+             mf.name, mf.parent_id);
 
         int out_id = 0;
-        int rc = acta_db_model_folder_create(db, name, parent_id, &out_id);
+        int rc = acta_db_model_folder_create(db, mf.name, mf.parent_id, &out_id);
 
         VLOG(3, "  acta_db_model_folder_create → rc=%d out_id=%d", rc, out_id);
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_mf_create;
         }
 
         VLOG(1, "  created folder id=%d", out_id);
@@ -196,7 +224,15 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_mf_create;
+
+    cleanup_mf_create:
+        if (json_owned) {
+            free(mf.name);
+        }
+        return ret;
     }
 
     /* ── get <id> ─────────────────────────────────────────────────── */
@@ -251,7 +287,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *s_parent = cmd_args_flag(ga, "parent-id", 0);
+        const char *s_parent = cmd_args_flag(ga, "parent_id", 0);
         const char *s_off    = cmd_args_flag(ga, "offset", 1);
         const char *s_lim    = cmd_args_flag(ga, "limit", 1);
         const char *s_count  = cmd_args_flag(ga, "count", 0);
@@ -282,7 +318,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         if (s_parent) {
             parent_id = atoi(s_parent);
             if (parent_id < 0) {
-                VLOG(1, "  ERROR: --parent-id must be non-negative, got '%s'", s_parent);
+                VLOG(1, "  ERROR: --parent_id must be non-negative, got '%s'", s_parent);
                 return EXIT_INVALID;
             }
             has_parent = 1;
@@ -365,14 +401,14 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *s_parent = cmd_args_flag(ga, "parent-id", 0);
+        const char *s_parent = cmd_args_flag(ga, "parent_id", 0);
 
         int parent_id = 0;
         int has_parent = 0;
         if (s_parent) {
             parent_id = atoi(s_parent);
             if (parent_id < 0) {
-                VLOG(1, "  ERROR: --parent-id must be non-negative, got '%s'", s_parent);
+                VLOG(1, "  ERROR: --parent_id must be non-negative, got '%s'", s_parent);
                 return EXIT_INVALID;
             }
             has_parent = 1;
@@ -515,7 +551,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         return EXIT_OK;
     }
 
-    /* ── move <id> --parent-id <new-parent> ───────────────────────── */
+    /* ── move <id> --parent_id <new-parent> ───────────────────────── */
     if (strcmp(action, "move") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
@@ -531,17 +567,17 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return EXIT_INVALID;
         }
 
-        const char *s_new_parent = cmd_args_flag(ga, "parent-id", 1);
+        const char *s_new_parent = cmd_args_flag(ga, "parent_id", 1);
         if (!s_new_parent) {
-            VLOG(1, "model_folder move: ERROR missing required --parent-id");
+            VLOG(1, "model_folder move: ERROR missing required --parent_id");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: parent-id\"}\n");
+                "\"message\":\"missing required field: parent_id\"}\n");
             return EXIT_INVALID;
         }
         int new_parent_id = atoi(s_new_parent);
         if (new_parent_id < 0) {
-            VLOG(1, "model_folder move: --parent-id must be non-negative, got '%s'", s_new_parent);
+            VLOG(1, "model_folder move: --parent_id must be non-negative, got '%s'", s_new_parent);
             return EXIT_INVALID;
         }
 
