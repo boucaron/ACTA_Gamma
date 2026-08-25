@@ -130,6 +130,16 @@ static const action_def_t execution_log_actions[] = {
 };
 #define EL_ACTIONS (sizeof(execution_log_actions) / sizeof(execution_log_actions[0]))
 
+static int valid_level(const char *lvl)
+{
+    return lvl &&
+        (strcmp(lvl, "debug") == 0 ||
+         strcmp(lvl, "info")  == 0 ||
+         strcmp(lvl, "warn")  == 0 ||
+         strcmp(lvl, "error") == 0);
+}
+
+
 int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db)
 {
@@ -162,7 +172,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             free(blob);
             json_owned = 1;
         } else {
-            const char *f_exec_id  = cmd_args_flag(ga, "execution-id", 1);
+            const char *f_exec_id  = cmd_args_flag(ga, "execution_id", 1);
             const char *f_level    = cmd_args_flag(ga, "level", 1);
             const char *f_event    = cmd_args_flag(ga, "event", 1);
             const char *f_message  = cmd_args_flag(ga, "message", 1);
@@ -212,11 +222,21 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
-        if (el.execution_id <= 0) {
-            VLOG(1, "  ERROR: missing required field 'execution-id'");
+         if (!valid_level(el.level)) {
+            VLOG(1, "  ERROR: 'level' must be one of: debug, info, warn, error "
+                    "(got '%s')",
+                    el.level ? el.level : "(null)");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: execution-id\"}\n");
+                "\"message\":\"level must be one of: debug, info, warn, error\"}\n");
+            ret = EXIT_INVALID;
+            goto cleanup_create;
+        }
+        if (el.execution_id <= 0) {
+            VLOG(1, "  ERROR: missing required field 'execution_id'");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required field: execution_id\"}\n");
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
