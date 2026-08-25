@@ -66,7 +66,7 @@ int commands_dispatch(const char *entity, const char *action,
     if (!fn)
         return entity_not_found(entity);
 
-    vdbg(gopts, 2, "dispatch → %s", entity);
+    vdbg(gopts, 2, "dispatch to %s", entity);
     return fn(action, ga, gopts, db);
 }
 
