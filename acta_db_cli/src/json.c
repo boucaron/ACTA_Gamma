@@ -139,7 +139,7 @@ int json_parse_context(const char *blob, void *out)
 
     c->type         = jget_str(root, "type");
     c->content      = jget_str(root, "content");
-    c->content_hash = jget_str(root, "content_hash");
+    c->content_hash = jget_str(root, "hash");
     c->metadata     = jget_str(root, "metadata");
     c->created_at   = jget_str(root, "created_at");
 

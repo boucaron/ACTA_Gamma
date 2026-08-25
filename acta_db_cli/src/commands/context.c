@@ -128,88 +128,112 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
 
     /* ── create ───────────────────────────────────────────────────── */
-    if (strcmp(action, "create") == 0) {
-        const char *type     = cmd_args_flag(ga, "type", 1);
-        const char *content  = cmd_args_flag(ga, "content", 1);
-        const char *hash     = cmd_args_flag(ga, "hash", 1);
-        const char *metadata = cmd_args_flag(ga, "metadata", 1);
+       if (strcmp(action, "create") == 0) {
+        context_t ctx = {0};
+        int json_owned = 0;
+        int ret = EXIT_OK;
 
+        /* ── populate ctx ── */
+        if (gopts->json_input) {
+            char *blob = read_stdin_all();
+            if (!blob) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"failed to read JSON input\"}\n");
+                return EXIT_INVALID;
+            }
+            VLOG(1, "context create: JSON input (%zu bytes)", strlen(blob));  // ← new
+
+            if (json_parse_context(blob, &ctx) != 0) {
+                VLOG(1, "  JSON parse error");  // ← new
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid JSON body\"}\n");
+                free(blob);
+                return EXIT_INVALID;
+            }
+            free(blob);
+            json_owned = 1;
+        } else {
+            ctx.type         = (char *)cmd_args_flag(ga, "type", 1);
+            ctx.content      = (char *)cmd_args_flag(ga, "content", 1);
+            ctx.content_hash = (char *)cmd_args_flag(ga, "hash", 1);
+            ctx.metadata     = (char *)cmd_args_flag(ga, "metadata", 1);
+        }
+
+        /* ── VLOGs now read from ctx (covers both paths) ── */
         VLOG(1, "context create: type=%s content=%s",
-             type    ? type    : "(missing)",
-             content ? content : "(missing)");
+             ctx.type    ? ctx.type    : "(missing)",
+             ctx.content ? ctx.content : "(missing)");
 
         VLOG(2, "  params: type=%s content=%s hash=%s metadata=%s fields=%s "
                 "no_nulls=%d id_only=%d table=%d",
-             type     ? type     : "(null)",
-             content  ? content  : "(null)",
-             hash     ? hash     : "(null)",
-             metadata ? metadata : "(null)",
+             ctx.type     ? ctx.type     : "(null)",
+             ctx.content  ? ctx.content  : "(null)",
+             ctx.content_hash ? ctx.content_hash : "(null)",
+             ctx.metadata ? ctx.metadata : "(null)",
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p type=%p content=%p hash=%p metadata=%p",
-             (const void *)ga, (const void *)type,
-             (const void *)content, (const void *)hash,
-             (const void *)metadata);
+        VLOG(3, "  ctx=%p json_owned=%d", (const void *)&ctx, json_owned);
 
-        if (gopts->json_input) {
-            VLOG(1, "  using --json input (not yet implemented)");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--json input not yet implemented for context\"}\n");
-            return EXIT_INVALID;
-        }
-
-        if (!type) {
+        /* ── required-field validation (uses ctx, not locals) ── */
+        if (!ctx.type) {
             VLOG(1, "  ERROR: missing required field 'type'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: type\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
-        if (!content) {
+        if (!ctx.content) {
             VLOG(1, "  ERROR: missing required field 'content'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: content\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
-         if (!hash) {
+        if (!ctx.content_hash) {
             VLOG(1, "  ERROR: missing required field 'hash'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: hash\"}\n");
-            return EXIT_INVALID;
+            ret = EXIT_INVALID;
+            goto cleanup_create;
         }
 
-        context_t ctx = {0};
-        ctx.type         = (char *)type;
-        ctx.content      = (char *)content;
-        ctx.content_hash = (char *)hash;
-        ctx.metadata     = (char *)metadata;
-
         vlog_ctx_fields("  pre-create", &ctx);
-        VLOG(3, "  ctx=%p &out_id=%p",
-             (const void *)&ctx, (const void *)&ctx.id);
 
         int out_id = 0;
         int rc = acta_db_context_create(db, &ctx, &out_id);
-
         VLOG(3, "  acta_db_context_create → rc=%d out_id=%d", rc, out_id);
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            ret = map_rc_to_exit(rc);
+            goto cleanup_create;
         }
 
         VLOG(1, "  created context id=%d", out_id);
-
         if (gopts->id_only)
             fprintf(stdout, "%d\n", out_id);
         else
             fprintf(stdout, "{\"id\":%d}\n", out_id);
-        return EXIT_OK;
+
+        ret = EXIT_OK;
+        goto cleanup_create;
+
+    cleanup_create:
+        if (json_owned) {
+            free(ctx.type);
+            free(ctx.content);
+            free(ctx.content_hash);
+            free(ctx.metadata);
+        }
+        return ret;
     }
+
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
