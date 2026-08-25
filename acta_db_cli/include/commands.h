@@ -44,7 +44,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
 int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
-int cmd_log(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
+int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
 int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);

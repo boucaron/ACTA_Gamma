@@ -31,7 +31,7 @@ static const entity_entry_t entity_table[] = {
     { "skill-folder",   cmd_skill_folder },
     { "skill-rev",      cmd_skill_rev    },
     { "exec",           cmd_exec         },
-    { "log",            cmd_log          },
+    { "log",            cmd_execution_log          },
 };
 
 #define ENTITY_COUNT (sizeof(entity_table) / sizeof(entity_table[0]))
