@@ -14,6 +14,10 @@
  *  Level 3  – raw internal trace (pointers, raw rc)
  *
  *  All diagnostics → stderr so stdout stays pipe-safe.
+ *
+ *  Usage: set vlog_gopts at the top of cmd_skill, then call
+ *         VLOG(1, "..."), VLOG(2, "...") etc. from anywhere in the
+ *         translation unit, including helper functions.
  */
 
 static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
@@ -24,6 +28,293 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
             fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
         }                                                                \
     } while (0)
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db skill --help                                       */
+void skill_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db skill <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create    Create a new skill\n"
+"  get       Fetch a skill by id\n"
+"  update    Update an existing skill\n"
+"  delete    Soft-delete a skill\n"
+"  restore   Restore a deleted skill\n"
+"  move      Move a skill to another folder\n"
+"  list      List skills\n"
+"  count     Count skills\n"
+"  help      Show this help\n"
+"\n"
+"== create ===========================================================\n"
+"  Create a new skill.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db skill create \\\n"
+"      --name \"Summarize\" \\\n"
+"      --prompt_template \"Summarize: {{input}}\" \\\n"
+"      --folder_id 3 \\\n"
+"      --description \"Summarises long text\" \\\n"
+"      --output_schema '{\"type\":\"string\"}'\n"
+"        <- flag-based\n"
+"\n"
+"    cat skill.json | actagamma_db skill create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>             Display name\n"
+"    --prompt_template <str>  Prompt template body\n"
+"\n"
+"  Optional fields:\n"
+"    --folder_id <int>        Owning folder (0 = root)\n"
+"    --description <str>      Human-readable description\n"
+"    --output_schema <json>   Expected output JSON schema\n"
+"\n"
+"  Options:\n"
+"    --json               Read the skill as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single skill by its primary key.\n"
+"\n"
+"    actagamma_db skill get 42\n"
+"    actagamma_db skill get 42 --include-deleted\n"
+"\n"
+"  Options:\n"
+"    --include-deleted    Return the row even if soft-deleted\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== update <id> ====================================================\n"
+"  Fully replace a skill's fields (all required fields must be\n"
+"  re-supplied).\n"
+"\n"
+"    actagamma_db skill update 42 \\\n"
+"      --name \"Summarize v2\" \\\n"
+"      --prompt_template \"Summarize (v2): {{input}}\"\n"
+"\n"
+"  Required fields (same as create):\n"
+"    --name <str>             Display name\n"
+"    --prompt_template <str>  Prompt template body\n"
+"\n"
+"  Optional fields:\n"
+"    --folder_id <int>        Owning folder (0 = root)\n"
+"    --description <str>      Human-readable description\n"
+"    --output_schema <json>   Expected output JSON schema\n"
+"\n"
+"  Options:\n"
+"    --json               Read the skill as JSON from stdin\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== delete <id> ====================================================\n"
+"  Soft-delete a skill (sets deleted_at; row is retained).\n"
+"\n"
+"    actagamma_db skill delete 42\n"
+"\n"
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted skill.\n"
+"\n"
+"    actagamma_db skill restore 42\n"
+"\n"
+"== move <skill_id> ================================================\n"
+"  Move a skill into (or out of) a folder.\n"
+"\n"
+"    actagamma_db skill move 42 --folder_id 3\n"
+"    actagamma_db skill move 42 --folder_id 0   # back to root\n"
+"\n"
+"  Options:\n"
+"    --folder_id <int>    Destination folder (required, 0 = root)\n"
+"\n"
+"== list ===========================================================\n"
+"  List skills, optionally filtered by folder.\n"
+"\n"
+"    actagamma_db skill list\n"
+"    actagamma_db skill list --folder_id 3\n"
+"    actagamma_db skill list --all --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --folder_id <int>    Only skills in this folder\n"
+"    --all                Include skills from all folders\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count ==========================================================\n"
+"  Count skills.\n"
+"\n"
+"    actagamma_db skill count\n"
+"    actagamma_db skill count --folder_id 3\n"
+"    actagamma_db skill count --all\n"
+"\n"
+"  Options:\n"
+"    --folder_id <int>    Count only skills in this folder\n"
+"    --all                Count across all folders\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (create / get)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_create(FILE *f)
+{
+    fputs(
+"== create ===========================================================\n"
+"  Create a new skill.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db skill create \\\n"
+"      --name \"Summarize\" \\\n"
+"      --prompt_template \"Summarize: {{input}}\" \\\n"
+"      --folder_id 3 \\\n"
+"      --description \"Summarises long text\" \\\n"
+"      --output_schema '{\"type\":\"string\"}'\n"
+"        <- flag-based\n"
+"\n"
+"    cat skill.json | actagamma_db skill create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>             Display name\n"
+"    --prompt_template <str>  Prompt template body\n"
+"\n"
+"  Optional fields:\n"
+"    --folder_id <int>        Owning folder (0 = root)\n"
+"    --description <str>      Human-readable description\n"
+"    --output_schema <json>   Expected output JSON schema\n"
+"\n"
+"  Options:\n"
+"    --json               Read the skill as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single skill by its primary key.\n"
+"\n"
+"    actagamma_db skill get 42\n"
+"    actagamma_db skill get 42 --include-deleted\n"
+"\n"
+"  Options:\n"
+"    --include-deleted    Return the row even if soft-deleted\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_update(FILE *f)
+{
+    fputs(
+"== update <id> ====================================================\n"
+"  Fully replace a skill's fields (all required fields must be\n"
+"  re-supplied).\n"
+"\n"
+"    actagamma_db skill update 42 \\\n"
+"      --name \"Summarize v2\" \\\n"
+"      --prompt_template \"Summarize (v2): {{input}}\"\n"
+"\n"
+"  Required fields (same as create):\n"
+"    --name <str>             Display name\n"
+"    --prompt_template <str>  Prompt template body\n"
+"\n"
+"  Optional fields:\n"
+"    --folder_id <int>        Owning folder (0 = root)\n"
+"    --description <str>      Human-readable description\n"
+"    --output_schema <json>   Expected output JSON schema\n"
+"\n"
+"  Options:\n"
+"    --json               Read the skill as JSON from stdin\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_delete(FILE *f)
+{
+    fputs(
+"== delete <id> ====================================================\n"
+"  Soft-delete a skill (sets deleted_at; row is retained).\n"
+"\n"
+"    actagamma_db skill delete 42\n", f);
+}
+
+static void usage_restore(FILE *f)
+{
+    fputs(
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted skill.\n"
+"\n"
+"    actagamma_db skill restore 42\n", f);
+}
+
+static void usage_move(FILE *f)
+{
+    fputs(
+"== move <skill_id> ================================================\n"
+"  Move a skill into (or out of) a folder.\n"
+"\n"
+"    actagamma_db skill move 42 --folder_id 3\n"
+"    actagamma_db skill move 42 --folder_id 0   # back to root\n"
+"\n"
+"  Options:\n"
+"    --folder_id <int>    Destination folder (required, 0 = root)\n", f);
+}
+
+static void usage_list(FILE *f)
+{
+    fputs(
+"== list ===========================================================\n"
+"  List skills, optionally filtered by folder.\n"
+"\n"
+"    actagamma_db skill list\n"
+"    actagamma_db skill list --folder_id 3\n"
+"    actagamma_db skill list --all --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --folder_id <int>    Only skills in this folder\n"
+"    --all                Include skills from all folders\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_count(FILE *f)
+{
+    fputs(
+"== count ==========================================================\n"
+"  Count skills.\n"
+"\n"
+"    actagamma_db skill count\n"
+"    actagamma_db skill count --folder_id 3\n"
+"    actagamma_db skill count --all\n"
+"\n"
+"  Options:\n"
+"    --folder_id <int>    Count only skills in this folder\n"
+"    --all                Count across all folders\n", f);
+}
 
 /* ── helpers ───────────────────────────────────────────────────────── */
 
@@ -139,11 +430,12 @@ static const action_def_t skill_actions[] = {
     { "create",  "create a new skill"             },
     { "get",     "fetch a skill by id"            },
     { "update",  "update an existing skill"       },
-    { "delete",  "remove a skill"                 },
+    { "delete",  "soft-delete a skill"            },
     { "restore", "restore a deleted skill"        },
     { "move",    "move a skill to another folder" },
     { "list",    "list skills"                    },
     { "count",   "count skills"                   },
+    { "help",    "show this help"                 },
 };
 #define SKILL_ACTIONS (sizeof(skill_actions) / sizeof(skill_actions[0]))
 
@@ -151,6 +443,12 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
               db_t *db)
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
+
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        skill_usage(stdout);
+        return EXIT_OK;
+    }
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
@@ -164,6 +462,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_create(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "skill create: JSON input (%zu bytes)", strlen(blob));
@@ -173,6 +472,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -223,6 +523,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_skill_create;
         }
@@ -231,6 +532,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: prompt_template\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_skill_create;
         }
@@ -284,11 +586,16 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "skill get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
 
@@ -340,6 +647,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_update(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
@@ -347,7 +655,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             VLOG(1, "skill update: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid id: %s\"}\n", id_str);
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_update(stderr);
             return EXIT_INVALID;
         }
 
@@ -362,6 +671,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_update(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "skill update: JSON input (%zu bytes)", strlen(blob));
@@ -371,6 +681,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_update(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -426,6 +737,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
+            usage_update(stderr);
             ret = EXIT_INVALID;
             goto cleanup_skill_update;
         }
@@ -434,6 +746,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: prompt_template\"}\n");
+            usage_update(stderr);
             ret = EXIT_INVALID;
             goto cleanup_skill_update;
         }
@@ -481,11 +794,16 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_delete(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "skill delete: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_delete(stderr);
             return EXIT_INVALID;
         }
 
@@ -513,11 +831,16 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_restore(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "skill restore: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_restore(stderr);
             return EXIT_INVALID;
         }
 
@@ -545,17 +868,30 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <skill_id>\"}\n");
+            usage_move(stderr);
             return EXIT_INVALID;
         }
         int skill_id = atoi(skill_id_str);
         if (skill_id <= 0) {
             VLOG(1, "skill move: invalid skill_id=%s", skill_id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
+            usage_move(stderr);
             return EXIT_INVALID;
         }
 
         const char *f_folder = cmd_args_flag(ga, "folder_id", 1);
-        int folder_id = 0;  /* 0 = root (no folder) */
-        if (f_folder) folder_id = atoi(f_folder);
+        if (!f_folder) {
+            VLOG(1, "skill move: ERROR missing --folder_id");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required flag: --folder_id\"}\n");
+            usage_move(stderr);
+            return EXIT_INVALID;
+        }
+        int folder_id = atoi(f_folder);
+        if (folder_id < 0) folder_id = 0;  /* 0 = root (no folder) */
 
         VLOG(1, "skill move: skill_id=%d folder_id=%d", skill_id, folder_id);
 
@@ -576,7 +912,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         VLOG(1, "  moved skill id=%d → folder_id=%d", skill_id, folder_id);
         fprintf(stdout, "{\"id\":%d,\"folder_id\":%d}\n",
-                skill_id, folder_id ? folder_id : 0);
+                skill_id, folder_id);
         return EXIT_OK;
     }
 
@@ -602,6 +938,10 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -611,6 +951,10 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;
@@ -723,7 +1067,18 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "skill: unknown action '%s'", action ? action : "(null)");
-    return action_err("skill", action, skill_actions, SKILL_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, skill_actions, SKILL_ACTIONS);
+
+        VLOG(1, "skill: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db skill help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
