@@ -1,12 +1,14 @@
 # actagamma_db — POC Makefile
 #
 #   make          → builds ./actagamma_db
-#   make clean    → removes objects + binary
+#   make test     → builds + runs ./test_skill
+#   make clean    → removes objects + binaries
 #
 # Layout:
-#   include/   headers
-#   src/       top-level .c  (acta_json.c, cli_util.c, …)
-#   src/commands/  per-entity .c
+#   include/        headers
+#   src/            top-level .c  (argparse.c, json.c, …)
+#   src/commands/   per-entity .c
+#   tests/skill/    skill CLI tests
 #   ../acta_db/libacta_db.a
 #
 # cJSON:
@@ -36,21 +38,35 @@ else ifneq ($(shell git diff --quiet 2>/dev/null && echo y),y)
 endif
 CFLAGS    += -DACTA_DB_GIT_HASH=\"$(GIT_HASH)\"
 
-# ---- sources ----
+# ---- sources (app) ----
 SRCS    := $(wildcard src/*.c)
 SRCS   += $(wildcard src/commands/*.c)
 OBJS    := $(patsubst %.c, %.o, $(SRCS))
+APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS))
 TARGET  := actagamma_db
 
-.PHONY: all clean
+# ---- sources (tests) ----
+TEST_SRCS   := $(wildcard tests/skill/*.c)
+TEST_OBJS   := $(patsubst %.c, %.o, $(TEST_SRCS))
+TEST_TARGET := test_skill
+
+.PHONY: all clean test
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
+# ---- test binary (links app objects minus main + test objects) ----
+$(TEST_TARGET): $(TEST_OBJS) $(APP_OBJS_NO_MAIN)
+	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
+
+# ---- pattern rule ----
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(TEST_OBJS) $(TARGET) $(TEST_TARGET)
