@@ -26,7 +26,7 @@ static const entity_entry_t entity_table[] = {
     { "context",            cmd_context      },
     { "model",              cmd_model        },
     { "model_folder",       cmd_model_folder },
-    { "model_revision",     cmd_model_rev    },
+    { "model_revision",     cmd_model_revision    },
     { "skill",              cmd_skill        },
     { "skill_folder",       cmd_skill_folder },
     { "skill_revision",     cmd_skill_rev    },

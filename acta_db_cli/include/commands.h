@@ -50,7 +50,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
 int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
-int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
+int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
 int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);

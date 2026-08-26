@@ -14,7 +14,7 @@
  *
  *  All diagnostics → stderr so stdout stays pipe-safe.
  *
- *  Usage: set vlog_gopts at the top of cmd_model_rev, then call
+ *  Usage: set vlog_gopts at the top of cmd_model_revision, then call
  *         VLOG(1, "..."), VLOG(2, "...") etc. from anywhere in the
  *         translation unit, including helper functions.
  */
@@ -27,6 +27,134 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
             fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
         }                                                                \
     } while (0)
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db model_revision --help
+ */
+void model_revision_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db model_revision <action> [options]\n"
+"\n"
+"Actions:\n"
+"  get <id>         Fetch a model revision by id\n"
+"  get-latest <model_id>  Fetch the latest revision for a model\n"
+"  list <model_id>  List revisions for a model\n"
+"  count <model_id> Count revisions for a model\n"
+"  help             Show this help\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single model revision by its primary key.\n"
+"\n"
+"    actagamma_db model_revision get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== get-latest <model_id> ============================================\n"
+"  Fetch the latest revision for a given model.\n"
+"\n"
+"    actagamma_db model_revision get-latest 7\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== list <model_id> =================================================\n"
+"  List model revisions for a model.\n"
+"\n"
+"    actagamma_db model_revision list 7\n"
+"    actagamma_db model_revision list 7 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count <model_id> ================================================\n"
+"  Count model revisions for a model.\n"
+"\n"
+"    actagamma_db model_revision count 7\n"
+"\n"
+"Global options:\n"
+"  --table              columnar / plain output instead of JSON\n"
+"  --verbose <n>        debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>       comma-separated field whitelist\n"
+"  --no_nulls           omit null-valued fields from JSON output\n"
+"  --id_only            print only the id (get / get-latest)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single model revision by its primary key.\n"
+"\n"
+"    actagamma_db model_revision get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_get_latest(FILE *f)
+{
+    fputs(
+"== get-latest <model_id> ============================================\n"
+"  Fetch the latest revision for a given model.\n"
+"\n"
+"    actagamma_db model_revision get-latest 7\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_list(FILE *f)
+{
+    fputs(
+"== list <model_id> =================================================\n"
+"  List model revisions for a model.\n"
+"\n"
+"    actagamma_db model_revision list 7\n"
+"    actagamma_db model_revision list 7 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_count(FILE *f)
+{
+    fputs(
+"== count <model_id> ================================================\n"
+"  Count model revisions for a model.\n"
+"\n"
+"    actagamma_db model_revision count 7\n", f);
+}
 
 /* ── helpers ───────────────────────────────────────────────────────── */
 
@@ -167,36 +295,48 @@ static void rev_table(FILE *f, const model_revision_t *r, int header)
 /*  Dispatch                                                           */
 /* ══════════════════════════════════════════════════════════════════ */
 
-static const action_def_t model_rev_actions[] = {
+static const action_def_t model_revision_actions[] = {
     { "get",        "fetch a model revision by id"          },
     { "get-latest", "fetch the latest revision for a model" },
     { "list",       "list revisions for a model"            },
-    { "count",      "count revisions for a model"           }
+    { "count",      "count revisions for a model"           },
+    { "help",       "show this help"                        },
 };
-#define REV_ACTIONS (sizeof(model_rev_actions) / sizeof(model_rev_actions[0]))
+#define REV_ACTIONS (sizeof(model_revision_actions) / sizeof(model_revision_actions[0]))
 
-int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
-                 db_t *db)
+int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
+                       db_t *db)
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
+
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        model_revision_usage(stdout);
+        return EXIT_OK;
+    }
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "model-rev get: ERROR missing <id>");
+            VLOG(1, "model_revision get: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "model-rev get: invalid id=%s", id_str);
+            VLOG(1, "model_revision get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "model-rev get: fetching id=%d", id);
+        VLOG(1, "model_revision get: fetching id=%d", id);
 
         int err = 0;
         model_revision_t *r = acta_db_model_revision_get(db, id, &err);
@@ -234,19 +374,24 @@ int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
     if (strcmp(action, "get-latest") == 0) {
         const char *model_id_str = cmd_args_next_positional(ga);
         if (!model_id_str) {
-            VLOG(1, "model-rev get-latest: ERROR missing <model_id>");
+            VLOG(1, "model_revision get-latest: ERROR missing <model_id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <model_id>\"}\n");
+            usage_get_latest(stderr);
             return EXIT_INVALID;
         }
         int model_id = atoi(model_id_str);
         if (model_id <= 0) {
-            VLOG(1, "model-rev get-latest: invalid model_id=%s", model_id_str);
+            VLOG(1, "model_revision get-latest: invalid model_id=%s", model_id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <model_id>: must be a positive integer\"}\n");
+            usage_get_latest(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "model-rev get-latest: fetching latest for model_id=%d", model_id);
+        VLOG(1, "model_revision get-latest: fetching latest for model_id=%d", model_id);
 
         int err = 0;
         model_revision_t *r = acta_db_model_revision_get_latest(db, model_id, &err);
@@ -284,15 +429,20 @@ int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
     if (strcmp(action, "list") == 0) {
         const char *model_id_str = cmd_args_next_positional(ga);
         if (!model_id_str) {
-            VLOG(1, "model-rev list: ERROR missing <model_id>");
+            VLOG(1, "model_revision list: ERROR missing <model_id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <model_id>\"}\n");
+            usage_list(stderr);
             return EXIT_INVALID;
         }
         int model_id = atoi(model_id_str);
         if (model_id <= 0) {
-            VLOG(1, "model-rev list: invalid model_id=%s", model_id_str);
+            VLOG(1, "model_revision list: invalid model_id=%s", model_id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <model_id>: must be a positive integer\"}\n");
+            usage_list(stderr);
             return EXIT_INVALID;
         }
 
@@ -307,6 +457,10 @@ int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -316,12 +470,16 @@ int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;   /* 0 = no limit (documented) */
         }
 
-        VLOG(1, "model-rev list: model_id=%d offset=%d limit=%d",
+        VLOG(1, "model_revision list: model_id=%d offset=%d limit=%d",
              model_id, offset, limit);
 
         VLOG(2, "  full: model_id=%d offset=%d limit=%d "
@@ -385,19 +543,24 @@ int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
     if (strcmp(action, "count") == 0) {
         const char *model_id_str = cmd_args_next_positional(ga);
         if (!model_id_str) {
-            VLOG(1, "model-rev count: ERROR missing <model_id>");
+            VLOG(1, "model_revision count: ERROR missing <model_id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <model_id>\"}\n");
+            usage_count(stderr);
             return EXIT_INVALID;
         }
         int model_id = atoi(model_id_str);
         if (model_id <= 0) {
-            VLOG(1, "model-rev count: invalid model_id=%s", model_id_str);
+            VLOG(1, "model_revision count: invalid model_id=%s", model_id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <model_id>: must be a positive integer\"}\n");
+            usage_count(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "model-rev count: model_id=%d", model_id);
+        VLOG(1, "model_revision count: model_id=%d", model_id);
 
         VLOG(2, "  model_id=%d", model_id);
 
@@ -412,7 +575,18 @@ int cmd_model_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "model_rev: unknown action '%s'", action ? action : "(null)");
-    return action_err("model-rev", action, model_rev_actions, REV_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, model_revision_actions, REV_ACTIONS);
+
+        VLOG(1, "model_revision: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db model_revision help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
