@@ -1,3 +1,4 @@
+/* ── skill_revision.c ───────────────────────────────────────────────── */
 #include "commands.h"
 #include "argparse.h"
 #include "cli_util.h"
@@ -27,6 +28,134 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
             fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
         }                                                                \
     } while (0)
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db skill_revision --help
+ */
+void skill_rev_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db skill_revision <action> [options]\n"
+"\n"
+"Actions:\n"
+"  get         Fetch a skill revision by id\n"
+"  get-latest  Fetch the most recent revision for a skill\n"
+"  list        List revisions for a skill\n"
+"  count       Count revisions for a skill\n"
+"  help        Show this help\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single skill revision by its primary key.\n"
+"\n"
+"    actagamma_db skill_revision get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== get-latest <skill_id> ===========================================\n"
+"  Fetch the most recent revision for a given skill.\n"
+"\n"
+"    actagamma_db skill_revision get-latest 7\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== list <skill_id> ================================================\n"
+"  List all revisions belonging to a skill.\n"
+"\n"
+"    actagamma_db skill_revision list 7\n"
+"    actagamma_db skill_revision list 7 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count <skill_id> ===============================================\n"
+"  Count revisions for a skill.\n"
+"\n"
+"    actagamma_db skill_revision count 7\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (get / get-latest)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_sr_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single skill revision by its primary key.\n"
+"\n"
+"    actagamma_db skill_revision get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_sr_latest(FILE *f)
+{
+    fputs(
+"== get-latest <skill_id> ===========================================\n"
+"  Fetch the most recent revision for a given skill.\n"
+"\n"
+"    actagamma_db skill_revision get-latest 7\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_sr_list(FILE *f)
+{
+    fputs(
+"== list <skill_id> ================================================\n"
+"  List all revisions belonging to a skill.\n"
+"\n"
+"    actagamma_db skill_revision list 7\n"
+"    actagamma_db skill_revision list 7 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_sr_count(FILE *f)
+{
+    fputs(
+"== count <skill_id> ===============================================\n"
+"  Count revisions for a skill.\n"
+"\n"
+"    actagamma_db skill_revision count 7\n", f);
+}
 
 /* ── helpers ───────────────────────────────────────────────────────── */
 
@@ -155,10 +284,11 @@ static void sr_table(FILE *f, const skill_revision_t *r, int header)
 /* ══════════════════════════════════════════════════════════════════ */
 
 static const action_def_t skill_rev_actions[] = {
-    { "get",    "fetch a skill revision by id"           },
-    { "latest", "fetch the latest revision for a skill"  },
-    { "list",   "list revisions for a skill"             },
-    { "count",  "count revisions for a skill"            }
+    { "get",         "fetch a skill revision by id"          },
+    { "get-latest",  "fetch the most recent revision for a skill" },
+    { "list",        "list revisions for a skill"            },
+    { "count",       "count revisions for a skill"           },
+    { "help",        "show this help"                        },
 };
 #define SR_ACTIONS (sizeof(skill_rev_actions) / sizeof(skill_rev_actions[0]))
 
@@ -167,23 +297,34 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
 
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        skill_rev_usage(stdout);
+        return EXIT_OK;
+    }
+
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "skill-rev get: ERROR missing <id>");
+            VLOG(1, "skill_revision get: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_sr_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "skill-rev get: invalid id=%s", id_str);
+            VLOG(1, "skill_revision get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_sr_get(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "skill-rev get: fetching id=%d", id);
+        VLOG(1, "skill_revision get: fetching id=%d", id);
 
         int err = 0;
         skill_revision_t *r = acta_db_skill_revision_get(db, id, &err);
@@ -217,23 +358,28 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         return EXIT_OK;
     }
 
-    /* ── latest <skill_id> ────────────────────────────────────────── */
-    if (strcmp(action, "latest") == 0) {
+    /* ── get-latest <skill_id> ────────────────────────────────────── */
+    if (strcmp(action, "get-latest") == 0) {
         const char *skill_str = cmd_args_next_positional(ga);
         if (!skill_str) {
-            VLOG(1, "skill-rev latest: ERROR missing <skill_id>");
+            VLOG(1, "skill_revision get-latest: ERROR missing <skill_id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <skill_id>\"}\n");
+            usage_sr_latest(stderr);
             return EXIT_INVALID;
         }
         int skill_id = atoi(skill_str);
         if (skill_id <= 0) {
-            VLOG(1, "skill-rev latest: invalid skill_id=%s", skill_str);
+            VLOG(1, "skill_revision get-latest: invalid skill_id=%s", skill_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
+            usage_sr_latest(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "skill-rev latest: skill_id=%d", skill_id);
+        VLOG(1, "skill_revision get-latest: skill_id=%d", skill_id);
 
         int err = 0;
         skill_revision_t *r = acta_db_skill_revision_get_latest(db, skill_id, &err);
@@ -271,15 +417,20 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
     if (strcmp(action, "list") == 0) {
         const char *skill_str = cmd_args_next_positional(ga);
         if (!skill_str) {
-            VLOG(1, "skill-rev list: ERROR missing <skill_id>");
+            VLOG(1, "skill_revision list: ERROR missing <skill_id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <skill_id>\"}\n");
+            usage_sr_list(stderr);
             return EXIT_INVALID;
         }
         int skill_id = atoi(skill_str);
         if (skill_id <= 0) {
-            VLOG(1, "skill-rev list: invalid skill_id=%s", skill_str);
+            VLOG(1, "skill_revision list: invalid skill_id=%s", skill_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
+            usage_sr_list(stderr);
             return EXIT_INVALID;
         }
 
@@ -294,6 +445,10 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_sr_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -303,12 +458,16 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_sr_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;   /* 0 = no limit (documented) */
         }
 
-        VLOG(1, "skill-rev list: skill_id=%d offset=%d limit=%d",
+        VLOG(1, "skill_revision list: skill_id=%d offset=%d limit=%d",
              skill_id, offset, limit);
 
         VLOG(2, "  full: skill_id=%d offset=%d limit=%d "
@@ -373,19 +532,24 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
     if (strcmp(action, "count") == 0) {
         const char *skill_str = cmd_args_next_positional(ga);
         if (!skill_str) {
-            VLOG(1, "skill-rev count: ERROR missing <skill_id>");
+            VLOG(1, "skill_revision count: ERROR missing <skill_id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <skill_id>\"}\n");
+            usage_sr_count(stderr);
             return EXIT_INVALID;
         }
         int skill_id = atoi(skill_str);
         if (skill_id <= 0) {
-            VLOG(1, "skill-rev count: invalid skill_id=%s", skill_str);
+            VLOG(1, "skill_revision count: invalid skill_id=%s", skill_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
+            usage_sr_count(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "skill-rev count: skill_id=%d", skill_id);
+        VLOG(1, "skill_revision count: skill_id=%d", skill_id);
 
         VLOG(2, "  skill_id=%d", skill_id);
 
@@ -400,7 +564,18 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "skill-rev: unknown action '%s'", action ? action : "(null)");
-    return action_err("skill-rev", action, skill_rev_actions, SR_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, skill_rev_actions, SR_ACTIONS);
+
+        VLOG(1, "skill_revision: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db skill_revision help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
