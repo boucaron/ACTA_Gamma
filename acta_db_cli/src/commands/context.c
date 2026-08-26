@@ -28,7 +28,120 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
         }                                                                \
     } while (0)
 
-/* ── helpers ───────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this to handle
+ *   acta context --help   without re-parsing the subcommand.          */
+void ctx_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db context <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create   Create a new context\n"
+"  get      Fetch a context by id\n"
+"  list     List contexts (filterable, paginated)\n"
+"  count    Count contexts (filterable)\n"
+"  help     Show this help\n"
+"\n"
+"== create =========================================================\n"
+"  actagamma_db context create --type <T> --content <C> --hash <H>\n"
+"                     [--metadata <M>]\n"
+"\n"
+"  Or pipe a JSON body from stdin:\n"
+"  echo '{\"type\":\"s\",\"content\":\"hi\",\"content_hash\":\"ab\"}' \\\n"
+"      | acta context create --json\n"
+"\n"
+"  Required (via flags or JSON key):\n"
+"    --type <string>          context type   (JSON key: \"type\")\n"
+"    --content <string>       payload        (JSON key: \"content\")\n"
+"    --hash <string>          content hash   (JSON key: \"content_hash\")\n"
+"  Optional:\n"
+"    --metadata <string>      extra data     (JSON key: \"metadata\")\n"
+"\n"
+"== get ============================================================\n"
+"  actagamma_db context get <positive-integer-id>\n"
+"  Example:\n"
+"    acta context get 42\n"
+"  Options:\n"
+"    --table          column output instead of JSON\n"
+"    --id-only        print just the numeric id\n"
+"    --fields <a,b>   restrict output fields (comma-separated)\n"
+"    --no-nulls       omit fields that are null\n"
+"\n"
+"== list ============================================================\n"
+"  actagamma_db context list [--type <T>] [--hash <H>]\n"
+"                 [--offset <int>] [--limit <int>] [--count]\n"
+"  Options:\n"
+"    --type <string>      filter by type\n"
+"    --hash <string>      filter by content hash\n"
+"    --offset <int>       skip first N results (default 0)\n"
+"    --limit <int>        max results (0 or omitted = unlimited)\n"
+"    --count              print total match count instead of items\n"
+"    --table              column output\n"
+"    --fields <a,b>       restrict output fields\n"
+"    --no-nulls           omit null fields\n"
+"\n"
+"== count ===========================================================\n"
+"  actagamma_db context count [--type <T>] [--hash <H>]\n"
+"  Prints a single integer: the number of matching contexts.\n"
+"\n"
+"Global options (apply to every action):\n"
+"  --json           read input from stdin as JSON\n"
+"  --fields <a,b>   comma-separated field filter for output\n"
+"  --no-nulls       suppress null-valued fields in JSON output\n"
+"  --id-only        print only the numeric id\n"
+"  --table          columnar output instead of JSON\n"
+"  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
+"\n", f);
+
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Fuzzy-matching helpers (for "did you mean …?")                    */
+/* ══════════════════════════════════════════════════════════════════ */
+
+static int edit_distance(const char *a, const char *b)
+{
+    int la = (int)strlen(a);
+    int lb = (int)strlen(b);
+    int dp[64][64];
+
+    for (int i = 0; i <= la; i++) dp[i][0] = i;
+    for (int j = 0; j <= lb; j++) dp[0][j] = j;
+
+    for (int i = 1; i <= la; i++) {
+        for (int j = 1; j <= lb; j++) {
+            int cost = (a[i-1] == b[j-1]) ? 0 : 1;
+            int best = dp[i-1][j] + 1;          /* deletion   */
+            if (dp[i][j-1] + 1 < best)           /* insertion  */
+                best = dp[i][j-1] + 1;
+            if (dp[i-1][j-1] + cost < best)      /* substitution*/
+                best = dp[i-1][j-1] + cost;
+            dp[i][j] = best;
+        }
+    }
+    return dp[la][lb];
+}
+
+static const char *closest_action(const char *input,
+                                  const action_def_t *actions, size_t n)
+{
+    if (!input || !*input) return NULL;
+    int best_dist = 4;              /* cap: anything ≥ 4 is too far  */
+    const char *best = NULL;
+    for (size_t i = 0; i < n; i++) {
+        int d = edit_distance(input, actions[i].name);
+        if (d > 0 && d < best_dist) { best_dist = d; best = actions[i].name; }
+    }
+    return best;
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  helpers                                                            */
+/* ══════════════════════════════════════════════════════════════════ */
 
 static void vlog_ctx_fields(const char *tag, const context_t *c)
 {
@@ -118,17 +231,24 @@ static const action_def_t context_actions[] = {
     { "create", "create a new context" },
     { "get",    "fetch a context by id" },
     { "list",   "list all contexts" },
-    { "count",  "count contexts" }
+    { "count",  "count contexts" },
+    { "help",   "show this help" }
 };
 #define CTX_ACTIONS (sizeof(context_actions) / sizeof(context_actions[0]))
 
 int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 db_t *db)
 {
-    vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
+    vlog_gopts = gopts;
+
+    /* ── help (subcommand-level; only the bare word "help") ─────── */
+    if (strcmp(action, "help") == 0) {
+        ctx_usage(stdout);
+        return EXIT_OK;
+    }
 
     /* ── create ───────────────────────────────────────────────────── */
-       if (strcmp(action, "create") == 0) {
+    if (strcmp(action, "create") == 0) {
         context_t ctx = {0};
         int json_owned = 0;
         int ret = EXIT_OK;
@@ -142,13 +262,15 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     "\"message\":\"failed to read JSON input\"}\n");
                 return EXIT_INVALID;
             }
-            VLOG(1, "context create: JSON input (%zu bytes)", strlen(blob));  // ← new
+            VLOG(1, "context create: JSON input (%zu bytes)", strlen(blob));
 
             if (json_parse_context(blob, &ctx) != 0) {
-                VLOG(1, "  JSON parse error");  // ← new
+                VLOG(1, "  JSON parse error");
                 fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"invalid JSON body\"}\n");
+                    "Error: invalid JSON body for 'create'.\n"
+                    "  Expected: {\"type\":\"...\",\"content\":\"...\","
+                    "\"content_hash\":\"...\",\"metadata\":\"...\"}\n"
+                    "  Run 'acta context help' for full usage.\n");
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -159,6 +281,18 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             ctx.content      = (char *)cmd_args_flag(ga, "content", 1);
             ctx.content_hash = (char *)cmd_args_flag(ga, "hash", 1);
             ctx.metadata     = (char *)cmd_args_flag(ga, "metadata", 1);
+
+            /* All four NULL → likely a typo in a flag name.  Nudge
+               before the per-field errors below. */
+            if (!ctx.type && !ctx.content &&
+                !ctx.content_hash && !ctx.metadata) {
+                fprintf(stderr,
+                    "Warning: no recognised flags for 'create'.\n"
+                    "  Did you misspell a flag?  Expected:\n"
+                    "    --type  --content  --hash  --metadata\n"
+                    "  Or use --json to read a JSON body from stdin.\n"
+                    "  Run 'acta context help' for full usage.\n");
+            }
         }
 
         /* ── VLOGs now read from ctx (covers both paths) ── */
@@ -178,29 +312,39 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  ctx=%p json_owned=%d", (const void *)&ctx, json_owned);
 
         /* ── required-field validation (uses ctx, not locals) ── */
-        if (!ctx.type) {
-            VLOG(1, "  ERROR: missing required field 'type'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: type\"}\n");
-            ret = EXIT_INVALID;
-            goto cleanup_create;
-        }
-        if (!ctx.content) {
-            VLOG(1, "  ERROR: missing required field 'content'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: content\"}\n");
-            ret = EXIT_INVALID;
-            goto cleanup_create;
-        }
-        if (!ctx.content_hash) {
-            VLOG(1, "  ERROR: missing required field 'hash'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: hash\"}\n");
-            ret = EXIT_INVALID;
-            goto cleanup_create;
+        {
+            struct { const char *field; const char *flag;
+                     const char *json_key; const char *example; } reqs[] = {
+                { "type",    "--type",    "type",
+                  "--type \"session\"" },
+                { "content", "--content", "content",
+                  "--content \"hello world\"" },
+                { "hash",    "--hash",    "content_hash",
+                  "--hash \"<sha256-hex>\"" },
+            };
+            for (size_t i = 0; i < sizeof reqs / sizeof reqs[0]; i++) {
+                const char *val = (i == 0) ? ctx.type
+                              : (i == 1)   ? ctx.content
+                                            : ctx.content_hash;
+                if (!val) {
+                    VLOG(1, "  ERROR: missing required field '%s'",
+                         reqs[i].field);
+                    fprintf(stderr,
+                        "Error: '%s' is required.\n"
+                        "  Via flag:\n"
+                        "    %s <value>\n"
+                        "  Via JSON (--json), key: \"%s\"\n"
+                        "  Example:\n"
+                        "    acta context create %s --content \"...\" --hash \"...\"\n"
+                        "  Run 'acta context help' for full usage.\n",
+                        reqs[i].field,
+                        reqs[i].flag,
+                        reqs[i].json_key,
+                        reqs[i].example);
+                    ret = EXIT_INVALID;
+                    goto cleanup_create;
+                }
+            }
         }
 
         vlog_ctx_fields("  pre-create", &ctx);
@@ -234,20 +378,26 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return ret;
     }
 
-
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
             VLOG(1, "context get: ERROR missing <id>");
             fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
+                "Error: 'get' requires a positional <id>.\n"
+                "  Usage: acta context get <positive-integer-id>\n"
+                "  Example: acta context get 42\n"
+                "  Run 'acta context help' for full usage.\n");
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "context get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "Error: id must be a positive integer, got '%s'.\n"
+                "  Usage: acta context get <positive-integer-id>\n"
+                "  Run 'acta context help' for full usage.\n",
+                id_str);
             return EXIT_INVALID;
         }
 
@@ -300,6 +450,11 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "Error: --offset must be a non-negative integer, got '%s'.\n"
+                    "  Usage: acta context list [--offset <int>] [--limit <int>] ...\n"
+                    "  Run 'acta context help' for full usage.\n",
+                    s_off);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -309,11 +464,15 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "Error: --limit must be a non-negative integer, got '%s'.\n"
+                    "  (Use 0 or omit --limit for unlimited.)\n"
+                    "  Run 'acta context help' for full usage.\n",
+                    s_lim);
                 return EXIT_INVALID;
             }
             limit = (int)v;   /* 0 = no limit (documented) */
         }
-
 
         context_query_t q = { .type = f_type, .hash = f_hash };
 
@@ -406,7 +565,18 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "context: unknown action '%s'", action ? action : "(null)");
-    return action_err("context", action, context_actions, CTX_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, context_actions, CTX_ACTIONS);
+
+        VLOG(1, "context: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'acta context help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
