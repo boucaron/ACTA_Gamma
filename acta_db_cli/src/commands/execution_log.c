@@ -119,6 +119,88 @@ void execution_log_usage(FILE *f)
 "\n", f);
 }
 
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_create(FILE *f)
+{
+    fputs(
+"== create ===========================================================\n"
+"  Create a new execution log entry.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db log create \\\n"
+"      --execution_id 1 --level info \\\n"
+"      --event \"stage_started\" \\\n"
+"      --message \"Compiling module X\" \\\n"
+"      --metadata '{\"module\":\"X\"}'\n"
+"        <- flag-based\n"
+"\n"
+"    cat entry.json | actagamma_db log create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --execution_id <int>   Owning execution (must be > 0)\n"
+"    --level <str>          debug | info | warn | error\n"
+"    --event <str>          Event name (e.g. \"stage_started\")\n"
+"\n"
+"  Optional fields:\n"
+"    --message <str>        Human-readable detail\n"
+"    --metadata <json>      Arbitrary JSON metadata\n"
+"\n"
+"  Options:\n"
+"    --json               Read the entry as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single log entry by its primary key.\n"
+"\n"
+"    actagamma_db log get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_list(FILE *f)
+{
+    fputs(
+"== list <execution_id> ==============================================\n"
+"  List log entries belonging to an execution.\n"
+"\n"
+"    actagamma_db log list 1\n"
+"    actagamma_db log list 1 --level warn --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --level <str>        Filter by level (debug|info|warn|error)\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_count(FILE *f)
+{
+    fputs(
+"== count <execution_id> =============================================\n"
+"  Count log entries for an execution.\n"
+"\n"
+"    actagamma_db log count 1\n"
+"    actagamma_db log count 1 --level error\n"
+"\n"
+"  Options:\n"
+"    --level <str>        Filter by level (debug|info|warn|error)\n", f);
+}
+
 /* ── helpers ───────────────────────────────────────────────────────── */
 
 static void vlog_el_fields(const char *tag, const execution_log_t *c)
@@ -255,6 +337,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_create(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "log create: JSON input (%zu bytes)", strlen(blob));
@@ -264,6 +347,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -309,6 +393,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: level\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
@@ -317,16 +402,18 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: event\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
-         if (!valid_level(el.level)) {
+        if (!valid_level(el.level)) {
             VLOG(1, "  ERROR: 'level' must be one of: debug, info, warn, error "
                     "(got '%s')",
                     el.level ? el.level : "(null)");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"level must be one of: debug, info, warn, error\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
@@ -335,6 +422,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: execution_id\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
@@ -384,11 +472,16 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "log get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
 
@@ -434,11 +527,16 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <execution_id>\"}\n");
+            usage_list(stderr);
             return EXIT_INVALID;
         }
         int execution_id = atoi(exec_id_str);
         if (execution_id <= 0) {
             VLOG(1, "log list: invalid execution_id=%s", exec_id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <execution_id>: must be a positive integer\"}\n");
+            usage_list(stderr);
             return EXIT_INVALID;
         }
 
@@ -454,6 +552,10 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -463,6 +565,10 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;   /* 0 = no limit (documented) */
@@ -541,11 +647,16 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <execution_id>\"}\n");
+            usage_count(stderr);
             return EXIT_INVALID;
         }
         int execution_id = atoi(exec_id_str);
         if (execution_id <= 0) {
             VLOG(1, "log count: invalid execution_id=%s", exec_id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <execution_id>: must be a positive integer\"}\n");
+            usage_count(stderr);
             return EXIT_INVALID;
         }
 
@@ -569,7 +680,20 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "execution_log: unknown action '%s'", action ? action : "(null)");
-    return action_err("execution_log", action, execution_log_actions, EL_ACTIONS);
+    
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, execution_log_actions, EL_ACTIONS);
+
+        VLOG(1, "db: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'acta db help' for full usage.\n");
+        return EXIT_INVALID;
+    }
+   
 }
