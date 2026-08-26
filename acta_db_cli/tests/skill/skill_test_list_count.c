@@ -23,8 +23,8 @@ static int do_count(stest_ctx_t *ctx, cmd_args_t *args, global_opts_t gopts)
 static void test_list_all_default(stest_ctx_t *ctx)
 {
     /* no flags → list_all → all 7 skills */
-    cmd_args_t *a = targs_new();
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -37,15 +37,15 @@ static void test_list_all_default(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, out, "\"id\":5");
     TEST_CONTAINS(ctx, out, "\"id\":6");
     TEST_CONTAINS(ctx, out, "\"id\":7");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_in_folder(stest_ctx_t *ctx)
 {
     /* --folder_id 2 → skills 1,4,6,7 */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "folder_id", "2");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "2", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -57,15 +57,15 @@ static void test_list_in_folder(stest_ctx_t *ctx)
     /* should NOT contain root skills */
     TEST(ctx, !strstr(out, "\"id\":2"));
     TEST(ctx, !strstr(out, "\"id\":5"));
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_folder_1(stest_ctx_t *ctx)
 {
     /* --folder_id 1 → only skill 3 */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "folder_id", "1");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "1", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -73,44 +73,44 @@ static void test_list_folder_1(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, out, "\"id\":3");
     TEST(ctx, !strstr(out, "\"id\":1"));
     TEST(ctx, !strstr(out, "\"id\":2"));
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_all_flag(stest_ctx_t *ctx)
 {
     /* --all → same as default (list_all) */
-    cmd_args_t *a = targs_new();
-    targs_flag_bool(a, "all");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag_bool(a, "all", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":7");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_folder_with_all_overrides(stest_ctx_t *ctx)
 {
     /* --folder_id 2 --all → all flag wins → list_all */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "folder_id", "2");
-    targs_flag_bool(a, "all");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "2", &g);
+    targs_flag_bool(a, "all", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     /* should include root skills too */
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":2");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_pagination(stest_ctx_t *ctx)
 {
     /* offset=2 limit=3 → skip first 2, take next 3 */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "offset", "2");
-    targs_flag(a, "limit", "3");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "offset", "2", &g);
+    targs_flag(a, "limit", "3", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -119,59 +119,59 @@ static void test_list_pagination(stest_ctx_t *ctx)
     int count = 0;
     for (const char *p = out; (p = strstr(p, "\"id\":")) != NULL; p++) count++;
     TEST_EQ(ctx, count, 3);
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_offset_beyond(stest_ctx_t *ctx)
 {
     /* offset=100 → empty */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "offset", "100");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "offset", "100", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "[]\n");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_invalid_offset(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "offset", "abc");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "offset", "abc", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_INVALID);
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_negative_offset(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "offset", "-1");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "offset", "-1", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_INVALID);
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_invalid_limit(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "limit", "xyz");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "limit", "xyz", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_INVALID);
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_table_output(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
     global_opts_t g = gopts_table();
+    cmd_args_t *a = targs_new();
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -180,13 +180,13 @@ static void test_list_table_output(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, out, "FOLDER_ID");
     TEST_CONTAINS(ctx, out, "NAME");
     TEST_CONTAINS(ctx, out, "PROMPT_TEMPLATE");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_fields_filter(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
     global_opts_t g = gopts_fields("id,name");
+    cmd_args_t *a = targs_new();
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -194,7 +194,7 @@ static void test_list_fields_filter(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, out, "\"id\"");
     TEST_CONTAINS(ctx, out, "\"name\"");
     TEST(ctx, !strstr(out, "prompt_template"));
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_list_empty_folder(stest_ctx_t *ctx)
@@ -203,20 +203,15 @@ static void test_list_empty_folder(stest_ctx_t *ctx)
     int fid = stest_seed_folder(ctx, "emptyTestFolder", 0);
     if (fid <= 0) return;  /* skip if folder creation failed */
 
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "folder_id", (char[]){'0','0','+','\0'}[0] ? "0" : "0");
-    /* ADAPT: set folder_id to fid dynamically */
-    global_opts_t g = gopts_default();
     /* For now just verify the empty-result path with offset trick: */
-    targs_free(a);
-
-    cmd_args_t *a2 = targs_new();
-    targs_flag(a2, "offset", "9999");
     global_opts_t g2 = gopts_default();
+    cmd_args_t *a2 = targs_new();
+    targs_flag(a2, "offset", "9999", &g2);
+
     int rc = do_list(ctx, a2, g2);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "[]\n");
-    targs_free(a2);
+    targs_free(a2, &g2);
 }
 
 /* ── count tests ──────────────────────────────────────────────────── */
@@ -224,59 +219,59 @@ static void test_list_empty_folder(stest_ctx_t *ctx)
 static void test_count_all(stest_ctx_t *ctx)
 {
     /* default: count all → 7 */
-    cmd_args_t *a = targs_new();
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
 
     int rc = do_count(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "7\n");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_count_in_folder(stest_ctx_t *ctx)
 {
     /* --folder_id 2 → 4 skills (ids 1,4,6,7) */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "folder_id", "2");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "2", &g);
 
     int rc = do_count(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "4\n");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_count_folder_1(stest_ctx_t *ctx)
 {
     /* --folder_id 1 → 1 skill (id 3) */
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "folder_id", "1");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "1", &g);
 
     int rc = do_count(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "1\n");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_count_all_flag(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
-    targs_flag_bool(a, "all");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag_bool(a, "all", &g);
 
     int rc = do_count(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "7\n");
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 static void test_count_list_flag(stest_ctx_t *ctx)
 {
     /* --count on list action → returns count instead of rows */
-    cmd_args_t *a = targs_new();
-    targs_flag_bool(a, "count");
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag_bool(a, "count", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -284,7 +279,7 @@ static void test_count_list_flag(stest_ctx_t *ctx)
     const char *out = stest_stdout(ctx);
     TEST(ctx, out[0] >= '0' && out[0] <= '9');
     TEST(ctx, !strstr(out, "["));
-    targs_free(a);
+    targs_free(a, &g);
 }
 
 /* ── runner ───────────────────────────────────────────────────────── */

@@ -25,6 +25,7 @@ typedef struct {
     char    db_path[512];       /* temp copy of acta_test_ref.db */
     db_t  *db;
     FILE  *out;                 /* redirected stdout */
+    int saved_stdout; 
     char  *out_buf;             /* heap buffer holding captured stdout */
     size_t out_len;             /* bytes captured */
     size_t out_cap;
@@ -39,7 +40,7 @@ void stest_teardown(stest_ctx_t *ctx);
 /* stdout capture */
 void stest_capture_begin(stest_ctx_t *ctx);
 void stest_capture_end(stest_ctx_t *ctx);
-const char *stest_stdout(const stest_ctx_t *ctx);
+const char *stest_stdout(stest_ctx_t *ctx);
 
 /* assert helpers (non-fatal, count failures) */
 void stest_assert(stest_ctx_t *ctx, int cond, const char *file, int line, const char *fmt, ...);
@@ -49,18 +50,18 @@ void stest_assert_null(stest_ctx_t *ctx, const void *p, const char *file, int li
 void stest_assert_not_null(stest_ctx_t *ctx, const void *p, const char *file, int line, const char *what);
 void stest_assert_contains(stest_ctx_t *ctx, const char *haystack, const char *needle, const char *file, int line, const char *what);
 
+#define TARGS_MAX_TOK  64
 /* ── test-args builder (wraps cmd_args_t construction) ─────────────
  *
  *  ADAPT: the 4 functions below must construct a cmd_args_t that is
  *  compatible with cmd_args_flag() and cmd_args_next_positional()
  *  as used in skill.c.  Replace the body with your actual API.
  */
-
 cmd_args_t *targs_new(void);
-void targs_flag(cmd_args_t *a, const char *name, const char *value);
-void targs_flag_bool(cmd_args_t *a, const char *name);
-void targs_pos(cmd_args_t *a, const char *value);
-void targs_free(cmd_args_t *a);
+void targs_flag(cmd_args_t *a, const char *name, const char *value, global_opts_t *opts);
+void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts);
+void targs_pos(cmd_args_t *a, const char *value, global_opts_t *opts);
+void targs_free(cmd_args_t *a, global_opts_t *opts);
 
 /* ── global_opts convenience ──────────────────────────────────────── */
 global_opts_t gopts_default(void);

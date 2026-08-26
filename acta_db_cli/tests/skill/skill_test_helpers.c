@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <string.h>
+#include <stdlib.h>
 
 /* ══════════════════════════════════════════════════════════════════
  *  ADAPT: cmd_args_t builder
@@ -31,7 +33,7 @@ typedef struct {
     int        owned;
 } targs_internal_t;
 
-cmd_args_t *targs_new(void)
+cmd_args_t *targs_new()
 {
     targs_internal_t *t = (targs_internal_t *)calloc(1, sizeof(targs_internal_t));
     if (!t) return NULL;
@@ -41,10 +43,14 @@ cmd_args_t *targs_new(void)
      * cmd_args_flag / cmd_args_next_positional" state.
      * e.g. cmd_args_init(&t->raw);  or  t->raw = (cmd_args_t){0};
      */
+
+    t->raw.argc = 0;
+    t->raw.argv = malloc(sizeof(char *) * TARGS_MAX_TOK);
+
     return &t->raw;
 }
 
-void targs_flag(cmd_args_t *a, const char *name, const char *value)
+void targs_flag(cmd_args_t *a, const char *name, const char *value, global_opts_t *opts)
 {
     targs_internal_t *t = (targs_internal_t *)a;  /* ADAPT: recover internal ptr */
     if (t->n_flags >= MAX_FLAGS) return;
@@ -53,9 +59,22 @@ void targs_flag(cmd_args_t *a, const char *name, const char *value)
     t->has_value[t->n_flags] = 1;
     t->n_flags++;
     /* ADAPT: store into cmd_args_t internal representation */
+
+
+    char buf[64];
+    snprintf(buf, sizeof buf, "--%s", name);
+    opts->argv[opts->argc++] = strdup(buf);
+    if (value)
+        opts->argv[opts->argc++] = strdup(value);    
+    a->argv[a->argc] = strdup(buf);
+    a->argc++;
+    a->argv[a->argc] = strdup(value);
+    a->argc++;
+
+
 }
 
-void targs_flag_bool(cmd_args_t *a, const char *name)
+void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts)
 {
     targs_internal_t *t = (targs_internal_t *)a;  /* ADAPT */
     if (t->n_flags >= MAX_FLAGS) return;
@@ -64,21 +83,34 @@ void targs_flag_bool(cmd_args_t *a, const char *name)
     t->has_value[t->n_flags] = 0;
     t->n_flags++;
     /* ADAPT */
+
+    char buf[64];
+    snprintf(buf, sizeof buf, "--%s", name);
+    opts->argv[opts->argc++] = strdup(buf);
+   //  opts->argv[opts->argc++] = strdup(value);
+
 }
 
-void targs_pos(cmd_args_t *a, const char *value)
+void targs_pos(cmd_args_t *a, const char *value, global_opts_t *opts)
 {
     targs_internal_t *t = (targs_internal_t *)a;  /* ADAPT */
     if (t->n_pos >= MAX_POS) return;
     snprintf(t->pos[t->n_pos], MAX_LEN, "%s", value);
     t->n_pos++;
     /* ADAPT */
+
+    opts->argv[opts->argc++] = strdup(value);
+
+    a->argv[a->argc] = strdup(value);
+    a->argc++;
 }
 
-void targs_free(cmd_args_t *a)
+void targs_free(cmd_args_t *a, global_opts_t *opts)
 {
     targs_internal_t *t = (targs_internal_t *)a;  /* ADAPT */
     if (t && t->owned) free(t);
+
+    // memleak in opts... not a big deal
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -94,6 +126,8 @@ global_opts_t gopts_default(void)
     g.table      = 0;
     g.id_only    = 0;
     g.json_input = 0;
+    g.argc = 0;
+    g.argv = malloc(sizeof(char *) * TARGS_MAX_TOK);
     return g;
 }
 
@@ -220,40 +254,63 @@ void stest_teardown(stest_ctx_t *ctx)
 void stest_capture_begin(stest_ctx_t *ctx)
 {
     fflush(stdout);
-    /* open a temp file to hold the captured output */
-    char tmp[256];
-    snprintf(tmp, sizeof tmp, "./tmp/acta_test_out_%d_%d", (int)getpid(), ctx->assertions);
-    ctx->out = fopen(tmp, "w");
-    if (!ctx->out) ctx->out = fopen(tmp, "w+");  /* retry */
-    ctx->out_len = 0;
+
+    int p[2];
+#ifdef _WIN32
+    _pipe(p, 4096, _O_BINARY); // MINGW
+#else
+    pipe(p);
+#endif
+
+    ctx->saved_stdout = dup(STDOUT_FILENO);
+    dup2(p[1], STDOUT_FILENO);   /* ← the redirect */
+    close(p[1]);                 /* only fd 1 holds the write end now */
+
+    ctx->out = fdopen(p[0], "rb");  /* read end, for the slurp below */
+
+    free(ctx->out_buf);
+    ctx->out_buf  = NULL;
+    ctx->out_len  = 0;
+    ctx->out_cap  = 0;
 }
 
 void stest_capture_end(stest_ctx_t *ctx)
 {
-    fflush(ctx->out);
-    fclose(ctx->out);
+    if (ctx->saved_stdout < 0) return;
 
-    /* re-open the temp file for reading, then slurp */
-    /* (simpler: use the same path to read back) */
-    /* For brevity, use a pipe-based approach or just:
-     *   - write to a known path, then fread it.
-     *   Alternatively, use open_memstream on POSIX.
-     *
-     *  Here I'll use the simpler "write to temp, read back" pattern:
-     */
-    /* ADAPT: if you prefer open_memstream / pipe, swap here. */
+    fflush(stdout);                    /* drain stdio → pipe */
+    dup2(ctx->saved_stdout, STDOUT_FILENO);  /* restore   */
+    close(ctx->saved_stdout);
+    ctx->saved_stdout = -1;
 
-    /* Restore stdout to the real fd 1 */
-    fflush(stdout);
+    /* slurp */
+    free(ctx->out_buf);
+    ctx->out_buf  = NULL;
+    ctx->out_len  = 0;
+    ctx->out_cap  = 0;
 
-    ctx->out_buf = NULL;
-    ctx->out_len = 0;
+    if (ctx->out) {
+        for (;;) {
+            if (ctx->out_len >= ctx->out_cap) {
+                ctx->out_cap = ctx->out_cap ? ctx->out_cap * 2 : 4096;
+                ctx->out_buf = realloc(ctx->out_buf, ctx->out_cap);
+                if (!ctx->out_buf) break;
+            }
+            size_t n = fread(ctx->out_buf + ctx->out_len, 1,
+                             ctx->out_cap - ctx->out_len, ctx->out);
+            if (n == 0) break;
+            ctx->out_len += n;
+        }
+        ctx->out_buf[ctx->out_len] = '\0';
+        fclose(ctx->out);
+        ctx->out = NULL;
+    }
 }
 
-const char *stest_stdout(const stest_ctx_t *ctx)
+
+const char *stest_stdout(stest_ctx_t *ctx)
 {
-    if (!ctx->out_buf) return "";
-    return ctx->out_buf;
+    return ctx->out_buf ? ctx->out_buf : "";
 }
 
 /* ══════════════════════════════════════════════════════════════════

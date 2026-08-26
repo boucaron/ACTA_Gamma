@@ -60,15 +60,15 @@ static void test_empty_action(stest_ctx_t *ctx)
 static void test_verbose_does_not_corrupt_stdout(stest_ctx_t *ctx)
 {
     /* run get with verbose=3 → stdout should still be clean JSON */
-    cmd_args_t *a = targs_new();
-    targs_pos(a, "1");
     global_opts_t g = gopts_default();
     g.verbose = 3;
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "1", &g);
 
     stest_capture_begin(ctx);
     int rc = cmd_skill("get", a, &g, ctx->db);
     stest_capture_end(ctx);
-    targs_free(a);
+    targs_free(a, &g);
 
     TEST_EQ(ctx, rc, EXIT_OK);
     const char *out = stest_stdout(ctx);
@@ -89,28 +89,28 @@ static void test_json_error_envelope_shape(stest_ctx_t *ctx)
      *
      * For now: just verify exit code is EXIT_INVALID for a known-bad input.
      */
-    cmd_args_t *a = targs_new();
-    targs_pos(a, "0");  /* invalid id */
     global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "0", &g);  /* invalid id */
 
     stest_capture_begin(ctx);
     int rc = cmd_skill("get", a, &g, ctx->db);
     stest_capture_end(ctx);
-    targs_free(a);
+    targs_free(a, &g);
 
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
 static void test_id_only_get(stest_ctx_t *ctx)
 {
-    cmd_args_t *a = targs_new();
-    targs_pos(a, "3");
     global_opts_t g = gopts_id_only();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "3", &g);
 
     stest_capture_begin(ctx);
     int rc = cmd_skill("get", a, &g, ctx->db);
     stest_capture_end(ctx);
-    targs_free(a);
+    targs_free(a, &g);
 
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_STREQ(ctx, stest_stdout(ctx), "3\n");
