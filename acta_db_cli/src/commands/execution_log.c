@@ -28,6 +28,97 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
         }                                                                \
     } while (0)
 
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db log --help                                          */
+void execution_log_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db log <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create    Create a new log entry\n"
+"  get       Fetch a log entry by id\n"
+"  list      List log entries for an execution\n"
+"  count     Count log entries for an execution\n"
+"  help      Show this help\n"
+"\n"
+"== create ===========================================================\n"
+"  Create a new execution log entry.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db log create \\\n"
+"      --execution_id 1 --level info \\\n"
+"      --event \"stage_started\" \\\n"
+"      --message \"Compiling module X\" \\\n"
+"      --metadata '{\"module\":\"X\"}'\n"
+"        <- flag-based\n"
+"\n"
+"    cat entry.json | actagamma_db log create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --execution_id <int>   Owning execution (must be > 0)\n"
+"    --level <str>          debug | info | warn | error\n"
+"    --event <str>          Event name (e.g. \"stage_started\")\n"
+"\n"
+"  Optional fields:\n"
+"    --message <str>        Human-readable detail\n"
+"    --metadata <json>      Arbitrary JSON metadata\n"
+"\n"
+"  Options:\n"
+"    --json               Read the entry as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single log entry by its primary key.\n"
+"\n"
+"    actagamma_db log get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== list <execution_id> ==============================================\n"
+"  List log entries belonging to an execution.\n"
+"\n"
+"    actagamma_db log list 1\n"
+"    actagamma_db log list 1 --level warn --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --level <str>        Filter by level (debug|info|warn|error)\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count <execution_id> =============================================\n"
+"  Count log entries for an execution.\n"
+"\n"
+"    actagamma_db log count 1\n"
+"    actagamma_db log count 1 --level error\n"
+"\n"
+"  Options:\n"
+"    --level <str>        Filter by level (debug|info|warn|error)\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (create / get)\n"
+"\n", f);
+}
+
 /* ── helpers ───────────────────────────────────────────────────────── */
 
 static void vlog_el_fields(const char *tag, const execution_log_t *c)
@@ -126,7 +217,8 @@ static const action_def_t execution_log_actions[] = {
     { "create", "create a new log entry"     },
     { "get",    "fetch a log entry by id"    },
     { "list",   "list log entries"           },
-    { "count",  "count log entries"          }
+    { "count",  "count log entries"          },
+    { "help",   "show this help"             },
 };
 #define EL_ACTIONS (sizeof(execution_log_actions) / sizeof(execution_log_actions[0]))
 
@@ -144,6 +236,12 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
                       db_t *db)
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
+
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        execution_log_usage(stdout);
+        return EXIT_OK;
+    }
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
