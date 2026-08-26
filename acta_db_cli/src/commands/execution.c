@@ -28,6 +28,288 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
         }                                                                \
     } while (0)
 
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db exec --help                                          */
+void exec_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db exec <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create    Create a new execution record\n"
+"  get       Fetch an execution by id\n"
+"  start     Mark an execution as started\n"
+"  cancel    Cancel a running execution\n"
+"  complete  Mark an execution as completed\n"
+"  fail      Mark an execution as failed\n"
+"  set-raw   Attach raw model output to an execution\n"
+"  list      List executions\n"
+"  count     Count executions\n"
+"  help      Show this help\n"
+"\n"
+"== create ===========================================================\n"
+"  Create a new execution record.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db exec create \\\n"
+"      --prompt \"What is the capital of France?\" \\\n"
+"      --context_id 1 --skill_revision_id 3 \\\n"
+"      --model_revision_id 2 --status pending\n"
+"        <- flag-based\n"
+"\n"
+"    cat exec.json | actagamma_db exec create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --prompt <str>               The prompt / task description\n"
+"    --context_id <int>           Owning context (must be > 0)\n"
+"    --skill_revision_id <int>    Skill revision (must be > 0)\n"
+"    --model_revision_id <int>    Model revision (must be > 0)\n"
+"\n"
+"  Optional fields:\n"
+"    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
+"    --status <str>               pending | running | completed | failed | cancelled\n"
+"\n"
+"  Options:\n"
+"    --json               Read the record as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single execution by its primary key.\n"
+"\n"
+"    actagamma_db exec get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== start <id> ======================================================\n"
+"  Transition an execution to 'running'.\n"
+"\n"
+"    actagamma_db exec start 42\n"
+"\n"
+"== cancel <id> ====================================================\n"
+"  Transition an execution to 'cancelled'.\n"
+"\n"
+"    actagamma_db exec cancel 42\n"
+"\n"
+"== complete <id> ==================================================\n"
+"  Transition an execution to 'completed'.\n"
+"\n"
+"    actagamma_db exec complete 42 --result \"answer text\"\n"
+"\n"
+"  Options:\n"
+"    --result <str>       Final result / answer text\n"
+"\n"
+"== fail <id> ======================================================\n"
+"  Transition an execution to 'failed'.\n"
+"\n"
+"    actagamma_db exec fail 42 --error \"timeout after 30s\"\n"
+"\n"
+"  Options:\n"
+"    --error <str>        Error description\n"
+"\n"
+"== set-raw <id> ====================================================\n"
+"  Attach the raw model response to an execution.\n"
+"\n"
+"    actagamma_db exec set-raw 42 --raw '<full raw output>'\n"
+"\n"
+"  Options:\n"
+"    --raw <str>          Raw response text (required)\n"
+"\n"
+"== list ============================================================\n"
+"  List executions with optional filters.\n"
+"\n"
+"    actagamma_db exec list\n"
+"    actagamma_db exec list --status running --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --status <str>             Filter by status\n"
+"    --context-id <int>         Filter by context\n"
+"    --skill-revision-id <int>  Filter by skill revision\n"
+"    --model-revision-id <int>  Filter by model revision\n"
+"    --parent-execution-id <int> Filter by parent execution\n"
+"    --offset <n>               Skip first N rows (default 0)\n"
+"    --limit <n>                Max rows to return (default 0 = unlimited)\n"
+"    --count                    Return only the row count (no rows)\n"
+"    --table                    Columnar output instead of JSON\n"
+"    --fields <csv>             Comma-separated field filter\n"
+"    --no_nulls                 Omit null-valued fields from JSON\n"
+"\n"
+"== count ===========================================================\n"
+"  Count executions matching optional filters.\n"
+"\n"
+"    actagamma_db exec count\n"
+"    actagamma_db exec count --status failed --context-id 7\n"
+"\n"
+"  Options:\n"
+"    --status <str>             Filter by status\n"
+"    --context-id <int>         Filter by context\n"
+"    --skill-revision-id <int>  Filter by skill revision\n"
+"    --model-revision-id <int>  Filter by model revision\n"
+"    --parent-execution-id <int> Filter by parent execution\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (create / get)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_create(FILE *f)
+{
+    fputs(
+"== create ===========================================================\n"
+"  Create a new execution record.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db exec create \\\n"
+"      --prompt \"What is the capital of France?\" \\\n"
+"      --context_id 1 --skill_revision_id 3 \\\n"
+"      --model_revision_id 2 --status pending\n"
+"        <- flag-based\n"
+"\n"
+"    cat exec.json | actagamma_db exec create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --prompt <str>               The prompt / task description\n"
+"    --context_id <int>           Owning context (must be > 0)\n"
+"    --skill_revision_id <int>    Skill revision (must be > 0)\n"
+"    --model_revision_id <int>    Model revision (must be > 0)\n"
+"\n"
+"  Optional fields:\n"
+"    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
+"    --status <str>               pending | running | completed | failed | cancelled\n"
+"\n"
+"  Options:\n"
+"    --json               Read the record as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single execution by its primary key.\n"
+"\n"
+"    actagamma_db exec get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_start(FILE *f)
+{
+    fputs(
+"== start <id> ======================================================\n"
+"  Transition an execution to 'running'.\n"
+"\n"
+"    actagamma_db exec start 42\n", f);
+}
+
+static void usage_cancel(FILE *f)
+{
+    fputs(
+"== cancel <id> ====================================================\n"
+"  Transition an execution to 'cancelled'.\n"
+"\n"
+"    actagamma_db exec cancel 42\n", f);
+}
+
+static void usage_complete(FILE *f)
+{
+    fputs(
+"== complete <id> ==================================================\n"
+"  Transition an execution to 'completed'.\n"
+"\n"
+"    actagamma_db exec complete 42 --result \"answer text\"\n"
+"\n"
+"  Options:\n"
+"    --result <str>       Final result / answer text\n", f);
+}
+
+static void usage_fail(FILE *f)
+{
+    fputs(
+"== fail <id> ======================================================\n"
+"  Transition an execution to 'failed'.\n"
+"\n"
+"    actagamma_db exec fail 42 --error \"timeout after 30s\"\n"
+"\n"
+"  Options:\n"
+"    --error <str>        Error description\n", f);
+}
+
+static void usage_set_raw(FILE *f)
+{
+    fputs(
+"== set-raw <id> ====================================================\n"
+"  Attach the raw model response to an execution.\n"
+"\n"
+"    actagamma_db exec set-raw 42 --raw '<full raw output>'\n"
+"\n"
+"  Options:\n"
+"    --raw <str>          Raw response text (required)\n", f);
+}
+
+static void usage_list(FILE *f)
+{
+    fputs(
+"== list ============================================================\n"
+"  List executions with optional filters.\n"
+"\n"
+"    actagamma_db exec list\n"
+"    actagamma_db exec list --status running --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --status <str>             Filter by status\n"
+"    --context-id <int>         Filter by context\n"
+"    --skill-revision-id <int>  Filter by skill revision\n"
+"    --model-revision-id <int>  Filter by model revision\n"
+"    --parent-execution-id <int> Filter by parent execution\n"
+"    --offset <n>               Skip first N rows (default 0)\n"
+"    --limit <n>                Max rows to return (default 0 = unlimited)\n"
+"    --count                    Return only the row count (no rows)\n"
+"    --table                    Columnar output instead of JSON\n"
+"    --fields <csv>             Comma-separated field filter\n"
+"    --no_nulls                 Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_count(FILE *f)
+{
+    fputs(
+"== count ===========================================================\n"
+"  Count executions matching optional filters.\n"
+"\n"
+"    actagamma_db exec count\n"
+"    actagamma_db exec count --status failed --context-id 7\n"
+"\n"
+"  Options:\n"
+"    --status <str>             Filter by status\n"
+"    --context-id <int>         Filter by context\n"
+"    --skill-revision-id <int>  Filter by skill revision\n"
+"    --model-revision-id <int>  Filter by model revision\n"
+"    --parent-execution-id <int> Filter by parent execution\n", f);
+}
+
 /* ── helpers ───────────────────────────────────────────────────────── */
 
 static void vlog_exec_fields(const char *tag, const execution_t *e)
@@ -154,15 +436,16 @@ static void exec_table(FILE *f, const execution_t *e, int header)
 /* ══════════════════════════════════════════════════════════════════ */
 
 static const action_def_t exec_actions[] = {
-    { "create",   "create a new exec record"    },
-    { "get",      "fetch an exec by id"         },
-    { "start",    "mark exec as started"        },
-    { "cancel",   "cancel a running exec"       },
-    { "complete", "mark exec as completed"      },
-    { "fail",     "mark exec as failed"         },
-    { "set-raw",  "attach raw output to an exec"},
-    { "list",     "list execs"                  },
-    { "count",    "count execs"                 },
+    { "create",   "create a new exec record"      },
+    { "get",      "fetch an exec by id"           },
+    { "start",    "mark exec as started"          },
+    { "cancel",   "cancel a running exec"         },
+    { "complete", "mark exec as completed"        },
+    { "fail",     "mark exec as failed"           },
+    { "set-raw",  "attach raw output to an exec"  },
+    { "list",     "list execs"                    },
+    { "count",    "count execs"                   },
+    { "help",     "show this help"                },
 };
 #define EXEC_ACTIONS (sizeof(exec_actions) / sizeof(exec_actions[0]))
 
@@ -184,8 +467,13 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
 
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        exec_usage(stdout);
+        return EXIT_OK;
+    }
+
     /* ── create ───────────────────────────────────────────────────── */
-         /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
         execution_t exec = {0};
         int json_owned = 0;
@@ -197,6 +485,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_create(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "exec create: JSON input (%zu bytes)", strlen(blob));
@@ -206,6 +495,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -254,6 +544,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: prompt\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
@@ -262,6 +553,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: context_id\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
@@ -270,6 +562,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: skill_revision_id\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
@@ -278,6 +571,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: model_revision_id\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
@@ -291,6 +585,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"status must be one of: pending, running, "
                 "completed, failed, cancelled\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
@@ -337,11 +632,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "exec get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
 
@@ -387,11 +687,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_start(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "exec start: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_start(stderr);
             return EXIT_INVALID;
         }
 
@@ -416,11 +721,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_cancel(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "exec cancel: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_cancel(stderr);
             return EXIT_INVALID;
         }
 
@@ -445,11 +755,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_complete(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "exec complete: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_complete(stderr);
             return EXIT_INVALID;
         }
 
@@ -478,11 +793,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_fail(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "exec fail: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_fail(stderr);
             return EXIT_INVALID;
         }
 
@@ -511,11 +831,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_set_raw(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "exec set-raw: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_set_raw(stderr);
             return EXIT_INVALID;
         }
 
@@ -525,6 +850,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required flag: --raw\"}\n");
+            usage_set_raw(stderr);
             return EXIT_INVALID;
         }
 
@@ -560,6 +886,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -569,6 +899,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;   /* 0 = no limit (documented) */
@@ -689,7 +1023,18 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "exec: unknown action '%s'", action ? action : "(null)");
-    return action_err("exec", action, exec_actions, EXEC_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, exec_actions, EXEC_ACTIONS);
+
+        VLOG(1, "exec: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db exec help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
