@@ -28,6 +28,243 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
         }                                                                \
     } while (0)
 
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db skill_folder --help                                     */
+void skill_folder_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db skill_folder <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create    Create a new skill_folder\n"
+"  get       Fetch a skill_folder by id\n"
+"  list      List skill_folders (all or by parent)\n"
+"  count     Count skill_folders\n"
+"  rename    Rename a skill_folder\n"
+"  move      Move a skill_folder to a new parent\n"
+"  delete    Soft-delete a skill_folder\n"
+"  restore   Restore a soft-deleted skill_folder\n"
+"  help      Show this help\n"
+"\n"
+"== create ===========================================================\n"
+"  Create a new skill_folder.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db skill_folder create \\\n"
+"      --name \"My Folder\" \\\n"
+"      --parent_id 1\n"
+"        <- flag-based\n"
+"\n"
+"    cat entry.json | actagamma_db skill_folder create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>           Skill_folder name (must be non-empty)\n"
+"\n"
+"  Optional fields:\n"
+"    --parent_id <int>      Parent skill_folder id (0 = root, default 0)\n"
+"\n"
+"  Options:\n"
+"    --json               Read the entry as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single skill_folder by its primary key.\n"
+"\n"
+"    actagamma_db skill_folder get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== list [parent_id | all] ==========================================\n"
+"  List skill_folders.  Omit the positional (or pass 'all') for all\n"
+"  skill_folders; pass a numeric id to list children of that\n"
+"  skill_folder.\n"
+"\n"
+"    actagamma_db skill_folder list\n"
+"    actagamma_db skill_folder list 1\n"
+"    actagamma_db skill_folder list 1 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count [parent_id | all] =========================================\n"
+"  Count skill_folders (all, or children of a given parent).\n"
+"\n"
+"    actagamma_db skill_folder count\n"
+"    actagamma_db skill_folder count 1\n"
+"\n"
+"== rename <id> --name <new> ========================================\n"
+"  Rename a skill_folder.\n"
+"\n"
+"    actagamma_db skill_folder rename 42 --name \"New Name\"\n"
+"\n"
+"  Required flags:\n"
+"    --name <str>         New skill_folder name\n"
+"\n"
+"== move <id> [--parent_id <pid>] ===================================\n"
+"  Move a skill_folder under a different parent.\n"
+"  Omit --parent_id (or pass 0) to move to root.\n"
+"\n"
+"    actagamma_db skill_folder move 42 --parent_id 7\n"
+"    actagamma_db skill_folder move 42            # → root\n"
+"\n"
+"  Options:\n"
+"    --parent_id <int>    New parent skill_folder id (default 0 = root)\n"
+"\n"
+"== delete <id> ====================================================\n"
+"  Soft-delete a skill_folder (sets deleted_at).\n"
+"\n"
+"    actagamma_db skill_folder delete 42\n"
+"\n"
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted skill_folder.\n"
+"\n"
+"    actagamma_db skill_folder restore 42\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (create / get)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_sf_create(FILE *f)
+{
+    fputs(
+"== create ===========================================================\n"
+"  Create a new skill_folder.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db skill_folder create \\\n"
+"      --name \"My Folder\" \\\n"
+"      --parent_id 1\n"
+"        <- flag-based\n"
+"\n"
+"    cat entry.json | actagamma_db skill_folder create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>           Skill_folder name (must be non-empty)\n"
+"\n"
+"  Optional fields:\n"
+"    --parent_id <int>      Parent skill_folder id (0 = root, default 0)\n"
+"\n"
+"  Options:\n"
+"    --json               Read the entry as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_sf_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single skill_folder by its primary key.\n"
+"\n"
+"    actagamma_db skill_folder get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_sf_list(FILE *f)
+{
+    fputs(
+"== list [parent_id | all] ==========================================\n"
+"  List skill_folders.  Omit the positional (or pass 'all') for all\n"
+"  skill_folders; pass a numeric id to list children of that\n"
+"  skill_folder.\n"
+"\n"
+"    actagamma_db skill_folder list\n"
+"    actagamma_db skill_folder list 1\n"
+"    actagamma_db skill_folder list 1 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_sf_count(FILE *f)
+{
+    fputs(
+"== count [parent_id | all] =========================================\n"
+"  Count skill_folders (all, or children of a given parent).\n"
+"\n"
+"    actagamma_db skill_folder count\n"
+"    actagamma_db skill_folder count 1\n", f);
+}
+
+static void usage_sf_rename(FILE *f)
+{
+    fputs(
+"== rename <id> --name <new> ========================================\n"
+"  Rename a skill_folder.\n"
+"\n"
+"    actagamma_db skill_folder rename 42 --name \"New Name\"\n"
+"\n"
+"  Required flags:\n"
+"    --name <str>         New skill_folder name\n", f);
+}
+
+static void usage_sf_move(FILE *f)
+{
+    fputs(
+"== move <id> [--parent_id <pid>] ===================================\n"
+"  Move a skill_folder under a different parent.\n"
+"  Omit --parent_id (or pass 0) to move to root.\n"
+"\n"
+"    actagamma_db skill_folder move 42 --parent_id 7\n"
+"    actagamma_db skill_folder move 42            # → root\n"
+"\n"
+"  Options:\n"
+"    --parent_id <int>    New parent skill_folder id (default 0 = root)\n", f);
+}
+
+static void usage_sf_delete(FILE *f)
+{
+    fputs(
+"== delete <id> ====================================================\n"
+"  Soft-delete a skill_folder (sets deleted_at).\n"
+"\n"
+"    actagamma_db skill_folder delete 42\n", f);
+}
+
+static void usage_sf_restore(FILE *f)
+{
+    fputs(
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted skill_folder.\n"
+"\n"
+"    actagamma_db skill_folder restore 42\n", f);
+}
+
 /* ── helpers ───────────────────────────────────────────────────────── */
 
 static void vlog_sf_fields(const char *tag, const skill_folder_t *f)
@@ -122,14 +359,15 @@ static void sf_table(FILE *f, const skill_folder_t *c, int header)
 /* ══════════════════════════════════════════════════════════════════ */
 
 static const action_def_t skill_folder_actions[] = {
-    { "create",  "create a new folder"         },
-    { "get",     "fetch a folder by id"        },
-    { "list",    "list folders (all or by parent)" },
-    { "count",   "count folders"               },
-    { "rename",  "rename a folder"             },
-    { "move",    "move a folder to a new parent" },
-    { "delete",  "soft-delete a folder"        },
-    { "restore", "restore a soft-deleted folder" }
+    { "create",  "create a new skill_folder"        },
+    { "get",     "fetch a skill_folder by id"       },
+    { "list",    "list skill_folders (all or by parent)" },
+    { "count",   "count skill_folders"             },
+    { "rename",  "rename a skill_folder"           },
+    { "move",    "move a skill_folder to a new parent" },
+    { "delete",  "soft-delete a skill_folder"      },
+    { "restore", "restore a soft-deleted skill_folder" },
+    { "help",    "show this help"                  },
 };
 #define SF_ACTIONS (sizeof(skill_folder_actions) / sizeof(skill_folder_actions[0]))
 
@@ -137,6 +375,12 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                      db_t *db)
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
+
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        skill_folder_usage(stdout);
+        return EXIT_OK;
+    }
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
@@ -150,6 +394,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_sf_create(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "skill_folder create: JSON input (%zu bytes)", strlen(blob));
@@ -159,6 +404,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_sf_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -192,6 +438,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
+            usage_sf_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_sf_create;
         }
@@ -212,7 +459,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             goto cleanup_sf_create;
         }
 
-        VLOG(1, "  created folder id=%d", out_id);
+        VLOG(1, "  created skill_folder id=%d", out_id);
 
         if (gopts->id_only)
             fprintf(stdout, "%d\n", out_id);
@@ -234,19 +481,24 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     if (strcmp(action, "get") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "folder get: ERROR missing <id>");
+            VLOG(1, "skill_folder get: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_sf_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "folder get: invalid id=%s", id_str);
+            VLOG(1, "skill_folder get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_sf_get(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "folder get: fetching id=%d", id);
+        VLOG(1, "skill_folder get: fetching id=%d", id);
 
         int err = 0;
         skill_folder_t *c = acta_db_skill_folder_get(db, id, &err);
@@ -307,6 +559,10 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_sf_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -316,16 +572,20 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_sf_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;
         }
 
         if (has_parent)
-            VLOG(1, "folder list: parent_id=%d offset=%d limit=%d",
+            VLOG(1, "skill_folder list: parent_id=%d offset=%d limit=%d",
                  parent_id, offset, limit);
         else
-            VLOG(1, "folder list: all offset=%d limit=%d", offset, limit);
+            VLOG(1, "skill_folder list: all offset=%d limit=%d", offset, limit);
 
         VLOG(2, "  full: parent_id=%d offset=%d limit=%d "
                 "no_nulls=%d table=%d fields=%s",
@@ -415,9 +675,9 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         if (has_parent)
-            VLOG(1, "folder count: parent_id=%d", parent_id);
+            VLOG(1, "skill_folder count: parent_id=%d", parent_id);
         else
-            VLOG(1, "folder count: all");
+            VLOG(1, "skill_folder count: all");
 
         VLOG(2, "  has_parent=%d parent_id=%d", has_parent, parent_id);
 
@@ -441,15 +701,20 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     if (strcmp(action, "rename") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "folder rename: ERROR missing <id>");
+            VLOG(1, "skill_folder rename: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_sf_rename(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "folder rename: invalid id=%s", id_str);
+            VLOG(1, "skill_folder rename: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_sf_rename(stderr);
             return EXIT_INVALID;
         }
 
@@ -459,10 +724,11 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required flag: --name\"}\n");
+            usage_sf_rename(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "folder rename: id=%d name=%s", id, f_name);
+        VLOG(1, "skill_folder rename: id=%d name=%s", id, f_name);
         VLOG(2, "  params: id=%d name=%s", id, f_name);
         VLOG(3, "  ga=%p f_name=%p", (const void *)ga, (const void *)f_name);
 
@@ -474,7 +740,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  renamed folder id=%d → %s", id, f_name);
+        VLOG(1, "  renamed skill_folder id=%d → %s", id, f_name);
         fprintf(stdout, "{\"id\":%d}\n", id);
         return EXIT_OK;
     }
@@ -483,15 +749,20 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     if (strcmp(action, "move") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "folder move: ERROR missing <id>");
+            VLOG(1, "skill_folder move: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_sf_move(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "folder move: invalid id=%s", id_str);
+            VLOG(1, "skill_folder move: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_sf_move(stderr);
             return EXIT_INVALID;
         }
 
@@ -502,7 +773,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             if (new_parent_id < 0) new_parent_id = 0;
         }
 
-        VLOG(1, "folder move: id=%d → parent_id=%d", id, new_parent_id);
+        VLOG(1, "skill_folder move: id=%d → parent_id=%d", id, new_parent_id);
         VLOG(2, "  params: id=%d new_parent_id=%d", id, new_parent_id);
         VLOG(3, "  ga=%p f_parent=%p", (const void *)ga, (const void *)f_parent);
 
@@ -514,7 +785,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  moved folder id=%d → parent_id=%d", id, new_parent_id);
+        VLOG(1, "  moved skill_folder id=%d → parent_id=%d", id, new_parent_id);
         fprintf(stdout, "{\"id\":%d}\n", id);
         return EXIT_OK;
     }
@@ -523,19 +794,24 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     if (strcmp(action, "delete") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "folder delete: ERROR missing <id>");
+            VLOG(1, "skill_folder delete: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_sf_delete(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "folder delete: invalid id=%s", id_str);
+            VLOG(1, "skill_folder delete: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_sf_delete(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "folder delete: id=%d", id);
+        VLOG(1, "skill_folder delete: id=%d", id);
         VLOG(2, "  params: id=%d", id);
 
         int rc = acta_db_skill_folder_soft_delete(db, id);
@@ -546,7 +822,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  deleted folder id=%d", id);
+        VLOG(1, "  deleted skill_folder id=%d", id);
         fprintf(stdout, "{\"id\":%d}\n", id);
         return EXIT_OK;
     }
@@ -555,19 +831,24 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     if (strcmp(action, "restore") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
-            VLOG(1, "folder restore: ERROR missing <id>");
+            VLOG(1, "skill_folder restore: ERROR missing <id>");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_sf_restore(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
-            VLOG(1, "folder restore: invalid id=%s", id_str);
+            VLOG(1, "skill_folder restore: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_sf_restore(stderr);
             return EXIT_INVALID;
         }
 
-        VLOG(1, "folder restore: id=%d", id);
+        VLOG(1, "skill_folder restore: id=%d", id);
         VLOG(2, "  params: id=%d", id);
 
         int rc = acta_db_skill_folder_restore(db, id);
@@ -578,12 +859,23 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  restored folder id=%d", id);
+        VLOG(1, "  restored skill_folder id=%d", id);
         fprintf(stdout, "{\"id\":%d}\n", id);
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "skill_folder: unknown action '%s'", action ? action : "(null)");
-    return action_err("skill_folder", action, skill_folder_actions, SF_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, skill_folder_actions, SF_ACTIONS);
+
+        VLOG(1, "skill_folder: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db skill_folder help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
