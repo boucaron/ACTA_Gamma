@@ -24,6 +24,243 @@ static const global_opts_t *vlog_gopts;
         }                                                                \
     } while (0)
 
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db model_folder --help                                   */
+void model_folder_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db model_folder <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create    Create a new model folder\n"
+"  get       Fetch a model folder by id\n"
+"  list      List model folders\n"
+"  count     Count model folders\n"
+"  rename    Rename a model folder\n"
+"  delete    Soft-delete a model folder\n"
+"  restore   Restore a soft-deleted model folder\n"
+"  move      Move a model folder to a new parent\n"
+"  help      Show this help\n"
+"\n"
+"== create ===========================================================\n"
+"  Create a new model folder.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db model_folder create \\\n"
+"      --name \"my-folder\" \\\n"
+"      --parent_id 3\n"
+"        <- flag-based\n"
+"\n"
+"    cat folder.json | actagamma_db model_folder create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>           Folder name\n"
+"\n"
+"  Optional fields:\n"
+"    --parent_id <int>      Parent model folder id (0/omitted = root)\n"
+"\n"
+"  Options:\n"
+"    --json               Read the folder as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single model folder by its primary key.\n"
+"\n"
+"    actagamma_db model_folder get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== list ==============================================================\n"
+"  List model folders, optionally filtered by parent.\n"
+"\n"
+"    actagamma_db model_folder list\n"
+"    actagamma_db model_folder list --parent_id 3 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --parent_id <int>    Filter by parent (0 = root children only)\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count ============================================================\n"
+"  Count model folders, optionally filtered by parent.\n"
+"\n"
+"    actagamma_db model_folder count\n"
+"    actagamma_db model_folder count --parent_id 3\n"
+"\n"
+"  Options:\n"
+"    --parent_id <int>    Filter by parent (0 = root children only)\n"
+"\n"
+"== rename <id> ======================================================\n"
+"  Rename a model folder.\n"
+"\n"
+"    actagamma_db model_folder rename 7 --name \"new-name\"\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>         New folder name\n"
+"\n"
+"== delete <id> ======================================================\n"
+"  Soft-delete a model folder (sets deleted_at timestamp).\n"
+"\n"
+"    actagamma_db model_folder delete 7\n"
+"\n"
+"== restore <id> ====================================================\n"
+"  Restore a soft-deleted model folder.\n"
+"\n"
+"    actagamma_db model_folder restore 7\n"
+"\n"
+"== move <id> =======================================================\n"
+"  Move a model folder to a new parent.\n"
+"\n"
+"    actagamma_db model_folder move 7 --parent_id 3\n"
+"    actagamma_db model_folder move 7 --parent_id 0   # move to root\n"
+"\n"
+"  Required fields:\n"
+"    --parent_id <int>    New parent model folder id (0 = root)\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (create / get)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_mf_create(FILE *f)
+{
+    fputs(
+"== create ===========================================================\n"
+"  Create a new model folder.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db model_folder create \\\n"
+"      --name \"my-folder\" \\\n"
+"      --parent_id 3\n"
+"        <- flag-based\n"
+"\n"
+"    cat folder.json | actagamma_db model_folder create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>           Folder name\n"
+"\n"
+"  Optional fields:\n"
+"    --parent_id <int>      Parent model folder id (0/omitted = root)\n"
+"\n"
+"  Options:\n"
+"    --json               Read the folder as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_mf_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single model folder by its primary key.\n"
+"\n"
+"    actagamma_db model_folder get 42\n"
+"\n"
+"  Options:\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_mf_list(FILE *f)
+{
+    fputs(
+"== list ==============================================================\n"
+"  List model folders, optionally filtered by parent.\n"
+"\n"
+"    actagamma_db model_folder list\n"
+"    actagamma_db model_folder list --parent_id 3 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --parent_id <int>    Filter by parent (0 = root children only)\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_mf_count(FILE *f)
+{
+    fputs(
+"== count ============================================================\n"
+"  Count model folders, optionally filtered by parent.\n"
+"\n"
+"    actagamma_db model_folder count\n"
+"    actagamma_db model_folder count --parent_id 3\n"
+"\n"
+"  Options:\n"
+"    --parent_id <int>    Filter by parent (0 = root children only)\n", f);
+}
+
+static void usage_mf_rename(FILE *f)
+{
+    fputs(
+"== rename <id> ======================================================\n"
+"  Rename a model folder.\n"
+"\n"
+"    actagamma_db model_folder rename 7 --name \"new-name\"\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>         New folder name\n", f);
+}
+
+static void usage_mf_delete(FILE *f)
+{
+    fputs(
+"== delete <id> ======================================================\n"
+"  Soft-delete a model folder (sets deleted_at timestamp).\n"
+"\n"
+"    actagamma_db model_folder delete 7\n", f);
+}
+
+static void usage_mf_restore(FILE *f)
+{
+    fputs(
+"== restore <id> ====================================================\n"
+"  Restore a soft-deleted model folder.\n"
+"\n"
+"    actagamma_db model_folder restore 7\n", f);
+}
+
+static void usage_mf_move(FILE *f)
+{
+    fputs(
+"== move <id> =======================================================\n"
+"  Move a model folder to a new parent.\n"
+"\n"
+"    actagamma_db model_folder move 7 --parent_id 3\n"
+"    actagamma_db model_folder move 7 --parent_id 0   # move to root\n"
+"\n"
+"  Required fields:\n"
+"    --parent_id <int>    New parent model folder id (0 = root)\n", f);
+}
+
 /* ── helpers ───────────────────────────────────────────────────────── */
 
 static void vlog_mf_fields(const char *tag, const model_folder_t *f)
@@ -120,13 +357,14 @@ static void mf_table(FILE *f, const model_folder_t *c, int header)
 
 static const action_def_t model_folder_actions[] = {
     { "create",  "create a new model folder"     },
-    { "get",     "fetch a folder by id"          },
-    { "list",    "list folders"                  },
-    { "count",   "count folders"                 },
-    { "rename",  "rename a folder"               },
-    { "delete",  "soft-delete a folder"          },
-    { "restore", "restore a soft-deleted folder" },
-    { "move",    "move a folder to a new parent" }
+    { "get",     "fetch a model folder by id"    },
+    { "list",    "list model folders"            },
+    { "count",   "count model folders"           },
+    { "rename",  "rename a model folder"         },
+    { "delete",  "soft-delete a model folder"    },
+    { "restore", "restore a soft-deleted model folder" },
+    { "move",    "move a model folder to a new parent" },
+    { "help",    "show this help"                }
 };
 #define MF_ACTIONS (sizeof(model_folder_actions) / sizeof(model_folder_actions[0]))
 
@@ -134,6 +372,12 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                      db_t *db)
 {
     vlog_gopts = gopts;
+
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        model_folder_usage(stdout);
+        return EXIT_OK;
+    }
 
     /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
@@ -147,6 +391,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_mf_create(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "model_folder create: JSON input (%zu bytes)", strlen(blob));
@@ -156,6 +401,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_mf_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -189,6 +435,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
+            usage_mf_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_mf_create;
         }
@@ -200,11 +447,12 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"parent_id must be non-negative\"}\n");
+            usage_mf_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_mf_create;
         }
 
-        VLOG(1, "  creating folder name='%s' parent_id=%d",
+        VLOG(1, "  creating model folder name='%s' parent_id=%d",
              mf.name, mf.parent_id);
 
         int out_id = 0;
@@ -218,7 +466,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             goto cleanup_mf_create;
         }
 
-        VLOG(1, "  created folder id=%d", out_id);
+        VLOG(1, "  created model folder id=%d", out_id);
 
         if (gopts->id_only)
             fprintf(stdout, "%d\n", out_id);
@@ -243,11 +491,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_mf_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model_folder get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_mf_get(stderr);
             return EXIT_INVALID;
         }
 
@@ -299,6 +552,10 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_mf_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -308,6 +565,10 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_mf_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;
@@ -319,6 +580,10 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             parent_id = atoi(s_parent);
             if (parent_id < 0) {
                 VLOG(1, "  ERROR: --parent_id must be non-negative, got '%s'", s_parent);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--parent_id must be non-negative\"}\n");
+                usage_mf_list(stderr);
                 return EXIT_INVALID;
             }
             has_parent = 1;
@@ -409,6 +674,10 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             parent_id = atoi(s_parent);
             if (parent_id < 0) {
                 VLOG(1, "  ERROR: --parent_id must be non-negative, got '%s'", s_parent);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--parent_id must be non-negative\"}\n");
+                usage_mf_count(stderr);
                 return EXIT_INVALID;
             }
             has_parent = 1;
@@ -443,11 +712,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_mf_rename(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model_folder rename: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_mf_rename(stderr);
             return EXIT_INVALID;
         }
 
@@ -457,6 +731,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
+            usage_mf_rename(stderr);
             return EXIT_INVALID;
         }
 
@@ -474,13 +749,14 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  renamed folder id=%d → '%s'", id, new_name);
+        VLOG(1, "  renamed model folder id=%d → '%s'", id, new_name);
         if (gopts->id_only)
             fprintf(stdout, "%d\n", id);
-        else
+        else {
             fprintf(stdout, "{\"id\":%d,\"name\":", id);
-        json_str(stdout, new_name);
-        fputs("}\n", stdout);
+            json_str(stdout, new_name);
+            fputs("}\n", stdout);
+        }
         return EXIT_OK;
     }
 
@@ -492,11 +768,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_mf_delete(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model_folder delete: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_mf_delete(stderr);
             return EXIT_INVALID;
         }
 
@@ -511,7 +792,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  soft-deleted folder id=%d", id);
+        VLOG(1, "  soft-deleted model folder id=%d", id);
         fprintf(stdout, "{\"deleted\":true}\n");
         return EXIT_OK;
     }
@@ -524,11 +805,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_mf_restore(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model_folder restore: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_mf_restore(stderr);
             return EXIT_INVALID;
         }
 
@@ -543,7 +829,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  restored folder id=%d", id);
+        VLOG(1, "  restored model folder id=%d", id);
         if (gopts->id_only)
             fprintf(stdout, "%d\n", id);
         else
@@ -559,11 +845,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_mf_move(stderr);
             return EXIT_INVALID;
         }
         int folder_id = atoi(id_str);
         if (folder_id <= 0) {
             VLOG(1, "model_folder move: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_mf_move(stderr);
             return EXIT_INVALID;
         }
 
@@ -573,11 +864,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: parent_id\"}\n");
+            usage_mf_move(stderr);
             return EXIT_INVALID;
         }
         int new_parent_id = atoi(s_new_parent);
         if (new_parent_id < 0) {
             VLOG(1, "model_folder move: --parent_id must be non-negative, got '%s'", s_new_parent);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"--parent_id must be non-negative\"}\n");
+            usage_mf_move(stderr);
             return EXIT_INVALID;
         }
 
@@ -596,7 +892,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             return map_rc_to_exit(rc);
         }
 
-        VLOG(1, "  moved folder id=%d → parent_id=%d", folder_id, new_parent_id);
+        VLOG(1, "  moved model folder id=%d → parent_id=%d", folder_id, new_parent_id);
         if (gopts->id_only)
             fprintf(stdout, "%d\n", folder_id);
         else
@@ -606,7 +902,18 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "model_folder: unknown action '%s'", action ? action : "(null)");
-    return action_err("model_folder", action, model_folder_actions, MF_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, model_folder_actions, MF_ACTIONS);
+
+        VLOG(1, "model_folder: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db model_folder help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
