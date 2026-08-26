@@ -110,7 +110,21 @@ static inline void json_str(FILE *f, const char *s)
 
 /* ── verbose logging to stderr (levels are cumulative) ────────────── */
 
+/*
+ *  Level 0  – silent (default)
+ *  Level 1  – action summary        (one line per action)
+ *  Level 2  – parameter/field dump  (every input & output field)
+ *  Level 3  – raw internal trace    (pointers, raw rc, struct layout)
+ *
+ * All diagnostics go to stderr so stdout remains pipe-safe.
+ */
 
+#define VLOG(lvl, gopts, fmt, ...)                                       \
+    do {                                                                 \
+        if ((gopts)->verbose >= (lvl)) {                                 \
+            fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);    \
+        }                                                                \
+    } while (0)
 
 #define VERBOSE(filt, lvl, ...)                                          \
     do {                                                                 \
@@ -125,6 +139,46 @@ static inline void json_str(FILE *f, const char *s)
 
 
 
+// Check for commands
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Fuzzy-matching helpers (for "did you mean …?")                    */
+/* ══════════════════════════════════════════════════════════════════ */
+static int edit_distance(const char *a, const char *b)
+{
+    int la = (int)strlen(a);
+    int lb = (int)strlen(b);
+    int dp[64][64];
+
+    for (int i = 0; i <= la; i++) dp[i][0] = i;
+    for (int j = 0; j <= lb; j++) dp[0][j] = j;
+
+    for (int i = 1; i <= la; i++) {
+        for (int j = 1; j <= lb; j++) {
+            int cost = (a[i-1] == b[j-1]) ? 0 : 1;
+            int best = dp[i-1][j] + 1;          /* deletion   */
+            if (dp[i][j-1] + 1 < best)           /* insertion  */
+                best = dp[i][j-1] + 1;
+            if (dp[i-1][j-1] + cost < best)      /* substitution*/
+                best = dp[i-1][j-1] + cost;
+            dp[i][j] = best;
+        }
+    }
+    return dp[la][lb];
+}
+
+static const char *closest_action(const char *input,
+                                  const action_def_t *actions, size_t n)
+{
+    if (!input || !*input) return NULL;
+    int best_dist = 4;
+    const char *best = NULL;
+    for (size_t i = 0; i < n; i++) {
+        int d = edit_distance(input, actions[i].name);
+        if (d > 0 && d < best_dist) { best_dist = d; best = actions[i].name; }
+    }
+    return best;
+}
 
 
 #endif /* ACTA_DB_CLI_UTIL_H */

@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 /* ── verbose logging to stderr (levels are cumulative) ────────────── */
 
 static const global_opts_t *vlog_gopts;
@@ -16,6 +15,58 @@ static const global_opts_t *vlog_gopts;
             fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
         }                                                                \
     } while (0)
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   acta db --help                                                      */
+void db_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db db <action> [options]\n"
+"\n"
+"Actions:\n"
+"  exec      Execute raw SQL\n"
+"  version   Print SQLite library version\n"
+"  help      Show this help\n"
+"\n"
+"== exec =========================================================\n"
+"  Provide SQL via one of (mutually exclusive, first wins):\n"
+"\n"
+"    actagamma_db db exec \"SELECT * FROM users WHERE id = 1;\"\n"
+"        <- positional argument\n"
+"\n"
+"    actagamma_db db exec --sql \"SELECT * FROM users;\"\n"
+"        <- --sql flag\n"
+"\n"
+"    actagamma_db db exec --file /path/to/migration.sql\n"
+"        <- --file flag (max 64 KiB)\n"
+"\n"
+"    actagamma_db db exec --stdin\n"
+"    cat migration.sql | acta db exec --stdin\n"
+"        <- --stdin flag (max 64 KiB)\n"
+"\n"
+"  Options:\n"
+"    --sql <text>       SQL text to execute\n"
+"    --file <path>      Read SQL from a file (max 64 KiB)\n"
+"    --stdin            Read SQL from stdin (max 64 KiB)\n"
+"    --table            print 'ok' instead of JSON\n"
+"    --verbose <n>      debug level 0-3 (stderr)\n"
+"\n"
+"== version ======================================================\n"
+"  actagamma_db db version\n"
+"  Prints the SQLite library version.\n"
+"  Options:\n"
+"    --table          print 'SQLite <ver>' instead of JSON\n"
+"\n"
+"Global options:\n"
+"  --table          columnar / plain output instead of JSON\n"
+"  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
+"\n", f);
+}
+
 
 /* ── helpers ───────────────────────────────────────────────────────── */
 
@@ -34,6 +85,7 @@ static void exec_output(const global_opts_t *gopts)
 static const action_def_t db_actions[] = {
     { "exec",    "execute raw SQL"              },
     { "version", "print SQLite library version" },
+    { "help",   "show this help"               },
 };
 #define DB_ACTIONS (sizeof(db_actions) / sizeof(db_actions[0]))
 
@@ -42,9 +94,15 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 {
     vlog_gopts = gopts;
 
+    /* ── help (subcommand-level; only the bare word "help") ─────── */
+    if (strcmp(action, "help") == 0) {
+        db_usage(stdout);
+        return EXIT_OK;
+    }
+
     /* ── exec ─────────────────────────────────────────────────────── */
     if (strcmp(action, "exec") == 0) {
-        const char *sql  = cmd_args_flag(ga, "sql",   1);
+        const char *sql   = cmd_args_flag(ga, "sql",   1);
         const char *fpath = cmd_args_flag(ga, "file",  1);
         const int   use_stdin = (cmd_args_flag(ga, "stdin", 0) != NULL);
 
@@ -60,13 +118,18 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!sql && !fpath && !use_stdin) {
             VLOG(1, "  ERROR: no SQL source (need positional, --sql, --file, or --stdin)");
             fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"no SQL source: provide a positional argument, --sql, --file, or --stdin\"}\n");
+                "Error: no SQL source provided.\n"
+                "  Provide SQL via one of:\n"
+                "    actagamma_db db exec \"<SQL>\"            <- positional\n"
+                "    actagamma_db db exec --sql \"<SQL>\"      <- --sql flag\n"
+                "    actagamma_db db exec --file <path>      <- --file flag\n"
+                "    actagamma_db db exec --stdin            <- stdin\n"
+                "  Run 'actagamma_db db help' for full usage.\n");
             return EXIT_INVALID;
         }
 
         /* resolve SQL text */
-        char   *sql_buf = NULL;        
+        char   *sql_buf = NULL;
         const char *sql_ptr = NULL;
 
         if (sql) {
@@ -77,8 +140,11 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             if (!fp) {
                 VLOG(1, "  ERROR: cannot open file '%s'", fpath);
                 fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"cannot open file\"}\n");
+                    "Error: cannot open file '%s'.\n"
+                    "  Check the path and permissions.\n"
+                    "  Usage: acta db exec --file <path>\n"
+                    "  Run 'acta db help' for full usage.\n",
+                    fpath);
                 return EXIT_INVALID;
             }
             long sz = 0;
@@ -88,16 +154,17 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             if (sz < 0 || sz > 65536) {
                 fclose(fp);
                 fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"SQL file too large (max 64 KiB)\"}\n");
+                    "Error: SQL file '%s' is too large (%ld bytes, max 65536).\n"
+                    "  Split the file or use --stdin for large inputs.\n"
+                    "  Run 'acta db help' for full usage.\n",
+                    fpath, sz);
                 return EXIT_INVALID;
             }
             sql_buf = malloc((size_t)sz + 1);
             if (!sql_buf) {
                 fclose(fp);
                 fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_ALLOC\",\"code\":-6,"
-                    "\"message\":\"allocation failure\"}\n");
+                    "Error: memory allocation failed.\n");
                 return EXIT_INVALID;
             }
             size_t rd = fread(sql_buf, 1, (size_t)sz, fp);
@@ -109,8 +176,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             sql_buf = malloc(65537);
             if (!sql_buf) {
                 fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_ALLOC\",\"code\":-6,"
-                    "\"message\":\"allocation failure\"}\n");
+                    "Error: memory allocation failed.\n");
                 return EXIT_INVALID;
             }
             size_t total = 0;
@@ -121,8 +187,9 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 if (total >= 65536 - 1) {
                     free(sql_buf);
                     fprintf(stderr,
-                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                        "\"message\":\"stdin input too large (max 64 KiB)\"}\n");
+                        "Error: stdin input too large (max 65536 bytes).\n"
+                        "  Pipe a smaller file or split the query.\n"
+                        "  Run 'acta db help' for full usage.\n");
                     return EXIT_INVALID;
                 }
             }
@@ -145,9 +212,10 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             VLOG(1, "  FAILED rc=%d (%s)", rc,
                  acta_db_strerror(rc));
             fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_SQL\",\"code\":-5,"
-                "\"message\":\"%s\"}\n",
-                msg ? msg : "unknown sql error");
+                "Error: SQL execution failed (rc=%d).\n"
+                "  SQLite: %s\n"
+                "  Check your SQL syntax. Run 'acta db help' for usage.\n",
+                rc, msg ? msg : "(no detail)");
             return map_rc_to_exit(rc);
         }
 
@@ -169,7 +237,18 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "db: unknown action '%s'", action ? action : "(null)");
-    return action_err("db", action, db_actions, DB_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, db_actions, DB_ACTIONS);
+
+        VLOG(1, "db: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'acta db help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }

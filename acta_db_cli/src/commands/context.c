@@ -99,23 +99,7 @@ void ctx_usage(FILE *f)
 
 }
 
-/* ══════════════════════════════════════════════════════════════════ */
-/*  Fuzzy-matching helpers (for "did you mean …?")                    */
-/* ══════════════════════════════════════════════════════════════════ */
 
-
-static const char *closest_action(const char *input,
-                                  const action_def_t *actions, size_t n)
-{
-    if (!input || !*input) return NULL;
-    int best_dist = 4;              /* cap: anything ≥ 4 is too far  */
-    const char *best = NULL;
-    for (size_t i = 0; i < n; i++) {
-        int d = edit_distance(input, actions[i].name);
-        if (d > 0 && d < best_dist) { best_dist = d; best = actions[i].name; }
-    }
-    return best;
-}
 
 /* ══════════════════════════════════════════════════════════════════ */
 /*  helpers                                                            */
