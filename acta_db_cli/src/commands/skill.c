@@ -599,10 +599,10 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        const char *f_inc_del = cmd_args_flag(ga, "include-deleted", 0);
+        int f_inc_del = cmd_args_has_flag(ga, "include-deleted");
 
         VLOG(1, "skill get: fetching id=%d include_deleted=%d",
-             id, f_inc_del ? 1 : 0);
+             id, f_inc_del);
 
         int err = 0;
         skill_t *s = f_inc_del

@@ -88,6 +88,8 @@ void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts)
     snprintf(buf, sizeof buf, "--%s", name);
     opts->argv[opts->argc++] = strdup(buf);
    //  opts->argv[opts->argc++] = strdup(value);
+    a->argv[a->argc] = strdup(buf);
+    a->argc++;
 
 }
 
