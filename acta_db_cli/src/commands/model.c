@@ -1,3 +1,4 @@
+/* File: model.c */
 #include "commands.h"
 #include "argparse.h"
 #include "cli_util.h"
@@ -27,6 +28,288 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
             fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
         }                                                                \
     } while (0)
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Usage / help                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Non-static: the global dispatch layer can call this for
+ *   actagamma_db model --help
+ */
+void model_usage(FILE *f)
+{
+    fputs(
+"Usage: actagamma_db model <action> [options]\n"
+"\n"
+"Actions:\n"
+"  create    Create a new model\n"
+"  get       Fetch a model by id\n"
+"  update    Update an existing model\n"
+"  delete    Remove a model (soft delete)\n"
+"  restore   Restore a deleted model\n"
+"  move      Move a model to another folder\n"
+"  list      List models\n"
+"  count     Count models\n"
+"  help      Show this help\n"
+"\n"
+"== create ===========================================================\n"
+"  Create a new model entry.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db model create \\\n"
+"      --name \"My Model\" \\\n"
+"      --backend openai \\\n"
+"      --model-identifier gpt-4o \\\n"
+"      --description \"Primary LLM\" \\\n"
+"      --base-url https://api.openai.com/v1 \\\n"
+"      --folder-id 3\n"
+"        <- flag-based\n"
+"\n"
+"    cat model.json | actagamma_db model create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>                 Display name\n"
+"    --backend <str>              Backend identifier\n"
+"    --model-identifier <str>     Upstream model id\n"
+"\n"
+"  Optional fields:\n"
+"    --folder-id <int>            Owning folder (0 = root)\n"
+"    --description <str>          Human-readable detail\n"
+"    --base-url <str>             API base URL\n"
+"    --configuration <json>       Arbitrary JSON config\n"
+"\n"
+"  Options:\n"
+"    --json               Read the entry as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n"
+"\n"
+"== get <id> ========================================================\n"
+"  Fetch a single model by its primary key.\n"
+"\n"
+"    actagamma_db model get 42\n"
+"    actagamma_db model get 42 --live\n"
+"\n"
+"  Options:\n"
+"    --live               Include soft-deleted rows\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== update <id> ====================================================\n"
+"  Update one or more fields on an existing model.\n"
+"\n"
+"    actagamma_db model update 42 --description \"New desc\"\n"
+"    actagamma_db model update 42 --base-url https://new.host/v1 \\\n"
+"      --configuration '{\"timeout\":30}'\n"
+"\n"
+"  At least one field is required.  Unspecified fields are\n"
+"  left unchanged.\n"
+"\n"
+"  Fields:\n"
+"    --name <str>                 Display name\n"
+"    --folder-id <int>            Owning folder\n"
+"    --description <str>          Human-readable detail\n"
+"    --backend <str>              Backend identifier\n"
+"    --base-url <str>             API base URL\n"
+"    --model-identifier <str>     Upstream model id\n"
+"    --configuration <json>       Arbitrary JSON config\n"
+"\n"
+"== delete <id> ====================================================\n"
+"  Soft-delete a model (sets deleted_at).\n"
+"\n"
+"    actagamma_db model delete 42\n"
+"\n"
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted model.\n"
+"\n"
+"    actagamma_db model restore 42\n"
+"\n"
+"== move <id> ======================================================\n"
+"  Move a model to a different folder.\n"
+"\n"
+"    actagamma_db model move 42 --folder-id 7\n"
+"    actagamma_db model move 42 --folder-id 0    # root\n"
+"\n"
+"  Required:\n"
+"    --folder-id <int>          Destination folder (0 = root)\n"
+"\n"
+"== list ===========================================================\n"
+"  List models, optionally filtered by folder.\n"
+"\n"
+"    actagamma_db model list\n"
+"    actagamma_db model list --folder-id 3 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --folder-id <int>    Filter by folder (omit = all)\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== count ==========================================================\n"
+"  Count models, optionally filtered by folder.\n"
+"\n"
+"    actagamma_db model count\n"
+"    actagamma_db model count --folder-id 3\n"
+"\n"
+"  Options:\n"
+"    --folder-id <int>    Filter by folder (omit = all)\n"
+"\n"
+"Global options:\n"
+"  --table            columnar / plain output instead of JSON\n"
+"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --fields <csv>     comma-separated field whitelist\n"
+"  --no_nulls         omit null-valued fields from JSON output\n"
+"  --id_only          print only the id (create / get)\n"
+"\n", f);
+}
+
+/* ── per-action usage snippets (printed to stderr on arg errors) ──── */
+
+static void usage_create(FILE *f)
+{
+    fputs(
+"== create ===========================================================\n"
+"  Create a new model entry.\n"
+"\n"
+"  Provide data via one of:\n"
+"\n"
+"    actagamma_db model create \\\n"
+"      --name \"My Model\" \\\n"
+"      --backend openai \\\n"
+"      --model-identifier gpt-4o \\\n"
+"      --description \"Primary LLM\" \\\n"
+"      --base-url https://api.openai.com/v1 \\\n"
+"      --folder-id 3\n"
+"        <- flag-based\n"
+"\n"
+"    cat model.json | actagamma_db model create --json\n"
+"        <- JSON via stdin\n"
+"\n"
+"  Required fields:\n"
+"    --name <str>                 Display name\n"
+"    --backend <str>              Backend identifier\n"
+"    --model-identifier <str>     Upstream model id\n"
+"\n"
+"  Optional fields:\n"
+"    --folder-id <int>            Owning folder (0 = root)\n"
+"    --description <str>          Human-readable detail\n"
+"    --base-url <str>             API base URL\n"
+"    --configuration <json>       Arbitrary JSON config\n"
+"\n"
+"  Options:\n"
+"    --json               Read the entry as JSON from stdin\n"
+"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+}
+
+static void usage_get(FILE *f)
+{
+    fputs(
+"== get <id> ========================================================\n"
+"  Fetch a single model by its primary key.\n"
+"\n"
+"    actagamma_db model get 42\n"
+"    actagamma_db model get 42 --live\n"
+"\n"
+"  Options:\n"
+"    --live               Include soft-deleted rows\n"
+"    --id_only            Print only the id\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_update(FILE *f)
+{
+    fputs(
+"== update <id> ====================================================\n"
+"  Update one or more fields on an existing model.\n"
+"\n"
+"    actagamma_db model update 42 --description \"New desc\"\n"
+"    actagamma_db model update 42 --base-url https://new.host/v1 \\\n"
+"      --configuration '{\"timeout\":30}'\n"
+"\n"
+"  At least one field is required.  Unspecified fields are\n"
+"  left unchanged.\n"
+"\n"
+"  Fields:\n"
+"    --name <str>                 Display name\n"
+"    --folder-id <int>            Owning folder\n"
+"    --description <str>          Human-readable detail\n"
+"    --backend <str>              Backend identifier\n"
+"    --base-url <str>             API base URL\n"
+"    --model-identifier <str>     Upstream model id\n"
+"    --configuration <json>       Arbitrary JSON config\n", f);
+}
+
+static void usage_delete(FILE *f)
+{
+    fputs(
+"== delete <id> ====================================================\n"
+"  Soft-delete a model (sets deleted_at).\n"
+"\n"
+"    actagamma_db model delete 42\n", f);
+}
+
+static void usage_restore(FILE *f)
+{
+    fputs(
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted model.\n"
+"\n"
+"    actagamma_db model restore 42\n", f);
+}
+
+static void usage_move(FILE *f)
+{
+    fputs(
+"== move <id> ======================================================\n"
+"  Move a model to a different folder.\n"
+"\n"
+"    actagamma_db model move 42 --folder-id 7\n"
+"    actagamma_db model move 42 --folder-id 0    # root\n"
+"\n"
+"  Required:\n"
+"    --folder-id <int>          Destination folder (0 = root)\n", f);
+}
+
+static void usage_list(FILE *f)
+{
+    fputs(
+"== list ===========================================================\n"
+"  List models, optionally filtered by folder.\n"
+"\n"
+"    actagamma_db model list\n"
+"    actagamma_db model list --folder-id 3 --offset 10 --limit 25\n"
+"\n"
+"  Options:\n"
+"    --folder-id <int>    Filter by folder (omit = all)\n"
+"    --offset <n>         Skip first N rows (default 0)\n"
+"    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --count              Return only the row count (no rows)\n"
+"    --table              Columnar output instead of JSON\n"
+"    --fields <csv>       Comma-separated field filter\n"
+"    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_count(FILE *f)
+{
+    fputs(
+"== count ==========================================================\n"
+"  Count models, optionally filtered by folder.\n"
+"\n"
+"    actagamma_db model count\n"
+"    actagamma_db model count --folder-id 3\n"
+"\n"
+"  Options:\n"
+"    --folder-id <int>    Filter by folder (omit = all)\n", f);
+}
 
 /* ── helpers ───────────────────────────────────────────────────────── */
 
@@ -162,6 +445,7 @@ static const action_def_t model_actions[] = {
     { "move",    "move a model to another folder"  },
     { "list",    "list all models"                 },
     { "count",   "count models"                    },
+    { "help",    "show this help"                  },
 };
 #define MODEL_ACTIONS (sizeof(model_actions) / sizeof(model_actions[0]))
 
@@ -170,7 +454,13 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 {
     vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
 
-       /* ── create ───────────────────────────────────────────────────── */
+    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    if (strcmp(action, "help") == 0) {
+        model_usage(stdout);
+        return EXIT_OK;
+    }
+
+    /* ── create ───────────────────────────────────────────────────── */
     if (strcmp(action, "create") == 0) {
         model_t m = {0};
         int json_owned = 0;
@@ -182,6 +472,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
+                usage_create(stderr);
                 return EXIT_INVALID;
             }
             VLOG(1, "model create: JSON input (%zu bytes)", strlen(blob));
@@ -191,6 +482,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
+                usage_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -228,6 +520,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: name\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
@@ -236,6 +529,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: backend\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
@@ -244,6 +538,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing required field: model-identifier\"}\n");
+            usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
@@ -290,11 +585,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model get: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_get(stderr);
             return EXIT_INVALID;
         }
         const char *s_live = cmd_args_flag(ga, "live", 0);
@@ -343,11 +643,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_update(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model update: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_update(stderr);
             return EXIT_INVALID;
         }
 
@@ -366,6 +671,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"at least one field required for update\"}\n");
+            usage_update(stderr);
             return EXIT_INVALID;
         }
 
@@ -450,11 +756,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_delete(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model delete: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_delete(stderr);
             return EXIT_INVALID;
         }
 
@@ -483,11 +794,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_restore(stderr);
             return EXIT_INVALID;
         }
         int id = atoi(id_str);
         if (id <= 0) {
             VLOG(1, "model restore: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_restore(stderr);
             return EXIT_INVALID;
         }
 
@@ -516,11 +832,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                 "\"message\":\"missing positional: <id>\"}\n");
+            usage_move(stderr);
             return EXIT_INVALID;
         }
         int model_id = atoi(id_str);
         if (model_id <= 0) {
             VLOG(1, "model move: invalid id=%s", id_str);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
+            usage_move(stderr);
             return EXIT_INVALID;
         }
 
@@ -562,6 +883,10 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_off, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--offset must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             offset = (int)v;
@@ -571,6 +896,10 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             long v = strtol(s_lim, &end, 10);
             if (*end || v < 0) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--limit must be a non-negative integer\"}\n");
+                usage_list(stderr);
                 return EXIT_INVALID;
             }
             limit = (int)v;   /* 0 = no limit (documented) */
@@ -676,7 +1005,18 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* Unknown action */
-    VLOG(1, "model: unknown action '%s'", action ? action : "(null)");
-    return action_err("model", action, model_actions, MODEL_ACTIONS);
+    /* ── Unknown action: suggest closest match + pointer to help ── */
+    {
+        const char *guess = closest_action(action, model_actions, MODEL_ACTIONS);
+
+        VLOG(1, "model: unknown action '%s'%s",
+             action ? action : "(null)",
+             guess   ? "  (suggestion below)" : "");
+
+        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
+        if (guess)
+            fprintf(stderr, "  Did you mean '%s'?\n", guess);
+        fprintf(stderr, "  Run 'actagamma_db model help' for full usage.\n");
+        return EXIT_INVALID;
+    }
 }
