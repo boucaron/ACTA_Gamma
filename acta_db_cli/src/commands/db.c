@@ -28,17 +28,21 @@ void db_usage(FILE *f)
 "Usage: actagamma_db db <action> [options]\n"
 "\n"
 "Actions:\n"
-"  exec      Execute raw SQL\n"
+"  exec      Execute mutating SQL (INSERT, UPDATE, DELETE, DDL, etc.)\n"
 "  version   Print SQLite library version\n"
 "  help      Show this help\n"
 "\n"
 "== exec =========================================================\n"
+"  Execute a single mutating statement (no SELECT / query support).\n"
+"  Supported: INSERT, UPDATE, DELETE, CREATE, DROP, ALTER,\n"
+"             TRUNCATE, REPLACE, and other write / DDL statements.\n"
+"\n"
 "  Provide SQL via one of (mutually exclusive, first wins):\n"
 "\n"
-"    actagamma_db db exec \"SELECT * FROM users WHERE id = 1;\"\n"
+"    actagamma_db db exec \"INSERT INTO users (name) VALUES ('Ada');\"\n"
 "        <- positional argument\n"
 "\n"
-"    actagamma_db db exec --sql \"SELECT * FROM users;\"\n"
+"    actagamma_db db exec --sql \"DELETE FROM sessions WHERE expires < now;\"\n"
 "        <- --sql flag\n"
 "\n"
 "    actagamma_db db exec --file /path/to/migration.sql\n"
@@ -68,6 +72,7 @@ void db_usage(FILE *f)
 }
 
 
+
 /* ── helpers ───────────────────────────────────────────────────────── */
 
 static void exec_output(const global_opts_t *gopts)
@@ -83,10 +88,11 @@ static void exec_output(const global_opts_t *gopts)
 /* ══════════════════════════════════════════════════════════════════ */
 
 static const action_def_t db_actions[] = {
-    { "exec",    "execute raw SQL"              },
-    { "version", "print SQLite library version" },
-    { "help",   "show this help"               },
+    { "exec",    "execute mutating SQL (no SELECT)" },
+    { "version", "print SQLite library version"     },
+    { "help",   "show this help"                   },
 };
+
 #define DB_ACTIONS (sizeof(db_actions) / sizeof(db_actions[0]))
 
 int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
@@ -127,6 +133,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 "  Run 'actagamma_db db help' for full usage.\n");
             return EXIT_INVALID;
         }
+
 
         /* resolve SQL text */
         char   *sql_buf = NULL;
