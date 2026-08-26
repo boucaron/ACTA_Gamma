@@ -103,28 +103,6 @@ void ctx_usage(FILE *f)
 /*  Fuzzy-matching helpers (for "did you mean …?")                    */
 /* ══════════════════════════════════════════════════════════════════ */
 
-static int edit_distance(const char *a, const char *b)
-{
-    int la = (int)strlen(a);
-    int lb = (int)strlen(b);
-    int dp[64][64];
-
-    for (int i = 0; i <= la; i++) dp[i][0] = i;
-    for (int j = 0; j <= lb; j++) dp[0][j] = j;
-
-    for (int i = 1; i <= la; i++) {
-        for (int j = 1; j <= lb; j++) {
-            int cost = (a[i-1] == b[j-1]) ? 0 : 1;
-            int best = dp[i-1][j] + 1;          /* deletion   */
-            if (dp[i][j-1] + 1 < best)           /* insertion  */
-                best = dp[i][j-1] + 1;
-            if (dp[i-1][j-1] + cost < best)      /* substitution*/
-                best = dp[i-1][j-1] + cost;
-            dp[i][j] = best;
-        }
-    }
-    return dp[la][lb];
-}
 
 static const char *closest_action(const char *input,
                                   const action_def_t *actions, size_t n)
