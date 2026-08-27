@@ -28,17 +28,20 @@ static void test_move_to_folder(stest_ctx_t *ctx)
 
 static void test_move_to_root(stest_ctx_t *ctx)
 {
-    /* move skill 3 (folder 1, "tata") to root (folder_id=0) */
+    /* move skill 7 (folder 2, "summarize4") to root (folder_id=0), rename alongside */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_pos(a, "3", &g);
+    targs_pos(a, "7", &g);
     targs_flag(a, "folder_id", "0", &g);
+    // targs_flag(a, "name", "summarize4_moved", &g); // Not taken in account
 
     int rc = do_move(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"folder_id\":0");
+    // TEST_CONTAINS(ctx, stest_stdout(ctx), "\"name\":\"summarize4_moved\"");
     targs_free(a, &g);
 }
+
 
 static void test_move_missing_folder_flag(stest_ctx_t *ctx)
 {
@@ -102,16 +105,17 @@ static void test_move_nonexistent_folder(stest_ctx_t *ctx)
 
 static void test_move_negative_folder_clamped(stest_ctx_t *ctx)
 {
-    /* folder_id=-1 clamped to 0 → root */
+    /* folder_id=-1 clamped to 0 → root; skill 7 ("summarize4") has no name collision at root */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_pos(a, "4", &g);  /* in folder 2 */
+    targs_pos(a, "7", &g);
     targs_flag(a, "folder_id", "-1", &g);
 
     int rc = do_move(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     targs_free(a, &g);
 }
+
 
 static void test_move_unique_violation(stest_ctx_t *ctx)
 {

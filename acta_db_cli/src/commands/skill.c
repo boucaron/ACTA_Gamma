@@ -918,11 +918,11 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *f_folder  = cmd_args_flag(ga, "folder_id", 0);
+        const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
         const char *s_off     = cmd_args_flag(ga, "offset", 1);
         const char *s_lim     = cmd_args_flag(ga, "limit", 1);
         const char *s_count   = cmd_args_flag(ga, "count", 0);
-        const char *f_all     = cmd_args_flag(ga, "all", 0);
+        int has_all = cmd_args_has_flag(ga, "all");
 
         int offset = 0, limit = 0;
         int folder_id = 0;
@@ -961,24 +961,24 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "skill list: folder_id=%s all=%d offset=%d limit=%d",
-             f_folder ? f_folder : (f_all ? "(any/all)" : "(root)"),
-             f_all ? 1 : 0,
+             f_folder ? f_folder : (has_all ? "(any/all)" : "(root)"),
+             has_all ? 1 : 0,
              offset, limit);
 
         VLOG(2, "  full: folder_id=%s all=%d offset=%d limit=%d "
                 "no_nulls=%d table=%d fields=%s",
              f_folder ? f_folder : "(null)",
-             f_all ? 1 : 0,
+             has_all ? 1 : 0,
              offset, limit,
              gopts->no_nulls, gopts->table,
              gopts->fields ? gopts->fields : "(all)");
 
         VLOG(3, "  folder_id=%d all=%d offset=%d limit=%d",
-             folder_id, f_all ? 1 : 0, offset, limit);
+             folder_id, has_all ? 1 : 0, offset, limit);
 
         if (gopts->count || s_count) {
             int err = 0;
-            int n = (in_folder && !f_all)
+            int n = (in_folder && !has_all )
                 ? acta_db_skill_count_in_folder(db, folder_id, &err)
                 : acta_db_skill_count_all(db, &err);
             if (err != ACTA_DB_OK) {
@@ -993,7 +993,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int out_count = 0, err = 0;
         skill_t **items;
 
-        if (in_folder && !f_all) {
+        if (in_folder && !has_all) {
             items = acta_db_skill_list_in_folder(db, folder_id,
                                                  offset, limit,
                                                  &out_count, &err);
@@ -1037,8 +1037,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *f_folder = cmd_args_flag(ga, "folder_id", 0);
-        const char *f_all    = cmd_args_flag(ga, "all", 0);
+        const char *f_folder = cmd_args_flag(ga, "folder_id", 1);
+        int has_all          = cmd_args_has_flag(ga, "all"); 
 
         int folder_id = 0;
         int in_folder = 0;
@@ -1048,13 +1048,13 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "skill count: folder_id=%s all=%d",
-             f_folder ? f_folder : (f_all ? "(any/all)" : "(root)"),
-             f_all ? 1 : 0);
+             f_folder ? f_folder : (has_all ? "(any/all)" : "(root)"),
+             has_all ? 1 : 0);
 
-        VLOG(2, "  folder_id=%d all=%d", folder_id, f_all ? 1 : 0);
+        VLOG(2, "  folder_id=%d all=%d", folder_id, has_all ? 1 : 0);
 
         int err = 0;
-        int n = (in_folder && !f_all)
+        int n = (in_folder && !has_all)
             ? acta_db_skill_count_in_folder(db, folder_id, &err)
             : acta_db_skill_count_all(db, &err);
 

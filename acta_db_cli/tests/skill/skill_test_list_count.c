@@ -273,14 +273,13 @@ static void test_count_list_flag(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
     targs_flag_bool(a, "count", &g);
 
-    int rc = do_list(ctx, a, g);
+    int rc = do_count(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    /* output is a bare integer */
-    const char *out = stest_stdout(ctx);
-    TEST(ctx, out[0] >= '0' && out[0] <= '9');
-    TEST(ctx, !strstr(out, "["));
+    /* 7 skills in reference data */
+    TEST_STREQ(ctx, stest_stdout(ctx), "7\n");
     targs_free(a, &g);
 }
+
 
 /* ── runner ───────────────────────────────────────────────────────── */
 
