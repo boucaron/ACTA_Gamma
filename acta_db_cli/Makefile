@@ -13,6 +13,7 @@
 #   tests/skill_folder/   skill_folder CLI tests
 #   tests/context/        context CLI tests
 #   tests/db/             db (exec / version / help) CLI tests
+#   tests/execution_log/  execution_log CLI tests
 #   ../acta_db/libacta_db.a
 #
 # cJSON:
@@ -23,7 +24,8 @@
 CC      ?= cc
 CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
-           -Itests/skill -Itests/skill_folder -Itests/context -Itests/db
+           -Itests/skill -Itests/skill_folder -Itests/context -Itests/db \
+           -Itests/execution_log
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
 CJSON_DIR ?=
@@ -75,12 +77,17 @@ DB_TEST_SRCS   := $(wildcard tests/db/*.c)
 DB_TEST_OBJS   := $(patsubst %.c, %.o, $(DB_TEST_SRCS))
 DB_TEST_TARGET := test_db
 
+# ---- sources (tests: execution_log) ----
+EL_TEST_SRCS   := $(wildcard tests/execution_log/*.c)
+EL_TEST_OBJS   := $(patsubst %.c, %.o, $(EL_TEST_SRCS))
+EL_TEST_TARGET := test_execution_log
+
 # shared test-framework object (lives in tests/skill/, used by all suites)
 HELPERS_OBJ := tests/skill/skill_test_helpers.o
 
 # all test targets (drives the `test` phony + clean)
 ALL_TEST_TARGETS := $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) \
-                    $(CTX_TEST_TARGET) $(DB_TEST_TARGET)
+                    $(CTX_TEST_TARGET) $(DB_TEST_TARGET) $(EL_TEST_TARGET)
 
 .PHONY: all clean test
 
@@ -109,12 +116,17 @@ $(CTX_TEST_TARGET): $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
 $(DB_TEST_TARGET): $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
 	$(CC) $(CFLAGS) -o $@ $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
+# ---- test binary: execution_log ----
+$(EL_TEST_TARGET): $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+	$(CC) $(CFLAGS) -o $@ $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+
 test: $(ALL_TEST_TARGETS)
 	./$(TEST_TARGET)
 	./$(SRV_TEST_TARGET)
 	./$(SFL_TEST_TARGET)
 	./$(CTX_TEST_TARGET)
 	./$(DB_TEST_TARGET)
+	./$(EL_TEST_TARGET)
 
 # ---- pattern rule ----
 %.o: %.c
@@ -122,5 +134,5 @@ test: $(ALL_TEST_TARGETS)
 
 clean:
 	rm -f $(OBJS) $(TEST_OBJS) $(SRV_TEST_OBJS) $(SFL_TEST_OBJS) \
-	      $(CTX_TEST_OBJS) $(DB_TEST_OBJS) \
+	      $(CTX_TEST_OBJS) $(DB_TEST_OBJS) $(EL_TEST_OBJS) \
 	      $(TARGET) $(ALL_TEST_TARGETS)
