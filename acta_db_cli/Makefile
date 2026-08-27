@@ -1,7 +1,7 @@
 # actagamma_db — POC Makefile
 #
 #   make          → builds ./actagamma_db
-#   make test     → builds + runs ./test_skill, ./test_skill_rev, ./test_skill_folder
+#   make test     → builds + runs ./test_skill, ./test_skill_rev, ./test_skill_folder, ./test_context
 #   make clean    → removes objects + binaries
 #
 # Layout:
@@ -11,6 +11,7 @@
 #   tests/skill/      skill CLI tests
 #   tests/skill_rev/  skill_revision CLI tests
 #   tests/skill_folder/  skill_folder CLI tests
+#   tests/context/    context CLI tests
 #   ../acta_db/libacta_db.a
 #
 # cJSON:
@@ -21,7 +22,7 @@
 CC      ?= cc
 CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
-           -Itests/skill -Itests/skill_folder
+           -Itests/skill -Itests/skill_folder -Itests/context
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
 CJSON_DIR ?=
@@ -63,6 +64,11 @@ SFL_TEST_SRCS   := $(wildcard tests/skill_folder/*.c)
 SFL_TEST_OBJS   := $(patsubst %.c, %.o, $(SFL_TEST_SRCS))
 SFL_TEST_TARGET := test_skill_folder
 
+# ---- sources (tests: context) ----
+CTX_TEST_SRCS   := $(wildcard tests/context/*.c)
+CTX_TEST_OBJS   := $(patsubst %.c, %.o, $(CTX_TEST_SRCS))
+CTX_TEST_TARGET := test_context
+
 # shared test-framework object (lives in tests/skill/, used by all suites)
 HELPERS_OBJ := tests/skill/skill_test_helpers.o
 
@@ -85,15 +91,20 @@ $(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
 $(SFL_TEST_TARGET): $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
 	$(CC) $(CFLAGS) -o $@ $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
-test: $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET)
+# ---- test binary: context ----
+$(CTX_TEST_TARGET): $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+	$(CC) $(CFLAGS) -o $@ $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+
+test: $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) $(CTX_TEST_TARGET)
 	./$(TEST_TARGET)
 	./$(SRV_TEST_TARGET)
 	./$(SFL_TEST_TARGET)
+	./$(CTX_TEST_TARGET)
 
 # ---- pattern rule ----
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TEST_OBJS) $(SRV_TEST_OBJS) $(SFL_TEST_OBJS) \
-	      $(TARGET) $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET)
+	rm -f $(OBJS) $(TEST_OBJS) $(SRV_TEST_OBJS) $(SFL_TEST_OBJS) $(CTX_TEST_OBJS) \
+	      $(TARGET) $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) $(CTX_TEST_TARGET)
