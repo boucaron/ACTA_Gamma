@@ -259,7 +259,7 @@ void stest_capture_begin(stest_ctx_t *ctx)
 
     int p[2];
 #ifdef _WIN32
-    _pipe(p, 4096, _O_BINARY); // MINGW
+    _pipe(p, 65536, _O_BINARY); // MINGW
 #else
     pipe(p);
 #endif
