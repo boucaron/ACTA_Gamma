@@ -1,14 +1,15 @@
 # actagamma_db — POC Makefile
 #
 #   make          → builds ./actagamma_db
-#   make test     → builds + runs ./test_skill
+#   make test     → builds + runs ./test_skill and ./test_skill_rev
 #   make clean    → removes objects + binaries
 #
 # Layout:
-#   include/        headers
-#   src/            top-level .c  (argparse.c, json.c, …)
-#   src/commands/   per-entity .c
-#   tests/skill/    skill CLI tests
+#   include/          headers
+#   src/              top-level .c  (argparse.c, json.c, …)
+#   src/commands/     per-entity .c
+#   tests/skill/      skill CLI tests
+#   tests/skill_rev/  skill_revision CLI tests
 #   ../acta_db/libacta_db.a
 #
 # cJSON:
@@ -18,7 +19,7 @@
 
 CC      ?= cc
 CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
-           -Iinclude -I../acta_db/include
+           -Iinclude -I../acta_db/include -Itests/skill
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
 CJSON_DIR ?=
@@ -45,10 +46,18 @@ OBJS    := $(patsubst %.c, %.o, $(SRCS))
 APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS))
 TARGET  := actagamma_db
 
-# ---- sources (tests) ----
+# ---- sources (tests: skill) ----
 TEST_SRCS   := $(wildcard tests/skill/*.c)
 TEST_OBJS   := $(patsubst %.c, %.o, $(TEST_SRCS))
 TEST_TARGET := test_skill
+
+# ---- sources (tests: skill_revision) ----
+SRV_TEST_SRCS   := $(wildcard tests/skill_revision/*.c)
+SRV_TEST_OBJS   := $(patsubst %.c, %.o, $(SRV_TEST_SRCS))
+SRV_TEST_TARGET := test_skill_rev
+
+# shared test-framework object (lives in tests/skill/, used by both suites)
+HELPERS_OBJ := tests/skill/skill_test_helpers.o
 
 .PHONY: all clean test
 
@@ -57,16 +66,21 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
-# ---- test binary (links app objects minus main + test objects) ----
+# ---- test binary: skill ----
 $(TEST_TARGET): $(TEST_OBJS) $(APP_OBJS_NO_MAIN)
 	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
-test: $(TEST_TARGET)
+# ---- test binary: skill_revision ----
+$(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+	$(CC) $(CFLAGS) -o $@ $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+
+test: $(TEST_TARGET) $(SRV_TEST_TARGET)
 	./$(TEST_TARGET)
+	./$(SRV_TEST_TARGET)
 
 # ---- pattern rule ----
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TEST_OBJS) $(TARGET) $(TEST_TARGET)
+	rm -f $(OBJS) $(TEST_OBJS) $(SRV_TEST_OBJS) $(TARGET) $(TEST_TARGET) $(SRV_TEST_TARGET)
