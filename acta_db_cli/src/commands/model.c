@@ -861,7 +861,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* ── delete <id> ──────────────────────────────────────────────── */
+        /* ── delete <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "delete") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
@@ -872,8 +872,17 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_delete(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+
+        /* ── robust <id> parse ────────────────────────────────────── */
+        char  *endptr = NULL;
+        errno = 0;
+        long  id_val = strtol(id_str, &endptr, 10);
+
+        int bad_id =
+             errno != 0 || endptr == id_str || *endptr != '\0'
+          || id_val <= 0 || id_val > (long)INT_MAX;
+
+        if (bad_id) {
             VLOG(1, "model delete: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -881,6 +890,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_delete(stderr);
             return EXIT_INVALID;
         }
+        int id = (int)id_val;
+        /* ──────────────────────────────────────────────────────────── */
 
         VLOG(1, "model delete: id=%d", id);
         VLOG(3, "  id=%d db=%p", id, (const void *)db);
@@ -895,7 +906,12 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  deleted model id=%d", id);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+
+        if (gopts->id_only) {
+            fprintf(stdout, "%d\n", id);
+        } else {
+            fprintf(stdout, "{\"id\":%d}\n", id);
+        }
         return EXIT_OK;
     }
 
@@ -910,8 +926,17 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_restore(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+
+        /* ── robust <id> parse ────────────────────────────────────── */
+        char  *endptr = NULL;
+        errno = 0;
+        long  id_val = strtol(id_str, &endptr, 10);
+
+        int bad_id =
+             errno != 0 || endptr == id_str || *endptr != '\0'
+          || id_val <= 0 || id_val > (long)INT_MAX;
+
+        if (bad_id) {
             VLOG(1, "model restore: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -919,6 +944,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_restore(stderr);
             return EXIT_INVALID;
         }
+        int id = (int)id_val;
+        /* ──────────────────────────────────────────────────────────── */
 
         VLOG(1, "model restore: id=%d", id);
         VLOG(3, "  id=%d db=%p", id, (const void *)db);
@@ -933,9 +960,15 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  restored model id=%d", id);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+
+        if (gopts->id_only) {
+            fprintf(stdout, "%d\n", id);
+        } else {
+            fprintf(stdout, "{\"id\":%d}\n", id);
+        }
         return EXIT_OK;
     }
+
 
     /* ── move <id> --folder_id <fid> ──────────────────────────────── */
     if (strcmp(action, "move") == 0) {
