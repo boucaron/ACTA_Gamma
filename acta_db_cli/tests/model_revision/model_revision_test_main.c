@@ -5,6 +5,7 @@ extern int run_model_revision_test_get();
 extern int run_model_revision_test_get_latest();
 extern int run_model_revision_test_list();
 extern int run_model_revision_test_count();
+extern int run_model_revision_test_misc();
 
 int main(void)
 {
@@ -14,6 +15,8 @@ int main(void)
     f += run_model_revision_test_get_latest();
     f += run_model_revision_test_list();
     f += run_model_revision_test_count();
+    f += run_model_revision_test_misc();
+
 
     if (f == 0) {
         printf("PASS: all model_revision tests passed\n");
