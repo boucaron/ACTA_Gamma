@@ -159,6 +159,25 @@ int acta_db_model_folder_soft_delete(db_t *db, int id)
         if (child_count > 0) return ACTA_DB_ERR_INVALID;
     }
 
+    /* Reject if live models are assigned to this folder. */
+    {
+        const char *check_sql =
+            "SELECT COUNT(*) FROM models"
+            " WHERE folder_id = ? AND deleted_at IS NULL;";
+        sqlite3_stmt *check;
+        if (sqlite3_prepare_v2(db->handle, check_sql, -1, &check, NULL)
+            != SQLITE_OK)
+            return ACTA_DB_ERR_SQL;
+        sqlite3_bind_int(check, 1, id);
+
+        int model_count = 0;
+        if (sqlite3_step(check) == SQLITE_ROW)
+            model_count = (int)sqlite3_column_int64(check, 0);
+        sqlite3_finalize(check);
+
+        if (model_count > 0) return ACTA_DB_ERR_INVALID;
+    }
+
     const char *sql =
         "UPDATE model_folders"
         " SET deleted_at = datetime('now'), updated_at = datetime('now')"

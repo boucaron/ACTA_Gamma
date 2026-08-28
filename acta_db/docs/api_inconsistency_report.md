@@ -11,30 +11,7 @@ Severity key:
 
 ---
 
-## 1. [BUG] `acta_db_model_folder_soft_delete` does not protect contained models
-
-`src/skill_folder.c:294` (`acta_db_skill_folder_soft_delete`) rejects the
-delete if the folder has **live child sub-folders** *or* **live skills**.
-
-`src/model_folder.c:138` (`acta_db_model_folder_soft_delete`) checks only
-**child sub-folders**. A folder whose `models.folder_id` it is soft-deleted,
-leaving live models pointing at a deleted folder.
-
-The headers claim the two share the same invariant
-(`model_folder.h`: "Invariant shared with acta_db_skill_folder_soft_delete")
-— for skill folders that invariant is "no live children *of any kind*",
-for model folders it is "no live child folders". Downstream,
-`acta_db_model_move_to_folder` will then refuse to move those orphaned models
-into any soft-deleted folder, and `list_in_folder` will still show them.
-
-**Fix:** add the same
-`SELECT COUNT(*) FROM models WHERE folder_id = ? AND deleted_at IS NULL`
-guard to `acta_db_model_folder_soft_delete` (and decide whether the
-soft-delete should reject or auto-reparent).
-
----
-
-## 2. [STYLE] Minor naming / style drift
+## 1. [STYLE] Minor naming / style drift
 
 1. `model.c:178` (`acta_db_model_update`) does a redundant
    `sqlite3_bind_int(stmt, 1, m->folder_id);` immediately overwritten by
@@ -56,13 +33,17 @@ soft-delete should reject or auto-reparent).
 
 ## Recommended action order
 
-1. **Fix #1** (model_folder_soft_delete missing model guard) - data
-   integrity.
-2. Style drift (#2).
+1. Style drift (#1).
 
 ---
 
 ## Fixed
+
+- **`acta_db_model_folder_soft_delete` did not protect contained models** —
+  added the `SELECT COUNT(*) FROM models WHERE folder_id = ? AND
+  deleted_at IS NULL` guard (rejects with `ACTA_DB_ERR_INVALID`, same
+  invariant as `acta_db_skill_folder_soft_delete`), header doc updated,
+  tests `soft_delete_live_models` / `soft_delete_deleted_models` added.
 
 - **`acta_db_strerror` returned "unknown error" for defined codes** —
   added `ACTA_DB_ERR_DUPLICATE` ("duplicate name") and

@@ -4,6 +4,7 @@
 #include <string.h>
 #include "db.h"
 #include "model_folder.h"
+#include "model.h"
 
 /* ── Minimal test harness ────────────────────────────────────────── */
 
@@ -46,6 +47,29 @@ static void setup(void)
         "  deleted_at TEXT NULL"
         ");");
     if (rc != ACTA_DB_OK) {
+        fprintf(stderr, "  FATAL: CREATE TABLE model_folders failed (%s)\n",
+                acta_db_strerror(rc));
+        acta_db_close(g_db);
+        g_db = NULL;
+        return;
+    }
+
+    /* Needed by soft_delete's contained-models guard. */
+    rc = acta_db_exec(g_db,
+        "CREATE TABLE models ("
+        "  id               INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  folder_id        INTEGER REFERENCES model_folders(id),"
+        "  name             TEXT NOT NULL,"
+        "  description      TEXT,"
+        "  backend          TEXT NOT NULL,"
+        "  base_url         TEXT,"
+        "  model_identifier TEXT NOT NULL,"
+        "  configuration    TEXT,"
+        "  created_at       TEXT DEFAULT (datetime('now')),"
+        "  updated_at       TEXT DEFAULT (datetime('now')),"
+        "  deleted_at       TEXT NULL"
+        ");");
+    if (rc != ACTA_DB_OK) {
         fprintf(stderr, "  FATAL: CREATE TABLE failed (%s)\n",
                 acta_db_strerror(rc));
         acta_db_close(g_db);
@@ -66,6 +90,23 @@ static void teardown(void)
 static int make_folder(const char *name, int parent_id, int *out_id)
 {
     return acta_db_model_folder_create(g_db, name, parent_id, out_id);
+}
+
+static int make_model(const char *name, int folder_id, int *out_id)
+{
+    model_t m;
+    m.id = 0;
+    m.folder_id = folder_id;
+    m.name = (char *)name;
+    m.description = (char *)"";
+    m.backend = (char *)"openai";
+    m.base_url = NULL;
+    m.model_identifier = (char *)"gpt-test";
+    m.configuration = NULL;
+    m.created_at = NULL;
+    m.updated_at = NULL;
+    m.deleted_at = NULL;
+    return acta_db_model_create(g_db, &m, out_id);
 }
 
 /* ── create ──────────────────────────────────────────────────────── */
@@ -280,6 +321,36 @@ static void test_soft_delete_with_deleted_children_ok(void)
 
     int rc = acta_db_model_folder_soft_delete(g_db, parent);
     T_ASSERT(rc == ACTA_DB_OK, "delete ok when children are all deleted");
+}
+
+static void test_soft_delete_with_live_models(void)
+{
+    int parent, model_id;
+    make_folder("Parent", 0, &parent);
+    make_model("M1", parent, &model_id);
+
+    int rc = acta_db_model_folder_soft_delete(g_db, parent);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "delete with live models → INVALID");
+
+    /* Parent and model should both still be live. */
+    model_folder_t *f = acta_db_model_folder_get(g_db, parent, NULL);
+    T_ASSERT(f->deleted_at == NULL, "parent still live");
+    acta_db_model_folder_free(f);
+
+    model_t *m = acta_db_model_get_live(g_db, model_id, NULL);
+    T_ASSERT(m != NULL, "model still live");
+    acta_db_model_free(m);
+}
+
+static void test_soft_delete_with_deleted_models_ok(void)
+{
+    int parent, model_id;
+    make_folder("Parent", 0, &parent);
+    make_model("M1", parent, &model_id);
+    acta_db_model_soft_delete(g_db, model_id);
+
+    int rc = acta_db_model_folder_soft_delete(g_db, parent);
+    T_ASSERT(rc == ACTA_DB_OK, "delete ok when models are all deleted");
 }
 
 static void test_soft_delete_double(void)
@@ -977,6 +1048,8 @@ int run_model_folder_tests(void)
         {"soft_delete_and_restore",      test_soft_delete_and_restore},
         {"soft_delete_live_children",    test_soft_delete_with_live_children},
         {"soft_delete_deleted_children", test_soft_delete_with_deleted_children_ok},
+        {"soft_delete_live_models",      test_soft_delete_with_live_models},
+        {"soft_delete_deleted_models",   test_soft_delete_with_deleted_models_ok},
         {"soft_delete_double",           test_soft_delete_double},
         {"restore_nonexistent",          test_restore_nonexistent},
         {"restore_null_db",              test_restore_null_db},

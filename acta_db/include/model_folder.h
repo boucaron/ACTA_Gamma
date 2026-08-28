@@ -49,14 +49,15 @@ int  acta_db_model_folder_rename(db_t *db, int id, const char *new_name);
  * Soft-delete a model_folder (sets deleted_at = now).
  *
  * Rejects the delete if the folder still has live (non-deleted)
- * children — delete or re-parent them first.
+ * child folders or live models — delete or move them first.
  *
  * Invariant shared with acta_db_skill_folder_soft_delete:
- *   live children → ACTA_DB_ERR_INVALID.
+ *   live children (of any kind) → ACTA_DB_ERR_INVALID.
  *
  * Returns:
  *   ACTA_DB_OK           folder was soft-deleted.
- *   ACTA_DB_ERR_INVALID  db is NULL, or the folder has live children.
+ *   ACTA_DB_ERR_INVALID  db is NULL, or the folder has live child
+ *                        folders or live models.
  *   ACTA_DB_ERR_NOT_FOUND no live row with that id (absent or already
  *                         soft-deleted).
  *   ACTA_DB_ERR_SQL      SQLite prepare/step failure.
