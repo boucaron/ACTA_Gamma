@@ -63,7 +63,7 @@ void model_usage(FILE *f)
 "      --model_identifier gpt-4o \\\n"
 "      --description \"Primary LLM\" \\\n"
 "      --base_url https://api.openai.com/v1 \\\n"
-"      --folder-id 3\n"
+"      --folder_id 3\n"
 "        <- flag-based\n"
 "\n"
 "    cat model.json | actagamma_db model create --json\n"
@@ -75,7 +75,7 @@ void model_usage(FILE *f)
 "    --model_identifier <str>     Upstream model id\n"
 "\n"
 "  Optional fields:\n"
-"    --folder-id <int>            Owning folder (0 = root)\n"
+"    --folder_id <int>            Owning folder (0 = root)\n"
 "    --description <str>          Human-readable detail\n"
 "    --base_url <str>             API base URL\n"
 "    --configuration <json>       Arbitrary JSON config\n"
@@ -110,7 +110,7 @@ void model_usage(FILE *f)
 "\n"
 "  Fields:\n"
 "    --name <str>                 Display name\n"
-"    --folder-id <int>            Owning folder\n"
+"    --folder_id <int>            Owning folder\n"
 "    --description <str>          Human-readable detail\n"
 "    --backend <str>              Backend identifier\n"
 "    --base_url <str>             API base URL\n"
@@ -130,20 +130,20 @@ void model_usage(FILE *f)
 "== move <id> ======================================================\n"
 "  Move a model to a different folder.\n"
 "\n"
-"    actagamma_db model move 42 --folder-id 7\n"
-"    actagamma_db model move 42 --folder-id 0    # root\n"
+"    actagamma_db model move 42 --folder_id 7\n"
+"    actagamma_db model move 42 --folder_id 0    # root\n"
 "\n"
 "  Required:\n"
-"    --folder-id <int>          Destination folder (0 = root)\n"
+"    --folder_id <int>          Destination folder (0 = root)\n"
 "\n"
 "== list ===========================================================\n"
 "  List models, optionally filtered by folder.\n"
 "\n"
 "    actagamma_db model list\n"
-"    actagamma_db model list --folder-id 3 --offset 10 --limit 25\n"
+"    actagamma_db model list --folder_id 3 --offset 10 --limit 25\n"
 "\n"
 "  Options:\n"
-"    --folder-id <int>    Filter by folder (omit = all)\n"
+"    --folder_id <int>    Filter by folder (omit = all)\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
 "    --count              Return only the row count (no rows)\n"
@@ -155,10 +155,10 @@ void model_usage(FILE *f)
 "  Count models, optionally filtered by folder.\n"
 "\n"
 "    actagamma_db model count\n"
-"    actagamma_db model count --folder-id 3\n"
+"    actagamma_db model count --folder_id 3\n"
 "\n"
 "  Options:\n"
-"    --folder-id <int>    Filter by folder (omit = all)\n"
+"    --folder_id <int>    Filter by folder (omit = all)\n"
 "\n"
 "Global options:\n"
 "  --table            columnar / plain output instead of JSON\n"
@@ -185,7 +185,7 @@ static void usage_create(FILE *f)
 "      --model_identifier gpt-4o \\\n"
 "      --description \"Primary LLM\" \\\n"
 "      --base_url https://api.openai.com/v1 \\\n"
-"      --folder-id 3\n"
+"      --folder_id 3\n"
 "        <- flag-based\n"
 "\n"
 "    cat model.json | actagamma_db model create --json\n"
@@ -197,7 +197,7 @@ static void usage_create(FILE *f)
 "    --model_identifier <str>     Upstream model id\n"
 "\n"
 "  Optional fields:\n"
-"    --folder-id <int>            Owning folder (0 = root)\n"
+"    --folder_id <int>            Owning folder (0 = root)\n"
 "    --description <str>          Human-readable detail\n"
 "    --base_url <str>             API base URL\n"
 "    --configuration <json>       Arbitrary JSON config\n"
@@ -240,7 +240,7 @@ static void usage_update(FILE *f)
 "\n"
 "  Fields:\n"
 "    --name <str>                 Display name\n"
-"    --folder-id <int>            Owning folder\n"
+"    --folder_id <int>            Owning folder\n"
 "    --description <str>          Human-readable detail\n"
 "    --backend <str>              Backend identifier\n"
 "    --base_url <str>             API base URL\n"
@@ -272,11 +272,11 @@ static void usage_move(FILE *f)
 "== move <id> ======================================================\n"
 "  Move a model to a different folder.\n"
 "\n"
-"    actagamma_db model move 42 --folder-id 7\n"
-"    actagamma_db model move 42 --folder-id 0    # root\n"
+"    actagamma_db model move 42 --folder_id 7\n"
+"    actagamma_db model move 42 --folder_id 0    # root\n"
 "\n"
 "  Required:\n"
-"    --folder-id <int>          Destination folder (0 = root)\n", f);
+"    --folder_id <int>          Destination folder (0 = root)\n", f);
 }
 
 static void usage_list(FILE *f)
@@ -286,10 +286,10 @@ static void usage_list(FILE *f)
 "  List models, optionally filtered by folder.\n"
 "\n"
 "    actagamma_db model list\n"
-"    actagamma_db model list --folder-id 3 --offset 10 --limit 25\n"
+"    actagamma_db model list --folder_id 3 --offset 10 --limit 25\n"
 "\n"
 "  Options:\n"
-"    --folder-id <int>    Filter by folder (omit = all)\n"
+"    --folder_id <int>    Filter by folder (omit = all)\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
 "    --count              Return only the row count (no rows)\n"
@@ -305,10 +305,10 @@ static void usage_count(FILE *f)
 "  Count models, optionally filtered by folder.\n"
 "\n"
 "    actagamma_db model count\n"
-"    actagamma_db model count --folder-id 3\n"
+"    actagamma_db model count --folder_id 3\n"
 "\n"
 "  Options:\n"
-"    --folder-id <int>    Filter by folder (omit = all)\n", f);
+"    --folder_id <int>    Filter by folder (omit = all)\n", f);
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -709,8 +709,17 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_update(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+
+        /* ── robust <id> parse ────────────────────────────────────── */
+        char  *endptr = NULL;
+        errno = 0;
+        long  id_val = strtol(id_str, &endptr, 10);
+
+        int bad_id =
+             errno != 0 || endptr == id_str || *endptr != '\0'
+          || id_val <= 0 || id_val > (long)INT_MAX;
+
+        if (bad_id) {
             VLOG(1, "model update: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -718,9 +727,11 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_update(stderr);
             return EXIT_INVALID;
         }
+        int id = (int)id_val;
+        /* ──────────────────────────────────────────────────────────── */
 
         const char *f_name        = cmd_args_flag(ga, "name", 1);
-        const char *f_folder_id   = cmd_args_flag(ga, "folder-id", 1);
+        const char *f_folder_id   = cmd_args_flag(ga, "folder_id", 1);
         const char *f_description = cmd_args_flag(ga, "description", 1);
         const char *f_backend     = cmd_args_flag(ga, "backend", 1);
         const char *f_base_url    = cmd_args_flag(ga, "base_url", 1);
@@ -738,9 +749,41 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        VLOG(1, "model update: id=%d name=%s backend=%s model_identifier=%s",
+        /* ── validate & parse --folder_id ──────────────────────────
+         *   "0"  → move to root (folder_id = NULL)
+         *   "-1" → clamp to root  (mirrors create behaviour)
+         *   "N"  → valid positive integer
+         *   junk → EXIT_INVALID
+         */
+        int  has_folder = 0;   /* 1 once we've decided folder_id is being set */
+        int  folder_val = 0;   /* 0 == root (NULL) */
+
+        if (f_folder_id) {
+            char *fend = NULL;
+            errno = 0;
+            long fv = strtol(f_folder_id, &fend, 10);
+
+            int bad_f =
+                 errno != 0 || fend == f_folder_id || *fend != '\0'
+              || fv > (long)INT_MAX;
+
+            if (bad_f) {
+                VLOG(1, "model update: invalid folder_id=%s", f_folder_id);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid <folder_id>: must be a non-negative integer\"}\n");
+                usage_update(stderr);
+                return EXIT_INVALID;
+            }
+            has_folder = 1;
+            folder_val = (fv < 0) ? 0 : (int)fv;   /* clamp negatives to root */
+        }
+
+        VLOG(1, "model update: id=%d name=%s folder_id=%s backend=%s "
+                "model_identifier=%s",
              id,
              f_name        ? f_name        : "(unchanged)",
+             has_folder    ? (folder_val == 0 ? "root" : (char[]){'0'+folder_val,0}) : "(unchanged)",
              f_backend     ? f_backend     : "(unchanged)",
              f_model_ident ? f_model_ident : "(unchanged)");
 
@@ -754,11 +797,9 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              f_model_ident ? f_model_ident : "(null)",
              f_config      ? f_config      : "(null)");
 
-        VLOG(3, "  id=%d ga=%p", id, (const void *)ga);
-
         /*
-         * For a full update we need the current row to fill in any
-         * fields the caller did not supply.  Fetch first.
+         * Fetch the current row so we can fill in any fields the caller
+         * did not supply (partial-update → full-update merge).
          */
         int err = 0;
         model_t *cur = acta_db_model_get_live(db, id, &err);
@@ -775,12 +816,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_NOT_FOUND;
         }
 
-        model_t m = *cur;   /* shallow copy; we will override fields below */
+        /* Shallow-merge: start from the live row, override only what
+         * the caller actually passed.  All string pointers either point
+         * into `cur` (freed together) or into the caller's arg buffers
+         * (still alive until after the update call). */
+        model_t m = *cur;
 
         if (f_name)
             m.name = (char *)f_name;
-        if (f_folder_id)
-            m.folder_id = atoi(f_folder_id);
+        if (has_folder)
+            m.folder_id = folder_val;   /* 0 → NULL in the DB layer */
         if (f_description)
             m.description = (char *)f_description;
         if (f_backend)
@@ -798,7 +843,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         VLOG(3, "  acta_db_model_update → rc=%d", rc);
 
-        /* m shares strings with cur; free cur once. */
+        /* m shares string pointers with cur; free cur once (and m). */
         acta_db_model_free(cur);
 
         if (rc != ACTA_DB_OK) {
@@ -807,7 +852,12 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  updated model id=%d", id);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+
+        if (gopts->id_only) {
+            fprintf(stdout, "%d\n", id);
+        } else {
+            fprintf(stdout, "{\"id\":%d}\n", id);
+        }
         return EXIT_OK;
     }
 
@@ -887,7 +937,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* ── move <id> --folder-id <fid> ──────────────────────────────── */
+    /* ── move <id> --folder_id <fid> ──────────────────────────────── */
     if (strcmp(action, "move") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
@@ -908,11 +958,11 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        const char *f_folder_id = cmd_args_flag(ga, "folder-id", 1);
+        const char *f_folder_id = cmd_args_flag(ga, "folder_id", 1);
         int folder_id = f_folder_id ? atoi(f_folder_id) : 0;
 
         VLOG(1, "model move: id=%d → folder_id=%d", model_id, folder_id);
-        VLOG(2, "  folder-id raw=%s", f_folder_id ? f_folder_id : "(root)");
+        VLOG(2, "  folder_id raw=%s", f_folder_id ? f_folder_id : "(root)");
         VLOG(3, "  model_id=%d folder_id=%d db=%p",
              model_id, folder_id, (const void *)db);
 
@@ -933,7 +983,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *f_folder  = cmd_args_flag(ga, "folder-id", 1);
+        const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
         const char *s_off     = cmd_args_flag(ga, "offset", 1);
         const char *s_lim     = cmd_args_flag(ga, "limit", 1);
         const char *s_count   = cmd_args_flag(ga, "count", 0);
@@ -1045,11 +1095,11 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *f_folder = cmd_args_flag(ga, "folder-id", 1);
+        const char *f_folder = cmd_args_flag(ga, "folder_id", 1);
         int folder_id = f_folder ? atoi(f_folder) : -1;  /* -1 = all */
 
         VLOG(1, "model count: folder_id=%d", folder_id);
-        VLOG(2, "  folder-id raw=%s", f_folder ? f_folder : "(all)");
+        VLOG(2, "  folder_id raw=%s", f_folder ? f_folder : "(all)");
         VLOG(3, "  folder_id=%d db=%p", folder_id, (const void *)db);
 
         int err = 0;
