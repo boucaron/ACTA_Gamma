@@ -126,7 +126,7 @@ static void test_model_create_dup_root(void) {
     acta_db_model_create(db, &m, &id1);
     int id2;
     int rc = acta_db_model_create(db, &m, &id2);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_DUPLICATE);
     test_db_teardown(db, path);
 }
 
@@ -143,7 +143,7 @@ static void test_model_create_dup_child(void) {
     acta_db_model_create(db, &m, &id1);
     int id2;
     int rc = acta_db_model_create(db, &m, &id2);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_DUPLICATE);
     test_db_teardown(db, path);
 }
 
