@@ -316,10 +316,13 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
-    /* The only constraints on this INSERT are the four FKs, so a
+    /* The handle runs with extended result codes (see db.c), so an FK
+     * violation comes back as SQLITE_CONSTRAINT_FOREIGNKEY, not the
+     * generic SQLITE_CONSTRAINT (same convention as skill.c).
+     * The only constraints on this INSERT are the four FKs, so a
      * constraint failure means a referenced row does not exist. */
-    if (rc == SQLITE_CONSTRAINT) return ACTA_DB_ERR_FK;
-    if (rc != SQLITE_DONE)       return ACTA_DB_ERR_SQL;
+    if (rc == SQLITE_CONSTRAINT_FOREIGNKEY) return ACTA_DB_ERR_FK;
+    if (rc != SQLITE_DONE)                  return ACTA_DB_ERR_SQL;
 
     if (out_id) *out_id = (int)sqlite3_last_insert_rowid(db->handle);
     return ACTA_DB_OK;
