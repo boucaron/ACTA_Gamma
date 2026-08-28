@@ -981,8 +981,17 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_move(stderr);
             return EXIT_INVALID;
         }
-        int model_id = atoi(id_str);
-        if (model_id <= 0) {
+
+        /* ── robust <id> parse ────────────────────────────────────── */
+        char  *endptr = NULL;
+        errno = 0;
+        long  id_val = strtol(id_str, &endptr, 10);
+
+        int bad_id =
+             errno != 0 || endptr == id_str || *endptr != '\0'
+          || id_val <= 0 || id_val > (long)INT_MAX;
+
+        if (bad_id) {
             VLOG(1, "model move: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -990,9 +999,31 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_move(stderr);
             return EXIT_INVALID;
         }
+        int model_id = (int)id_val;
+        /* ──────────────────────────────────────────────────────────── */
 
         const char *f_folder_id = cmd_args_flag(ga, "folder_id", 1);
-        int folder_id = f_folder_id ? atoi(f_folder_id) : 0;
+        int folder_id = 0;   /* 0 == root (NULL) */
+
+        if (f_folder_id) {
+            char *fend = NULL;
+            errno = 0;
+            long fv = strtol(f_folder_id, &fend, 10);
+
+            int bad_f =
+                 errno != 0 || fend == f_folder_id || *fend != '\0'
+              || fv > (long)INT_MAX;
+
+            if (bad_f) {
+                VLOG(1, "model move: invalid folder_id=%s", f_folder_id);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"invalid <folder_id>: must be a non-negative integer\"}\n");
+                usage_move(stderr);
+                return EXIT_INVALID;
+            }
+            folder_id = (fv < 0) ? 0 : (int)fv;  /* clamp negatives to root */
+        }
 
         VLOG(1, "model move: id=%d → folder_id=%d", model_id, folder_id);
         VLOG(2, "  folder_id raw=%s", f_folder_id ? f_folder_id : "(root)");
@@ -1010,9 +1041,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  moved model id=%d → folder_id=%d", model_id, folder_id);
-        fprintf(stdout, "{\"id\":%d,\"folder_id\":%d}\n", model_id, folder_id);
+
+        if (gopts->id_only) {
+            fprintf(stdout, "%d\n", model_id);
+        } else {
+            fprintf(stdout,
+                "{\"id\":%d,\"folder_id\":%d}\n", model_id, folder_id);
+        }
         return EXIT_OK;
     }
+
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
