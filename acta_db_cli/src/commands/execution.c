@@ -870,14 +870,14 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *f_status   = cmd_args_flag(ga, "status", 0);
-        const char *f_ctx_id   = cmd_args_flag(ga, "context-id", 0);
-        const char *f_skill_id = cmd_args_flag(ga, "skill-revision-id", 0);
-        const char *f_model_id = cmd_args_flag(ga, "model-revision-id", 0);
-        const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 0);
+        const char *f_status   = cmd_args_flag(ga, "status", 1);
+        const char *f_ctx_id   = cmd_args_flag(ga, "context-id", 1);
+        const char *f_skill_id = cmd_args_flag(ga, "skill-revision-id", 1);
+        const char *f_model_id = cmd_args_flag(ga, "model-revision-id", 1);
+        const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 1);
         const char *s_off      = cmd_args_flag(ga, "offset", 1);
         const char *s_lim      = cmd_args_flag(ga, "limit", 1);
-        const char *s_count    = cmd_args_flag(ga, "count", 0);
+        int has_count    = cmd_args_has_flag(ga, "count");
 
         int offset = 0, limit = 0;
 
@@ -938,7 +938,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              q.context_id, q.skill_revision_id,
              q.model_revision_id, q.parent_execution_id);
 
-        if (gopts->count || s_count) {
+        if (gopts->count || has_count) {
             int err = 0;
             int n = acta_db_execution_count(db, &q, &err);
             if (err != ACTA_DB_OK) {
@@ -988,11 +988,11 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *f_status   = cmd_args_flag(ga, "status", 0);
-        const char *f_ctx_id   = cmd_args_flag(ga, "context-id", 0);
-        const char *f_skill_id = cmd_args_flag(ga, "skill-revision-id", 0);
-        const char *f_model_id = cmd_args_flag(ga, "model-revision-id", 0);
-        const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 0);
+        const char *f_status   = cmd_args_flag(ga, "status", 1);
+        const char *f_ctx_id   = cmd_args_flag(ga, "context-id", 1);
+        const char *f_skill_id = cmd_args_flag(ga, "skill-revision-id", 1);
+        const char *f_model_id = cmd_args_flag(ga, "model-revision-id", 1);
+        const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 1);
 
         execution_query_t q = {
             .status              = f_status,
