@@ -34,19 +34,36 @@ soft-delete should reject or auto-reparent).
 
 ---
 
+## 2. [STYLE] Minor naming / style drift
+
+1. `model.c:178` (`acta_db_model_update`) does a redundant
+   `sqlite3_bind_int(stmt, 1, m->folder_id);` immediately overwritten by
+   `sqlite3_bind_null` / `sqlite3_bind_int` in the if/else — harmless but
+   confusing; the skill version doesn't have the redundant line.
+2. `execution_query_t` zero-value = "any" works, but the struct mixes
+   `0`-sentinel ints with `NULL`-sentinel strings while the doc block
+   repeats both rules twice (once in prose, once in comments) — fine, but
+   `ACTA_EXEC_QUERY_ANY` is a `#define` of a compound literal while every
+   other multi-line convenience is a function; consider a
+   `acta_db_execution_query_any()` returning the struct, and note the
+   macro produces a statement-level-only expression in some C contexts.
+3. `db.h` typedefs `db_t` *after* declaring `acta_db_strerror`; `model.h`
+   et al. include only `db.h`, so users who include a single entity
+   header get the whole convention block duplicated per header — keep the
+   convention block in exactly one place.
+
+---
+
 ## Recommended action order
 
 1. **Fix #1** (model_folder_soft_delete missing model guard) - data
    integrity.
+2. Style drift (#2).
 
 ---
 
 ## Fixed
 
-- **Style drift** — redundant `folder_id` bind removed in
-  `acta_db_model_update`; `ACTA_EXEC_QUERY_ANY` macro replaced by
-  `acta_db_execution_query_any()` inline function (all call sites
-  updated); `db_t` typedef moved above `acta_db_strerror` (f24cd61).
 - **`acta_db_strerror` returned "unknown error" for defined codes** —
   added `ACTA_DB_ERR_DUPLICATE` ("duplicate name") and
   `ACTA_DB_ERR_FK` ("foreign key violation") cases + test (e4e0bc3).
