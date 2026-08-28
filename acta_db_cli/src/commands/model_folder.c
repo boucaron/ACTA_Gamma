@@ -430,7 +430,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
              (const void *)mf.name);
 
         /* ── required-field validation ────────────────────────────── */
-        if (!mf.name) {
+        if (!mf.name || mf.name[0] == '\0' ) {
             VLOG(1, "  ERROR: missing required field 'name'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -540,10 +540,10 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *s_parent = cmd_args_flag(ga, "parent_id", 0);
+        const char *s_parent = cmd_args_flag(ga, "parent_id", 1);
         const char *s_off    = cmd_args_flag(ga, "offset", 1);
         const char *s_lim    = cmd_args_flag(ga, "limit", 1);
-        const char *s_count  = cmd_args_flag(ga, "count", 0);
+        int has_count  = cmd_args_has_flag(ga, "count");
 
         int offset = 0, limit = 0;
 
@@ -602,7 +602,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         VLOG(3, "  has_parent=%d parent_id=%d offset=%d limit=%d",
              has_parent, parent_id, offset, limit);
 
-        if (gopts->count || s_count) {
+        if (gopts->count || has_count) {
             int err = 0;
             int n;
             if (has_parent) {
@@ -666,7 +666,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *s_parent = cmd_args_flag(ga, "parent_id", 0);
+        const char *s_parent = cmd_args_flag(ga, "parent_id", 1);
 
         int parent_id = 0;
         int has_parent = 0;

@@ -1,5 +1,5 @@
 /* ── execution_log_test_main.c ────────────────────────────────────── */
-#include "skill_test_helpers.h"
+#include "../skill/skill_test_helpers.h"
 #include <stdio.h>
 
 extern int run_execution_log_test_create(void);

@@ -11,6 +11,7 @@
 #   tests/skill/          skill CLI tests  (also holds shared skill_test_helpers.*)
 #   tests/skill_rev/      skill_revision CLI tests
 #   tests/skill_folder/   skill_folder CLI tests
+#   tests/model_folder/   model_folder CLI tests
 #   tests/context/        context CLI tests
 #   tests/db/             db (exec / version / help) CLI tests
 #   tests/execution_log/  execution_log CLI tests
@@ -25,7 +26,8 @@
 CC      ?= cc
 CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
-           -Itests/skill -Itests/skill_folder -Itests/context -Itests/db \
+           -Itests/skill -Itests/skill_folder -Itests/model_folder \
+           -Itests/context -Itests/db \
            -Itests/execution_log -Itests/exec
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
@@ -68,6 +70,11 @@ SFL_TEST_SRCS   := $(wildcard tests/skill_folder/*.c)
 SFL_TEST_OBJS   := $(patsubst %.c, %.o, $(SFL_TEST_SRCS))
 SFL_TEST_TARGET := test_skill_folder
 
+# ---- sources (tests: model_folder) ----
+MF_TEST_SRCS   := $(wildcard tests/model_folder/*.c)
+MF_TEST_OBJS   := $(patsubst %.c, %.o, $(MF_TEST_SRCS))
+MF_TEST_TARGET := test_model_folder
+
 # ---- sources (tests: context) ----
 CTX_TEST_SRCS   := $(wildcard tests/context/*.c)
 CTX_TEST_OBJS   := $(patsubst %.c, %.o, $(CTX_TEST_SRCS))
@@ -93,8 +100,8 @@ HELPERS_OBJ := tests/skill/skill_test_helpers.o
 
 # all test targets (drives the `test` phony + clean)
 ALL_TEST_TARGETS := $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) \
-                    $(CTX_TEST_TARGET) $(DB_TEST_TARGET) $(EL_TEST_TARGET) \
-                    $(EXEC_TEST_TARGET)
+                    $(MF_TEST_TARGET) $(CTX_TEST_TARGET) $(DB_TEST_TARGET) \
+                    $(EL_TEST_TARGET) $(EXEC_TEST_TARGET)
 
 .PHONY: all clean test
 
@@ -114,6 +121,10 @@ $(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
 # ---- test binary: skill_folder ----
 $(SFL_TEST_TARGET): $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
 	$(CC) $(CFLAGS) -o $@ $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+
+# ---- test binary: model_folder ----
+$(MF_TEST_TARGET): $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+	$(CC) $(CFLAGS) -o $@ $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: context ----
 $(CTX_TEST_TARGET): $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
@@ -135,6 +146,7 @@ test: $(ALL_TEST_TARGETS)
 	./$(TEST_TARGET)
 	./$(SRV_TEST_TARGET)
 	./$(SFL_TEST_TARGET)
+	./$(MF_TEST_TARGET)
 	./$(CTX_TEST_TARGET)
 	./$(DB_TEST_TARGET)
 	./$(EL_TEST_TARGET)
@@ -146,6 +158,7 @@ test: $(ALL_TEST_TARGETS)
 
 clean:
 	rm -f $(OBJS) $(TEST_OBJS) $(SRV_TEST_OBJS) $(SFL_TEST_OBJS) \
+	      $(MF_TEST_OBJS) \
 	      $(CTX_TEST_OBJS) $(DB_TEST_OBJS) $(EL_TEST_OBJS) \
 	      $(EXEC_TEST_OBJS) \
 	      $(TARGET) $(ALL_TEST_TARGETS)
