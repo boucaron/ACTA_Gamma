@@ -49,8 +49,26 @@ extern "C" {
  *            limit  max rows for this call.
  *                   ≤ 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE.
  *                   To fetch all rows, page with successive offset values.
- * 
- * Counters:  int foo_count(db, …, int *err);
+ *
+ * Common pagination contract (all listers):
+ *   offset - zero-based row offset (skip this many rows).
+ *            Must be >= 0; a negative value yields ACTA_DB_ERR_INVALID.
+ *   limit  - maximum number of rows to return.
+ *            <= 0 or > ACTA_DB_MAX_PAGE -> clamped to ACTA_DB_MAX_PAGE (10000).
+ *            A lister NEVER returns more than ACTA_DB_MAX_PAGE rows in one
+ *            call, regardless of what the caller passes; to fetch a result
+ *            set larger than that, page with successive offset values.
+ *   Return value:
+ *     heap-allocated array of T*  ->  success (a valid empty set may
+ *     still be a NULL array - check *out_count / *err)
+ *     NULL                        ->  real failure (*err < 0)
+ *   If out_count is non-NULL it receives the number of items returned
+ *   (0 for an empty page, which is success, not an error).
+ *   If err is non-NULL it is set to ACTA_DB_OK on success or a
+ *   negative ACTA_DB_ERR_* code on failure.
+ *   Either out_count or err (or both) may be NULL.
+ *
+ * Counters:  int foo_count(db, ..., int *err);
  *            returns >= 0 on success, -1 on failure.
  *            err nullable; same codes as mutators.
  *

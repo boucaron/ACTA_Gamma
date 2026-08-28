@@ -84,7 +84,8 @@ skill_folder_t *acta_db_skill_folder_get(db_t *db, int id, int *err);
  * ordered by id.
  *
  * offset – rows to skip (>= 0; negative → ACTA_DB_ERR_INVALID).
- * limit  – max rows to return; <= 0 means no limit (return all).
+ * limit  – max rows to return; <= 0 or > ACTA_DB_MAX_PAGE → clamped
+ *          to ACTA_DB_MAX_PAGE (see the common pagination contract in db.h).
  *
  * Returns heap-allocated array of skill_folder_t*, or NULL on failure.
  * *out_count (nullable) receives the number of rows returned.
@@ -98,7 +99,8 @@ skill_folder_t **acta_db_skill_folder_list_children(db_t *db,
 /* Return a page of all live folders ordered by id.
  *
  * offset – rows to skip (>= 0; negative → ACTA_DB_ERR_INVALID).
- * limit  – max rows to return; <= 0 means no limit (return all).
+ * limit  – max rows to return; <= 0 or > ACTA_DB_MAX_PAGE → clamped
+ *          to ACTA_DB_MAX_PAGE (see the common pagination contract in db.h).
  *
  * Returns heap-allocated array of skill_folder_t*, or NULL on failure.
  * *out_count (nullable) receives the number of rows returned.

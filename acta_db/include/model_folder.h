@@ -19,24 +19,9 @@ typedef struct {
     char   *deleted_at;     /* NULL if live */
 } model_folder_t;
 
-/*
- * ── Common pagination contract (all listers below) ─────────────────
- *
- *   offset – zero-based row offset (skip this many rows).
- *            Must be >= 0; a negative value yields ACTA_DB_ERR_INVALID.
- *   limit  – maximum number of rows to return.
- *            <= 0 means no limit (return all matching rows).
- *
- *   Return value:
- *     heap-allocated array of model_folder_t*  →  success (possibly empty)
- *     NULL                                      →  real failure
- *
- *   If out_count is non-NULL it receives the number of items returned.
- *   If err is non-NULL it is set to ACTA_DB_OK on success or a
- *   negative ACTA_DB_ERR_* code on failure.
- *   Either out_count or err (or both) may be NULL.
- * ────────────────────────────────────────────────────────────────────
- */
+/* ── Pagination: see the common pagination contract in db.h ────────────
+ *    (offset >= 0; limit clamped to ACTA_DB_MAX_PAGE; out_count/err
+ *    nullable; empty page is success with *out_count == 0.) */
 
 /* --- Mutators ──────────────────────────────────────────────────────── */
 
@@ -54,8 +39,10 @@ int  acta_db_model_folder_create(db_t *db, const char *name, int parent_id,
 
 /* Rename an existing folder.
  *
- * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if db, id, or new_name
- * is invalid, ACTA_DB_ERR_SQL on failure. */
+ * Returns ACTA_DB_OK on success,
+ * ACTA_DB_ERR_INVALID if db, id, or new_name is invalid,
+ * ACTA_DB_ERR_NOT_FOUND if no live folder matches id,
+ * ACTA_DB_ERR_SQL on failure. */
 int  acta_db_model_folder_rename(db_t *db, int id, const char *new_name);
 
 /**
@@ -83,7 +70,8 @@ int acta_db_model_folder_soft_delete(db_t *db, int id);
  * (deleted_at IS NULL).
  *
  * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if db is NULL,
- * ACTA_DB_ERR_SQL on failure. */
+ * ACTA_DB_ERR_NOT_FOUND if no folder with that id exists (live or
+ * deleted), ACTA_DB_ERR_SQL on failure. */
 int  acta_db_model_folder_restore(db_t *db, int id);
 
 /*

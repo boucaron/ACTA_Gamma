@@ -68,13 +68,11 @@ typedef struct {
 /*
  * ── Execution state machine ──────────────────────────────────────────
  *
- *   pending ──start()──────────▶ running ──complete()──▶ completed  (terminal)
- *                     │               │
- *                     │          fail()
- *                     │               ▼
- *                     └──cancel()───▶ failed       (terminal)
- *                              ▼
- *                         cancelled               (terminal)
+ *   pending ──start()──▶ running ──complete()──▶ completed  (terminal)
+ *                            │
+ *                            └──fail()──────────▶ failed     (terminal)
+ *
+ *   pending, running ──cancel()──▶ cancelled  (terminal)
  *
  *  Transition rules (enforced in the C layer, not in SQL):
  *
@@ -93,11 +91,16 @@ typedef struct {
  *  function validates the current state internally and returns
  *  ACTA_DB_ERR_INVALID if the transition is illegal.
  *
- *  ⚠  The SELECT-then-UPDATE pattern is not atomic.  This is safe
- *  under the project's single-threaded DB usage model.  If the handle
- *  is ever shared across threads, fold the status guard into the
- *  UPDATE itself (  WHERE id = ? AND status = ?  ) and rely on
- *  sqlite3_changes().
+ *  Concurrency: each transition UPDATE already carries its own status
+ *  guard (  WHERE id = ? AND status = ?  ) and checks
+ *  sqlite3_changes(), so the state change itself is atomic even if
+ *  the handle is shared across threads.  The pre-SELECT exists only
+ *  to return the friendlier ACTA_DB_ERR_INVALID for an illegal
+ *  transition; in a race the losing caller simply sees 0 rows changed.
+ *
+ *  Permanence: execution rows have no delete / restore API (contexts
+ *  and executions are referenced by ON DELETE RESTRICT foreign keys),
+ *  so a row created here lives for the life of the database.
  * ─────────────────────────────────────────────────────────────────────
  */
 
@@ -149,7 +152,8 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
  *   offset – number of rows to skip (0-based; 0 = first row).
  *            Must be >= 0; negative → ACTA_DB_ERR_INVALID.
  *   limit  – maximum number of rows to return.
- *            <= 0 means no limit (return all matching rows).
+ *            <= 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE
+ *            (see the common pagination contract in db.h).
  *
  * Returns:
  *   heap-allocated array of execution_t* (free with

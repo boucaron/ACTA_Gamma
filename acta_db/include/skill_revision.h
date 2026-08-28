@@ -79,7 +79,8 @@ skill_revision_t *acta_db_skill_revision_get_latest(
  * Pagination:
  *   offset – zero-based row offset (skip this many rows). Must be >= 0.
  *   limit  – maximum number of rows to return.
- *            <= 0 means no limit (return all matching rows).
+ *            <= 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE
+ *            (see the common pagination contract in db.h).
  *
  * Returns a heap-allocated array of skill_revision_t* on success,
  * or NULL on real failure.

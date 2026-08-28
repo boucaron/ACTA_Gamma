@@ -61,7 +61,8 @@ model_revision_t *acta_db_model_revision_get_latest(
  *
  *   offset – number of rows to skip (0-based; 0 = first page).
  *   limit  – maximum number of rows to return.
- *            <= 0 means no limit (return all matching rows).
+ *            <= 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE
+ *            (see the common pagination contract in db.h).
  *
  * Returns a heap-allocated array of model_revision_t* (free with
  * acta_db_model_revision_list_free), or NULL on real failure.

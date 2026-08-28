@@ -115,7 +115,8 @@ skill_t *acta_db_skill_get_live(db_t *db, int id, int *err);
  *
  * Pagination:
  *   offset – rows to skip (0-based). Must be >= 0.
- *   limit  – max rows to return. <= 0 means no limit (return all).
+ *   limit  – max rows to return. <= 0 or > ACTA_DB_MAX_PAGE → clamped
+ *            to ACTA_DB_MAX_PAGE (see the common pagination contract in db.h).
  *
  * Returns a heap-allocated array of skill_t*, or NULL.
  * *out_count (nullable) receives the number of items returned.

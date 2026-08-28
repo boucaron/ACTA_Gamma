@@ -100,6 +100,7 @@ int      acta_db_model_soft_delete(db_t *db, int id);
  * Mutator – restore a soft-deleted model (set deleted_at = NULL).
  *
  * Returns ACTA_DB_OK on success (including when already live – no-op).
+ * ACTA_DB_ERR_NOT_FOUND if no row with that id exists (live or deleted).
  * ACTA_DB_ERR_SQL on failure.
  */
 int      acta_db_model_restore(db_t *db, int id);
@@ -122,7 +123,8 @@ int      acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id);
  *
  *   offset – zero-based row offset.  Must be >= 0.
  *   limit  – maximum number of rows to return.
- *            <= 0 means no limit (return all matching rows).
+ *            <= 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE
+ *            (see the common pagination contract in db.h).
  *
  * Returns a heap-allocated array of model_t* (free with
  * acta_db_model_list_free), or NULL on real failure.
@@ -143,7 +145,8 @@ model_t **acta_db_model_list_in_folder(db_t *db,
  *
  *   offset – zero-based row offset.  Must be >= 0.
  *   limit  – maximum number of rows to return.
- *            <= 0 means no limit (return all matching rows).
+ *            <= 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE
+ *            (see the common pagination contract in db.h).
  *
  * Returns a heap-allocated array of model_t* (free with
  * acta_db_model_list_free), or NULL on real failure.

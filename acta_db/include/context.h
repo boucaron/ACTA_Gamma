@@ -34,6 +34,11 @@ typedef struct {
 
 /* ── Single-row operations ────────────────────────────────────────── */
 
+/* Immutability: context rows have no update / soft-delete API.  The
+ * schema installs a BEFORE UPDATE trigger that RAISE(ABORT)s, so any
+ * out-of-band UPDATE fails with "contexts are immutable" (observable
+ * via acta_db_last_error).  Treat context rows as append-only. */
+
 /* Insert a context row.
  * Returns ACTA_DB_OK on success; ACTA_DB_ERR_INVALID if required fields
  * are missing; ACTA_DB_ERR_SQL if the statement fails.
@@ -60,7 +65,9 @@ context_t *acta_db_context_get(db_t *db, int id, int *err);
  *
  * q      – filter criteria; NULL treats both fields as "match all".
  * offset – skip this many rows before starting (>= 0).
- * limit  – maximum number of rows to return (<= 0 = no cap).
+ * limit  – maximum number of rows to return (<= 0 or > ACTA_DB_MAX_PAGE
+ *          → clamped to ACTA_DB_MAX_PAGE; see the common pagination
+ *          contract in db.h).
  *
  * Returns a heap-allocated array of context_t pointers (free with
  * acta_db_context_list_free), or NULL on real failure.

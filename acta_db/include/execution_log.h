@@ -28,6 +28,12 @@ typedef struct {
 
 /*
  * Mutator.
+ *
+ * Validation: db and log must be non-NULL; log->level must be one of
+ * "debug" | "info" | "warn" | "error" (ACTA_LOG_LEVEL_* constants,
+ * case-sensitive); log->event must be non-NULL.  Any violation
+ * → ACTA_DB_ERR_INVALID.
+ *
  *   Return value is the error code:
  *     ACTA_DB_OK (0)        – row created; *out_id set (if non-NULL).
  *     negative ACTA_DB_ERR_* – failure; *out_id left untouched.
@@ -67,16 +73,20 @@ execution_log_t *acta_db_execution_log_get(db_t *db,
  *     Server-side filter on the log level column.
  *       - NULL or "" (empty string) → no filter (return all levels).
  *       - "debug" | "info" | "warn" | "error" → only that level.
+ *       - any other non-empty value → *err = ACTA_DB_ERR_INVALID,
+ *         returns NULL (server validates the level, it is not free-form).
  *
  *   Pagination:
  *     offset – number of rows to skip (0-based).
  *     limit  – maximum number of rows to return.
- *              <= 0 means no limit (return all matching rows).
+ *              <= 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE
+ *              (see the common pagination contract in db.h).
  *
- *   success / rows found → returns valid execution_log_t ** (array of
- *                          heap-allocated structs), *err = ACTA_DB_OK.
- *   no rows (not-found)  → returns NULL, *err = ACTA_DB_OK.
- *   real failure         → returns NULL, *err = negative ACTA_DB_ERR_*.
+ *   rows found   → returns a valid array of heap-allocated structs,
+ *                  *out_count = number of rows, *err = ACTA_DB_OK.
+ *   empty page   → returns NULL, *out_count = 0, *err = ACTA_DB_OK
+ *                  (success — not an error).
+ *   real failure → returns NULL, *err = negative ACTA_DB_ERR_*.
  *
  * Both out_count and err may be NULL (caller ignores them).
  */
@@ -90,7 +100,9 @@ execution_log_t **acta_db_execution_log_list_by_execution(db_t *db,
  * Count – total number of log rows for a given execution (ignoring pagination).
  *
  *   level:
- *     Same semantics as list_by_execution: NULL or "" → count all levels.
+ *     Same semantics as list_by_execution: NULL or "" → count all
+ *     levels; unrecognized non-empty level → returns -1,
+ *     *err = ACTA_DB_ERR_INVALID.
  *
  * Returns the row count (>= 0), or -1 on error (*err set).
  * err may be NULL.
