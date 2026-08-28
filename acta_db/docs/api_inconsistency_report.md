@@ -34,33 +34,7 @@ soft-delete should reject or auto-reparent).
 
 ---
 
-## 2. [DOC] `acta_db_strerror` returns "unknown error" for two defined codes
-
-`db.h` promises:
-> "Returns 'unknown error' for values outside the defined range."
-
-But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
-`ACTA_DB_ERR_FK` (-7) — both *defined* codes fall through to
-"unknown error". Add the two cases (e.g. "duplicate name" /
-"foreign key violation").
-
----
-
-## 3. [DOC] Stale/incorrect comments in `db.c` around `acta_db_open`
-
-- `src/db.c:70` comment: "Returns `ACTA_DB_ERR_NOTFOUND` when the file
-  did not exist…" — no such constant exists; the code sets
-  `ACTA_DB_ERR_INVALID_DB`, and it is not about a missing file, it is
-  about an empty/non-SQLite file.
-- `db.h` documents `creationMode` only as "If creationMode is set to 0,
-  we check if this is a SQLite DB". Any non-zero value is "create mode",
-  but no `ACTA_DB_OPEN_EXISTING` / `ACTA_DB_OPEN_CREATE`-style constants
-  are defined, so callers pass raw `0`/`1` literals. Define two named
-  constants.
-
----
-
-## 4. [STYLE] Minor naming / style drift
+## 2. [STYLE] Minor naming / style drift
 
 1. `model.c:178` (`acta_db_model_update`) does a redundant
    `sqlite3_bind_int(stmt, 1, m->folder_id);` immediately overwritten by
@@ -84,14 +58,19 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 1. **Fix #1** (model_folder_soft_delete missing model guard) - data
    integrity.
-2. Code cleanup: #2 (strerror DUPLICATE/FK cases), #3 (stale db.c
-   comment + named open-mode constants).
-3. Style drift (#4).
+2. Style drift (#2).
 
 ---
 
 ## Fixed
 
+- **`acta_db_strerror` returned "unknown error" for defined codes** —
+  added `ACTA_DB_ERR_DUPLICATE` ("duplicate name") and
+  `ACTA_DB_ERR_FK` ("foreign key violation") cases + test (e4e0bc3).
+- **Stale `acta_db_open` comment / unnamed open modes** — comment
+  rewritten in `db.c`; `ACTA_DB_OPEN_EXISTING` / `ACTA_DB_OPEN_CREATE`
+  constants added in `db.h`; all in-repo call sites now use the named
+  constants (e4e0bc3).
 - **Empty-string validation drift between model and skill folders** —
   model folder create/rename now reject empty names; docs aligned
   (2a9bf6d).
