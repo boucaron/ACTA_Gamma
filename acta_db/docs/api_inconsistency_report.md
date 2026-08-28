@@ -34,97 +34,7 @@ soft-delete should reject or auto-reparent).
 
 ---
 
-## 2. [ASMT] Empty-string validation drift between model and skill folders — **FIXED** (2a9bf6d)
-
-Resolved by aligning the model side to the skill side:
-`acta_db_model_folder_create` and `acta_db_model_folder_rename` now reject
-empty names (`!*name` / `!*new_name` → `ACTA_DB_ERR_INVALID`), and
-`model_folder.h` documents "NULL/empty" like `skill_folder.h` does.
-Covers `create_empty_name` / `rename_empty_name` tests in
-`tests/test_model_folder.c`.
-
-| Check | model | skill |
-|---|---|---|
-| create: empty `name` rejected? | **No** (`src/model_folder.c:94` only checks NULL) | Yes (`!*name`, src/skill_folder.c:160) |
-| rename: empty `new_name` rejected? | **No** (`src/model_folder.c:118` only checks NULL) | Yes (`src/skill_folder.c:185`) |
-
-The headers agree the implementations should differ
-(`model_folder.h`: "if db or name is NULL" vs `skill_folder.h`:
-"NULL/empty"), so the code matches the docs — but the two halves of the
-API behave differently for identical inputs, and neither header documents
-that the model side is *weaker*. Either align the implementations and
-docs, or explicitly document the difference.
-
----
-
-## 3. [ASMT] `acta_db_model_update` lacks the `id <= 0` guard that `acta_db_skill_update` has — **FIXED** (eeb98bc)
-
-Resolved by adding `m->id <= 0` to the `acta_db_model_update` guard
-(→ `ACTA_DB_ERR_INVALID`), documenting it in `model.h` like
-`skill.h` does, and adding the `test_model_update_invalid_id` test.
-
-- `src/skill.c:130`: `if (!db || !s || s->id <= 0 || ...) → INVALID`
-- `src/model.c:163`:  `if (!db || !m || !m->name || ...)` — **no id check**
-
-Consequences:
-- `acta_db_model_update(db, &(model_t){.id = -5, ...})` → `NOT_FOUND`
-  instead of `INVALID`.
-- The doc of `acta_db_skill_update` explicitly lists `s->id <= 0` under
-  `ACTA_DB_ERR_INVALID`; `model_update`'s doc does not.
-
-**Fix:** add `m->id <= 0` to the model guard and doc.
-
----
-
-## 4. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints — **FIXED** (0bfd47c, 327e76b)
-
-Resolved:
-- `context_id` / `skill_revision_id` / `model_revision_id` must be > 0
-  (else `ACTA_DB_ERR_INVALID`), `prompt` still required.
-- `e->status` is ignored at create time — rows are always inserted
-  `pending`; other states are only reachable via the transition
-  functions.
-- `SQLITE_CONSTRAINT` → `ACTA_DB_ERR_FK` (was folded into INVALID).
-  Because `acta_db_open` enables extended result codes (see db.c), the
-  code to match is the specific extended code
-  `SQLITE_CONSTRAINT_FOREIGNKEY`, never the generic
-  `SQLITE_CONSTRAINT` — same convention as `skill.c`.
-- `execution.h` now documents all required fields and the new error
-  mapping. Tests: `test_exec_create_zero_ids`,
-  `test_exec_create_ignores_status`, and the FK cases now expect
-  `ACTA_DB_ERR_FK`.
-
-Header contract (`execution.h`):
-> "Insert a new execution row (status defaults to 'pending').
->  Returns ACTA_DB_ERR_INVALID if db or e is NULL or required fields
->  (context_id, prompt) are missing."
-
-Implementation (`src/execution.c:287`):
-1. **`context_id` is not validated** — only `!e->prompt` is. A
-   `context_id` of 0 passes the C check and then dies at SQLite as an
-   FK violation, which is folded into `ACTA_DB_ERR_INVALID`
-   (`if (rc == SQLITE_CONSTRAINT) return ACTA_DB_ERR_INVALID;`) —
-   conflating "bad argument" with "referenced row does not exist".
-   (The sibling module `model_create` uses `ACTA_DB_ERR_FK` for this case.)
-2. **`e->status` is honored verbatim.** The header says status *defaults*
-   to pending and that the state machine is enforced in the C layer;
-   in practice the caller can insert a row straight into `completed` /
-   `failed` / `cancelled`, or any string (the schema CHECK then aborts
-   with `SQLITE_CONSTRAINT` → `ACTA_DB_ERR_INVALID`, an undocumented path).
-3. **`skill_revision_id` / `model_revision_id` are NOT NULL in the schema**
-   but the header does not mention them as required; a zero-initialized
-   struct silently produces `ACTA_DB_ERR_INVALID` (FK) with no hint in the
-   docs.
-
-**Fix:** validate `e->context_id > 0` (and the two revision ids) up front
-→ `ACTA_DB_ERR_INVALID`; ignore or whitelist `e->status` at create time
-(force `pending`, or only accept `pending`); return `ACTA_DB_ERR_FK` on
-`SQLITE_CONSTRAINT` instead of `INVALID`. Update the header to list all
-required fields.
-
----
-
-## 5. [DOC] `acta_db_strerror` returns "unknown error" for two defined codes
+## 2. [DOC] `acta_db_strerror` returns "unknown error" for two defined codes
 
 `db.h` promises:
 > "Returns 'unknown error' for values outside the defined range."
@@ -136,7 +46,7 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 ---
 
-## 6. [DOC] Stale/incorrect comments in `db.c` around `acta_db_open`
+## 3. [DOC] Stale/incorrect comments in `db.c` around `acta_db_open`
 
 - `src/db.c:70` comment: "Returns `ACTA_DB_ERR_NOTFOUND` when the file
   did not exist…" — no such constant exists; the code sets
@@ -150,7 +60,7 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 ---
 
-## 7. [STYLE] Minor naming / style drift
+## 4. [STYLE] Minor naming / style drift
 
 1. `model.c:178` (`acta_db_model_update`) does a redundant
    `sqlite3_bind_int(stmt, 1, m->folder_id);` immediately overwritten by
@@ -174,8 +84,22 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 1. **Fix #1** (model_folder_soft_delete missing model guard) - data
    integrity.
-2. **Fix #4** (execution_create validation / status bypass / FK code) — ✅ done (0bfd47c, 327e76b).
-3. Code cleanup: #5 (strerror DUPLICATE/FK cases), #6 (stale db.c
+2. Code cleanup: #2 (strerror DUPLICATE/FK cases), #3 (stale db.c
    comment + named open-mode constants).
-4. Decide and align the model/skill asymmetries (#2 ✅, #3 ✅).
-5. Style drift (#7).
+3. Style drift (#4).
+
+---
+
+## Fixed
+
+- **Empty-string validation drift between model and skill folders** —
+  model folder create/rename now reject empty names; docs aligned
+  (2a9bf6d).
+- **`acta_db_model_update` missing `id <= 0` guard** — added guard,
+  doc, and test, matching `acta_db_skill_update` (eeb98bc).
+- **`acta_db_execution_create` state-machine bypass / constraint
+  misreporting** — ids validated up front, `e->status` ignored (always
+  `pending`), FK failures return `ACTA_DB_ERR_FK`. Note: the handle runs
+  with extended result codes (see db.c), so the code to match is
+  `SQLITE_CONSTRAINT_FOREIGNKEY`, never the generic
+  `SQLITE_CONSTRAINT` — same convention as `skill.c` (0bfd47c, 327e76b).
