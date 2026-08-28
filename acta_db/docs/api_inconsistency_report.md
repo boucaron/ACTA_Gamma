@@ -76,7 +76,19 @@ Consequences:
 
 ---
 
-## 4. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints
+## 4. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints — **FIXED** (0bfd47c)
+
+Resolved:
+- `context_id` / `skill_revision_id` / `model_revision_id` must be > 0
+  (else `ACTA_DB_ERR_INVALID`), `prompt` still required.
+- `e->status` is ignored at create time — rows are always inserted
+  `pending`; other states are only reachable via the transition
+  functions.
+- `SQLITE_CONSTRAINT` → `ACTA_DB_ERR_FK` (was folded into INVALID).
+- `execution.h` now documents all required fields and the new error
+  mapping. Tests: `test_exec_create_zero_ids`,
+  `test_exec_create_ignores_status`, and the FK cases now expect
+  `ACTA_DB_ERR_FK`.
 
 Header contract (`execution.h`):
 > "Insert a new execution row (status defaults to 'pending').
@@ -158,7 +170,7 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 1. **Fix #1** (model_folder_soft_delete missing model guard) - data
    integrity.
-2. **Fix #4** (execution_create validation / status bypass / FK code).
+2. **Fix #4** (execution_create validation / status bypass / FK code) — ✅ done (0bfd47c).
 3. Code cleanup: #5 (strerror DUPLICATE/FK cases), #6 (stale db.c
    comment + named open-mode constants).
 4. Decide and align the model/skill asymmetries (#2 ✅, #3 ✅).
