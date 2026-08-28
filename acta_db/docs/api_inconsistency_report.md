@@ -11,34 +11,7 @@ Severity key:
 
 ---
 
-## 1. [BUG] `acta_db_skill_create` reports duplicate names as `ACTA_DB_ERR_NOT_FOUND`
-
-`src/skill.c:117` — a `SQLITE_CONSTRAINT` on INSERT (the `uq_skills_root` /
-`uq_skills_child` unique indexes) is mapped to `ACTA_DB_ERR_NOT_FOUND`.
-A caller inserting an existing name therefore receives "not found" for an
-operation that is *not* a lookup.
-
-Compare the sibling module, which does this correctly
-(`src/model.c:149-154`):
-```c
-if (strstr(msg, "UNIQUE constraint failed")) return ACTA_DB_ERR_DUPLICATE;
-if (strstr(msg, "FOREIGN KEY"))              return ACTA_DB_ERR_FK;
-```
-
-`ACTA_DB_ERR_DUPLICATE` / `ACTA_DB_ERR_FK` exist in `db.h` precisely for this.
-
-**Fix:** in `acta_db_skill_create` and `acta_db_skill_update` (same bug at
-`src/skill.c:157`), map `SQLITE_CONSTRAINT` → `ACTA_DB_ERR_DUPLICATE`
-(and FK failures → `ACTA_DB_ERR_FK`).
-
-Also note: `model.c` distinguishes UNIQUE vs FK by substring-matching
-`sqlite3_errmsg()`. That is locale/SQLite-version fragile. Prefer checking
-`rc == SQLITE_CONSTRAINT` (SQLite 3.8+ can give `SQLITE_CONSTRAINT_UNIQUE`
-vs `SQLITE_CONSTRAINT_FOREIGNKEY` directly).
-
----
-
-## 2. [BUG] `acta_db_model_folder_soft_delete` does not protect contained models
+## 1. [BUG] `acta_db_model_folder_soft_delete` does not protect contained models
 
 `src/skill_folder.c:294` (`acta_db_skill_folder_soft_delete`) rejects the
 delete if the folder has **live child sub-folders** *or* **live skills**.
@@ -61,7 +34,7 @@ soft-delete should reject or auto-reparent).
 
 ---
 
-## 3. [DOC] `limit` semantics: headers say "no limit", implementation clamps
+## 2. [DOC] `limit` semantics: headers say "no limit", implementation clamps
 
 `db.h` (correct, matches code via `db_clamp_limit` in `internal.h:116`):
 > `limit ≤ 0 or > ACTA_DB_MAX_PAGE → clamped to ACTA_DB_MAX_PAGE (10000)`
@@ -88,7 +61,7 @@ remove the per-module statements and point at the `db.h` convention block).
 
 ---
 
-## 4. [DOC] Restore functions: `ACTA_DB_ERR_NOT_FOUND` missing from docs
+## 3. [DOC] Restore functions: `ACTA_DB_ERR_NOT_FOUND` missing from docs
 
 All four restore implementations return `ACTA_DB_ERR_NOT_FOUND` when the
 id does not exist:
@@ -105,7 +78,7 @@ id does not exist:
 
 ---
 
-## 5. [DOC] `acta_db_model_folder_rename` doc omits `ACTA_DB_ERR_NOT_FOUND`
+## 4. [DOC] `acta_db_model_folder_rename` doc omits `ACTA_DB_ERR_NOT_FOUND`
 
 Implementation (`src/model_folder.c:135`) returns `ACTA_DB_ERR_NOT_FOUND`
 when no live folder matches `id`; `model_folder.h` documents only
@@ -113,7 +86,7 @@ INVALID / SQL. (`skill_folder_rename` documents it correctly.)
 
 ---
 
-## 6. [ASMT] Empty-string validation drift between model and skill folders
+## 5. [ASMT] Empty-string validation drift between model and skill folders
 
 | Check | model | skill |
 |---|---|---|
@@ -129,7 +102,7 @@ docs, or explicitly document the difference.
 
 ---
 
-## 7. [ASMT] `acta_db_model_update` lacks the `id <= 0` guard that `acta_db_skill_update` has
+## 6. [ASMT] `acta_db_model_update` lacks the `id <= 0` guard that `acta_db_skill_update` has
 
 - `src/skill.c:130`: `if (!db || !s || s->id <= 0 || ...) → INVALID`
 - `src/model.c:163`:  `if (!db || !m || !m->name || ...)` — **no id check**
@@ -144,7 +117,7 @@ Consequences:
 
 ---
 
-## 8. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints
+## 7. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints
 
 Header contract (`execution.h`):
 > "Insert a new execution row (status defaults to 'pending').
@@ -176,7 +149,7 @@ required fields.
 
 ---
 
-## 9. [DOC] `acta_db_execution_log_create` validates `level` but the header doesn't say so
+## 8. [DOC] `acta_db_execution_log_create` validates `level` but the header doesn't say so
 
 `src/execution_log.c:96`: an unrecognized level string (e.g. `"Warning"`)
 is rejected with `ACTA_DB_ERR_INVALID`, and `list_by_execution` /
@@ -194,7 +167,7 @@ or rename to make the intent obvious. Also note its constants are
 
 ---
 
-## 10. [DOC] `acta_db_strerror` returns "unknown error" for two defined codes
+## 9. [DOC] `acta_db_strerror` returns "unknown error" for two defined codes
 
 `db.h` promises:
 > "Returns 'unknown error' for values outside the defined range."
@@ -206,7 +179,7 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 ---
 
-## 11. [DOC] Stale/incorrect comments in `db.c` around `acta_db_open`
+## 10. [DOC] Stale/incorrect comments in `db.c` around `acta_db_open`
 
 - `src/db.c:70` comment: "Returns `ACTA_DB_ERR_NOTFOUND` when the file
   did not exist…" — no such constant exists; the code sets
@@ -220,7 +193,7 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 ---
 
-## 12. [DOC] `execution.h` state-machine diagram is garbled and the warning is stale
+## 11. [DOC] `execution.h` state-machine diagram is garbled and the warning is stale
 
 The ASCII diagram in `execution.h` does not match the text below it
 (the `cancel()` / `fail()` arrows land in the wrong boxes; `pending`
@@ -240,7 +213,7 @@ about the actual atomicity story. Redraw the diagram and rewrite the note.
 
 ---
 
-## 13. [ASMT] Lister empty-result convention stated differently per header
+## 12. [ASMT] Lister empty-result convention stated differently per header
 
 `db.h` and most headers: an empty result set returns a valid pointer
 (possibly NULL array) with `*out_count == 0` and `*err == OK`.
@@ -255,7 +228,7 @@ wording with the other headers.
 
 ---
 
-## 14. [ASMT] Module surface asymmetries (likely intentional, but undocumented)
+## 13. [ASMT] Module surface asymmetries (likely intentional, but undocumented)
 
 | Capability | model | skill | context | execution | execution_log |
 |---|---|---|---|---|---|
@@ -279,7 +252,7 @@ Nothing is *wrong* here, but:
 
 ---
 
-## 15. [STYLE] Minor naming / style drift
+## 14. [STYLE] Minor naming / style drift
 
 1. `model.c:178` (`acta_db_model_update`) does a redundant
    `sqlite3_bind_int(stmt, 1, m->folder_id);` immediately overwritten by
@@ -296,7 +269,7 @@ Nothing is *wrong* here, but:
    section banners only in some files) — cosmetic, but the
    "common pagination contract" block that should be the single source of
    truth exists *only* in `model_folder.h`, not in `db.h` where it
-   belongs (and where it currently disagrees with the code, see item 3).
+   belongs (and where it currently disagrees with the code, see item 2).
 4. `db.h` typedefs `db_t` *after* declaring `acta_db_strerror`; `model.h`
    et al. include only `db.h`, so users who include a single entity
    header get the whole convention block duplicated per header — keep the
@@ -306,12 +279,10 @@ Nothing is *wrong* here, but:
 
 ## Recommended action order
 
-1. **Fix #1** (skill create/update constraint → DUPLICATE/FK) — real bug,
-   actively wrong error codes.
-2. **Fix #2** (model_folder_soft_delete missing model guard) — data
+1. **Fix #1** (model_folder_soft_delete missing model guard) — data
    integrity.
-3. **Fix #8** (execution_create validation / status bypass / FK code).
-4. Rewrite the pagination contract once in `db.h` and delete the
-   per-module copies (#3, #13, #15.3).
-5. Doc-only fixes: #4, #5, #9, #10, #11, #12.
-6. Decide and document the model/skill asymmetries (#6, #7, #14).
+2. **Fix #7** (execution_create validation / status bypass / FK code).
+3. Rewrite the pagination contract once in `db.h` and delete the
+   per-module copies (#2, #12, #14.3).
+4. Doc-only fixes: #3, #4, #8, #9, #10, #11.
+5. Decide and document the model/skill asymmetries (#5, #6, #13).
