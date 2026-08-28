@@ -34,7 +34,14 @@ soft-delete should reject or auto-reparent).
 
 ---
 
-## 2. [ASMT] Empty-string validation drift between model and skill folders
+## 2. [ASMT] Empty-string validation drift between model and skill folders — **FIXED** (2a9bf6d)
+
+Resolved by aligning the model side to the skill side:
+`acta_db_model_folder_create` and `acta_db_model_folder_rename` now reject
+empty names (`!*name` / `!*new_name` → `ACTA_DB_ERR_INVALID`), and
+`model_folder.h` documents "NULL/empty" like `skill_folder.h` does.
+Covers `create_empty_name` / `rename_empty_name` tests in
+`tests/test_model_folder.c`.
 
 | Check | model | skill |
 |---|---|---|
@@ -150,5 +157,5 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 2. **Fix #4** (execution_create validation / status bypass / FK code).
 3. Code cleanup: #5 (strerror DUPLICATE/FK cases), #6 (stale db.c
    comment + named open-mode constants).
-4. Decide and align the model/skill asymmetries (#2, #3).
+4. Decide and align the model/skill asymmetries (#2 ✅ done, #3).
 5. Style drift (#7).
