@@ -610,7 +610,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
 
     /* ── get <id> ─────────────────────────────────────────────────── */
-        if (strcmp(action, "get") == 0) {
+    if (strcmp(action, "get") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
             VLOG(1, "model get: ERROR missing <id>");
@@ -622,16 +622,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         /* ── robust integer parse ─────────────────────────────────── */
-        char   *endptr = NULL;
-        errno   = 0;
-        long    id_val = strtol(id_str, &endptr, 10);
+        char  *endptr = NULL;
+        errno = 0;
+        long  id_val = strtol(id_str, &endptr, 10);
 
         int bad_id =
              errno != 0               /* ERANGE: overflow / underflow   */
-          || endptr == id_str         /* no digits consumed (e.g. "x")  */
-          || *endptr != '\0'          /* trailing junk   (e.g. "12ab")  */
-          || id_val <= 0             /* not a positive integer          */
-          || id_val > (long)INT_MAX; /* would truncate in int           */
+          || endptr == id_str         /* no digits consumed             */
+          || *endptr != '\0'          /* trailing junk  ("12ab")       */
+          || id_val <= 0             /* not positive                   */
+          || id_val > (long)INT_MAX; /* would truncate in int          */
 
         if (bad_id) {
             VLOG(1, "model get: invalid id=%s", id_str);
@@ -644,17 +644,21 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int id = (int)id_val;
         /* ──────────────────────────────────────────────────────────── */
 
-        const char *s_live = cmd_args_flag(ga, "live", 0);
+        int  use_live   = (cmd_args_flag(ga, "live", 0) != NULL);
 
-        VLOG(1, "model get: fetching id=%d live=%d", id, s_live != NULL);
+        VLOG(1, "model get: id=%d live=%d fields=%s no_nulls=%d",
+             id, use_live,
+             gopts->fields ? gopts->fields : "(all)",
+             gopts->no_nulls);
 
+        /* ── fetch ────────────────────────────────────────────────── */
         int err = 0;
-        model_t *m = s_live
+        model_t *m = use_live
             ? acta_db_model_get_live(db, id, &err)
             : acta_db_model_get(db, id, &err);
 
-        VLOG(3, "  acta_db_model_get(%d, live=%d) → ptr=%p err=%d",
-             id, s_live != NULL, (const void *)m, err);
+        VLOG(3, "  fetch(id=%d, live=%d) → ptr=%p err=%d",
+             id, use_live, (const void *)m, err);
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
@@ -662,22 +666,33 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return map_rc_to_exit(err);
         }
         if (!m) {
-            VLOG(1, "  not found (id=%d)", id);
+            VLOG(1, "  not found (id=%d, live=%d)", id, use_live);
             return EXIT_OK;
         }
 
         vlog_model_fields("  result", m);
         vlog_model_raw("  raw", m, 0);
 
+        /* ── output ───────────────────────────────────────────────── */
         if (gopts->id_only) {
+            /* --id_only: bare integer, ignores fields/no_nulls/table */
             fprintf(stdout, "%d\n", m->id);
+
         } else if (gopts->table) {
-            model_table(stdout, NULL, 1);
-            model_table(stdout, m, 0);
+            /* --table: columnar; --fields restricts which columns */
+            model_table(stdout, NULL, 1);           /* header row   */
+            model_table(stdout, m, 0);             /* data row     */
+            /* model_table() honours gopts->fields internally:
+               it only prints the requested columns.              */
+
         } else {
+            /* default: JSON object on one line
+               gopts->fields    → only emit listed keys
+               gopts->no_nulls  → skip keys whose value is NULL   */
             model_to_json(stdout, m, gopts);
             fputc('\n', stdout);
         }
+
         acta_db_model_free(m);
         return EXIT_OK;
     }
