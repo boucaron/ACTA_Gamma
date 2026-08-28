@@ -81,7 +81,8 @@ model_t *acta_db_model_get_live(db_t *db, int id, int *err);
  *
  * Returns:
  *   ACTA_DB_OK           – success
- *   ACTA_DB_ERR_INVALID  – db is NULL, or a required field is NULL
+ *   ACTA_DB_ERR_INVALID  – db/m is NULL, m->id <= 0, or a required
+ *                          field (name, backend, model_identifier) is NULL
  *   ACTA_DB_ERR_NOT_FOUND– no live row matches m->id
  *   ACTA_DB_ERR_SQL      – prepare/step failure
  */

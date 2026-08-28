@@ -160,7 +160,7 @@ int acta_db_model_create(db_t *db, const model_t *m, int *out_id)
 
 
 int acta_db_model_update(db_t *db, const model_t *m) {
-    if (!db || !m || !m->name || !m->backend || !m->model_identifier)
+    if (!db || !m || m->id <= 0 || !m->name || !m->backend || !m->model_identifier)
         return ACTA_DB_ERR_INVALID;
 
     const char *sql =

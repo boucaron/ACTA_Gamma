@@ -378,6 +378,22 @@ static void test_model_update_null_args(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 4.x: model_update — invalid id ---------- */
+static void test_model_update_invalid_id(void) {
+    const char *path = "test/acta_test_m_upbadid.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m0 = { .id = 0, .name = "M", .backend = "b", .model_identifier = "mid" };
+    TEST_ASSERT_EQ_INT(acta_db_model_update(db, &m0), ACTA_DB_ERR_INVALID);
+
+    model_t mNeg = { .id = -5, .name = "M", .backend = "b", .model_identifier = "mid" };
+    TEST_ASSERT_EQ_INT(acta_db_model_update(db, &mNeg), ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
 /* ---------- 4.22: model_soft_delete — happy ---------- */
 static void test_model_soft_delete_happy(void) {
     const char *path = "test/acta_test_m_sd.db";
@@ -1161,6 +1177,7 @@ void run_model_tests(void) {
     test_model_update_no_change();
     test_model_update_deleted();
     test_model_update_null_args();
+    test_model_update_invalid_id();
 
     /* soft_delete */
     test_model_soft_delete_happy();
