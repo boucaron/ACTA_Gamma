@@ -27,7 +27,7 @@ static void test_db_open_existing(void) {
 /* ---------- 1.3: acta_db_open — invalid path ---------- */
 static void test_db_open_invalid_path(void) {
     int err = 0;
-    db_t *db = acta_db_open("/nonexistent/dir/sub/file.db", &err, 0);
+    db_t *db = acta_db_open("/nonexistent/dir/sub/file.db", &err, ACTA_DB_OPEN_EXISTING);
     TEST_ASSERT_NULL(db);
     TEST_ASSERT(err < 0);
 }
@@ -35,7 +35,7 @@ static void test_db_open_invalid_path(void) {
 /* ---------- 1.4: acta_db_open — NULL path ---------- */
 static void test_db_open_null_path(void) {
     int err = 0;
-    db_t *db = acta_db_open(NULL, &err, 1);
+    db_t *db = acta_db_open(NULL, &err, ACTA_DB_OPEN_CREATE);
     TEST_ASSERT_NULL(db);
     TEST_ASSERT(err < 0);
 }
@@ -50,7 +50,7 @@ static void test_db_open_createmode0_missing_file(void) {
     remove(path);
 
     int err = 0;
-    db_t *db = acta_db_open(path, &err, 0);
+    db_t *db = acta_db_open(path, &err, ACTA_DB_OPEN_EXISTING);
     TEST_ASSERT_NULL(db);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID_DB);
 
@@ -72,7 +72,7 @@ static void test_db_open_createmode0_empty_file(void) {
     fclose(f);
 
     int err = 0;
-    db_t *db = acta_db_open(path, &err, 0);
+    db_t *db = acta_db_open(path, &err, ACTA_DB_OPEN_EXISTING);
     TEST_ASSERT_NULL(db);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID_DB);
 
@@ -97,7 +97,7 @@ static void test_db_open_createmode0_existing_valid(void) {
 
     /* Second open: verify mode. */
     int err = 0;
-    db_t *db2 = acta_db_open(path, &err, 0);
+    db_t *db2 = acta_db_open(path, &err, ACTA_DB_OPEN_EXISTING);
     TEST_ASSERT_NOT_NULL(db2);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
@@ -108,7 +108,7 @@ static void test_db_open_createmode0_existing_valid(void) {
 /* ---------- 1.4e: NULL path with err == NULL (no crash) ---------- */
 static void test_db_open_null_path_null_err(void) {
     /* Must not dereference a NULL err pointer. */
-    db_t *db = acta_db_open(NULL, NULL, 0);
+    db_t *db = acta_db_open(NULL, NULL, ACTA_DB_OPEN_EXISTING);
     TEST_ASSERT_NULL(db);
 }
 
@@ -117,9 +117,26 @@ static void test_db_open_success_null_err(void) {
     const char *path = "test/acta_test_cm0_nullerr.db";
     remove(path);
 
-    db_t *db = acta_db_open(path, NULL, 1);
+    db_t *db = acta_db_open(path, NULL, ACTA_DB_OPEN_CREATE);
     TEST_ASSERT_NOT_NULL(db);
     test_db_teardown(db, path);
+}
+
+/* ---------- 1.4g: acta_db_strerror — every defined code ---------- */
+static void test_db_strerror_defined_codes(void) {
+    const int codes[] = {
+        ACTA_DB_OK, ACTA_DB_ERR_NOT_FOUND, ACTA_DB_ERR_SQL,
+        ACTA_DB_ERR_ALLOC, ACTA_DB_ERR_INVALID, ACTA_DB_ERR_INVALID_DB,
+        ACTA_DB_ERR_DUPLICATE, ACTA_DB_ERR_FK,
+    };
+    for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
+        const char *msg = acta_db_strerror(codes[i]);
+        TEST_ASSERT_NOT_NULL(msg);
+        TEST_ASSERT(strcmp(msg, "unknown error") != 0);
+    }
+    /* Out-of-range values still map to "unknown error". */
+    TEST_ASSERT_EQ_STR(acta_db_strerror(42), "unknown error");
+    TEST_ASSERT_EQ_STR(acta_db_strerror(-100), "unknown error");
 }
 
 
@@ -623,6 +640,7 @@ void run_db_tests(void) {
     test_db_open_createmode0_existing_valid();    
     test_db_open_null_path_null_err();
     test_db_open_success_null_err();
+    test_db_strerror_defined_codes();
     test_db_close_valid();
     test_db_close_null();
     test_db_close_outstanding_stmts();

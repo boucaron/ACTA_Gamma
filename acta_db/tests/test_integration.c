@@ -629,7 +629,7 @@ static void test_integration_concurrency_two_connections(void) {
     TEST_ASSERT_NOT_NULL(db1);
 
     int errorno = 0;
-    db_t *db2 = acta_db_open(path, &errorno, 0);
+    db_t *db2 = acta_db_open(path, &errorno, ACTA_DB_OPEN_EXISTING);
     TEST_ASSERT_NOT_NULL(db2);
     TEST_ASSERT_EQ_INT(errorno, ACTA_DB_OK);
 

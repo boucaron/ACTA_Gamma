@@ -24,6 +24,14 @@ extern "C" {
 #define ACTA_DB_ERR_DUPLICATE  (-6)
 #define ACTA_DB_ERR_FK  (-7)
 
+/* --- Open modes (acta_db_open third argument) ---
+ * ACTA_DB_OPEN_EXISTING: verify the file is a non-empty SQLite DB;
+ *                        fails with ACTA_DB_ERR_INVALID_DB otherwise.
+ * ACTA_DB_OPEN_CREATE:   open the file, creating it if it does not
+ *                        exist (the caller applies the schema). */
+#define ACTA_DB_OPEN_EXISTING 0
+#define ACTA_DB_OPEN_CREATE   1
+
 
 /**
  * Hard upper bound on rows a single lister call may return.
@@ -89,8 +97,13 @@ const char *acta_db_strerror(int code);
 
 typedef struct db_t db_t;
 
-/* Open (or create) a database at the given path.
- * If creationMode is set to 0, we check if this is a SQLite DB
+/* Open a database at the given path.
+ * creationMode must be one of:
+ *   ACTA_DB_OPEN_EXISTING – check that the file is an existing, non-empty
+ *                           SQLite DB (empty/non-SQLite file →
+ *                           ACTA_DB_ERR_INVALID_DB)
+ *   ACTA_DB_OPEN_CREATE   – open the file, creating it if it does not
+ *                           exist (the caller applies the schema)
  * Returns NULL on failure; if err is non-NULL it receives the error code. */
 db_t *acta_db_open(const char *path, int *err, int creationMode);
 

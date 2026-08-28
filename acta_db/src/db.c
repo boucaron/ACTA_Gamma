@@ -15,6 +15,8 @@ const char *acta_db_strerror(int code)
     case ACTA_DB_ERR_ALLOC:     return "allocation failure";
     case ACTA_DB_ERR_INVALID:   return "invalid argument";
     case ACTA_DB_ERR_INVALID_DB: return "invalid sqlitedb file";
+    case ACTA_DB_ERR_DUPLICATE: return "duplicate name";
+    case ACTA_DB_ERR_FK:        return "foreign key violation";
     default:                    return "unknown error";
     }
 }
@@ -48,10 +50,14 @@ static int vlog_count_rows(void *ctx, int ncol, char **vals, char **names)
     return 0;
 }
 
-/* ── open (or verify) an existing database ─────────────────────────
+/* ── Open a database ───────────────────────────────────────────────
  *
- *  Returns ACTA_DB_ERR_NOTFOUND when the file did not exist and
- *  sqlite3_open() silently created an empty 0-byte database.
+ *  ACTA_DB_OPEN_EXISTING: verify the file is a non-empty SQLite DB
+ *  (at least one user table); an empty or non-SQLite file yields
+ *  ACTA_DB_ERR_INVALID_DB.  This guards against sqlite3_open()
+ *  silently creating an empty 0-byte database.
+ *  ACTA_DB_OPEN_CREATE: open the file, creating it if it does not
+ *  exist (schema is applied by the caller).
  */
 db_t *acta_db_open(const char *path, int *err, int creationMode)
 {

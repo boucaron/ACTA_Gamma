@@ -219,7 +219,7 @@ void stest_init(stest_ctx_t *ctx, const char *ref_db_path)
      * or:                    int rc = acta_db_open(&ctx->db, path);
      */
     int err = 0;
-    ctx->db = acta_db_open(ctx->db_path, &err, 0);
+    ctx->db = acta_db_open(ctx->db_path, &err, ACTA_DB_OPEN_EXISTING);
     if (!ctx->db) {
         fprintf(stderr, "[stest] FATAL: acta_db_open(%s) failed err=%d\n",
                 ctx->db_path, err);

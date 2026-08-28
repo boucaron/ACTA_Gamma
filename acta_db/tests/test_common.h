@@ -69,7 +69,7 @@ static int test_failures = 0;
 /* Helper: create a temp db path, open, exec schema, return handle. Caller must close. */
 static db_t *test_db_open(const char *path) {
     int err = 0;
-    db_t *db = acta_db_open(path, &err, 1);
+    db_t *db = acta_db_open(path, &err, ACTA_DB_OPEN_CREATE);
     if (!db) return NULL;
     /* Schema is expected to be applied at open time by the library.
      * If not, we'd exec it here. Adjust as needed. */
