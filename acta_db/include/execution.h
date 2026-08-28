@@ -58,10 +58,10 @@ typedef struct {
 } execution_query_t;
 
 /* Convenience: a query that matches every row. */
-static inline execution_query_t acta_db_execution_query_any(void)
-{
-    return (execution_query_t){ NULL, 0, 0, 0, 0 };
-}
+#define ACTA_EXEC_QUERY_ANY \
+    (execution_query_t){ .status = NULL, .parent_execution_id = 0, \
+                          .context_id = 0, .skill_revision_id = 0, \
+                          .model_revision_id = 0 }
 
 /* ── State machine ────────────────────────────────────────────────── */
 
@@ -157,7 +157,7 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
 /*
  * Return a page of executions matching `q`, ordered by id ASC.
  *
- * q – filter criteria; NULL is equivalent to acta_db_execution_query_any().
+ * q – filter criteria; NULL is equivalent to &ACTA_EXEC_QUERY_ANY.
  *
  * Pagination:
  *   offset – number of rows to skip (0-based; 0 = first row).
@@ -179,7 +179,7 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
  * ── Examples ──────────────────────────────────────────────────────
  *
  *   All rows:
- *       query(db, acta_db_execution_query_any(), off, lim, …)
+ *       query(db, &ACTA_EXEC_QUERY_ANY, off, lim, …)
  *
  *   Single filter:
  *       query(db, &(execution_query_t){ .status = "running" }, …)
@@ -209,7 +209,7 @@ execution_t **acta_db_execution_query(db_t *db,
  * rendering "Page X of Y", or deciding whether a lister is exhausted
  * without fetching the next page.
  *
- * q – filter criteria; NULL is equivalent to acta_db_execution_query_any().
+ * q – filter criteria; NULL is equivalent to &ACTA_EXEC_QUERY_ANY.
  *
  * Returns:
  *   >= 0  on success (the row count; 0 is valid)

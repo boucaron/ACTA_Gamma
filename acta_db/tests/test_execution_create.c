@@ -739,7 +739,7 @@ static void test_exec_query_any(void) {
     }
 
     int n = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                   0, 0, &n, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_NOT_NULL(items);
@@ -766,7 +766,7 @@ static void test_exec_query_by_status(void) {
 
     int err = 0;
 
-    execution_query_t q1 = acta_db_execution_query_any();
+    execution_query_t q1 = ACTA_EXEC_QUERY_ANY;
     q1.status = ACTA_EXEC_STATUS_PENDING;
     int n1 = 0;
     execution_t **r1 = acta_db_execution_query(db, &q1, 0, 0, &n1, &err);
@@ -774,14 +774,14 @@ static void test_exec_query_by_status(void) {
     TEST_ASSERT_EQ_INT(n1, 1);
     acta_db_execution_list_free(r1, n1);
 
-    execution_query_t q2 = acta_db_execution_query_any();
+    execution_query_t q2 = ACTA_EXEC_QUERY_ANY;
     q2.status = ACTA_EXEC_STATUS_COMPLETED;
     int n2 = 0;
     execution_t **r2 = acta_db_execution_query(db, &q2, 0, 0, &n2, &err);
     TEST_ASSERT_EQ_INT(n2, 1);
     acta_db_execution_list_free(r2, n2);
 
-    execution_query_t q3 = acta_db_execution_query_any();
+    execution_query_t q3 = ACTA_EXEC_QUERY_ANY;
     q3.status = ACTA_EXEC_STATUS_FAILED;
     int n3 = 0;
     acta_db_execution_query(db, &q3, 0, 0, &n3, &err);
@@ -805,7 +805,7 @@ static void test_exec_query_by_parent(void) {
     exec_create(db, ctx_id, sr_id, mr_id, "C2", parent);
     exec_create(db, ctx_id, sr_id, mr_id, "Other", 0);
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
 
     int n = 0, err = 0;
@@ -834,7 +834,7 @@ static void test_exec_query_by_context(void) {
 
     int err = 0;
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = ctx_id;
     int n = 0;
     execution_t **items = acta_db_execution_query(db, &q, 0, 0, &n, &err);
@@ -863,7 +863,7 @@ static void test_exec_query_by_skill_rev(void) {
 
     int err = 0;
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.skill_revision_id = sr_id;
     int n = 0;
     execution_t **items = acta_db_execution_query(db, &q, 0, 0, &n, &err);
@@ -891,7 +891,7 @@ static void test_exec_query_by_model_rev(void) {
 
     int err = 0;
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.model_revision_id = mr_id;
     int n = 0;
     execution_t **items = acta_db_execution_query(db, &q, 0, 0, &n, &err);
@@ -923,7 +923,7 @@ static void test_exec_query_combined(void) {
 
     int err = 0;
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status     = ACTA_EXEC_STATUS_COMPLETED;
     q.context_id = ctx_id;
     int n = 0;
@@ -932,7 +932,7 @@ static void test_exec_query_combined(void) {
     TEST_ASSERT_EQ_INT(items[0]->id, e1);
     acta_db_execution_list_free(items, n);
 
-    execution_query_t q2 = acta_db_execution_query_any();
+    execution_query_t q2 = ACTA_EXEC_QUERY_ANY;
     q2.status     = ACTA_EXEC_STATUS_PENDING;
     q2.context_id = ctx_id;
     int n2 = 0;
@@ -940,7 +940,7 @@ static void test_exec_query_combined(void) {
     TEST_ASSERT_EQ_INT(n2, 1);
     acta_db_execution_list_free(r2, n2);
 
-    execution_query_t q3 = acta_db_execution_query_any();
+    execution_query_t q3 = ACTA_EXEC_QUERY_ANY;
     q3.status     = ACTA_EXEC_STATUS_COMPLETED;
     q3.context_id = 999999;
     int n3 = 0;
@@ -968,26 +968,26 @@ static void test_exec_query_pagination(void) {
     int err = 0;
 
     int n1 = 0;
-    execution_t **p1 = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **p1 = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                0, 3, &n1, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n1, 3);
     acta_db_execution_list_free(p1, n1);
 
     int n2 = 0;
-    execution_t **p2 = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **p2 = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                3, 3, &n2, &err);
     TEST_ASSERT_EQ_INT(n2, 3);
     acta_db_execution_list_free(p2, n2);
 
     int n3 = 0;
-    execution_t **p3 = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **p3 = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                6, 3, &n3, &err);
     TEST_ASSERT_EQ_INT(n3, 1);
     acta_db_execution_list_free(p3, n3);
 
     int n4 = 0;
-    acta_db_execution_query(db, &acta_db_execution_query_any(), 7, 3, &n4, &err);
+    acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY, 7, 3, &n4, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(n4, 0);
 
@@ -1015,7 +1015,7 @@ static void test_exec_query_null_q(void) {
 
 static void test_exec_query_null_db(void) {
     int n = 0, err = 0;
-    execution_t **items = acta_db_execution_query(NULL, &acta_db_execution_query_any(),
+    execution_t **items = acta_db_execution_query(NULL, &ACTA_EXEC_QUERY_ANY,
                                                   0, 10, &n, &err);
     TEST_ASSERT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
@@ -1028,7 +1028,7 @@ static void test_exec_query_negative_offset(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int n = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                   -1, 10, &n, &err);
     TEST_ASSERT_NULL(items);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
@@ -1046,7 +1046,7 @@ static void test_exec_query_null_outparams(void) {
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
     TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "N", 0) > 0);
 
-    execution_t **items = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                   0, 0, NULL, NULL);
     TEST_ASSERT_NOT_NULL(items);
     acta_db_execution_list_free(items, 1);
@@ -1074,7 +1074,7 @@ static void test_exec_count_all(void) {
     }
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &acta_db_execution_query_any(),
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY,
                                                &err), 5);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
@@ -1100,15 +1100,15 @@ static void test_exec_count_by_status(void) {
 
     int err = 0;
 
-    execution_query_t qp = acta_db_execution_query_any();
+    execution_query_t qp = ACTA_EXEC_QUERY_ANY;
     qp.status = ACTA_EXEC_STATUS_PENDING;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &qp, &err), 1);
 
-    execution_query_t qr = acta_db_execution_query_any();
+    execution_query_t qr = ACTA_EXEC_QUERY_ANY;
     qr.status = ACTA_EXEC_STATUS_RUNNING;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &qr, &err), 1);
 
-    execution_query_t qc = acta_db_execution_query_any();
+    execution_query_t qc = ACTA_EXEC_QUERY_ANY;
     qc.status = ACTA_EXEC_STATUS_COMPLETED;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &qc, &err), 1);
 
@@ -1130,7 +1130,7 @@ static void test_exec_count_by_parent(void) {
     exec_create(db, ctx_id, sr_id, mr_id, "K3", parent);
     exec_create(db, ctx_id, sr_id, mr_id, "Other", 0);
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
 
     int err = 0;
@@ -1156,17 +1156,17 @@ static void test_exec_count_combined(void) {
 
     int err = 0;
 
-    execution_query_t q = acta_db_execution_query_any();
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status     = ACTA_EXEC_STATUS_COMPLETED;
     q.context_id = ctx_id;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q, &err), 1);
 
-    execution_query_t q2 = acta_db_execution_query_any();
+    execution_query_t q2 = ACTA_EXEC_QUERY_ANY;
     q2.status     = ACTA_EXEC_STATUS_PENDING;
     q2.context_id = ctx_id;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q2, &err), 1);
 
-    execution_query_t q3 = acta_db_execution_query_any();
+    execution_query_t q3 = ACTA_EXEC_QUERY_ANY;
     q3.status     = ACTA_EXEC_STATUS_COMPLETED;
     q3.context_id = 999999;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &q3, &err), 0);
@@ -1181,7 +1181,7 @@ static void test_exec_count_empty(void) {
     TEST_ASSERT_NOT_NULL(db);
 
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &acta_db_execution_query_any(),
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY,
                                                &err), 0);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
 
@@ -1190,7 +1190,7 @@ static void test_exec_count_empty(void) {
 
 static void test_exec_count_null_db(void) {
     int err = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_count(NULL, &acta_db_execution_query_any(),
+    TEST_ASSERT_EQ_INT(acta_db_execution_count(NULL, &ACTA_EXEC_QUERY_ANY,
                                                &err), -1);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
@@ -1223,7 +1223,7 @@ static void test_exec_count_null_err(void) {
     TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "X", 0) > 0);
 
     TEST_ASSERT_EQ_INT(
-        acta_db_execution_count(db, &acta_db_execution_query_any(), NULL), 1);
+        acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY, NULL), 1);
 
     test_db_teardown(db, path);
 }
@@ -1272,7 +1272,7 @@ static void test_exec_list_free_valid(void) {
     }
 
     int out_count = 0, err = 0;
-    execution_t **items = acta_db_execution_query(db, &acta_db_execution_query_any(),
+    execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                   0, 0, &out_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(out_count, 3);
