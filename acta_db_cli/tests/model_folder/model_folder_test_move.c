@@ -1,4 +1,4 @@
-#include "../skill/skill_test_helpers.h"
+#include "skill_test_helpers.h"
 
 #define REF_DB "acta_test_ref.db"
 
@@ -36,18 +36,45 @@ static void test_move_to_parent(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_move_to_root(stest_ctx_t *ctx)
+static void test_move_to_root_conflict(stest_ctx_t *ctx)
 {
+    /* id=6 is "childTest" under parent 1.
+     * Moving to root would violate uq_model_folders_root
+     * because id=5 ("childTest") already lives at root. */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_pos(a, "6", &g);         /* childTest under parent 1 */
-    targs_flag(a, "parent_id", "0", &g);  /* move to root */
+    targs_pos(a, "6", &g);
+    targs_flag(a, "parent_id", "0", &g);
+
+    int rc = do_move(ctx, a, g);
+    TEST(ctx, rc != EXIT_OK);
+    targs_free(a, &g);
+}
+
+
+static void test_move_to_root(stest_ctx_t *ctx)
+{
+    /* Create a uniquely-named child under parent 3, then move it to root. */
+    global_opts_t g = gopts_default();
+    cmd_args_t *ca = targs_new();
+    targs_flag(ca, "name", "uniqueMoveMe", &g);
+    targs_flag(ca, "parent_id", "3", &g);
+    do_create(ctx, ca, g);
+    targs_free(ca, &g);
+
+    /* Now move it (id will be the next autoincrement, grab via get or
+     * just move by name isn't supported — use the id we know is new.
+     * In the ref DB max id=8, so new folder is id=9. */
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "9", &g);
+    targs_flag(a, "parent_id", "0", &g);
 
     int rc = do_move(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"parent_id\":null");
     targs_free(a, &g);
 }
+
 
 static void test_move_id_only(stest_ctx_t *ctx)
 {
@@ -200,6 +227,7 @@ int run_model_folder_test_move(void)
     stest_init(&ctx, REF_DB);
 
     test_move_to_parent(&ctx);
+    test_move_to_root_conflict(&ctx);
     test_move_to_root(&ctx);
     test_move_id_only(&ctx);
     test_move_missing_id(&ctx);
