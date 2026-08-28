@@ -861,7 +861,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-        /* ── delete <id> ──────────────────────────────────────────────── */
+    /* ── delete <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "delete") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
