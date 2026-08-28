@@ -75,6 +75,15 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
     sqlite3_exec(handle, "PRAGMA foreign_keys=ON;",  NULL, NULL, NULL);
 
     /*
+     * Enable extended result codes so that constraint violations
+     * report SQLITE_CONSTRAINT_UNIQUE / SQLITE_CONSTRAINT_FOREIGNKEY
+     * directly from sqlite3_step() instead of the generic
+     * SQLITE_CONSTRAINT.  This mirrors PRAGMA foreign_keys=ON above:
+     * a connection-level setting, applied once at open.
+     */
+    sqlite3_extended_result_codes(handle, 1);
+
+    /*
      * Guard against sqlite3_open() auto-creating an empty file.
      * A real database must contain at least one user table; a
      * freshly-created 0-byte file has none (only sqlite_% internals).

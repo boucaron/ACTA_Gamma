@@ -1,9 +1,11 @@
 /* skill.c */
+#include <stdio.h>
 #include "internal.h"
 #include "skill.h"
 #include "db.h"
 
 #include <stdlib.h>
+
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Row helpers
@@ -114,8 +116,14 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id)
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) {
-        if (rc == SQLITE_CONSTRAINT)
-            return ACTA_DB_ERR_NOT_FOUND;
+        if (rc == SQLITE_CONSTRAINT_UNIQUE)
+            return ACTA_DB_ERR_DUPLICATE;
+        if (rc == SQLITE_CONSTRAINT_FOREIGNKEY)
+            return ACTA_DB_ERR_FK;
+        fprintf(stderr,
+                "[skill_create DEBUG] folder_id=%d name=%s: "
+                "sqlite3_step rc=%d: %s\n",
+                s->folder_id, s->name, rc, sqlite3_errmsg(db->handle));
         return ACTA_DB_ERR_SQL;
     }
 
@@ -154,8 +162,10 @@ int acta_db_skill_update(db_t *db, const skill_t *s)
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) {
-        if (rc == SQLITE_CONSTRAINT)
-            return ACTA_DB_ERR_NOT_FOUND;
+        if (rc == SQLITE_CONSTRAINT_UNIQUE)
+            return ACTA_DB_ERR_DUPLICATE;
+        if (rc == SQLITE_CONSTRAINT_FOREIGNKEY)
+            return ACTA_DB_ERR_FK;
         return ACTA_DB_ERR_SQL;
     }
 

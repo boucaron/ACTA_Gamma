@@ -112,8 +112,8 @@ static void test_create_invalid_folder(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    int id = sk_create_skill(db, 99999, "OrphanSkill", "Template", "{}");
-    TEST_ASSERT_EQ_INT(id, ACTA_DB_ERR_NOT_FOUND);
+    int rc = sk_create_skill(db, 99999, "OrphanSkill", "Template", "{}");
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_FK);
 
     test_db_teardown(db, path);
 }
@@ -129,7 +129,7 @@ static void test_create_dup_root(void) {
     int id1 = sk_create_skill(db, 0, "DupName", "Prompt A", "{}");
     TEST_ASSERT(id1 > 0);
     int id2 = sk_create_skill(db, 0, "DupName", "Prompt B", "{}");
-    TEST_ASSERT(id2 < 0);
+    TEST_ASSERT_EQ_INT(id2, ACTA_DB_ERR_DUPLICATE);
 
     test_db_teardown(db, path);
 }
@@ -147,7 +147,7 @@ static void test_create_dup_child(void) {
     int id1 = sk_create_skill(db, folder_id, "ChildDup", "Prompt A", "{}");
     TEST_ASSERT(id1 > 0);
     int id2 = sk_create_skill(db, folder_id, "ChildDup", "Prompt B", "{}");
-    TEST_ASSERT(id2 < 0);
+    TEST_ASSERT_EQ_INT(id2, ACTA_DB_ERR_DUPLICATE);
 
     test_db_teardown(db, path);
 }
@@ -362,6 +362,40 @@ static void test_update_null_args(void) {
     skill_t s = mk_skill(1, 0, "X", "d", "p", "{}");
     TEST_ASSERT_EQ_INT(acta_db_skill_update(NULL, &s), ACTA_DB_ERR_INVALID);
     TEST_ASSERT_EQ_INT(acta_db_skill_update(db, NULL), ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.29 */
+static void test_update_dup_name(void) {
+    const char *path = "test/acta_test_sk_upd_dup.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id_a = sk_create_skill(db, 0, "DupA", "Prompt A", "{}");
+    int id_b = sk_create_skill(db, 0, "DupB", "Prompt B", "{}");
+    TEST_ASSERT(id_a > 0 && id_b > 0);
+
+    /* Rename B onto A's name in the same (root) folder. */
+    skill_t s = mk_skill(id_b, 0, "DupA", "desc", "Prompt B", "{}");
+    TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s), ACTA_DB_ERR_DUPLICATE);
+
+    test_db_teardown(db, path);
+}
+
+/* 7.30 */
+static void test_update_bad_folder(void) {
+    const char *path = "test/acta_test_sk_upd_badfolder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id = sk_create_skill(db, 0, "UpdBadFolder", "Prompt", "{}");
+    TEST_ASSERT(id > 0);
+
+    skill_t s = mk_skill(id, 99999, "UpdBadFolder", "desc", "Prompt", "{}");
+    TEST_ASSERT_EQ_INT(acta_db_skill_update(db, &s), ACTA_DB_ERR_FK);
 
     test_db_teardown(db, path);
 }
@@ -724,6 +758,8 @@ void run_skill_crud_tests(void) {
     test_update_no_change();
     test_update_deleted();
     test_update_null_args();
+    test_update_dup_name();
+    test_update_bad_folder();
 
     /* soft_delete */
     test_soft_delete_happy();

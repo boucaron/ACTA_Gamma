@@ -26,9 +26,11 @@ typedef struct {
 
 /* Insert a skill row.
  *
- * Returns ACTA_DB_OK on success; ACTA_DB_ERR_INVALID if db, s,
- * s->name, or s->prompt_template is NULL; ACTA_DB_ERR_SQL on
- * prepare/step failure.
+ * Returns ACTA_DB_OK on success;
+ * ACTA_DB_ERR_INVALID if db, s, s->name, or s->prompt_template is NULL;
+ * ACTA_DB_ERR_DUPLICATE if the name is already used in the same folder;
+ * ACTA_DB_ERR_FK if s->folder_id does not reference a live folder;
+ * ACTA_DB_ERR_SQL on other prepare/step failure.
  *
  * @param out_id  [out] receives the new row id; may be NULL.
  *
@@ -65,6 +67,8 @@ int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id);
  *   ACTA_DB_ERR_INVALID  – db/s is NULL, s->id <= 0, or a required
  *                          field (name, prompt_template) is NULL
  *   ACTA_DB_ERR_NOT_FOUND– no live row matches s->id
+ *   ACTA_DB_ERR_DUPLICATE– (name, folder_id) conflicts with a live row
+ *   ACTA_DB_ERR_FK       – s->folder_id does not reference a live folder
  *   ACTA_DB_ERR_SQL      – prepare/step failure
  */
 int acta_db_skill_update(db_t *db, const skill_t *s);
