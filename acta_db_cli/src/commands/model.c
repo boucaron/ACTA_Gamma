@@ -60,9 +60,9 @@ void model_usage(FILE *f)
 "    actagamma_db model create \\\n"
 "      --name \"My Model\" \\\n"
 "      --backend openai \\\n"
-"      --model-identifier gpt-4o \\\n"
+"      --model_identifier gpt-4o \\\n"
 "      --description \"Primary LLM\" \\\n"
-"      --base-url https://api.openai.com/v1 \\\n"
+"      --base_url https://api.openai.com/v1 \\\n"
 "      --folder-id 3\n"
 "        <- flag-based\n"
 "\n"
@@ -72,12 +72,12 @@ void model_usage(FILE *f)
 "  Required fields:\n"
 "    --name <str>                 Display name\n"
 "    --backend <str>              Backend identifier\n"
-"    --model-identifier <str>     Upstream model id\n"
+"    --model_identifier <str>     Upstream model id\n"
 "\n"
 "  Optional fields:\n"
 "    --folder-id <int>            Owning folder (0 = root)\n"
 "    --description <str>          Human-readable detail\n"
-"    --base-url <str>             API base URL\n"
+"    --base_url <str>             API base URL\n"
 "    --configuration <json>       Arbitrary JSON config\n"
 "\n"
 "  Options:\n"
@@ -102,7 +102,7 @@ void model_usage(FILE *f)
 "  Update one or more fields on an existing model.\n"
 "\n"
 "    actagamma_db model update 42 --description \"New desc\"\n"
-"    actagamma_db model update 42 --base-url https://new.host/v1 \\\n"
+"    actagamma_db model update 42 --base_url https://new.host/v1 \\\n"
 "      --configuration '{\"timeout\":30}'\n"
 "\n"
 "  At least one field is required.  Unspecified fields are\n"
@@ -113,8 +113,8 @@ void model_usage(FILE *f)
 "    --folder-id <int>            Owning folder\n"
 "    --description <str>          Human-readable detail\n"
 "    --backend <str>              Backend identifier\n"
-"    --base-url <str>             API base URL\n"
-"    --model-identifier <str>     Upstream model id\n"
+"    --base_url <str>             API base URL\n"
+"    --model_identifier <str>     Upstream model id\n"
 "    --configuration <json>       Arbitrary JSON config\n"
 "\n"
 "== delete <id> ====================================================\n"
@@ -182,9 +182,9 @@ static void usage_create(FILE *f)
 "    actagamma_db model create \\\n"
 "      --name \"My Model\" \\\n"
 "      --backend openai \\\n"
-"      --model-identifier gpt-4o \\\n"
+"      --model_identifier gpt-4o \\\n"
 "      --description \"Primary LLM\" \\\n"
-"      --base-url https://api.openai.com/v1 \\\n"
+"      --base_url https://api.openai.com/v1 \\\n"
 "      --folder-id 3\n"
 "        <- flag-based\n"
 "\n"
@@ -194,12 +194,12 @@ static void usage_create(FILE *f)
 "  Required fields:\n"
 "    --name <str>                 Display name\n"
 "    --backend <str>              Backend identifier\n"
-"    --model-identifier <str>     Upstream model id\n"
+"    --model_identifier <str>     Upstream model id\n"
 "\n"
 "  Optional fields:\n"
 "    --folder-id <int>            Owning folder (0 = root)\n"
 "    --description <str>          Human-readable detail\n"
-"    --base-url <str>             API base URL\n"
+"    --base_url <str>             API base URL\n"
 "    --configuration <json>       Arbitrary JSON config\n"
 "\n"
 "  Options:\n"
@@ -232,7 +232,7 @@ static void usage_update(FILE *f)
 "  Update one or more fields on an existing model.\n"
 "\n"
 "    actagamma_db model update 42 --description \"New desc\"\n"
-"    actagamma_db model update 42 --base-url https://new.host/v1 \\\n"
+"    actagamma_db model update 42 --base_url https://new.host/v1 \\\n"
 "      --configuration '{\"timeout\":30}'\n"
 "\n"
 "  At least one field is required.  Unspecified fields are\n"
@@ -243,8 +243,8 @@ static void usage_update(FILE *f)
 "    --folder-id <int>            Owning folder\n"
 "    --description <str>          Human-readable detail\n"
 "    --backend <str>              Backend identifier\n"
-"    --base-url <str>             API base URL\n"
-"    --model-identifier <str>     Upstream model id\n"
+"    --base_url <str>             API base URL\n"
+"    --model_identifier <str>     Upstream model id\n"
 "    --configuration <json>       Arbitrary JSON config\n", f);
 }
 
@@ -461,7 +461,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── create ───────────────────────────────────────────────────── */
-    if (strcmp(action, "create") == 0) {
+        if (strcmp(action, "create") == 0) {
         model_t m = {0};
         int json_owned = 0;
         int ret = EXIT_OK;
@@ -490,12 +490,34 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             json_owned = 1;
         } else {
             m.name             = (char *)cmd_args_flag(ga, "name", 1);
-            m.folder_id        = atoi(cmd_args_flag(ga, "folder-id", 1));
             m.description      = (char *)cmd_args_flag(ga, "description", 1);
             m.backend          = (char *)cmd_args_flag(ga, "backend", 1);
-            m.base_url         = (char *)cmd_args_flag(ga, "base-url", 1);
-            m.model_identifier = (char *)cmd_args_flag(ga, "model-identifier", 1);
+            m.base_url         = (char *)cmd_args_flag(ga, "base_url", 1);
+            m.model_identifier = (char *)cmd_args_flag(ga, "model_identifier", 1);
             m.configuration    = (char *)cmd_args_flag(ga, "configuration", 1);
+
+            /* --- folder_id: validate & clamp --- */
+            m.folder_id = 0;  /* default: root (NULL) */
+            {
+                const char *fid_str = cmd_args_flag(ga, "folder_id", 1);
+                if (fid_str && strlen(fid_str) > 0) {
+                    char *endp = NULL;
+                    errno = 0;
+                    long fid = strtol(fid_str, &endp, 10);
+                    if (errno == ERANGE || endp == fid_str || *endp != '\0') {
+                        VLOG(1, "  ERROR: 'folder_id' value '%s' is not a valid integer",
+                             fid_str);
+                        fprintf(stderr,
+                            "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                            "\"message\":\"'folder_id' must be a valid integer\"}\n");
+                        usage_create(stderr);
+                        ret = EXIT_INVALID;
+                        goto cleanup_create;
+                    }
+                    /* <= 0 → root (NULL in DB) */
+                    m.folder_id = (fid > 0) ? (int)fid : 0;
+                }
+            }
         }
 
         VLOG(1, "model create: name=%s backend=%s model_identifier=%s",
@@ -524,6 +546,15 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
+        if (m.name && strlen(m.name) == 0) {
+            VLOG(1, "  ERROR: 'name' must not be empty");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"field 'name' must not be empty\"}\n");
+            usage_create(stderr);
+            ret = EXIT_INVALID;
+            goto cleanup_create;
+        }
         if (!m.backend) {
             VLOG(1, "  ERROR: missing required field 'backend'");
             fprintf(stderr,
@@ -534,10 +565,10 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             goto cleanup_create;
         }
         if (!m.model_identifier) {
-            VLOG(1, "  ERROR: missing required field 'model-identifier'");
+            VLOG(1, "  ERROR: missing required field 'model_identifier'");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: model-identifier\"}\n");
+                "\"message\":\"missing required field: model_identifier\"}\n");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
@@ -577,8 +608,9 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
 
+
     /* ── get <id> ─────────────────────────────────────────────────── */
-    if (strcmp(action, "get") == 0) {
+        if (strcmp(action, "get") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
         if (!id_str) {
             VLOG(1, "model get: ERROR missing <id>");
@@ -588,8 +620,20 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_get(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+
+        /* ── robust integer parse ─────────────────────────────────── */
+        char   *endptr = NULL;
+        errno   = 0;
+        long    id_val = strtol(id_str, &endptr, 10);
+
+        int bad_id =
+             errno != 0               /* ERANGE: overflow / underflow   */
+          || endptr == id_str         /* no digits consumed (e.g. "x")  */
+          || *endptr != '\0'          /* trailing junk   (e.g. "12ab")  */
+          || id_val <= 0             /* not a positive integer          */
+          || id_val > (long)INT_MAX; /* would truncate in int           */
+
+        if (bad_id) {
             VLOG(1, "model get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -597,6 +641,9 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_get(stderr);
             return EXIT_INVALID;
         }
+        int id = (int)id_val;
+        /* ──────────────────────────────────────────────────────────── */
+
         const char *s_live = cmd_args_flag(ga, "live", 0);
 
         VLOG(1, "model get: fetching id=%d live=%d", id, s_live != NULL);
@@ -635,6 +682,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
+
     /* ── update <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "update") == 0) {
         const char *id_str = cmd_args_next_positional(ga);
@@ -660,8 +708,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *f_folder_id   = cmd_args_flag(ga, "folder-id", 1);
         const char *f_description = cmd_args_flag(ga, "description", 1);
         const char *f_backend     = cmd_args_flag(ga, "backend", 1);
-        const char *f_base_url    = cmd_args_flag(ga, "base-url", 1);
-        const char *f_model_ident = cmd_args_flag(ga, "model-identifier", 1);
+        const char *f_base_url    = cmd_args_flag(ga, "base_url", 1);
+        const char *f_model_ident = cmd_args_flag(ga, "model_identifier", 1);
         const char *f_config      = cmd_args_flag(ga, "configuration", 1);
 
         /* At least one field must be provided for update. */
