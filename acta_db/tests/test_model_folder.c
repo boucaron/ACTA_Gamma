@@ -100,6 +100,13 @@ static void test_create_null_db(void)
     T_ASSERT(rc == ACTA_DB_ERR_INVALID, "NULL db → INVALID");
 }
 
+static void test_create_empty_name(void)
+{
+    int id;
+    int rc = acta_db_model_folder_create(g_db, "", 0, &id);
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "empty name → INVALID");
+}
+
 static void test_create_null_out_id(void)
 {
     int rc = acta_db_model_folder_create(g_db, "NoOutId", 0, NULL);
@@ -195,6 +202,14 @@ static void test_rename_null_name(void)
     make_folder("X", 0, &id);
     int rc = acta_db_model_folder_rename(g_db, id, NULL);
     T_ASSERT(rc == ACTA_DB_ERR_INVALID, "NULL name → INVALID");
+}
+
+static void test_rename_empty_name(void)
+{
+    int id;
+    T_ASSERT(make_folder("Before", 0, &id) == ACTA_DB_OK, "setup");
+    int rc = acta_db_model_folder_rename(g_db, id, "");
+    T_ASSERT(rc == ACTA_DB_ERR_INVALID, "empty name → INVALID");
 }
 
 static void test_rename_null_db(void)
@@ -936,6 +951,7 @@ int run_model_folder_tests(void)
         {"create_basic",                 test_create_basic},
         {"create_child",                 test_create_child},
         {"create_null_name",             test_create_null_name},
+        {"create_empty_name",            test_create_empty_name},
         {"create_null_db",               test_create_null_db},
         {"create_null_out_id",           test_create_null_out_id},
 
@@ -951,6 +967,7 @@ int run_model_folder_tests(void)
         {"rename_soft_deleted",          test_rename_soft_deleted},
         {"rename_not_found",             test_rename_not_found},
         {"rename_null_name",             test_rename_null_name},
+        {"rename_empty_name",            test_rename_empty_name},
         {"rename_null_db",               test_rename_null_db},
         {"rename_invalid_id",            test_rename_invalid_id},
 

@@ -91,7 +91,7 @@ static model_folder_t **collect_rows(sqlite3_stmt *stmt,
 int acta_db_model_folder_create(db_t *db, const char *name, int parent_id,
                                 int *out_id)
 {
-    if (!db || !name) return ACTA_DB_ERR_INVALID;
+    if (!db || !name || !*name) return ACTA_DB_ERR_INVALID;
 
     const char *sql =
         "INSERT INTO model_folders (name, parent_id) VALUES (?, ?);";
@@ -115,7 +115,8 @@ int acta_db_model_folder_create(db_t *db, const char *name, int parent_id,
 
 int acta_db_model_folder_rename(db_t *db, int id, const char *new_name)
 {
-    if (!db || !new_name || id <= 0) return ACTA_DB_ERR_INVALID;
+    if (!db || !new_name || !*new_name || id <= 0)
+        return ACTA_DB_ERR_INVALID;
 
     const char *sql =
         "UPDATE model_folders SET name = ?, updated_at = datetime('now') "

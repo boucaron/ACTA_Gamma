@@ -28,19 +28,19 @@ typedef struct {
 /* Create a new folder.
  *
  * @param db         database handle (must not be NULL).
- * @param name       folder name (must not be NULL).
+ * @param name       folder name (must not be NULL or empty).
  * @param parent_id  parent folder id, or 0 for root-level.
  * @param out_id     [out] receives the new row id; may be NULL.
  *
- * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if db or name is
- * NULL, ACTA_DB_ERR_SQL on prepare/step failure. */
+ * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if db is NULL
+ * or name is NULL/empty, ACTA_DB_ERR_SQL on prepare/step failure. */
 int  acta_db_model_folder_create(db_t *db, const char *name, int parent_id,
                                  int *out_id);
 
 /* Rename an existing folder.
  *
  * Returns ACTA_DB_OK on success,
- * ACTA_DB_ERR_INVALID if db, id, or new_name is invalid,
+ * ACTA_DB_ERR_INVALID if db is NULL, id is invalid, or new_name is NULL/empty,
  * ACTA_DB_ERR_NOT_FOUND if no live folder matches id,
  * ACTA_DB_ERR_SQL on failure. */
 int  acta_db_model_folder_rename(db_t *db, int id, const char *new_name);
