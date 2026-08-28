@@ -89,13 +89,11 @@ extern "C" {
 
 /* db.h — public, near the other #defines */
 
+typedef struct db_t db_t;
 
 /* Return a short human-readable string for an error code.
  * Returns "unknown error" for values outside the defined range. */
 const char *acta_db_strerror(int code);
-
-
-typedef struct db_t db_t;
 
 /* Open a database at the given path.
  * creationMode must be one of:

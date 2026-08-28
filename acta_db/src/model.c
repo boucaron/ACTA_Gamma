@@ -172,7 +172,6 @@ int acta_db_model_update(db_t *db, const model_t *m) {
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
 
-    sqlite3_bind_int(stmt, 1, m->folder_id);  /* 0 stored as NULL below */
     if (m->folder_id == 0)
         sqlite3_bind_null(stmt, 1);
     else
