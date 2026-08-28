@@ -111,7 +111,7 @@ static void test_model_create_invalid_folder(void) {
     model_t m = { .name = "N", .backend = "b", .model_identifier = "mid", .folder_id = 999999 };
     int id;
     int rc = acta_db_model_create(db, &m, &id);
-    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_SQL);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_FK);
     test_db_teardown(db, path);
 }
 
