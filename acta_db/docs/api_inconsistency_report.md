@@ -76,7 +76,7 @@ Consequences:
 
 ---
 
-## 4. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints — **FIXED** (0bfd47c)
+## 4. [DOC/BUG] `acta_db_execution_create` bypasses the state machine and misreports constraints — **FIXED** (0bfd47c, 327e76b)
 
 Resolved:
 - `context_id` / `skill_revision_id` / `model_revision_id` must be > 0
@@ -85,6 +85,10 @@ Resolved:
   `pending`; other states are only reachable via the transition
   functions.
 - `SQLITE_CONSTRAINT` → `ACTA_DB_ERR_FK` (was folded into INVALID).
+  Because `acta_db_open` enables extended result codes (see db.c), the
+  code to match is the specific extended code
+  `SQLITE_CONSTRAINT_FOREIGNKEY`, never the generic
+  `SQLITE_CONSTRAINT` — same convention as `skill.c`.
 - `execution.h` now documents all required fields and the new error
   mapping. Tests: `test_exec_create_zero_ids`,
   `test_exec_create_ignores_status`, and the FK cases now expect
@@ -170,7 +174,7 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 
 1. **Fix #1** (model_folder_soft_delete missing model guard) - data
    integrity.
-2. **Fix #4** (execution_create validation / status bypass / FK code) — ✅ done (0bfd47c).
+2. **Fix #4** (execution_create validation / status bypass / FK code) — ✅ done (0bfd47c, 327e76b).
 3. Code cleanup: #5 (strerror DUPLICATE/FK cases), #6 (stale db.c
    comment + named open-mode constants).
 4. Decide and align the model/skill asymmetries (#2 ✅, #3 ✅).
