@@ -57,7 +57,11 @@ docs, or explicitly document the difference.
 
 ---
 
-## 3. [ASMT] `acta_db_model_update` lacks the `id <= 0` guard that `acta_db_skill_update` has
+## 3. [ASMT] `acta_db_model_update` lacks the `id <= 0` guard that `acta_db_skill_update` has — **FIXED** (eeb98bc)
+
+Resolved by adding `m->id <= 0` to the `acta_db_model_update` guard
+(→ `ACTA_DB_ERR_INVALID`), documenting it in `model.h` like
+`skill.h` does, and adding the `test_model_update_invalid_id` test.
 
 - `src/skill.c:130`: `if (!db || !s || s->id <= 0 || ...) → INVALID`
 - `src/model.c:163`:  `if (!db || !m || !m->name || ...)` — **no id check**
@@ -157,5 +161,5 @@ But `src/db.c:16` has no cases for `ACTA_DB_ERR_DUPLICATE` (-6) or
 2. **Fix #4** (execution_create validation / status bypass / FK code).
 3. Code cleanup: #5 (strerror DUPLICATE/FK cases), #6 (stale db.c
    comment + named open-mode constants).
-4. Decide and align the model/skill asymmetries (#2 ✅ done, #3).
+4. Decide and align the model/skill asymmetries (#2 ✅, #3 ✅).
 5. Style drift (#7).
