@@ -285,10 +285,13 @@ int acta_db_execution_count(db_t *db,
 
 int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
 {
-    if (!db || !e || !e->prompt)
+    if (!db || !e || e->context_id <= 0 || e->skill_revision_id <= 0 ||
+        e->model_revision_id <= 0 || !e->prompt)
         return ACTA_DB_ERR_INVALID;
 
-    const char *status = e->status ? e->status : ACTA_EXEC_STATUS_PENDING;
+    /* e->status is deliberately ignored: a new execution is always
+     * created "pending"; later state is only reached via the
+     * transition functions (start/complete/fail/cancel). */
 
     const char *sql =
         "INSERT INTO executions "
@@ -304,7 +307,7 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
     sqlite3_bind_int  (stmt, 2, e->skill_revision_id);
     sqlite3_bind_int  (stmt, 3, e->model_revision_id);
     sqlite3_bind_text (stmt, 4, e->prompt, -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text (stmt, 5, status, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text (stmt, 5, ACTA_EXEC_STATUS_PENDING, -1, SQLITE_TRANSIENT);
     if (e->parent_execution_id == 0)
         sqlite3_bind_null(stmt, 6);
     else
@@ -313,7 +316,9 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
-    if (rc == SQLITE_CONSTRAINT) return ACTA_DB_ERR_INVALID;
+    /* The only constraints on this INSERT are the four FKs, so a
+     * constraint failure means a referenced row does not exist. */
+    if (rc == SQLITE_CONSTRAINT) return ACTA_DB_ERR_FK;
     if (rc != SQLITE_DONE)       return ACTA_DB_ERR_SQL;
 
     if (out_id) *out_id = (int)sqlite3_last_insert_rowid(db->handle);

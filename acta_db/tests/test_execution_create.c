@@ -82,7 +82,7 @@ static void test_exec_create_invalid_ctx(void) {
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
-                       ACTA_DB_ERR_INVALID);
+                       ACTA_DB_ERR_FK);
 
     test_db_teardown(db, path);
 }
@@ -105,7 +105,7 @@ static void test_exec_create_invalid_sr(void) {
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
-                       ACTA_DB_ERR_INVALID);
+                       ACTA_DB_ERR_FK);
 
     test_db_teardown(db, path);
 }
@@ -128,7 +128,7 @@ static void test_exec_create_invalid_mr(void) {
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
-                       ACTA_DB_ERR_INVALID);
+                       ACTA_DB_ERR_FK);
 
     test_db_teardown(db, path);
 }
@@ -223,7 +223,64 @@ static void test_exec_create_invalid_parent(void) {
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
-                       ACTA_DB_ERR_INVALID);
+                       ACTA_DB_ERR_FK);
+}
+
+static void test_exec_create_zero_ids(void) {
+    const char *path = "test/acta_test_exec_zero_ids.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    /* each id field == 0 must be rejected up front as INVALID */
+    execution_t e;
+    memset(&e, 0, sizeof(e));
+    e.prompt = "Hello";
+
+    e.context_id = 0; e.skill_revision_id = sr_id; e.model_revision_id = mr_id;
+    TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, NULL), ACTA_DB_ERR_INVALID);
+
+    e.context_id = ctx_id; e.skill_revision_id = 0; e.model_revision_id = mr_id;
+    TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, NULL), ACTA_DB_ERR_INVALID);
+
+    e.context_id = ctx_id; e.skill_revision_id = sr_id; e.model_revision_id = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, NULL), ACTA_DB_ERR_INVALID);
+
+    /* negative ids too */
+    e.context_id = -1; e.skill_revision_id = sr_id; e.model_revision_id = mr_id;
+    TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, NULL), ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+static void test_exec_create_ignores_status(void) {
+    const char *path = "test/acta_test_exec_ign_status.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int ctx_id, sr_id, mr_id;
+    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
+
+    execution_t e;
+    memset(&e, 0, sizeof(e));
+    e.context_id        = ctx_id;
+    e.skill_revision_id = sr_id;
+    e.model_revision_id = mr_id;
+    e.prompt            = "Hello";
+    e.status            = ACTA_EXEC_STATUS_COMPLETED;  /* must be ignored */
+
+    int out_id = 0;
+    TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id), ACTA_DB_OK);
+
+    int err = 0;
+    execution_t *got = acta_db_execution_get(db, out_id, &err);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
+    acta_db_execution_free(got);
 
     test_db_teardown(db, path);
 }
@@ -1262,9 +1319,11 @@ void run_execution_create_tests(void) {
     test_exec_create_invalid_sr();
     test_exec_create_invalid_mr();
     test_exec_create_null_prompt();
+    test_exec_create_zero_ids();
     test_exec_create_default_status();
     test_exec_create_with_parent();
     test_exec_create_invalid_parent();
+    test_exec_create_ignores_status();
 }
 
 void run_execution_get_tests(void) {

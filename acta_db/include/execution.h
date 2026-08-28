@@ -106,10 +106,21 @@ typedef struct {
 
 /* ── Mutators (return int status directly) ────────────────────────── */
 
-/* Insert a new execution row (status defaults to "pending").
+/* Insert a new execution row.
+ *
+ * Required fields (validated up front, all must hold):
+ *   context_id > 0, skill_revision_id > 0, model_revision_id > 0,
+ *   prompt != NULL.
+ *
+ * e->status is IGNORED: a new execution is always created "pending";
+ * any other state is only reachable via the transition functions
+ * (start / complete / fail / cancel).
+ *
  * Returns ACTA_DB_OK on success; *out_id receives the new row id.
- * Returns ACTA_DB_ERR_INVALID if db or e is NULL or required fields
- * (context_id, prompt) are missing. */
+ * Returns ACTA_DB_ERR_INVALID if db or e is NULL or a required field
+ * is missing; ACTA_DB_ERR_FK if context_id / skill_revision_id /
+ * model_revision_id / parent_execution_id does not reference an
+ * existing row; ACTA_DB_ERR_SQL on prepare/step failure. */
 int  acta_db_execution_create(db_t *db, const execution_t *e, int *out_id);
 
 /* Transition pending → running. Sets started_at. */
