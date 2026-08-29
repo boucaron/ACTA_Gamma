@@ -68,6 +68,22 @@ static void test_exec_ddl_create_index(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+static void test_exec_trailing_semicolon(stest_ctx_t *ctx)
+{
+    /* The lib (sqlite3_exec) accepts a trailing ';' after a single
+     * statement (the help example uses one). Lock that behavior in. */
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "sql",
+               "INSERT INTO contexts(type, content, content_hash) "
+               "VALUES('text','db-test-trailing-semicolon','h4');",
+               &g);
+
+    int rc = do_db(ctx, "exec", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    targs_free(a, &g);
+}
+
 static void test_exec_table_mode(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_table();
@@ -290,6 +306,7 @@ int run_db_test_all(void)
     test_exec_positional_insert(&ctx);
     test_exec_sql_flag(&ctx);
     test_exec_ddl_create_index(&ctx);
+    test_exec_trailing_semicolon(&ctx);
     test_exec_table_mode(&ctx);
 
     /* exec – errors */
