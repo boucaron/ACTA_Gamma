@@ -124,7 +124,7 @@ static sqlite3_stmt *prepare_folder_query(db_t *db,
         return NULL;
     }
 
-    if (limit > 0) {
+    if (limit > 0 || offset > 0) {
         int n = snprintf(sql + len, sizeof(sql) - (size_t)len,
                         " LIMIT ? OFFSET ?");
         if (n < 0 || len + n >= (int)sizeof(sql)) {
@@ -143,12 +143,13 @@ static sqlite3_stmt *prepare_folder_query(db_t *db,
     int idx = 1;
     if (has_parent_filter && parent_id != 0)
         sqlite3_bind_int(stmt, idx++, parent_id);
-    if (limit > 0) {
-        sqlite3_bind_int(stmt, idx++, limit);
+    if (limit > 0 || offset > 0) {
+        sqlite3_bind_int(stmt, idx++, limit > 0 ? limit : -1);
         sqlite3_bind_int(stmt, idx++, offset);
     }
     return stmt;
 }
+
 
 /* ================================================================
  *  Mutators
