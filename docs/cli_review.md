@@ -19,6 +19,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 >   `parent_id` handling, `--id_only` help mismatch). The strict id
 >   helpers live in `cli_util.h`: `parse_positive_id`, `parse_nonneg_int`,
 >   `parse_folder_id`.
+> - Verbose logging consolidated to a single macro: `VLOG(lvl, fmt, ...)`
+>   (`cli.h`), gated on `cli_gopts` (defined in `commands.c`, set once in
+>   `commands_dispatch`). Removed: `vdbg` (cli.h), the unused
+>   `VLOG(lvl, gopts, ...)` and dead `VERBOSE`/`gopts_local` macros
+>   (cli_util.h), and the per-TU `vlog_gopts` + local `#define VLOG`
+>   copies in the 10 command files (former P1 #5, P3 #11, and the
+>   VLOG part of P4 #13).
 
 ---
 
@@ -58,25 +65,21 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    (Levenshtein) solve the same problem with different scoring. Keep one
    (Levenshtein is strictly more useful for mid-word typos).
 
-5. **Three conventions for verbose logging** (`include/cli.h`, `include/cli_util.h`)
-   `vdbg` (cli.h), `VLOG` (cli_util.h), and a `VERBOSE` macro that depends on a
-   magically-named local variable `gopts_local`. Keep one macro.
-
-6. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
+5. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
     - `exit_code` parameter is ignored (`(void)exit_code`).
     - Callers mix string codes (`"ACTA_CLI_ERR"`) with numeric `c_code` values
       of different provenance (`-10` CLI codes vs. raw library rc in
       `ACTA_DB_OPEN_FAIL`). Decide the schema once (spec §7.1 exists — enforce
       it here).
 
-7. **`parse_globals` conflates three error classes** (`src/argparse.c`)
+6. **`parse_globals` conflates three error classes** (`src/argparse.c`)
     OOM on the `rest` malloc, a missing value for `--db`/`--json`/etc., and
     "fewer than 2 positionals" all return `EXIT_CLI` (10) with no message;
     `main.c` then prints "missing entity and/or action" — misleading for the
     other two cases. OOM should be `EXIT_ALLOC` (3); missing flag values need
     their own message naming the flag.
 
-8. **Duplicate declaration of `cmd_skill`** at the bottom of
+7. **Duplicate declaration of `cmd_skill`** at the bottom of
     `include/commands.h` — copy-paste leftover.
 
 ### Nitpicks
@@ -196,7 +199,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 11. **Opaque `-1` parse errors**
     All parse failures return -1 with no detail. `cJSON_GetErrorPtr()` is right
-    there — at minimum `vdbg(1, ...)` the error pointer + offset on failure so
+    there — at minimum `VLOG(1, ...)` the error pointer + offset on failure so
     `--verbose` users can debug malformed input.
 
 12. **Stale header comment** (`json.h`)
@@ -305,14 +308,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     `created_at` from the JSON blob is forwarded into
     `acta_db_context_create` — confirm the lib ignores it (Part 2 #9 carries
     into this entity concretely).
-
-11. **Per-TU `static vlog_gopts` + local `VLOG` macro redefined in every
-    command file** (`db.c`, `context.c`, and the same pattern in Part 4 files)
-    That's now 4 coexisting verbosity mechanisms (cli.h `vdbg`, cli_util `VLOG`,
-    cli_util `VERBOSE`, and per-TU `VLOG`). The per-TU copy also means a
-    forgotten `vlog_gopts = gopts;` at the top of a new `cmd_*` silently
-    disables logging (and the NULL check hides it). One small header helper
-    (`vlog_set(gopts)` + one macro) removes the whole class.
 
 ### Nitpicks
 
@@ -444,7 +439,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     declarations coexist.
 
 13. **Structural duplication is the dominant cost in this family**
-    Each of the 8 files re-implements: the VLOG macro + `vlog_gopts`, the
+    Each of the 8 files re-implements: the
     usage text + per-action snippets, the id-parse block (×1–5), the
     JSON-vs-flags input split, the `goto cleanup` free list, the
     to-json/table/empty-`[]` emit triplet, and the unknown-action suggest
