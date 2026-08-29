@@ -184,5 +184,29 @@ static inline const char *closest_action(const char *input,
     return best;
 }
 
+/* Emit the canonical unknown-action error for an entity and return its
+ * exit code. Single implementation for all entities (the previous per-file
+ * copy-paste had drifted: 2 of 10 files logged the wrong VLOG label / help
+ * pointer). `vlog_label` and `help_target` are passed by the caller, not
+ * derived, and the stderr text is a fixed contract (scripts grep for
+ * "Unknown action") — output stays byte-stable, historical quirks
+ * included. */
+static inline int unknown_action(const char *vlog_label, const char *action,
+                                 const char *help_target,
+                                 const action_def_t *actions, size_t n)
+{
+    const char *shown = action ? action : "(null)";
+    const char *guess = closest_action(action, actions, n);
+
+    VLOG(1, "%s: unknown action '%s'%s",
+         vlog_label, shown, guess ? "  (suggestion below)" : "");
+
+    fprintf(stderr, "Unknown action '%s'.\n", shown);
+    if (guess)
+        fprintf(stderr, "  Did you mean '%s'?\n", guess);
+    fprintf(stderr, "  Run '%s' for full usage.\n", help_target);
+    return EXIT_INVALID;
+}
+
 
 #endif /* ACTA_DB_CLI_UTIL_H */

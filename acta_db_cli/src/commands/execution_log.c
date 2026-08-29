@@ -661,18 +661,9 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
 
     
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, execution_log_actions, EL_ACTIONS);
-
-        VLOG(1, "db: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'acta db help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    /* "db" label + "acta db help" are historical (copy-paste) quirks, kept
+     * for byte-stable output — fix in a contract change, not here. */
+    return unknown_action("db", action, "acta db help",
+                          execution_log_actions, EL_ACTIONS);
    
 }

@@ -1029,17 +1029,6 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, exec_actions, EXEC_ACTIONS);
-
-        VLOG(1, "exec: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'actagamma_db exec help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    return unknown_action("exec", action, "actagamma_db exec help",
+                          exec_actions, EXEC_ACTIONS);
 }

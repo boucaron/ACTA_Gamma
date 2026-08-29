@@ -233,17 +233,6 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, db_actions, DB_ACTIONS);
-
-        VLOG(1, "db: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'acta db help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    return unknown_action("db", action, "acta db help",
+                          db_actions, DB_ACTIONS);
 }

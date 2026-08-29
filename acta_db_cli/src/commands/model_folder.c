@@ -886,17 +886,6 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, model_folder_actions, MF_ACTIONS);
-
-        VLOG(1, "model_folder: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'actagamma_db model_folder help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    return unknown_action("model_folder", action, "actagamma_db model_folder help",
+                          model_folder_actions, MF_ACTIONS);
 }

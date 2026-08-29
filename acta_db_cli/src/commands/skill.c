@@ -1078,17 +1078,6 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, skill_actions, SKILL_ACTIONS);
-
-        VLOG(1, "skill: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'actagamma_db skill help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    return unknown_action("skill", action, "actagamma_db skill help",
+                          skill_actions, SKILL_ACTIONS);
 }

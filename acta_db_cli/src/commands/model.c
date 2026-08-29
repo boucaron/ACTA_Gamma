@@ -1134,17 +1134,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, model_actions, MODEL_ACTIONS);
-
-        VLOG(1, "model: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'actagamma_db model help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    return unknown_action("model", action, "actagamma_db model help",
+                          model_actions, MODEL_ACTIONS);
 }

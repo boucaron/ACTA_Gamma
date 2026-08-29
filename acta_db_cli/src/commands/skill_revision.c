@@ -534,17 +534,6 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    {
-        const char *guess = closest_action(action, skill_rev_actions, SR_ACTIONS);
-
-        VLOG(1, "skill_revision: unknown action '%s'%s",
-             action ? action : "(null)",
-             guess   ? "  (suggestion below)" : "");
-
-        fprintf(stderr, "Unknown action '%s'.\n", action ? action : "(null)");
-        if (guess)
-            fprintf(stderr, "  Did you mean '%s'?\n", guess);
-        fprintf(stderr, "  Run 'actagamma_db skill_revision help' for full usage.\n");
-        return EXIT_INVALID;
-    }
+    return unknown_action("skill_revision", action, "actagamma_db skill_revision help",
+                          skill_rev_actions, SR_ACTIONS);
 }
