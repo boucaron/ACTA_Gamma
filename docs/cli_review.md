@@ -65,8 +65,9 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 >   lib drop it (former P5 #1; the lib's forced-`pending` comment remains
 >   authoritative) (`cffe8fe`).
 > - `json.h` header comment rewritten to describe the implemented parse
->   layer (former P2 #12) (`9f19a6a`). The `json.c` serialize stubs and
->   `json_print_table` remain open (P2 #3–4 / W4).
+>   layer (former P2 #12) (`9f19a6a`).
+> - Dead `json_serialize_*` stubs and `json_print_table` no-op removed from
+>   `json.h`/`json.c` (former P2 #3–4) (`2e34bbc`).
 > - Server-authoritative field forgery (former P2 #9 / P3 #5) verified
 >   closed at the lib: the create INSERTs take no client `created_at`, and
 >   exec status is forced `pending`; `content_hash` is accepted by design.
@@ -131,21 +132,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 ## Part 2: JSON layer (`json.h` / `json.c`) and input-source plumbing
 
 ### Bugs (worth fixing)
-
-3. **Serialize half of the API is unimplemented stubs** (`json.c`)
-   `json_serialize_{model,skill,context,execution}`, `json_serialize_model_array`
-   all `return NULL` with a TODO, and the header documents `NULL` as the error
-   value — callers cannot distinguish "unimplemented" from "error". Output is in
-   fact hand-emitted per command (`fputs`/`json_str`/`tcol` sprinkled through
-   `commands/*.c`), so this header API is aspirational. Decide: either implement
-   the serializers (which would let every `create`/`get`/`update` share one
-   emit path) or remove the declarations so the code doesn't advertise an API
-   that always fails.
-
-4. **`json_print_table` is an unimplemented no-op** (`json.c`)
-   Declared in `json.h` ("print rows as aligned columns") with a TODO body that
-   does nothing. Table output is actually done with `tcol` from `cli_util.h` —
-   two table mechanisms. Remove the stub or implement it on top of `tcol`.
 
 5. **Include cycle / wrong layering: `json.c` includes `commands.h`**
    just to get the entity structs (`model_t`, `skill_t`, …), while

@@ -17,7 +17,6 @@ in-scope items; what remains there (F1–F3) is folded into the plan below
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | W1 | Remove the dead local `--count` flag in all 8 `list` actions (`parse_globals` already consumed it into `gopts->count`) | P4 #4 / P3 #2 | Dead branch misleads readers; `gopts->count` already used |
-| W4 | Remove unimplemented stubs: `json_serialize_*` (4 + 1 array) and `json_print_table` — the header advertises an API that always fails / no-ops; real output is hand-emitted per command (`tcol`) | P2 #3–4 | Or implement the serializers to share one emit path — decide first |
 | W6 | Move the shared test helpers out of `tests/skill/` into `tests/helpers/` (or `tests/common/`) so ownership is visible; every suite currently links `tests/skill/skill_test_helpers.o` and carries a `-Itests/skill` path | P5 #7 | Minor: skill target gets the helper via its own wildcard instead of `HELPERS_OBJ` |
 | W7 | Makefile hygiene: auto-derive test targets from `$(wildcard tests/*)`; add the missing `../acta_db/libacta_db.a` dependency (lib consumed with no rebuild rule); move the lib from `LDFLAGS` to `LDLIBS`; make `test` run all suites and report (`for … || fail=1` or `make -k`) instead of stopping at the first failure | P5 #4, #5, #8 | `LDFLAGS` ordering only works today by accident |
 | W8 | POSIX/Windows mismatch: targets have no `$(EXEEXT)` but the tree carries `.o`/`.exe` artifacts; document "POSIX only" or add `$(EXEEXT)`. Extend root `.gitignore` with `*.o`, `*.exe`, `*.a` (covers `*.db` only today) | P5 #6 | Tree hygiene, not a commit bug |
@@ -35,12 +34,13 @@ in-scope items; what remains there (F1–F3) is folded into the plan below
 
 - **Do first:** P3–P4 (silent not-found, error contract) — all have ready
   helpers (`finish_db_error`).
-- **Then:** cheap wins W1, W4, W6–W8, mostly mechanical.
+- **Then:** cheap wins W1, W6–W8, mostly mechanical.
 - **Finally:** S1–S4 structural work; S1 should land before any of P3/P4/W1
   patterns are re-touched per-file (or those per-file fixes become throwaway).
 - Done so far: P1 `skill update` data loss (`928c66f`), P2 input-source
   resolution (`e58d956`), W2 empty-name checks in `model update` /
   `model_folder rename` (`341de4b`), W3 `exec create` rejects dead
-  `--status` (`cffe8fe`), W5 stale `json.h` comment
+  `--status` (`cffe8fe`), W4 removed `json_serialize_*` stubs +
+  `json_print_table` (`2e34bbc`), W5 stale `json.h` comment
   (`9f19a6a`, done during the P2 round); round 3's db-surface scope is closed,
   F1–F3 are carried as P4 / S2 / S3.
