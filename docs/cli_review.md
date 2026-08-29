@@ -45,6 +45,32 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 >   rejects empty SQL, and a trailing `;` is verified accepted.
 > - `db_usage` is static (only `cmd_db` calls it); the other entities'
 >   `*_usage` still carry the declaration issue (P4 #9).
+> - Input sources fixed (former P2 #1–2): a shared `resolve_input_source()`
+>   (`commands.h`) now feeds every create handler + `skill update` —
+>   `--json <blob>` → `--from_file` → `--stdin`; no source → flag mode;
+>   conflicting / empty / unreadable → canonical JSON error +
+>   `EXIT_INVALID` (`e58d956`). Per-suite input-source regression cases run
+>   raw argv through `parse_globals` via the shared `stest_run_argv` helper
+>   (`fd262ca`). Residual: a *bare* `--json` (no value) is still unparseable
+>   — the parser was left unchanged on purpose (see S4 in
+>   `cli_active_action.md`); help text no longer teaches it.
+> - `skill update` data loss (former P4 #1) fixed: fetch-and-merge on the
+>   live row, exactly the `model update` pattern; not-found now
+>   `EXIT_NOT_FOUND` from the live-row fetch (`928c66f`).
+> - Empty `name` rejected on the remaining update/rename paths (`model
+>   update`, `model_folder rename`; `skill update`/`skill_folder rename`
+>   already had it) — same contract as create (former P4 #5) (`341de4b`).
+> - `exec create` now *rejects* `--status` (flag or JSON body) with a
+>   canonical JSON error instead of validating it and silently letting the
+>   lib drop it (former P5 #1; the lib's forced-`pending` comment remains
+>   authoritative) (`cffe8fe`).
+> - `json.h` header comment rewritten to describe the implemented parse
+>   layer (former P2 #12) (`9f19a6a`). The `json.c` serialize stubs and
+>   `json_print_table` remain open (P2 #3–4 / W4).
+> - Part 5 #3 (untested global parse layer) is narrowed, not closed: the
+>   `stest_run_argv` in-process raw-argv path now exercises
+>   `parse_globals` + handler in every JSON-input suite, but a dedicated
+>   `parse_globals`/`commands_dispatch` suite is still missing (S2).
 
 ---
 
