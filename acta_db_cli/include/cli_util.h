@@ -175,11 +175,17 @@ static inline const char *closest_action(const char *input,
                                   const action_def_t *actions, size_t n)
 {
     if (!input || !*input) return NULL;
-    int best_dist = 4;
     const char *best = NULL;
+    int best_dist = INT_MAX;
     for (size_t i = 0; i < n; i++) {
-        int d = edit_distance(input, actions[i].name);
-        if (d > 0 && d < best_dist) { best_dist = d; best = actions[i].name; }
+        const char *name = actions[i].name;
+        /* Length-relative acceptance threshold (per target name): 1 edit
+         * is meaningful, 3+ never are. Short names (≤ 3 chars) get only
+         * 1, so "cat" does not suggest "get" (d=2) while "creat"→
+         * "create" (d=1) and "cretae"→"create" (d=2) still fire. */
+        int limit = (int)strlen(name) <= 3 ? 1 : 2;
+        int d = edit_distance(input, name);
+        if (d > 0 && d <= limit && d < best_dist) { best_dist = d; best = name; }
     }
     return best;
 }
