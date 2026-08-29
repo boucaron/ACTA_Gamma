@@ -488,8 +488,8 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_sf_get(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill_folder get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -708,8 +708,8 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_sf_rename(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill_folder rename: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -756,8 +756,8 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_sf_move(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill_folder move: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -801,8 +801,8 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_sf_delete(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill_folder delete: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -838,8 +838,8 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_sf_restore(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill_folder restore: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"

@@ -46,6 +46,22 @@ static inline int action_err(const char *entity, const char *action,
     return EXIT_CLI;
 }
 
+/* Parse a positive-integer id ("42") from a CLI argument.
+ * Strict: rejects trailing garbage ("42abc"), non-numeric ("abc"),
+ * zero, negatives, and overflow ("999999999999999") via strtol+endptr
+ * instead of atoi (which accepts "42abc" and has UB on overflow).
+ * Returns 1 on success (and stores into *out); 0 on invalid input
+ * (*out left unmodified). */
+static inline int parse_positive_id(const char *s, int *out)
+{
+    if (!s || !out) return 0;
+    char *end;
+    long v = strtol(s, &end, 10);
+    if (*end != '\0' || v <= 0) return 0;
+    *out = (int)v;
+    return 1;
+}
+
 /* Map a C API return code → CLI exit code (spec §7.1). */
 static inline int map_rc_to_exit(int rc)
 {

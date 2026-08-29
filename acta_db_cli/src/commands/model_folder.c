@@ -497,8 +497,8 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_get(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model_folder get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -718,8 +718,8 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_rename(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model_folder rename: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -774,8 +774,8 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_delete(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model_folder delete: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -811,8 +811,8 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_restore(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model_folder restore: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -851,8 +851,8 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_move(stderr);
             return EXIT_INVALID;
         }
-        int folder_id = atoi(id_str);
-        if (folder_id <= 0) {
+        int folder_id;
+        if (!parse_positive_id(id_str, &folder_id)) {
             VLOG(1, "model_folder move: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"

@@ -326,8 +326,8 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
             usage_get(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model_revision get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -381,8 +381,8 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
             usage_get_latest(stderr);
             return EXIT_INVALID;
         }
-        int model_id = atoi(model_id_str);
-        if (model_id <= 0) {
+        int model_id;
+        if (!parse_positive_id(model_id_str, &model_id)) {
             VLOG(1, "model_revision get-latest: invalid model_id=%s", model_id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -436,8 +436,8 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
             usage_list(stderr);
             return EXIT_INVALID;
         }
-        int model_id = atoi(model_id_str);
-        if (model_id <= 0) {
+        int model_id;
+        if (!parse_positive_id(model_id_str, &model_id)) {
             VLOG(1, "model_revision list: invalid model_id=%s", model_id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -550,8 +550,8 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
             usage_count(stderr);
             return EXIT_INVALID;
         }
-        int model_id = atoi(model_id_str);
-        if (model_id <= 0) {
+        int model_id;
+        if (!parse_positive_id(model_id_str, &model_id)) {
             VLOG(1, "model_revision count: invalid model_id=%s", model_id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"

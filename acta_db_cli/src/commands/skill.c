@@ -589,8 +589,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_get(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -650,8 +650,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_update(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill update: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -797,8 +797,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_delete(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill delete: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -834,8 +834,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_restore(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill restore: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -871,8 +871,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_move(stderr);
             return EXIT_INVALID;
         }
-        int skill_id = atoi(skill_id_str);
-        if (skill_id <= 0) {
+        int skill_id;
+        if (!parse_positive_id(skill_id_str, &skill_id)) {
             VLOG(1, "skill move: invalid skill_id=%s", skill_id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"

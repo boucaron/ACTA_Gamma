@@ -314,8 +314,8 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             usage_sr_get(stderr);
             return EXIT_INVALID;
         }
-        int id = atoi(id_str);
-        if (id <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "skill_revision get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -369,8 +369,8 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             usage_sr_latest(stderr);
             return EXIT_INVALID;
         }
-        int skill_id = atoi(skill_str);
-        if (skill_id <= 0) {
+        int skill_id;
+        if (!parse_positive_id(skill_str, &skill_id)) {
             VLOG(1, "skill_revision get-latest: invalid skill_id=%s", skill_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -424,8 +424,8 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             usage_sr_list(stderr);
             return EXIT_INVALID;
         }
-        int skill_id = atoi(skill_str);
-        if (skill_id <= 0) {
+        int skill_id;
+        if (!parse_positive_id(skill_str, &skill_id)) {
             VLOG(1, "skill_revision list: invalid skill_id=%s", skill_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -539,8 +539,8 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             usage_sr_count(stderr);
             return EXIT_INVALID;
         }
-        int skill_id = atoi(skill_str);
-        if (skill_id <= 0) {
+        int skill_id;
+        if (!parse_positive_id(skill_str, &skill_id)) {
             VLOG(1, "skill_revision count: invalid skill_id=%s", skill_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"

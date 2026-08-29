@@ -353,9 +353,8 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 "  Run 'acta context help' for full usage.\n");
             return EXIT_INVALID;
         }
-        char *end;
-        long id_v = strtol(id_str, &end, 10);
-        if (*end || id_v <= 0) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "context get: invalid id=%s", id_str);
             fprintf(stderr,
                 "Error: id must be a positive integer, got '%s'.\n"
@@ -364,8 +363,6 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 id_str);
             return EXIT_INVALID;
         }
-
-        int id = (int)id_v;
 
         VLOG(1, "context get: fetching id=%d", id);
 
