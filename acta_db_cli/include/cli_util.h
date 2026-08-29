@@ -148,6 +148,12 @@ static inline int edit_distance(const char *a, const char *b)
 {
     int la = (int)strlen(a);
     int lb = (int)strlen(b);
+
+    /* Inputs are only used for fuzzy "did you mean" suggestions; anything
+     * this long can never be within edit distance 4 of a real action name,
+     * so bail out before touching the 64x64 DP buffer below. */
+    if (la > 60 || lb > 60) return 61;
+
     int dp[64][64];
 
     for (int i = 0; i <= la; i++) dp[i][0] = i;
