@@ -105,6 +105,8 @@ void help_print(FILE *out)
         "  --json <blob>      input JSON object\n"
         "  --stdin            read JSON from stdin\n"
         "  --from_file <p>    read JSON from file\n"
+        "                     (--json / --stdin / --from_file are mutually\n"
+        "                     exclusive; combining two is an error)\n"
         "  --version          print version\n"
         "  --help, -h         this help\n"
         "  --tools            JSON tool schema\n"

@@ -47,7 +47,7 @@ void skill_folder_usage(FILE *f)
 "    --parent_id <int>      Parent skill_folder id (0 = root, default 0)\n"
 "\n"
 "  Options:\n"
-"    --json               Read the entry as JSON from stdin\n"
+"    --json <blob>          Read the entry as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
@@ -147,7 +147,7 @@ static void usage_sf_create(FILE *f)
 "    --parent_id <int>      Parent skill_folder id (0 = root, default 0)\n"
 "\n"
 "  Options:\n"
-"    --json               Read the entry as JSON from stdin\n"
+"    --json <blob>          Read the entry as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
@@ -363,15 +363,13 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         int json_owned = 0;
         int ret = EXIT_OK;
 
-        if (gopts->json_input) {
-            char *blob = read_stdin_all();
-            if (!blob) {
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"failed to read JSON input\"}\n");
-                usage_sf_create(stderr);
-                return EXIT_INVALID;
-            }
+        char *blob = NULL;
+        int src = resolve_input_source(gopts, &blob);
+        if (src < 0) {
+            usage_sf_create(stderr);
+            return EXIT_INVALID;   /* error line already on stderr */
+        }
+        if (src) {
             VLOG(1, "skill_folder create: JSON input (%zu bytes)", strlen(blob));
 
             if (json_parse_skill_folder(blob, &sf) != 0) {

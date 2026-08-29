@@ -29,7 +29,7 @@ void ctx_usage(FILE *f)
 "\n"
 "  Or pipe a JSON body from stdin:\n"
 "  echo '{\"type\":\"s\",\"content\":\"hi\",\"content_hash\":\"ab\"}' \\\n"
-"      | actagamma_db context create --json\n"
+"      | actagamma_db context create --stdin\n"
 "\n"
 "  Required (via flags or JSON key):\n"
 "    --type <string>          context type   (JSON key: \"type\")\n"
@@ -66,7 +66,9 @@ void ctx_usage(FILE *f)
 "  Prints a single integer: the number of matching contexts.\n"
 "\n"
 "Global options (apply to every action):\n"
-"  --json           read input from stdin as JSON\n"
+"  --json <blob>    read input from a JSON object (flag value)\n"
+"  --stdin          read input from stdin as JSON\n"
+"  --from_file <p>  read input from a file as JSON\n"
 "  --fields <a,b>   comma-separated field filter for output\n"
 "  --no_nulls       suppress null-valued fields in JSON output\n"
 "  --id_only        print only the numeric id\n"
@@ -191,14 +193,12 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int ret = EXIT_OK;
 
         /* ── populate ctx ── */
-        if (gopts->json_input) {
-            char *blob = read_stdin_all();
-            if (!blob) {
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"failed to read JSON input\"}\n");
-                return EXIT_INVALID;
-            }
+        char *blob = NULL;
+        int src = resolve_input_source(gopts, &blob);
+        if (src < 0) {
+            return EXIT_INVALID;   /* error line already on stderr */
+        }
+        if (src) {
             VLOG(1, "context create: JSON input (%zu bytes)", strlen(blob));
 
             if (json_parse_context(blob, &ctx) != 0) {
@@ -227,7 +227,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     "Warning: no recognised flags for 'create'.\n"
                     "  Did you misspell a flag?  Expected:\n"
                     "    --type  --content  --hash  --metadata\n"
-                    "  Or use --json to read a JSON body from stdin.\n"
+                    "  Or use --json <blob>, --stdin, or --from_file <path> for a JSON body.\n"
                     "  Run 'actagamma_db context help' for full usage.\n");
             }
         }

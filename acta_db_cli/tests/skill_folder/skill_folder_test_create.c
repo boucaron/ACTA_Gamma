@@ -178,8 +178,8 @@ static int run_create_json(stest_ctx_t *ctx, cmd_args_t *args,
     int saved_out = _dup(STDOUT_FILENO);
     int in_p[2], out_p[2];
     if (saved_in < 0 || saved_out < 0 ||
-        _pipe(in_p,  65536, O_BINARY ) != 0 ||
-        _pipe(out_p, 65536, O_BINARY ) != 0) {
+        _pipe(in_p,  65536, O_BINARY) != 0 ||
+        _pipe(out_p, 65536, O_BINARY) != 0) {
         if (saved_in  >= 0) _close(saved_in);
         if (saved_out >= 0) _close(saved_out);
         return -1;
@@ -196,7 +196,6 @@ static int run_create_json(stest_ctx_t *ctx, cmd_args_t *args,
     }
 #endif
 
-
     const char *data = stdin_blob ? stdin_blob : "";
     size_t blen = strlen(data);
     size_t off = 0;
@@ -211,6 +210,14 @@ static int run_create_json(stest_ctx_t *ctx, cmd_args_t *args,
     dup2(out_p[1], STDOUT_FILENO);
     close(in_p[0]);
     close(out_p[1]);
+
+    /* ── debug: verify what the pipe actually holds ── */
+    /* {
+        char dbg[256] = {0};
+        ssize_t dr = read(STDIN_FILENO, dbg, sizeof(dbg) - 1);
+        fprintf(stderr, "DEBUG run_create_json: read %zd bytes: '%s'\n", dr, dbg);
+    } */
+    /* ── end debug ── */
 
     int rc = cmd_skill_folder("create", args, &gopts, ctx->db);
 
@@ -232,6 +239,7 @@ static int run_create_json(stest_ctx_t *ctx, cmd_args_t *args,
     g_json_stdout[n] = '\0';
     return rc;
 }
+
 
 static void test_create_json_invalid(stest_ctx_t *ctx)
 {
@@ -257,10 +265,11 @@ static void test_create_json_missing_name(stest_ctx_t *ctx)
 
 static void test_create_json_valid(stest_ctx_t *ctx)
 {
-    global_opts_t g = gopts_json();
+    global_opts_t g = gopts_default();
+    g.json_input = (char *)"{\"name\":\"JsonFolder\"}";
     cmd_args_t *a = targs_new();
 
-    int rc = run_create_json(ctx, a, g, "{\"name\":\"JsonFolder\"}");
+    int rc = run_create_json(ctx, a, g, "");
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, g_json_stdout, "\"id\":");
     targs_free(a, &g);
@@ -268,15 +277,17 @@ static void test_create_json_valid(stest_ctx_t *ctx)
 
 static void test_create_json_with_parent(stest_ctx_t *ctx)
 {
-    global_opts_t g = gopts_json();
+    global_opts_t g = gopts_default();
+    g.json_input = (char *)"{\"name\":\"JsonChild\",\"parent_id\":1}";
     cmd_args_t *a = targs_new();
 
-    int rc = run_create_json(ctx, a, g,
-                             "{\"name\":\"JsonChild\",\"parent_id\":1}");
+    int rc = run_create_json(ctx, a, g, "");
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, g_json_stdout, "\"id\":");
     targs_free(a, &g);
 }
+
+
 
 /* ── runner ───────────────────────────────────────────────────────── */
 

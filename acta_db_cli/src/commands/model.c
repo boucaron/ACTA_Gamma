@@ -58,7 +58,7 @@ void model_usage(FILE *f)
 "    --configuration <json>       Arbitrary JSON config\n"
 "\n"
 "  Options:\n"
-"    --json               Read the entry as JSON from stdin\n"
+"    --json <blob>          Read the entry as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
@@ -180,7 +180,7 @@ static void usage_create(FILE *f)
 "    --configuration <json>       Arbitrary JSON config\n"
 "\n"
 "  Options:\n"
-"    --json               Read the entry as JSON from stdin\n"
+"    --json <blob>          Read the entry as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
@@ -441,15 +441,13 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int json_owned = 0;
         int ret = EXIT_OK;
 
-        if (gopts->json_input) {
-            char *blob = read_stdin_all();
-            if (!blob) {
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"failed to read JSON input\"}\n");
-                usage_create(stderr);
-                return EXIT_INVALID;
-            }
+        char *blob = NULL;
+        int src = resolve_input_source(gopts, &blob);
+        if (src < 0) {
+            usage_create(stderr);
+            return EXIT_INVALID;   /* error line already on stderr */
+        }
+        if (src) {
             VLOG(1, "model create: JSON input (%zu bytes)", strlen(blob));
 
             if (json_parse_model(blob, &m) != 0) {

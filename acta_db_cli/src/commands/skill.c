@@ -54,7 +54,7 @@ void skill_usage(FILE *f)
 "    --output_schema <json>   Expected output JSON schema\n"
 "\n"
 "  Options:\n"
-"    --json               Read the skill as JSON from stdin\n"
+"    --json <blob>          Read the skill as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
@@ -93,7 +93,7 @@ void skill_usage(FILE *f)
 "  (use: actagamma_db skill move <id> --folder_id 0).\n"
 "\n"
 "  Options:\n"
-"    --json               Read the skill patch as JSON from stdin\n"
+"    --json <blob>          Read the skill patch as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
 "== delete <id> ====================================================\n"
@@ -183,7 +183,7 @@ static void usage_create(FILE *f)
 "    --output_schema <json>   Expected output JSON schema\n"
 "\n"
 "  Options:\n"
-"    --json               Read the skill as JSON from stdin\n"
+"    --json <blob>          Read the skill as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
@@ -230,7 +230,7 @@ static void usage_update(FILE *f)
 "  (use: actagamma_db skill move <id> --folder_id 0).\n"
 "\n"
 "  Options:\n"
-"    --json               Read the skill patch as JSON from stdin\n"
+"    --json <blob>          Read the skill patch as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
 
@@ -439,15 +439,13 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int json_owned = 0;
         int ret = EXIT_OK;
 
-        if (gopts->json_input) {
-            char *blob = read_stdin_all();
-            if (!blob) {
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"failed to read JSON input\"}\n");
-                usage_create(stderr);
-                return EXIT_INVALID;
-            }
+        char *blob = NULL;
+        int src = resolve_input_source(gopts, &blob);
+        if (src < 0) {
+            usage_create(stderr);
+            return EXIT_INVALID;   /* error line already on stderr */
+        }
+        if (src) {
             VLOG(1, "skill create: JSON input (%zu bytes)", strlen(blob));
 
             if (json_parse_skill(blob, &s) != 0) {
@@ -653,7 +651,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        /* ── input flags (flag mode; JSON mode reads stdin) ───────── */
+        /* ── input flags (flag mode; JSON mode: --json/--stdin/--from_file) ── */
         const char *f_name    = cmd_args_flag(ga, "name", 1);
         const char *f_prompt  = cmd_args_flag(ga, "prompt_template", 1);
         const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
@@ -664,7 +662,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int folder_val = 0;   /* 0 == root (NULL) */
         int ret = EXIT_OK;
 
-        if (!gopts->json_input) {
+        if (!gopts->json_input && !gopts->from_stdin && !gopts->from_file) {
             /* At least one field must be provided for update. */
             if (!f_name && !f_prompt && !f_desc && !f_schema && !f_folder) {
                 VLOG(1, "  ERROR: no fields provided for update");
@@ -723,16 +721,14 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         skill_t parsed = {0};
         int parsed_owned = 0;
 
-        if (gopts->json_input) {
-            char *blob = read_stdin_all();
-            if (!blob) {
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"failed to read JSON input\"}\n");
-                usage_update(stderr);
-                ret = EXIT_INVALID;
-                goto cleanup_skill_update;
-            }
+        char *blob = NULL;
+        int src = resolve_input_source(gopts, &blob);
+        if (src < 0) {
+            usage_update(stderr);
+            ret = EXIT_INVALID;
+            goto cleanup_skill_update;
+        }
+        if (src) {
             VLOG(1, "skill update: JSON input (%zu bytes)", strlen(blob));
 
             if (json_parse_skill(blob, &parsed) != 0) {
