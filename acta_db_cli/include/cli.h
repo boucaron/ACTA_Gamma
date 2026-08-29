@@ -75,6 +75,14 @@ extern const global_opts_t *cli_gopts;
 const char *resolve_db_path(const char *flag_db);
 
 /* ---- helpers ---- */
-void cli_error(int exit_code, const char *err_const, int c_code, const char *fmt, ...);
+/* CLI-layer error emitter (defined in main.c). Emits the canonical
+ * single-line JSON error on stderr, enforcing the §7.1 schema exactly
+ * once (same shape as finish_db_error in cli_util.h):
+ *   {"error":"ACTA_DB_ERR_<NAME>","code":<rc>,"message":"<escaped>"}
+ * `rc` is the raw (negative) ACTA_DB_ERR_* code; the message is
+ * formatted then JSON-escaped. Returns the exit code derived from rc
+ * (map_rc_to_exit) so the exit code always matches the "code" field;
+ * callers must return it. */
+int cli_error(int rc, const char *fmt, ...);
 
 #endif /* ACTA_CLI_H */

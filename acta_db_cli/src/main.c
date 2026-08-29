@@ -18,6 +18,7 @@
 #include <stdarg.h>
 
 #include "cli.h"        /* global_opts_t, cmd_args_t, EXIT_* codes */
+#include "cli_util.h"   /* json_str, map_rc_to_exit, finish_db_error */
 #include "argparse.h"
 #include "commands.h"
 #include "acta_db.h"
@@ -37,20 +38,20 @@ const char *resolve_db_path(const char *flag_db) {
 
 /*
  * Single-line JSON error → stderr, empty stdout.
+ * Enforces the §7.1 schema once: delegates to finish_db_error
+ * (cli_util.h) — error name from the raw rc, rc in "code",
+ * message formatted then JSON-escaped (paths with `"`/`\` are
+ * safe). The exit code is derived from rc (map_rc_to_exit) and
+ * returned, so it always matches the "code" field.
  */
-void cli_error(int exit_code, const char *err_const, int c_code,
-               const char *fmt, ...) {
-    (void)exit_code;
-    fprintf(stderr, "{\"error\":\"");
-    if (err_const) fputs(err_const, stderr);
-    fprintf(stderr, "\",\"code\":%d,\"message\":\"", c_code);
-
+int cli_error(int rc, const char *fmt, ...) {
+    char msg[2048];
     va_list ap;
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    if (vsnprintf(msg, sizeof msg, fmt, ap) < 0)
+        msg[0] = '\0';
     va_end(ap);
-
-    fputs("\"}\n", stderr);
+    return finish_db_error(rc, msg);
 }
 
 int main(int argc, char **argv) {
@@ -60,9 +61,8 @@ int main(int argc, char **argv) {
     /* ---- pass 1: global flags ---- */
     int rc = parse_globals(argc, argv, &gopts);
     if (rc == EXIT_CLI) {
-        cli_error(EXIT_CLI, "ACTA_CLI_ERR", -10,
-                  "missing entity and/or action. See --help.");
-        return EXIT_CLI;
+        return cli_error(ACTA_DB_ERR_INVALID,
+                         "missing entity and/or action. See --help.");
     }
 
     /* ---- early exits (no DB needed) ---- */
@@ -72,9 +72,8 @@ int main(int argc, char **argv) {
 
     /* ---- need at least entity + action ---- */
     if (gopts.argc < 2) {
-        cli_error(EXIT_CLI, "ACTA_CLI_ERR", -10,
-                  "usage: actagamma_db <entity> <action> [args]. See --help.");
-        return EXIT_CLI;
+        return cli_error(ACTA_DB_ERR_INVALID,
+                         "usage: actagamma_db <entity> <action> [args]. See --help.");
     }
 
     const char *entity = gopts.argv[0];
@@ -90,11 +89,14 @@ int main(int argc, char **argv) {
     int db_err = ACTA_DB_OK;
     db_t *db = acta_db_open(db_path, &db_err, ACTA_DB_OPEN_EXISTING);
     if (!db) {
-        cli_error(EXIT_DB_OPEN, "ACTA_DB_OPEN_FAIL", db_err,
-                  "cannot open database '%s' (%s)",
-                  db_path, acta_db_strerror(db_err));
+        /* Raw library rc flows into the JSON "code" field; the exit
+         * code is map_rc_to_exit(db_err) (see #5: unknown rc maps
+         * to EXIT_SQL until map_rc_to_exit is completed). */
+        int open_exit = cli_error(db_err,
+                                 "cannot open database '%s' (%s)",
+                                 db_path, acta_db_strerror(db_err));
         free(gopts.argv);
-        return EXIT_DB_OPEN;
+        return open_exit;
     }
 
     /* ---- dispatch (handlers receive the open db handle) ---- */
