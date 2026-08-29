@@ -4,9 +4,10 @@
 #include <stdio.h>
 
 /*
- * JSON serialize / parse helpers (cJSON-backed).
- * See json.c for the implementation. The serialize_* functions are
- * declared per entity; not all are implemented yet (see json.c).
+ * JSON serialize / parse stubs.
+ * Real implementation will use cJSON (one vendored .c/.h pair).
+ * Structs to be supplied — signatures are placeholders for now.
+ */
 
 /* ---- output: struct → compact/pretty one-line JSON ---- */
 /*

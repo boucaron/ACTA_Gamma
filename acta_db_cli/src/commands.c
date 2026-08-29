@@ -4,7 +4,6 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <sqlite3.h>
 
 #ifndef ACTA_DB_GIT_HASH
 #define ACTA_DB_GIT_HASH "unknown"
@@ -77,8 +76,8 @@ int commands_dispatch(const char *entity, const char *action,
 
 void version_print(FILE *out)
 {
-    fprintf(out, "actagamma_db %s (%s | sqlite %s)\n",
-            ACTA_DB_CLI_VERSION, ACTA_DB_GIT_HASH, sqlite3_libversion());
+    fprintf(out, "actagamma_db %s (%s | libacta_db 0.1.0, sqlite 3.x.x)\n",
+            ACTA_DB_CLI_VERSION, ACTA_DB_GIT_HASH);
 }
 
 void help_print(FILE *out)
@@ -102,10 +101,10 @@ void help_print(FILE *out)
         "  --from-file <p>    read JSON from file\n"
         "  --version          print version\n"
         "  --help, -h         this help\n"
-        "  --tools            JSON tool schema (experimental; may be incomplete)\n"
+        "  --tools            JSON tool schema\n"
         "  --verbose, -v      increase verbosity (repeatable, 1-3)\n"
         "\n"
-        "Run '<entity> help' for per-command usage.\n");
+        "see --tools for full command reference.\n");
 }
 
 int tools_print(FILE *out)

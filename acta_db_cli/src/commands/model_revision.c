@@ -448,6 +448,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
 
         const char *s_off   = cmd_args_flag(ga, "offset", 1);
         const char *s_lim   = cmd_args_flag(ga, "limit", 1);
+        const char *s_count = cmd_args_flag(ga, "count", 0);
 
         int offset = 0, limit = 0;
 
@@ -489,7 +490,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
 
         VLOG(3, "  model_id=%d offset=%d limit=%d", model_id, offset, limit);
 
-        if (gopts->count) {
+        if (gopts->count || s_count) {
             int err = 0;
             int n = acta_db_model_revision_count(db, model_id, &err);
             if (err != ACTA_DB_OK) {

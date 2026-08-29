@@ -60,6 +60,8 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
 int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db);
+int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
+                      db_t *db);
 
 
 
