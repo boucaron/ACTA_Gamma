@@ -171,6 +171,63 @@ static int peek(cmd_args_t *it, const char **tok) {
     return 1;
 }
 
+/*
+ * name → has_value table for ENTITY flags (global flags are already
+ * consumed in pass 1).  The flag vocabulary is consistent across
+ * entities: the same name always takes a value or is always boolean.
+ * A flag not listed here is conservatively treated as value-taking
+ * (legacy behavior), so new value flags keep working before they
+ * are added to the table.
+ */
+typedef struct { const char *name; int has_value; } flag_spec_t;
+
+static const flag_spec_t entity_flag_specs[] = {
+    { "all", 0 },
+    { "backend", 1 },
+    { "base_url", 1 },
+    { "configuration", 1 },
+    { "content", 1 },
+    { "context_id", 1 },
+    { "count", 0 },
+    { "description", 1 },
+    { "error", 0 },
+    { "event", 1 },
+    { "execution_id", 1 },
+    { "file", 1 },
+    { "folder_id", 1 },
+    { "hash", 1 },
+    { "include_deleted", 0 },
+    { "level", 1 },
+    { "limit", 1 },
+    { "live", 0 },
+    { "message", 1 },
+    { "metadata", 1 },
+    { "model_identifier", 1 },
+    { "model_revision_id", 1 },
+    { "name", 1 },
+    { "offset", 1 },
+    { "output_schema", 1 },
+    { "parent_execution_id", 1 },
+    { "parent_id", 1 },
+    { "prompt", 1 },
+    { "prompt_template", 1 },
+    { "raw", 1 },
+    { "result", 0 },
+    { "skill_revision_id", 1 },
+    { "sql", 1 },
+    { "sql_stdin", 0 },
+    { "status", 1 },
+    { "type", 1 },
+};
+
+static int flag_has_value(const char *name) {
+    for (size_t i = 0; i < sizeof(entity_flag_specs) / sizeof(entity_flag_specs[0]); i++) {
+        if (strcmp(entity_flag_specs[i].name, name) == 0)
+            return entity_flag_specs[i].has_value;
+    }
+    return 1;   /* unknown flag: assume value-taking (legacy) */
+}
+
 const char *cmd_args_next_positional(cmd_args_t *it) {
     while (it->pos < it->argc) {
         const char *tok = it->argv[it->pos];
@@ -178,12 +235,17 @@ const char *cmd_args_next_positional(cmd_args_t *it) {
             it->pos++;
             return tok;
         }
-        /* it's a flag; skip flag + optional value (heuristic:
-         * next non-flag token is its value) */
+        /* it's a flag; skip it, and skip its value ONLY if the flag
+         * takes one (name→has_value table).  The old positional
+         * heuristic unconditionally ate the next non-flag token, so
+         * boolean flags (e.g. --include_deleted) consumed the
+         * positional that followed them. */
         it->pos++;
-        if (it->pos < it->argc) {
-            const char *nxt = it->argv[it->pos];
-            if (!is_flag(nxt)) it->pos++;
+        if (strchr(tok + 2, '=')) continue;   /* --name=value: inline */
+        if (flag_has_value(tok + 2) &&
+            it->pos < it->argc &&
+            !is_flag(it->argv[it->pos])) {
+            it->pos++;
         }
     }
     return NULL;

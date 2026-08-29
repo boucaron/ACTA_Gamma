@@ -96,11 +96,15 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── exec ─────────────────────────────────────────────────────── */
     if (strcmp(action, "exec") == 0) {
-        const char *sql   = cmd_args_flag(ga, "sql",   1);
-        const char *fpath = cmd_args_flag(ga, "file",  1);
+        /* Sources, mutually exclusive, first wins in the order the
+         * help lists them: positional, --sql, --file, --sql_stdin. */
+        const char *pos_sql = cmd_args_next_positional(ga);
+        const char *sql     = cmd_args_flag(ga, "sql",   1);
+        const char *fpath   = cmd_args_flag(ga, "file",  1);
         const int   use_stdin = (cmd_args_flag(ga, "sql_stdin", 0) != NULL);
 
-        VLOG(1, "db exec: sql=%s file=%s stdin=%d",
+        VLOG(1, "db exec: pos=%s sql=%s file=%s stdin=%d",
+             pos_sql? pos_sql: "(null)",
              sql    ? sql    : "(null)",
              fpath  ? fpath  : "(null)",
              use_stdin);
@@ -123,7 +127,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        if (!sql && !fpath && !use_stdin) {
+        if (!pos_sql && !sql && !fpath && !use_stdin) {
             VLOG(1, "  ERROR: no SQL source (need positional, --sql, --file, or --sql_stdin)");
             fprintf(stderr,
                 "Error: no SQL source provided.\n"
@@ -141,7 +145,9 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         char   *sql_buf = NULL;
         const char *sql_ptr = NULL;
 
-        if (sql) {
+        if (pos_sql) {
+            sql_ptr = pos_sql;
+        } else if (sql) {
             sql_ptr = sql;
         } else if (fpath) {
             VLOG(2, "  reading file: %s", fpath);

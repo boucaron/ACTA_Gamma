@@ -36,7 +36,9 @@ void cmd_args_init(cmd_args_t *it, int argc, char **argv);
 
 /*
  * Returns the next positional (non-flag) argument, or NULL.
- * Skips past flags and their values automatically.
+ * Skips past flags automatically; a flag's value token is skipped
+ * only if the flag name is known to take a value (name→has_value
+ * table in argparse.c) — boolean flags never eat the next token.
  */
 const char *cmd_args_next_positional(cmd_args_t *it);
 

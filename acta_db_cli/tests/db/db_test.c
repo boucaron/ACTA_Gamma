@@ -34,6 +34,46 @@ static void test_exec_positional_insert(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+static void test_exec_positional_real(stest_ctx_t *ctx)
+{
+    /* The documented positional form: db exec "INSERT ...".  (The
+     * existing test_exec_positional_insert actually drives the --sql
+     * flag; this one exercises the real positional path.  Includes a
+     * trailing ';' as in the help example. */
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_pos(a,
+              "INSERT INTO contexts(type, content, content_hash) "
+              "VALUES('text','db-test-positional-real','h6');",
+              &g);
+
+    int rc = do_db(ctx, "exec", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+    targs_free(a, &g);
+}
+
+static void test_exec_positional_after_bool_flag(stest_ctx_t *ctx)
+{
+    /* Regression (P1 #1): the old cmd_args_next_positional heuristic
+     * ate the token after a boolean flag as its value, so a positional
+     * SQL after --sql_stdin was lost (and the handler would read
+     * stdin). The positional must survive the bool flag and win as the
+     * first-listed source — and stdin must NOT be read. */
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag_bool(a, "sql_stdin", &g);
+    targs_pos(a,
+              "INSERT INTO contexts(type, content, content_hash) "
+              "VALUES('text','db-test-pos-after-bool','h7');",
+              &g);
+
+    int rc = do_db(ctx, "exec", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+    targs_free(a, &g);
+}
+
 static void test_exec_sql_flag(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
@@ -304,6 +344,8 @@ int run_db_test_all(void)
 
     /* exec – success */
     test_exec_positional_insert(&ctx);
+    test_exec_positional_real(&ctx);
+    test_exec_positional_after_bool_flag(&ctx);
     test_exec_sql_flag(&ctx);
     test_exec_ddl_create_index(&ctx);
     test_exec_trailing_semicolon(&ctx);
