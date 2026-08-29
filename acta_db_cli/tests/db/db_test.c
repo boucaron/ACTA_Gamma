@@ -98,6 +98,21 @@ static void test_exec_no_source(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+static void test_exec_global_stdin_rejected(stest_ctx_t *ctx)
+{
+    /* The global --stdin is consumed by parse_globals into gopts->from_stdin
+     * before db exec sees it. The handler must reject it with a clear error
+     * (pointing at --sql_stdin), not silently fall through to "no SQL source"
+     * or start reading stdin. */
+    global_opts_t g = gopts_default();
+    g.from_stdin = 1;
+    cmd_args_t   *a = targs_new();
+
+    int rc = do_db(ctx, "exec", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
 static void test_exec_empty_sql_flag(stest_ctx_t *ctx)
 {
     /* --sql "" must be rejected with a clear error, not passed to the lib */
@@ -279,6 +294,7 @@ int run_db_test_all(void)
 
     /* exec – errors */
     test_exec_no_source(&ctx);
+    test_exec_global_stdin_rejected(&ctx);
     test_exec_empty_sql_flag(&ctx);
     test_exec_empty_file(&ctx);
     test_exec_invalid_sql(&ctx);

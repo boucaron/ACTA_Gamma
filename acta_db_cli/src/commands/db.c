@@ -38,14 +38,14 @@ void db_usage(FILE *f)
 "    actagamma_db db exec --file /path/to/migration.sql\n"
 "        <- --file flag (max 64 KiB)\n"
 "\n"
-"    actagamma_db db exec --stdin\n"
-"    cat migration.sql | actagamma_db db exec --stdin\n"
-"        <- --stdin flag (max 64 KiB)\n"
+"    actagamma_db db exec --sql_stdin\n"
+"    cat migration.sql | actagamma_db db exec --sql_stdin\n"
+"        <- --sql_stdin flag (max 64 KiB)\n"
 "\n"
 "  Options:\n"
 "    --sql <text>       SQL text to execute\n"
 "    --file <path>      Read SQL from a file (max 64 KiB)\n"
-"    --stdin            Read SQL from stdin (max 64 KiB)\n"
+"    --sql_stdin        Read SQL from stdin (max 64 KiB)\n"
 "    --table            print 'ok' instead of JSON\n"
 "    --verbose <n>      debug level 0-3 (stderr)\n"
 "\n"
@@ -98,7 +98,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     if (strcmp(action, "exec") == 0) {
         const char *sql   = cmd_args_flag(ga, "sql",   1);
         const char *fpath = cmd_args_flag(ga, "file",  1);
-        const int   use_stdin = (cmd_args_flag(ga, "stdin", 0) != NULL);
+        const int   use_stdin = (cmd_args_flag(ga, "sql_stdin", 0) != NULL);
 
         VLOG(1, "db exec: sql=%s file=%s stdin=%d",
              sql    ? sql    : "(null)",
@@ -109,15 +109,29 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table, gopts->verbose);
 
+        /* The global --stdin flag is consumed by parse_globals into
+         * gopts->from_stdin before the handler sees it, so the entity
+         * flag is --sql_stdin. Reject --stdin explicitly instead of
+         * letting it silently fall through to "no SQL source". */
+        if (gopts->from_stdin) {
+            VLOG(1, "  ERROR: global --stdin used; db exec expects --sql_stdin");
+            fprintf(stderr,
+                "Error: --stdin is a global JSON-input flag and is not used by 'db exec'.\n"
+                "  Read SQL from stdin with --sql_stdin:\n"
+                "    cat migration.sql | actagamma_db db exec --sql_stdin\n"
+                "  Run 'actagamma_db db help' for full usage.\n");
+            return EXIT_INVALID;
+        }
+
         if (!sql && !fpath && !use_stdin) {
-            VLOG(1, "  ERROR: no SQL source (need positional, --sql, --file, or --stdin)");
+            VLOG(1, "  ERROR: no SQL source (need positional, --sql, --file, or --sql_stdin)");
             fprintf(stderr,
                 "Error: no SQL source provided.\n"
                 "  Provide SQL via one of:\n"
                 "    actagamma_db db exec \"<SQL>\"            <- positional\n"
                 "    actagamma_db db exec --sql \"<SQL>\"      <- --sql flag\n"
                 "    actagamma_db db exec --file <path>      <- --file flag\n"
-                "    actagamma_db db exec --stdin            <- stdin\n"
+                "    actagamma_db db exec --sql_stdin        <- stdin\n"
                 "  Run 'actagamma_db db help' for full usage.\n");
             return EXIT_INVALID;
         }
@@ -150,7 +164,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fclose(fp);
                 fprintf(stderr,
                     "Error: SQL file '%s' is too large (%ld bytes, max 65536).\n"
-                    "  Split the file or use --stdin for large inputs.\n"
+                    "  Split the file or use --sql_stdin for large inputs.\n"
                     "  Run 'actagamma_db db help' for full usage.\n",
                     fpath, sz);
                 return EXIT_INVALID;
@@ -197,7 +211,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             VLOG(1, "  ERROR: empty SQL resolved from source");
             fprintf(stderr,
                 "Error: empty SQL provided.\n"
-                "  The SQL source (positional, --sql, --file, or --stdin) resolved to 0 bytes.\n"
+                "  The SQL source (positional, --sql, --file, or --sql_stdin) resolved to 0 bytes.\n"
                 "  Run 'actagamma_db db help' for usage.\n");
             return EXIT_INVALID;
         }
