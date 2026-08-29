@@ -779,13 +779,24 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             folder_val = (fv < 0) ? 0 : (int)fv;   /* clamp negatives to root */
         }
 
-        VLOG(1, "model update: id=%d name=%s folder_id=%s backend=%s "
-                "model_identifier=%s",
-             id,
-             f_name        ? f_name        : "(unchanged)",
-             has_folder    ? (folder_val == 0 ? "root" : (char[]){'0'+folder_val,0}) : "(unchanged)",
-             f_backend     ? f_backend     : "(unchanged)",
-             f_model_ident ? f_model_ident : "(unchanged)");
+        {
+            char folder_str[16];
+            const char *folder_disp;
+            if (!has_folder)              folder_disp = "(unchanged)";
+            else if (folder_val == 0)     folder_disp = "root";
+            else {
+                snprintf(folder_str, sizeof folder_str, "%d", folder_val);
+                folder_disp = folder_str;
+            }
+
+            VLOG(1, "model update: id=%d name=%s folder_id=%s backend=%s "
+                    "model_identifier=%s",
+                 id,
+                 f_name        ? f_name        : "(unchanged)",
+                 folder_disp,
+                 f_backend     ? f_backend     : "(unchanged)",
+                 f_model_ident ? f_model_ident : "(unchanged)");
+        }
 
         VLOG(2, "  params: name=%s folder_id=%s description=%s backend=%s "
                 "base_url=%s model_identifier=%s configuration=%s",
