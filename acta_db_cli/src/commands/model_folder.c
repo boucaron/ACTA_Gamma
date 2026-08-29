@@ -715,6 +715,14 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_rename(stderr);
             return EXIT_INVALID;
         }
+        if (strlen(new_name) == 0) {
+            VLOG(1, "model_folder rename: ERROR 'name' must not be empty");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"field 'name' must not be empty\"}\n");
+            usage_mf_rename(stderr);
+            return EXIT_INVALID;
+        }
 
         VLOG(1, "model_folder rename: id=%d new_name=%s", id, new_name);
 

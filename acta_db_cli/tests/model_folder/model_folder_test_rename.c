@@ -141,8 +141,8 @@ static void test_rename_empty_name(stest_ctx_t *ctx)
     targs_flag(a, "name", "", &g);
 
     int rc = do_rename(ctx, a, g);
-    /* empty name: depends on DB NOT NULL / app-level check */
-    TEST(ctx, rc == EXIT_OK || rc != EXIT_OK);
+    /* empty name must be rejected (same contract as create) */
+    TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }
 

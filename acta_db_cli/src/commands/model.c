@@ -697,6 +697,14 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_update(stderr);
             return EXIT_INVALID;
         }
+        if (f_name && strlen(f_name) == 0) {
+            VLOG(1, "  ERROR: 'name' must not be empty");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"field 'name' must not be empty\"}\n");
+            usage_update(stderr);
+            return EXIT_INVALID;
+        }
 
         /* ── validate & parse --folder_id ──────────────────────────
          *   "0"  → move to root (folder_id = NULL)
