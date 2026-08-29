@@ -661,9 +661,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
 
     
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    /* "db" label + "acta db help" are historical (copy-paste) quirks, kept
-     * for byte-stable output — fix in a contract change, not here. */
-    return unknown_action("db", action, "acta db help",
+    return unknown_action("execution_log", action, "actagamma_db execution_log help",
                           execution_log_actions, EL_ACTIONS);
    
 }

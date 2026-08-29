@@ -11,7 +11,7 @@
 /* ══════════════════════════════════════════════════════════════════ */
 
 /* Non-static: the global dispatch layer can call this for
- *   acta db --help                                                      */
+ *   actagamma_db db --help                                                      */
 void db_usage(FILE *f)
 {
     fputs(
@@ -39,7 +39,7 @@ void db_usage(FILE *f)
 "        <- --file flag (max 64 KiB)\n"
 "\n"
 "    actagamma_db db exec --stdin\n"
-"    cat migration.sql | acta db exec --stdin\n"
+"    cat migration.sql | actagamma_db db exec --stdin\n"
 "        <- --stdin flag (max 64 KiB)\n"
 "\n"
 "  Options:\n"
@@ -137,8 +137,8 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "Error: cannot open file '%s'.\n"
                     "  Check the path and permissions.\n"
-                    "  Usage: acta db exec --file <path>\n"
-                    "  Run 'acta db help' for full usage.\n",
+                    "  Usage: actagamma_db db exec --file <path>\n"
+                    "  Run 'actagamma_db db help' for full usage.\n",
                     fpath);
                 return EXIT_INVALID;
             }
@@ -151,7 +151,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "Error: SQL file '%s' is too large (%ld bytes, max 65536).\n"
                     "  Split the file or use --stdin for large inputs.\n"
-                    "  Run 'acta db help' for full usage.\n",
+                    "  Run 'actagamma_db db help' for full usage.\n",
                     fpath, sz);
                 return EXIT_INVALID;
             }
@@ -184,7 +184,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     fprintf(stderr,
                         "Error: stdin input too large (max 65536 bytes).\n"
                         "  Pipe a smaller file or split the query.\n"
-                        "  Run 'acta db help' for full usage.\n");
+                        "  Run 'actagamma_db db help' for full usage.\n");
                     return EXIT_INVALID;
                 }
             }
@@ -209,7 +209,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stderr,
                 "Error: SQL execution failed (rc=%d).\n"
                 "  SQLite: %s\n"
-                "  Check your SQL syntax. Run 'acta db help' for usage.\n",
+                "  Check your SQL syntax. Run 'actagamma_db db help' for usage.\n",
                 rc, msg ? msg : "(no detail)");
             return map_rc_to_exit(rc);
         }
@@ -233,6 +233,6 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    return unknown_action("db", action, "acta db help",
+    return unknown_action("db", action, "actagamma_db db help",
                           db_actions, DB_ACTIONS);
 }

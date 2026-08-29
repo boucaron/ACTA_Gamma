@@ -10,7 +10,7 @@
 /* ══════════════════════════════════════════════════════════════════ */
 
 /* Non-static: the global dispatch layer can call this to handle
- *   acta context --help   without re-parsing the subcommand.          */
+ *   actagamma_db context --help   without re-parsing the subcommand.          */
 void ctx_usage(FILE *f)
 {
     fputs(
@@ -29,7 +29,7 @@ void ctx_usage(FILE *f)
 "\n"
 "  Or pipe a JSON body from stdin:\n"
 "  echo '{\"type\":\"s\",\"content\":\"hi\",\"content_hash\":\"ab\"}' \\\n"
-"      | acta context create --json\n"
+"      | actagamma_db context create --json\n"
 "\n"
 "  Required (via flags or JSON key):\n"
 "    --type <string>          context type   (JSON key: \"type\")\n"
@@ -41,7 +41,7 @@ void ctx_usage(FILE *f)
 "== get ============================================================\n"
 "  actagamma_db context get <positive-integer-id>\n"
 "  Example:\n"
-"    acta context get 42\n"
+"    actagamma_db context get 42\n"
 "  Options:\n"
 "    --table          column output instead of JSON\n"
 "    --id_only        print just the numeric id\n"
@@ -207,7 +207,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     "Error: invalid JSON body for 'create'.\n"
                     "  Expected: {\"type\":\"...\",\"content\":\"...\","
                     "\"content_hash\":\"...\",\"metadata\":\"...\"}\n"
-                    "  Run 'acta context help' for full usage.\n");
+                    "  Run 'actagamma_db context help' for full usage.\n");
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -228,7 +228,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     "  Did you misspell a flag?  Expected:\n"
                     "    --type  --content  --hash  --metadata\n"
                     "  Or use --json to read a JSON body from stdin.\n"
-                    "  Run 'acta context help' for full usage.\n");
+                    "  Run 'actagamma_db context help' for full usage.\n");
             }
         }
 
@@ -272,8 +272,8 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                         "    %s <value>\n"
                         "  Via JSON (--json), key: \"%s\"\n"
                         "  Example:\n"
-                        "    acta context create %s --content \"...\" --hash \"...\"\n"
-                        "  Run 'acta context help' for full usage.\n",
+                        "    actagamma_db context create %s --content \"...\" --hash \"...\"\n"
+                        "  Run 'actagamma_db context help' for full usage.\n",
                         reqs[i].field,
                         reqs[i].flag,
                         reqs[i].json_key,
@@ -323,9 +323,9 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             VLOG(1, "context get: ERROR missing <id>");
             fprintf(stderr,
                 "Error: 'get' requires a positional <id>.\n"
-                "  Usage: acta context get <positive-integer-id>\n"
-                "  Example: acta context get 42\n"
-                "  Run 'acta context help' for full usage.\n");
+                "  Usage: actagamma_db context get <positive-integer-id>\n"
+                "  Example: actagamma_db context get 42\n"
+                "  Run 'actagamma_db context help' for full usage.\n");
             return EXIT_INVALID;
         }
         int id;
@@ -333,8 +333,8 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             VLOG(1, "context get: invalid id=%s", id_str);
             fprintf(stderr,
                 "Error: id must be a positive integer, got '%s'.\n"
-                "  Usage: acta context get <positive-integer-id>\n"
-                "  Run 'acta context help' for full usage.\n",
+                "  Usage: actagamma_db context get <positive-integer-id>\n"
+                "  Run 'actagamma_db context help' for full usage.\n",
                 id_str);
             return EXIT_INVALID;
         }
@@ -388,8 +388,8 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
                 fprintf(stderr,
                     "Error: --offset must be a non-negative integer, got '%s'.\n"
-                    "  Usage: acta context list [--offset <int>] [--limit <int>] ...\n"
-                    "  Run 'acta context help' for full usage.\n",
+                    "  Usage: actagamma_db context list [--offset <int>] [--limit <int>] ...\n"
+                    "  Run 'actagamma_db context help' for full usage.\n",
                     s_off);
                 return EXIT_INVALID;
             }
@@ -400,7 +400,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 fprintf(stderr,
                     "Error: --limit must be a non-negative integer, got '%s'.\n"
                     "  (Use 0 or omit --limit for unlimited.)\n"
-                    "  Run 'acta context help' for full usage.\n",
+                    "  Run 'actagamma_db context help' for full usage.\n",
                     s_lim);
                 return EXIT_INVALID;
             }
@@ -498,6 +498,6 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     }
 
     /* ── Unknown action: suggest closest match + pointer to help ── */
-    return unknown_action("context", action, "acta context help",
+    return unknown_action("context", action, "actagamma_db context help",
                           context_actions, CTX_ACTIONS);
 }
