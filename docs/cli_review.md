@@ -64,6 +64,10 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    `action_err` (common-prefix scoring) and `closest_action`/`edit_distance`
    (Levenshtein) solve the same problem with different scoring. Keep one
    (Levenshtein is strictly more useful for mid-word typos).
+   **Verified 2025: the prefix mechanism is already dead** — `action_err` has
+   no call sites; Levenshtein is the sole live path (all 10 entity files).
+   Resolution is a pure deletion. See **Appendix A** for the detailed review
+   and refactoring variants with costs.
 
 5. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
     - `exit_code` parameter is ignored (`(void)exit_code`).
@@ -600,3 +604,149 @@ required, root-vs-null semantics) plus shared `create/get/list/count/
 update/delete/restore/move` drivers would fix the divergences structurally
 (atoi vs strtol, leak lists, silent not-found, dead `--count`, success
 shapes) rather than file-by-file.
+
+---
+
+# Appendix A — Finding P1 #4 in depth: the duplicate "did you mean" mechanisms
+
+**Scope:** `include/cli_util.h` (`action_def_t`, `action_err`, `edit_distance`,
+`closest_action`) + the 10 unknown-action blocks in `src/commands/*.c` +
+3 test files.
+
+## What the code actually does
+
+Two mechanisms coexist in `cli_util.h`:
+
+| | `action_err` (lines 21–53) | `closest_action` + `edit_distance` (lines 177–221) |
+|---|---|---|
+| Scoring | common **prefix** length; best ≥ 3 chars gets `"suggested":true` | Levenshtein DP (64×64), threshold `< 4` |
+| Output | single-line JSON to stderr, full action list, exit `EXIT_CLI` (10) | returns `const char *` only — caller prints |
+| Call sites | **none** (dead code) | all 10 entity files; pinned by `tests/context`, `tests/model_folder`, `tests/model_revision` |
+
+The live path is uniform everywhere: each entity file has the same ~15-line
+block — `closest_action(...)`, print `Unknown action '<x>'.`, optional
+`Did you mean '<y>'?`, `Run 'acta <entity> help'…`, `return EXIT_INVALID;`.
+
+### Issues found (beyond the duplication itself)
+
+1. **`action_err` is dead, and dangerous to revive.** Zero references outside
+   `cli_util.h`. It also bakes in two other reviewed defects:
+   - `fprintf(stderr, ..., entity, action)` — raw `%s` into a JSON string,
+     the same unescaped-JSON bug class as P1 #2 (a typo containing `"` breaks
+     the error contract);
+   - `"error":"ACTA_CLI_ERR","code":-10` — the string/numeric code mix of
+     P1 #5, plus a third exit code (`EXIT_CLI` 10) for the same condition the
+     live path reports as `EXIT_INVALID` (4).
+   If someone "fixes" a future unknown-action site by calling the apparently-
+   purpose-built `action_err`, all three regressions come back at once.
+2. **Absolute Levenshtein threshold, regardless of name length**
+   (`best_dist = 4` in `closest_action`). Consequences:
+   - short names get noisy suggestions: `d("cat","get") = 2 < 4` →
+     `cat` would suggest `get`;
+   - long typos are never flagged: any input of length ≥ real-name + 4 is
+     distance ≥ … bounded by the threshold, so `createtable` (11) vs
+     `create` (6) is d = 5 → no suggestion, which is correct, but
+     `updat` vs `update` (d = 1) vs `cancell` … the real loss is that the
+     same "2 edits" is meaningful at length 4 (`updt`→`update`) and noise at
+     length 3. A length-relative rule (e.g. `d ≤ 1` if target length ≤ 3,
+     else `d ≤ 2`) is the standard fix and keeps the three test expectations
+     ("creat"→"create", "cretae"→"create", "listt"→"list") green.
+3. **The 10 unknown-action blocks are copy-paste** (same shape, same
+   `EXIT_INVALID`, same help pointer) — the same family cost as P4 #13, and
+   they are the *output contract* for unknown actions, so they must never be
+   allowed to drift per entity. This is where the duplication actually bites;
+   the scoring duplication is cosmetic because one side is dead.
+4. **`action_def_t.help` is write-only for the suggestion path.** The help
+   strings feed usage text, but `closest_action` returns only the name;
+   the "Did you mean" line could have shown the one-liner (`Did you mean
+   'list'? (list all contexts)`) for free. Not a bug.
+5. Nits, live path: `d > 0` in `closest_action` excludes exact matches —
+   unreachable at the unknown-action site, harmless; the 64×64 stack buffer
+   (16 KB per call) and the `> 60 → 61` bail-out are fine; tie-breaking is
+   first-wins (deterministic), fine.
+
+## Decision
+
+**Keep Levenshtein. Delete `action_err` in its entirety.** The finding is
+therefore cheaper than the doc's original phrasing: it is not a choice
+between two live mechanisms, it is a deletion. Nothing outside `cli_util.h`
+needs to change for the deletion itself.
+
+## Refactoring variants (ordered by scope; A ⊂ B ⊂ D)
+
+### Variant A — Delete the dead mechanism (recommended, do now)
+
+- Remove `action_err` (30 lines, `cli_util.h:21–53`).
+- Keep `action_def_t`, `edit_distance`, `closest_action` untouched — no API
+  change, no caller change, tests unaffected.
+- **Cost:** 1 file, −30 LOC, no behavior change. **Effort:** < 15 min.
+  **Risk:** ~0 (dead code, verified by grep). **Value:** kills the
+  most-likely path by which the P1 #2/#5 regressions could be re-introduced.
+
+### Variant B — A + centralize the 10 unknown-action blocks (recommended, next)
+
+- Add one helper in `cli_util.h`, e.g.
+  ```c
+  /* Print the canonical unknown-action error and return its exit code.
+   * Output must stay byte-stable: scripts grep for "Unknown action". */
+  static inline int unknown_action(const char *entity, const char *action,
+                                   const action_def_t *actions, size_t n)
+  ```
+  which calls `closest_action` and emits the current three-line block
+  (`Unknown action '<x>'.` / `Did you mean '<y>'?` / `Run 'acta <entity>
+  help' for full usage.`) and returns `EXIT_INVALID`.
+- Replace the ~15-line block in each of the 10 files with one call.
+- **Cost:** +~25 LOC helper, −~150 LOC across `src/commands/`, 10 files
+  touched, ~12 one-line replacements. **Effort:** 1–2 h. **Risk:** low if the
+  helper's output is kept **byte-identical** to today's (do not change the
+  exit code or wording here — that is a contract change, not a refactor).
+  **Value:** unknown-action output can no longer drift per entity (the real
+  pain in finding #4, see issue 3 above); also absorbs the "unknown-entity has
+  no suggestion list" nit from Part 1 if the entity table gets the same
+  treatment.
+
+### Variant C — Fix the scoring heuristic (optional polish)
+
+- Replace the absolute `best_dist = 4` with a length-relative rule in
+  `closest_action`, e.g. accept `d == 1` for target names ≤ 3 chars, else
+  `d <= 2`; optionally prefer the shorter target on ties.
+- Keep or drop Damerau (transposition cost 1): marginal value for
+  3–8-character command names; the existing tests ("cretae"→"create" is 2
+  substitutions, not a transposition) still pass either way. Recommendation:
+  **skip Damerau**.
+- **Cost:** ~10 LOC in one function + re-run/adjust the 3 suggestion tests.
+  **Effort:** ~30 min. **Risk:** low; only changes *whether* a suggestion
+  appears, never which action is chosen at d = 1. **Value:** fewer false
+  suggestions on short names ("cat" ↛ "get"); slightly better UX. Do **after**
+  B so the new behavior has one emit site to test.
+
+### Variant D — Descriptor-driven dispatch (structural; absorbs A + B + C)
+
+- The `action_def_t` arrays already exist in all 10 files and already carry
+  the name→help mapping. Extend them into full dispatch tables
+  (`{ name, help, handler_fn }`) and add one generic
+  `entity_dispatch(entity, actions, n, argv)` that owns: action lookup,
+  suggestion (one scoring implementation), help rendering, and the unknown-
+  action error. Each entity file shrinks to its handlers + the field
+  descriptors it already half-has (P4 #13).
+- **Cost:** several hours; touches all 10 files + `commands.h` + the test
+  call convention (tests currently call `cmd_*` directly, so handler
+  signatures must stay stable or tests are adapted). **Effort:** half day to
+  a day. **Risk:** medium — the biggest blast radius of the four, and it
+  changes how tests invoke handlers. **Value:** the highest — it makes the
+  whole P4 #13 family (leak lists, silent not-found, dead `--count`, success
+  shapes, and now suggestions) structurally unable to diverge again.
+
+### Recommendation
+
+| Step | Variant | When |
+|------|---------|------|
+| 1 | **A** — delete `action_err` | immediately; trivial, pure win |
+| 2 | **B** — shared `unknown_action`, byte-identical output | next cleanup pass |
+| 3 | **C** — relative distance threshold | with B or right after |
+| 4 | **D** — descriptor-driven dispatch | as the program for P4 #13, not as a drive-by |
+
+Do not do B's output change (e.g. switching unknown-action to the
+single-line JSON error shape) in the same change as B: that is a user/
+script-visible contract change and belongs with the P1 #5 error-schema
+decision, with a spec note and release mention.

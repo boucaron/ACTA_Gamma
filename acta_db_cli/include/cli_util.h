@@ -18,38 +18,6 @@ typedef struct {
     const char *help;   /* short one-liner shown in the error list */
 } action_def_t;
 
-static inline int action_err(const char *entity, const char *action,
-                      const action_def_t *actions, size_t count)
-{
-    /* build "actions":[...] */
-    fprintf(stderr,
-        "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
-        "\"message\":\"unknown %s action: '%s'\",\"actions\":[",
-        entity, action);
-
-    /* suggest best prefix match */
-    size_t best_len = 0, best_i = 0;
-    for (size_t i = 0; i < count; i++) {
-        size_t j = 0;
-        while (action[j] && actions[i].name[j] && action[j] == actions[i].name[j])
-            j++;
-        if (j > best_len) { best_len = j; best_i = i; }
-    }
-
-    for (size_t i = 0; i < count; i++) {
-        if (i) fprintf(stderr, ",");
-        if (best_len >= 3 && i == best_i)
-            fprintf(stderr, "{\"name\":\"%s\",\"suggested\":true}", actions[i].name);
-        else
-            fprintf(stderr, "{\"name\":\"%s\"}", actions[i].name);
-    }
-
-    fprintf(stderr,
-        "],\"usage\":\"actagamma_db %s <action> [flags]\"}\n",
-        entity);
-    return EXIT_CLI;
-}
-
 /* Parse a positive-integer id ("42") from a CLI argument.
  * Strict: rejects trailing garbage ("42abc"), non-numeric ("abc"),
  * zero, negatives, and overflow ("999999999999999") via strtol+endptr
