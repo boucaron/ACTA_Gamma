@@ -31,9 +31,7 @@ in-scope items; what remains there (F2, F3) is folded into the plan below
 
 ## Summary
 
-- **Do first:** P3 (silent not-found) — ready helpers
-  (`finish_db_error`, `finish_op_error`).
-- **Then:** cheap wins W1, W6–W8, mostly mechanical.
+- **Next:** cheap wins W1, W6–W8, mostly mechanical.
 - **Finally:** S1–S4 structural work; S1 should land before any of P3/W1
   patterns are re-touched per-file (or those per-file fixes become throwaway).
 - Done so far: P3 `get` not-found → `EXIT_NOT_FOUND` + JSON error (`e6c86fe`),
