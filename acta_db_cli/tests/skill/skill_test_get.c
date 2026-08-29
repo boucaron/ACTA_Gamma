@@ -149,7 +149,7 @@ static void test_get_non_numeric_id(stest_ctx_t *ctx)
     targs_pos(a, "abc", &g);
 
     int rc = do_get(ctx, a, g);
-    /* atoi("abc") = 0, so id<=0 → EXIT_INVALID */
+    /* "abc" is rejected by parse_positive_id (endptr) → EXIT_INVALID */
     TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }

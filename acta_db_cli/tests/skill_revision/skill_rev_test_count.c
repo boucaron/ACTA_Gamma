@@ -88,7 +88,7 @@ static void test_count_invalid_negative(stest_ctx_t *ctx)
 
 static void test_count_non_numeric(stest_ctx_t *ctx)
 {
-    /* atoi("abc") → 0 → invalid */
+    /* "abc" rejected by parse_positive_id → invalid */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "abc", &g);

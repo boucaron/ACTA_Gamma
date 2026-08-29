@@ -82,6 +82,21 @@ static inline int parse_nonneg_int(const char *s, int *out)
     return 1;
 }
 
+/* Parse an optional folder id: strict format like parse_nonneg_int,
+ * but negatives are NOT an error — they clamp to 0 (root/NULL in DB).
+ * Returns 1 on success, 0 on invalid format (*out left unmodified). */
+static inline int parse_folder_id(const char *s, int *out)
+{
+    if (!s || !out) return 0;
+    errno = 0;
+    char *end;
+    long v = strtol(s, &end, 10);
+    if (errno == ERANGE || *end != '\0' || v > (long)INT_MAX)
+        return 0;
+    *out = (v < 0) ? 0 : (int)v;   /* negatives → root */
+    return 1;
+}
+
 /* Map a C API return code → CLI exit code (spec §7.1). */
 static inline int map_rc_to_exit(int rc)
 {

@@ -140,7 +140,7 @@ static void test_get_non_numeric(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_pos(a, "abc", &g);   /* atoi("abc") == 0 → invalid */
+    targs_pos(a, "abc", &g);   /* "abc" rejected by parse_positive_id → invalid */
 
     int rc = do_rev(ctx, "get", a, g);
     TEST_EQ(ctx, rc, EXIT_INVALID);

@@ -501,11 +501,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             {
                 const char *fid_str = cmd_args_flag(ga, "folder_id", 1);
                 if (fid_str && strlen(fid_str) > 0) {
-                    char *endp = NULL;
-                    errno = 0;
-                    long fid = strtol(fid_str, &endp, 10);
-                    if (errno == ERANGE || endp == fid_str || *endp != '\0'
-                        || fid > (long)INT_MAX) {
+                    if (!parse_folder_id(fid_str, &m.folder_id)) {
                         VLOG(1, "  ERROR: 'folder_id' value '%s' is not a valid integer",
                              fid_str);
                         fprintf(stderr,
@@ -515,8 +511,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                         ret = EXIT_INVALID;
                         goto cleanup_create;
                     }
-                    /* <= 0 → root (NULL in DB) */
-                    m.folder_id = (fid > 0) ? (int)fid : 0;
                 }
             }
         }
@@ -623,18 +617,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         /* ── robust integer parse ─────────────────────────────────── */
-        char  *endptr = NULL;
-        errno = 0;
-        long  id_val = strtol(id_str, &endptr, 10);
-
-        int bad_id =
-             errno != 0               /* ERANGE: overflow / underflow   */
-          || endptr == id_str         /* no digits consumed             */
-          || *endptr != '\0'          /* trailing junk  ("12ab")       */
-          || id_val <= 0             /* not positive                   */
-          || id_val > (long)INT_MAX; /* would truncate in int          */
-
-        if (bad_id) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model get: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -642,7 +626,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_get(stderr);
             return EXIT_INVALID;
         }
-        int id = (int)id_val;
         /* ──────────────────────────────────────────────────────────── */
 
         int  use_live   = (cmd_args_flag(ga, "live", 0) != NULL);
@@ -712,15 +695,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         /* ── robust <id> parse ────────────────────────────────────── */
-        char  *endptr = NULL;
-        errno = 0;
-        long  id_val = strtol(id_str, &endptr, 10);
-
-        int bad_id =
-             errno != 0 || endptr == id_str || *endptr != '\0'
-          || id_val <= 0 || id_val > (long)INT_MAX;
-
-        if (bad_id) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model update: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -728,7 +704,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_update(stderr);
             return EXIT_INVALID;
         }
-        int id = (int)id_val;
         /* ──────────────────────────────────────────────────────────── */
 
         const char *f_name        = cmd_args_flag(ga, "name", 1);
@@ -760,15 +735,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int  folder_val = 0;   /* 0 == root (NULL) */
 
         if (f_folder_id) {
-            char *fend = NULL;
-            errno = 0;
-            long fv = strtol(f_folder_id, &fend, 10);
-
-            int bad_f =
-                 errno != 0 || fend == f_folder_id || *fend != '\0'
-              || fv > (long)INT_MAX;
-
-            if (bad_f) {
+            if (!parse_folder_id(f_folder_id, &folder_val)) {
                 VLOG(1, "model update: invalid folder_id=%s", f_folder_id);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -777,7 +744,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 return EXIT_INVALID;
             }
             has_folder = 1;
-            folder_val = (fv < 0) ? 0 : (int)fv;   /* clamp negatives to root */
         }
 
         {
@@ -886,15 +852,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         /* ── robust <id> parse ────────────────────────────────────── */
-        char  *endptr = NULL;
-        errno = 0;
-        long  id_val = strtol(id_str, &endptr, 10);
-
-        int bad_id =
-             errno != 0 || endptr == id_str || *endptr != '\0'
-          || id_val <= 0 || id_val > (long)INT_MAX;
-
-        if (bad_id) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model delete: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -902,7 +861,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_delete(stderr);
             return EXIT_INVALID;
         }
-        int id = (int)id_val;
         /* ──────────────────────────────────────────────────────────── */
 
         VLOG(1, "model delete: id=%d", id);
@@ -940,15 +898,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         /* ── robust <id> parse ────────────────────────────────────── */
-        char  *endptr = NULL;
-        errno = 0;
-        long  id_val = strtol(id_str, &endptr, 10);
-
-        int bad_id =
-             errno != 0 || endptr == id_str || *endptr != '\0'
-          || id_val <= 0 || id_val > (long)INT_MAX;
-
-        if (bad_id) {
+        int id;
+        if (!parse_positive_id(id_str, &id)) {
             VLOG(1, "model restore: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -956,7 +907,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_restore(stderr);
             return EXIT_INVALID;
         }
-        int id = (int)id_val;
         /* ──────────────────────────────────────────────────────────── */
 
         VLOG(1, "model restore: id=%d", id);
@@ -995,15 +945,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         /* ── robust <id> parse ────────────────────────────────────── */
-        char  *endptr = NULL;
-        errno = 0;
-        long  id_val = strtol(id_str, &endptr, 10);
-
-        int bad_id =
-             errno != 0 || endptr == id_str || *endptr != '\0'
-          || id_val <= 0 || id_val > (long)INT_MAX;
-
-        if (bad_id) {
+        int model_id;
+        if (!parse_positive_id(id_str, &model_id)) {
             VLOG(1, "model move: invalid id=%s", id_str);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -1011,7 +954,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_move(stderr);
             return EXIT_INVALID;
         }
-        int model_id = (int)id_val;
         /* ──────────────────────────────────────────────────────────── */
 
         const char *f_folder_id = cmd_args_flag(ga, "folder_id", 1);
@@ -1026,15 +968,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int folder_id = 0;   /* 0 == root (NULL) */
 
         if (f_folder_id) {
-            char *fend = NULL;
-            errno = 0;
-            long fv = strtol(f_folder_id, &fend, 10);
-
-            int bad_f =
-                 errno != 0 || fend == f_folder_id || *fend != '\0'
-              || fv > (long)INT_MAX;
-
-            if (bad_f) {
+            if (!parse_folder_id(f_folder_id, &folder_id)) {
                 VLOG(1, "model move: invalid folder_id=%s", f_folder_id);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -1042,7 +976,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 usage_move(stderr);
                 return EXIT_INVALID;
             }
-            folder_id = (fv < 0) ? 0 : (int)fv;  /* clamp negatives to root */
         }
 
         VLOG(1, "model move: id=%d → folder_id=%d", model_id, folder_id);
