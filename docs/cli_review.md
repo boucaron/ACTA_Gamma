@@ -38,8 +38,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 >   centralized `finish_db_error(rc, what)` helper (`cli_util.h`) emits
 >   `{"error":"ACTA_DB_ERR_*","code":<rc>,"message":"..."}` as stderr line 1
 >   and returns the mapped exit code; all 9 `db exec` error paths and
->   `db`'s unknown-action path route through it. The P4 #3 systemic work
->   (silent lib-failure paths in the other entities) still stands.
+>   `db`'s unknown-action path route through it.
+> - Library-failure paths in the 9 entity files now emit the stderr JSON
+>   error (former P4 #3): all 45 `if (rc != ACTA_DB_OK)` sites route
+>   through `finish_op_error(db, rc, op)` (`cli_util.h`), a thin wrapper
+>   over `finish_db_error` composing `"<entity> <action> failed:
+>   <acta_db_last_error>"`; exit codes and stdout unchanged. Regression:
+>   `tests/model/model_test_error_contract.c` (`ed142cc`).
 > - `db exec` supports the positional-argument form, reads SQL from stdin
 >   via `--sql_stdin` (renamed from `--stdin`, which `parse_globals` eats),
 >   rejects empty SQL, and a trailing `;` is verified accepted.
@@ -273,15 +278,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    Widespread now (Part 3 #1 was the first instance). Should be
    `EXIT_NOT_FOUND` (1) + the JSON error line.
 
-3. **Library failures exit non-zero with *nothing* on stderr**
-   Every `if (rc != ACTA_DB_OK) { VLOG(...); return map_rc_to_exit(rc); }`
-   path (get/update/delete/restore/move/list/count, all entities) prints no
-   error JSON — the single-line-JSON-on-stderr contract (Part 1) is only
-   implemented for *input-validation* errors. `db.c` emits the JSON error
-   line via `finish_db_error` (the reference implementation); these print
-   nothing but an exit code. Centralize: route these paths through
-   `finish_db_error(rc, what)`.
-
 4. **Dead local `--count` flag** — every `list` action reads
     `cmd_args_flag(ga, "count", 0)` / `cmd_args_has_flag(ga, "count")` even
     though `parse_globals` already consumed `--count` into `gopts->count`
@@ -434,8 +430,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 # Summary (unresolved, by severity)
 
 1. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #2)*
-2. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation (`db.c` is the reference). *(P4 #3)*
-3. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
+2. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
 
 **Structural recommendation:** the copy-paste family (P4 #10) is where most
 bugs live. A per-entity *field descriptor* (name, JSON key, flag, type,
