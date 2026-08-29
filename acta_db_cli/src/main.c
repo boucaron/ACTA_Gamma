@@ -90,10 +90,10 @@ int main(int argc, char **argv) {
     db_t *db = acta_db_open(db_path, &db_err, ACTA_DB_OPEN_EXISTING);
     if (!db) {
         /* Raw library rc flows into the JSON "code" field; the exit
-         * code is map_rc_to_exit(db_err) (see #5: unknown rc maps
-         * to EXIT_SQL until map_rc_to_exit is completed). */
+         * code is map_rc_to_exit(db_err). */
         int open_exit = cli_error(db_err,
-                                 "cannot open database '%s' (%s)",
+                                 "cannot open database '%s' (%s): check the "
+                                 "path and that it is a valid SQLite database",
                                  db_path, acta_db_strerror(db_err));
         free(gopts.argv);
         return open_exit;

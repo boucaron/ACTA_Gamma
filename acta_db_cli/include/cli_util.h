@@ -69,16 +69,23 @@ static inline int parse_folder_id(const char *s, int *out)
     return 1;
 }
 
-/* Map a C API return code → CLI exit code (spec §7.1). */
+/* Map a C API return code → CLI exit code (spec §7.1). The rc set is
+ * complete (db.h): INVALID_DB, DUPLICATE and FK are constraint /
+ * validation failures, not SQL errors, so they exit EXIT_INVALID.
+ * The default is an explicit generic fallback for unknown rc values —
+ * never EXIT_SQL (an unknown code is not evidence of a SQL error). */
 static inline int map_rc_to_exit(int rc)
 {
     switch (rc) {
-    case ACTA_DB_OK:            return EXIT_OK;
-    case ACTA_DB_ERR_NOT_FOUND: return EXIT_NOT_FOUND;
-    case ACTA_DB_ERR_SQL:       return EXIT_SQL;
-    case ACTA_DB_ERR_ALLOC:     return EXIT_ALLOC;
-    case ACTA_DB_ERR_INVALID:   return EXIT_INVALID;
-    default:                    return EXIT_SQL;
+    case ACTA_DB_OK:             return EXIT_OK;
+    case ACTA_DB_ERR_NOT_FOUND:  return EXIT_NOT_FOUND;
+    case ACTA_DB_ERR_SQL:        return EXIT_SQL;
+    case ACTA_DB_ERR_ALLOC:      return EXIT_ALLOC;
+    case ACTA_DB_ERR_INVALID:    return EXIT_INVALID;
+    case ACTA_DB_ERR_INVALID_DB:
+    case ACTA_DB_ERR_DUPLICATE:
+    case ACTA_DB_ERR_FK:         return EXIT_INVALID;
+    default:                     return EXIT_INVALID;
     }
 }
 
