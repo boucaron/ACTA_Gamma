@@ -31,11 +31,13 @@ in-scope items; what remains there (F2, F3) is folded into the plan below
 
 ## Summary
 
-- **Next:** cheap wins W1, W6–W8, mostly mechanical.
+- **Next:** cheap wins W6–W8, mostly mechanical.
 - **Finally:** S1–S4 structural work; S1 should land before any of P3/W1
   patterns are re-touched per-file (or those per-file fixes become throwaway).
 - Done so far: P3 `get` not-found → `EXIT_NOT_FOUND` + JSON error (`e6c86fe`),
-  plus `get-latest` follow-up (`f7d2ef5`),
+  plus `get-latest` follow-up (`f7d2ef5`), W1 dead local `--count` reads in
+  all `list` actions removed + test ga-injections reworked to `g.count = 1`
+  (`99d17c1`),
   P1 `skill update` data loss (`928c66f`), P2 input-source
   resolution (`e58d956`), P4 entity DB failures emit the stderr JSON error
   line (`ed142cc`), W2 empty-name checks in `model update` /
