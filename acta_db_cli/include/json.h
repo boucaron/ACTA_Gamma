@@ -1,40 +1,12 @@
 #ifndef ACTA_JSON_H
 #define ACTA_JSON_H
 
-#include <stdio.h>
-
 /*
  * JSON layer, implemented on top of vendored cJSON.
- * Parse (blob → entity struct) is implemented; serialize
- * (entity struct → JSON) is still unimplemented and returns NULL.
+ * Parse (blob → entity struct) only; CLI output is hand-rolled in the
+ * command handlers (no serialize API).
  * Entity structs are declared in commands.h.
  */
-
-/* ---- output: struct → compact/pretty one-line JSON ---- */
-/*
- * Returns malloc'd string; caller frees.
- * NULL on error.
- *
- * `fields`  — comma-separated whitelist, or NULL for all.
- * `no_nulls`— omit null-valued fields.
- * `pretty`  — 2-space indent.
- */
-char *json_serialize_model(const void *model,
-                           const char *fields,
-                           int no_nulls,
-                           int pretty);
-/* ... one per entity ... */
-char *json_serialize_skill(const void *skill,
-                           const char *fields, int no_nulls, int pretty);
-char *json_serialize_context(const void *ctx,
-                             const char *fields, int no_nulls, int pretty);
-char *json_serialize_execution(const void *exec,
-                               const char *fields, int no_nulls, int pretty);
-
-/* ---- array (list) ---- */
-char *json_serialize_model_array(const void **items, int n,
-                                 const char *fields,
-                                 int no_nulls, int pretty);
 
 /* ---- input: JSON blob → struct ---- */
 /*
@@ -54,14 +26,5 @@ int json_parse_skill_folder(const char *blob, void *out);
  * Validate that `blob` is well-formed JSON. Returns 0 or -1.
  */
 int json_validate(const char *blob);
-
-/* ---- table output (human-readable columns) ---- */
-/*
- * Print rows as aligned columns to `out`.
- * Truncates strings > 40 chars. NULL → "-".
- */
-void json_print_table(FILE *out,
-                      const char *const *headers, int ncols,
-                      const char *const *row, int nrows);
 
 #endif /* ACTA_JSON_H */

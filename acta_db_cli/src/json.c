@@ -79,44 +79,6 @@ int json_validate(const char *blob)
     return 0;
 }
 
-/* ── remaining stubs (to be filled in per entity) ─────────────────── */
-
-char *json_serialize_model(const void *model,
-                           const char *fields, int no_nulls, int pretty)
-{
-    (void)model; (void)fields; (void)no_nulls; (void)pretty;
-    return NULL;  /* TODO */
-}
-
-char *json_serialize_skill(const void *skill,
-                           const char *fields, int no_nulls, int pretty)
-{
-    (void)skill; (void)fields; (void)no_nulls; (void)pretty;
-    return NULL;
-}
-
-char *json_serialize_context(const void *ctx,
-                             const char *fields, int no_nulls, int pretty)
-{
-    (void)ctx; (void)fields; (void)no_nulls; (void)pretty;
-    return NULL;
-}
-
-char *json_serialize_execution(const void *exec,
-                               const char *fields, int no_nulls, int pretty)
-{
-    (void)exec; (void)fields; (void)no_nulls; (void)pretty;
-    return NULL;
-}
-
-char *json_serialize_model_array(const void **items, int n,
-                                 const char *fields,
-                                 int no_nulls, int pretty)
-{
-    (void)items; (void)n; (void)fields; (void)no_nulls; (void)pretty;
-    return NULL;
-}
-
 /* ── json_parse_context ───────────────────────────────────────────── */
 
 int json_parse_context(const char *blob, void *out)
@@ -325,13 +287,4 @@ int json_parse_skill(const char *blob, void *out)
 
     cJSON_Delete(root);
     return 0;
-}
-
-
-void json_print_table(FILE *out,
-                      const char *const *headers, int ncols,
-                      const char *const *row, int nrows)
-{
-    (void)out; (void)headers; (void)ncols; (void)row; (void)nrows;
-    /* TODO */
 }
