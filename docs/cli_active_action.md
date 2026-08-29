@@ -6,18 +6,17 @@ that touch the `db` surface: the `db` command (`acta db version` /
 errors surface (`main.c`, `argparse.c`, `cli_util.h`), ordered by
 priority (highest first).
 
-**Round 2** — the `db.c` handler is contract-clean (round 1: positional
-form, `--sql_stdin`, empty-SQL, trailing `;`, `sqlite3_libversion()`,
-JSON error contract via `finish_db_error`, success shapes in help).
-What remains is the global error layer plus db-related follow-ups.
+**Round 3** — the `db` surface is closed. Rounds 1–2 covered: the
+`db.c` handler contract (positional form, `--sql_stdin`, empty-SQL,
+trailing `;`, `sqlite3_libversion()`, JSON error contract via
+`finish_db_error`, success shapes in help) and the global error layer
+(`cli_error` enforcing the §7.1 schema once, real version in
+`version_print`, `db_usage` made static, `map_rc_to_exit` rc set
+completed). What remains is the systemic follow-ups F1–F3 only.
 
 | # | Action | Issue | Source | Severity | Effort | Notes / dependencies |
 |---|--------|-------|--------|----------|--------|----------------------|
-| 1 | ~~Escape `cli_error` messages in `main.c` with `json_str` (`cli_util.h`)~~ — ✅ done (f422717) | P1 #2 — `cli_error` emits unescaped JSON; a `--db` path containing `"`/`\` breaks the single-line JSON contract — the first error a `db` user hits, same class as what was fixed in db.c | P1 #2 | Medium-High — error-contract violation at the db open/parse layer | S | Header dependency direction already OK (`main.c` includes `cli_util.h`) |
-| 2 | ~~Fix `cli_error` error-code plumbing: stop ignoring `exit_code`, unify string codes (`"ACTA_CLI_ERR"`) with numeric `c_code` incl. raw lib rc in `ACTA_DB_OPEN_FAIL`; enforce the §7.1 schema once~~ — ✅ done (f422717) | P1 #4 — dead/inconsistent error-code plumbing; the db-open failure path is one of the producers | P1 #4 | Medium — exit codes / `code` fields misleading for db-open failures | M | Do together with #1 (same function); spec §7.1 is the schema |
-| 3 | ~~Replace hard-coded `"libacta_db 0.1.0, sqlite 3.x.x"` in `version_print` with `ACTA_DB_CLI_VERSION` + `sqlite3_libversion()`~~ — ✅ done (47e3a63) | P1 nitpick — `actagamma_db version` fakes the sqlite version while `db version` reports the real one | P1 nitpick | Low | S | `main.c`; sqlite already linked |
-| 4 | ~~Declare `db_usage` in `commands.h` (and wire `actagamma_db db --help`) or make it static~~ — ✅ done (9322773, made static) | P4 #12 — `db_usage` is non-static ("the dispatch layer can call this") but undeclared, so the dispatch layer cannot call it | P4 #12 | Low — dead intent | S | Closes the db file; the other 9 entities carry the same issue (out of scope) |
-| 5 | ~~Fix `map_rc_to_exit` `default:` mapping unknown rc to `EXIT_SQL` (explicit generic code or complete the rc set)~~ — ✅ done (2bedab6, rc set completed + default → EXIT_INVALID) | P1 nitpick — IO-style/unknown rc misreported as SQL; `db exec` is the main consumer | P1 nitpick | Low | S | `cli_util.h`; check the rc set in `acta_db/include/db.h` first |
+| — | *(none — in-scope items for round 3)* | | | | | |
 
 **Systemic follow-ups (db is the reference implementation; not db-closed):**
 
@@ -29,7 +28,8 @@ What remains is the global error layer plus db-related follow-ups.
 
 ## Summary
 
-- **Quick wins (1–2 h):** #1, #3, #4, #5
-- **Paired fix:** #1 + #2 together (same `cli_error` function, same
-  JSON/exit-code contract)
-- **Defer / own elsewhere:** F1–F3 are systemic; db-side halves are done
+- **Round 2 closed:** all five in-scope items — #1+#2 `cli_error` §7.1
+  rewrite (f422717), #3 real sqlite version (47e3a63), #4 `db_usage`
+  static (9322773), #5 `map_rc_to_exit` completion (2bedab6)
+- **Round 3 entry state:** db surface contract-clean; only F1–F3 remain,
+  all cross-entity/systemic (spec, per-entity plans, test seam)
