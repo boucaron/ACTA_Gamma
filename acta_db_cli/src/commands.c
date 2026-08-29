@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sqlite3.h>
 
 /* Single definition; set once in commands_dispatch, read by VLOG()
  * (cli.h) from every translation unit. */
@@ -81,8 +82,8 @@ int commands_dispatch(const char *entity, const char *action,
 
 void version_print(FILE *out)
 {
-    fprintf(out, "actagamma_db %s (%s | libacta_db 0.1.0, sqlite 3.x.x)\n",
-            ACTA_DB_CLI_VERSION, ACTA_DB_GIT_HASH);
+    fprintf(out, "actagamma_db %s (%s | libacta_db, sqlite %s)\n",
+            ACTA_DB_CLI_VERSION, ACTA_DB_GIT_HASH, sqlite3_libversion());
 }
 
 void help_print(FILE *out)
