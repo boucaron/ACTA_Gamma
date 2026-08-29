@@ -11,14 +11,6 @@
 #include "cli_util.h"
 #include "commands.h"
 
-/* ── exit codes (must match cli_util.h / main.c) ─────────────────── */
-#ifndef EXIT_OK
-#define EXIT_OK        0
-#endif
-#ifndef EXIT_INVALID
-#define EXIT_INVALID   2
-#endif
-
 /* ── test context: one duplicated DB + captured stdout ───────────── */
 
 typedef struct {
@@ -51,12 +43,7 @@ void stest_assert_not_null(stest_ctx_t *ctx, const void *p, const char *file, in
 void stest_assert_contains(stest_ctx_t *ctx, const char *haystack, const char *needle, const char *file, int line, const char *what);
 
 #define TARGS_MAX_TOK  64
-/* ── test-args builder (wraps cmd_args_t construction) ─────────────
- *
- *  ADAPT: the 4 functions below must construct a cmd_args_t that is
- *  compatible with cmd_args_flag() and cmd_args_next_positional()
- *  as used in skill.c.  Replace the body with your actual API.
- */
+/* ── test-args builder (wraps cmd_args_t construction) ───────────── */
 cmd_args_t *targs_new(void);
 void targs_flag(cmd_args_t *a, const char *name, const char *value, global_opts_t *opts);
 void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts);
