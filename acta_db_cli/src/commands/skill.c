@@ -540,7 +540,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "skill create");
             goto cleanup_skill_create;
         }
 
@@ -606,7 +606,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_skill_free(s);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill get");
         }
         if (!s) {
             VLOG(1, "  not found (id=%d)", id);
@@ -703,7 +703,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED fetching current row err=%d", err);
             acta_db_skill_free(cur);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill update");
         }
         if (!cur) {
             VLOG(1, "  not found or already deleted (id=%d)", id);
@@ -835,7 +835,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "skill update");
             goto cleanup_skill_update;
         }
 
@@ -891,7 +891,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill delete");
         }
 
         VLOG(1, "  deleted skill id=%d", id);
@@ -928,7 +928,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill restore");
         }
 
         VLOG(1, "  restored skill id=%d", id);
@@ -990,7 +990,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill move");
         }
 
         VLOG(1, "  moved skill id=%d → folder_id=%d", skill_id, folder_id);
@@ -1067,7 +1067,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 : acta_db_skill_count_all(db, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "skill count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -1089,7 +1089,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
             acta_db_skill_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -1151,7 +1151,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);

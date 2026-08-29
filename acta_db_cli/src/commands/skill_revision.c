@@ -310,7 +310,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_skill_revision_free(r);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_revision get");
         }
         if (!r) {
             VLOG(1, "  not found (id=%d)", id);
@@ -365,7 +365,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_skill_revision_free(r);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_revision latest");
         }
         if (!r) {
             VLOG(1, "  no revisions found (skill_id=%d)", skill_id);
@@ -453,7 +453,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
             int n = acta_db_skill_revision_count(db, skill_id, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "skill_revision count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -467,7 +467,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
             acta_db_skill_revision_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_revision list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -526,7 +526,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         int n = acta_db_skill_revision_count(db, skill_id, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_revision count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);

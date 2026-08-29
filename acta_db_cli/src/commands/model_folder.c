@@ -448,7 +448,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "model_folder create");
             goto cleanup_mf_create;
         }
 
@@ -504,7 +504,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_model_folder_free(c);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_folder get");
         }
         if (!c) {
             VLOG(1, "  not found (id=%d)", id);
@@ -594,7 +594,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             }
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "model_folder count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -616,7 +616,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
             acta_db_model_folder_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_folder list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -678,7 +678,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_folder count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);
@@ -735,7 +735,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model_folder rename");
         }
 
         VLOG(1, "  renamed model folder id=%d → '%s'", id, new_name);
@@ -778,7 +778,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model_folder delete");
         }
 
         VLOG(1, "  soft-deleted model folder id=%d", id);
@@ -815,7 +815,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model_folder restore");
         }
 
         VLOG(1, "  restored model folder id=%d", id);
@@ -878,7 +878,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model_folder move");
         }
 
         VLOG(1, "  moved model folder id=%d → parent_id=%d", folder_id, new_parent_id);

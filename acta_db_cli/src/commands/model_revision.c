@@ -322,7 +322,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_model_revision_free(r);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_revision get");
         }
         if (!r) {
             VLOG(1, "  not found (id=%d)", id);
@@ -377,7 +377,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_model_revision_free(r);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_revision latest");
         }
         if (!r) {
             VLOG(1, "  no revisions found (model_id=%d)", model_id);
@@ -464,7 +464,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
             int n = acta_db_model_revision_count(db, model_id, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "model_revision count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -478,7 +478,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
             acta_db_model_revision_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_revision list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -537,7 +537,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         int n = acta_db_model_revision_count(db, model_id, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model_revision count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);

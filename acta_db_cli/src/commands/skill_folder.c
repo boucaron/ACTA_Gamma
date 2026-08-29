@@ -437,7 +437,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "skill_folder create");
             goto cleanup_sf_create;
         }
 
@@ -491,7 +491,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_skill_folder_free(c);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_folder get");
         }
         if (!c) {
             VLOG(1, "  not found (id=%d)", id);
@@ -588,7 +588,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                 n = acta_db_skill_folder_count_all(db, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "skill_folder count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -610,7 +610,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
             acta_db_skill_folder_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_folder list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -678,7 +678,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "skill_folder count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);
@@ -725,7 +725,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill_folder rename");
         }
 
         VLOG(1, "  renamed skill_folder id=%d → %s", id, f_name);
@@ -776,7 +776,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill_folder move");
         }
 
         VLOG(1, "  moved skill_folder id=%d → parent_id=%d", id, new_parent_id);
@@ -813,7 +813,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill_folder delete");
         }
 
         VLOG(1, "  deleted skill_folder id=%d", id);
@@ -850,7 +850,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "skill_folder restore");
         }
 
         VLOG(1, "  restored skill_folder id=%d", id);

@@ -582,7 +582,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "execution create");
             goto cleanup_exec_create;
         }
 
@@ -638,7 +638,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_execution_free(e);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "execution get");
         }
         if (!e) {
             VLOG(1, "  not found (id=%d)", id);
@@ -689,7 +689,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "execution start");
         }
         VLOG(1, "  started id=%d", id);
         return EXIT_OK;
@@ -723,7 +723,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "execution cancel");
         }
         VLOG(1, "  cancelled id=%d", id);
         return EXIT_OK;
@@ -761,7 +761,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "execution complete");
         }
         VLOG(1, "  completed id=%d", id);
         return EXIT_OK;
@@ -799,7 +799,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "execution fail");
         }
         VLOG(1, "  failed id=%d", id);
         return EXIT_OK;
@@ -844,7 +844,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "execution set-raw");
         }
         VLOG(1, "  set raw response for id=%d", id);
         return EXIT_OK;
@@ -926,7 +926,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             int n = acta_db_execution_count(db, &q, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "execution count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -939,7 +939,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  query FAILED err=%d", err);
             acta_db_execution_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "execution list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -1006,7 +1006,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int n = acta_db_execution_count(db, &q, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "execution count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);

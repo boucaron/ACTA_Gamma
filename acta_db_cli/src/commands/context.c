@@ -292,7 +292,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "context create");
             goto cleanup_create;
         }
 
@@ -350,7 +350,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_context_free(c);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "context get");
         }
         if (!c) {
             VLOG(1, "  not found (id=%d)", id);
@@ -429,7 +429,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             int n = acta_db_context_count(db, &q, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "context count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -442,7 +442,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  query FAILED err=%d", err);
             acta_db_context_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "context list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -490,7 +490,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int n = acta_db_context_count(db, &q, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "context count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);

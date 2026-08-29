@@ -9,6 +9,7 @@ extern int run_model_test_delete_restore();
 extern int run_model_test_move();
 extern int run_model_test_list_count();
 extern int run_model_test_misc();
+extern int run_model_test_error_contract();
 
 int main(void)
 {
@@ -21,6 +22,7 @@ int main(void)
     f += run_model_test_move();
     f += run_model_test_list_count();
     f += run_model_test_misc();
+    f += run_model_test_error_contract();
 
     if (f == 0) {
         printf("PASS: all model tests passed\n");

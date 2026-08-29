@@ -550,7 +550,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            ret = map_rc_to_exit(rc);
+            ret = finish_op_error(db, rc, "model create");
             goto cleanup_create;
         }
 
@@ -620,7 +620,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d → exit mapping", err);
             acta_db_model_free(m);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model get");
         }
         if (!m) {
             VLOG(1, "  not found (id=%d, live=%d)", id, use_live);
@@ -765,7 +765,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED fetching current row err=%d", err);
             acta_db_model_free(cur);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model update");
         }
         if (!cur) {
             VLOG(1, "  not found or already deleted (id=%d)", id);
@@ -807,7 +807,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model update");
         }
 
         VLOG(1, "  updated model id=%d", id);
@@ -853,7 +853,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model delete");
         }
 
         VLOG(1, "  deleted model id=%d", id);
@@ -899,7 +899,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model restore");
         }
 
         VLOG(1, "  restored model id=%d", id);
@@ -971,7 +971,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d → exit mapping", rc);
-            return map_rc_to_exit(rc);
+            return finish_op_error(db, rc, "model move");
         }
 
         VLOG(1, "  moved model id=%d → folder_id=%d", model_id, folder_id);
@@ -1050,7 +1050,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 n = acta_db_model_count_all(db, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
-                return map_rc_to_exit(err);
+                return finish_op_error(db, err, "model count");
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
@@ -1073,7 +1073,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
             acta_db_model_list_free(items, out_count);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model list");
         }
 
         VLOG(1, "  %d item(s) returned", out_count);
@@ -1132,7 +1132,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
-            return map_rc_to_exit(err);
+            return finish_op_error(db, err, "model count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);

@@ -174,6 +174,22 @@ static inline int finish_db_error(int rc, const char *what)
     return map_rc_to_exit(rc);
 }
 
+/* Emit the JSON error line for a failed library call and return the mapped
+ * exit code.  `op` names the operation ("model update", "skill create", …);
+ * the detail is `acta_db_last_error(db)`, so the stderr line is
+ *   {"error":"ACTA_DB_ERR_*","code":<rc>,"message":"<op> failed: <detail>"}
+ * Thin wrapper over finish_db_error for the per-entity
+ * `if (rc != ACTA_DB_OK)` paths (P4 #3) — the single place that composes
+ * the "<op> failed: <detail>" message. */
+static inline int finish_op_error(db_t *db, int rc, const char *op)
+{
+    const char *msg = (db != NULL) ? acta_db_last_error(db) : NULL;
+    char what[512];
+    snprintf(what, sizeof what, "%s failed: %s",
+             op ? op : "operation", msg ? msg : "(no detail)");
+    return finish_db_error(rc, what);
+}
+
 /* Verbose logging: VLOG() — single definition in cli.h. */
 
 
