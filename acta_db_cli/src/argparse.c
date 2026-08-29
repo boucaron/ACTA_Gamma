@@ -1,4 +1,5 @@
 #include "argparse.h"
+#include "cli_util.h"   /* parse_nonneg_int, json_str */
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -93,20 +94,29 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             continue;
         }
         if (flag_prefix_match(a, "verbose")) {
-            /* --verbose=N form (explicit level) */
-            if (a[9] == '=') {
-                int lvl = atoi(a + 10);
-                g->verbose = (lvl >= 1 && lvl <= 3) ? lvl : 3;
+            int lvl = 0;
+            /* Only --verbose=N reaches here (bare --verbose is caught by the
+             * strcmp above). Never consume argv[i+1]: a space form would
+             * silently eat the entity name. */
+            if (a[9] != '=') {
+                if (g->verbose < 3) g->verbose++;
+                continue;
+            }
+            if (a[10] == '\0' || !parse_nonneg_int(a + 10, &lvl)) {
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
+                    "\"message\":\"invalid --verbose level: '");
+                json_str(stderr, a + 10);
+                fprintf(stderr,
+                    "' (expected an integer 0-3)\"}\n");
+                free(rest);
+                return EXIT_INVALID;
+            }
+            if (lvl > 3) {
+                fprintf(stderr, "--verbose: level clamped to 3 (got %d)\n", lvl);
+                g->verbose = 3;
             } else {
-                /* --verbose <N> (space form, treat N as level) */
-                if (i + 1 < argc) {
-                    int lvl = atoi(argv[i + 1]);
-                    if (lvl >= 1 && lvl <= 3) g->verbose = lvl;
-                    else g->verbose = 3;
-                    i++;
-                } else if (g->verbose < 3) {
-                    g->verbose++;
-                }
+                g->verbose = lvl;
             }
             continue;
         }
