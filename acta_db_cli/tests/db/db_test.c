@@ -98,6 +98,36 @@ static void test_exec_no_source(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+static void test_exec_empty_sql_flag(stest_ctx_t *ctx)
+{
+    /* --sql "" must be rejected with a clear error, not passed to the lib */
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "sql", "", &g);
+
+    int rc = do_db(ctx, "exec", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_exec_empty_file(stest_ctx_t *ctx)
+{
+    /* 0-byte file must be rejected (was: acta_db_exec(db, "")) */
+    const char *path = "acta_test_empty.sql";
+    FILE *fp = fopen(path, "w");
+    if (fp)
+        fclose(fp);
+
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "file", path, &g);
+
+    int rc = do_db(ctx, "exec", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+    remove(path);
+}
+
 static void test_exec_invalid_sql(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
@@ -249,6 +279,8 @@ int run_db_test_all(void)
 
     /* exec – errors */
     test_exec_no_source(&ctx);
+    test_exec_empty_sql_flag(&ctx);
+    test_exec_empty_file(&ctx);
     test_exec_invalid_sql(&ctx);
     test_exec_fk_violation(&ctx);
     test_exec_immutable_context(&ctx);

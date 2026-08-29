@@ -192,6 +192,16 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             sql_ptr = sql_buf;
         }
 
+        if (sql_ptr == NULL || *sql_ptr == '\0') {
+            free(sql_buf);
+            VLOG(1, "  ERROR: empty SQL resolved from source");
+            fprintf(stderr,
+                "Error: empty SQL provided.\n"
+                "  The SQL source (positional, --sql, --file, or --stdin) resolved to 0 bytes.\n"
+                "  Run 'actagamma_db db help' for usage.\n");
+            return EXIT_INVALID;
+        }
+
         VLOG(3, "  sql_ptr=%p sql_len=%zu",
              (const void *)sql_ptr, strlen(sql_ptr));
 
