@@ -878,7 +878,6 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 1);
         const char *s_off      = cmd_args_flag(ga, "offset", 1);
         const char *s_lim      = cmd_args_flag(ga, "limit", 1);
-        int has_count    = cmd_args_has_flag(ga, "count");
 
         int offset = 0, limit = 0;
 
@@ -939,7 +938,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              q.context_id, q.skill_revision_id,
              q.model_revision_id, q.parent_execution_id);
 
-        if (gopts->count || has_count) {
+        if (gopts->count) {
             int err = 0;
             int n = acta_db_execution_count(db, &q, &err);
             if (err != ACTA_DB_OK) {

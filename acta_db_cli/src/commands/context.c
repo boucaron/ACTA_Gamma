@@ -404,7 +404,6 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *f_hash  = cmd_args_flag(ga, "hash", 1);
         const char *s_off   = cmd_args_flag(ga, "offset", 1);
         const char *s_lim   = cmd_args_flag(ga, "limit", 1);
-        const char *s_count = cmd_args_flag(ga, "count", 0);
 
         int offset = 0, limit = 0;
 
@@ -455,7 +454,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  q=%p q.type=%p q.hash=%p",
              (const void *)&q, (const void *)q.type, (const void *)q.hash);
 
-        if (gopts->count || s_count) {
+        if (gopts->count) {
             int err = 0;
             int n = acta_db_context_count(db, &q, &err);
             if (err != ACTA_DB_OK) {
