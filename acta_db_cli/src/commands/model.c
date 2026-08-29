@@ -1014,6 +1014,14 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         /* ──────────────────────────────────────────────────────────── */
 
         const char *f_folder_id = cmd_args_flag(ga, "folder_id", 1);
+        if (!f_folder_id) {
+            VLOG(1, "model move: ERROR missing --folder_id");
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"missing required flag: --folder_id\"}\n");
+            usage_move(stderr);
+            return EXIT_INVALID;
+        }
         int folder_id = 0;   /* 0 == root (NULL) */
 
         if (f_folder_id) {
