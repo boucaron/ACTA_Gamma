@@ -4,9 +4,10 @@
 #include <stdio.h>
 
 /*
- * JSON serialize / parse stubs.
- * Real implementation will use cJSON (one vendored .c/.h pair).
- * Structs to be supplied — signatures are placeholders for now.
+ * JSON layer, implemented on top of vendored cJSON.
+ * Parse (blob → entity struct) is implemented; serialize
+ * (entity struct → JSON) is still unimplemented and returns NULL.
+ * Entity structs are declared in commands.h.
  */
 
 /* ---- output: struct → compact/pretty one-line JSON ---- */
