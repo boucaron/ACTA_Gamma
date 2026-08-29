@@ -29,8 +29,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    - In the reachable `--verbose=`/prefix path, `atoi(argv[i+1])` on a
      non-numeric token returns 0 → sets verbose=3 *and* consumes the token
      that was actually the entity name.
+   Both call sites are still bare atoi (`src/argparse.c:98` `atoi(a + 10)`
+   and `:103` `atoi(argv[i + 1])`), and a non-numeric level clamps to 3
+   (max) rather than erroring.
    **Fix:** handle `--verbose` with the same uniform `=`-split as other flags;
-   validate the level with a real integer parse (e.g. `strtol` + endptr check).
+   validate the level with a real integer parse. No new code needed — the
+   strict helper already exists: `parse_nonneg_int(a + 10, &lvl)` from
+   `cli_util.h`, then clamp to `0..3`.
 
 3. **`--create-dirs` silently swallowed** (`src/argparse.c`)
    Accepted with `/* swallow; TODO: thread to open */` while open mode is
@@ -217,10 +222,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 - `json_parse_context` maps the JSON key `"hash"` to `content_hash` while every
   other key is a straight name match — inconsistent wire format; prefer
   `"content_hash"`.
-- `model.c`'s flag path (the `else` branch) does proper `strtol` + endptr
-  validation for `folder_id` — good; the JSON path goes through `jget_int`
-  instead, so the same input can be validated differently depending on which
-  input mode the user chose.
+- `model.c`'s flag path (the `else` branch) uses the shared strict
+  `parse_folder_id` helper (cli_util.h, `strtol` + endptr + ERANGE) for
+  `folder_id` in create/update/move — good; the JSON path goes through
+  `jget_int` instead, so the same input can be validated differently
+  depending on which input mode the user chose. (The copy-pasted strtol
+  block that was once unique to model.c has been extracted to `cli_util.h`;
+  Part 4 #8/#9 track the atoi sites not yet converted.)
 
 ### Positives
 
@@ -384,11 +392,17 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    also mallocs `created_at`, `updated_at`, `deleted_at`. (Skill create's
    cleanup frees all seven — it's the reference implementation for the family.)
 
-5. **Negative `folder_id` accepted where the error message says it isn't**
-   (`model.c` move/update): the error text is "must be a non-negative
-   integer" for *invalid* values, but a valid-but-negative value is clamped
-   to root (`fv < 0 → 0`) instead of rejected. Pick one; clamping hides
-   user typos (`--folder_id -3`).
+5. **Negative `folder_id`/`parent_id` handling is inconsistent across paths**
+   Clamping-to-root is now deliberate and documented in `parse_folder_id`
+   (cli_util.h: "negatives … clamp to 0 (root/NULL in DB)"), and
+   model.c create/update/move use it. But sibling paths diverge:
+   `model_folder`/`skill_folder` update do their own `atoi` + *reject*
+   negatives ("must be non-negative"), `skill move` clamps
+   (`if (folder_id < 0) folder_id = 0`), and the `*_folder` create paths
+   pass `atoi` results through with no negative check at all. One flag
+   (`--folder_id`/`--parent_id`) should mean one thing: decide clamp vs
+   reject once, then route every path through `parse_folder_id` (or a
+   rejecting variant) and delete the ad-hoc checks.
 
 ### Systemic patterns (affect most of the family)
 
@@ -408,18 +422,37 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    one `finish_db_error(rc, what)` that emits the JSON line and returns the
    mapped code.
 
-8. **Two id-parsing dialects in sibling entities**
-   `model.c` uses the correct `strtol` + endptr + range block (nice — it's
-   even copy-pasted five times within the file); `skill`, `context get`,
-   `model_folder`, `skill_folder`, and both revision files use bare `atoi`
-   ("12ab" → 12 silently; overflow wraps; "abc" → 0 → rejected only by the
-   `<= 0` check). Extract the model.c block into `int parse_id(const char *)`
-   in `cli_util.h` and use it everywhere.
+8. ~~Two id-parsing dialects in sibling entities~~ — **resolved for
+   positional ids**
+   The extraction was implemented: `cli_util.h` now provides
+   `parse_positive_id` (rejects trailing garbage "12ab", non-numeric "abc",
+   zero, negatives, and ERANGE/overflow > INT_MAX via strtol+endptr) and
+   `parse_nonneg_int` (0 allowed, for `--offset`/`--limit`). Every *positional*
+   id in all 8 entity files plus `execution`/`execution_log` (get/update/
+   move/restore, `--model_id`/`--skill_id`/`--context_id` refs in revisions
+   and logs, offset/limit) goes through them. What remains: flag *values*
+   and list/count *filters* that still use bare `atoi` — enumerated in #9.
 
-9. **`--folder_id`/`--parent_id` filters use bare `atoi` in list/count**
-   (`model.c` list/count, `skill.c` list, `model_folder.c` list):
-   `atoi("abc") → 0` silently filters *root* instead of erroring;
-   `atoi("-5")` falls into the "all" branch. Same fix as #8.
+9. **Remaining bare-`atoi` sites: flag values and filters** — after the #8
+   conversion these are the *only* non-strict number parses left in the CLI
+   (`atoi("abc") → 0`, `"12ab" → 12`, UB on overflow):
+   - `argparse.c:98,103` — `--verbose=`/`--verbose <N>` (Part 1 #2).
+   - `execution.c:514–517` (create: `--context-id`, `--skill-revision-id`,
+     `--model-revision-id`, `--parent-execution-id`) and `908–911`/`994–997`
+     (list/count query filters, same four flags).
+   - `execution_log.c:363` — `log create --execution-id`.
+   - `model.c:1015,1117` — list/count `--folder_id` filter
+     (`f_folder ? atoi(f_folder) : -1`; `"abc" → 0` silently filters *root*).
+   - `skill.c:492` (create `--folder_id`), `704` (update), `893` (move,
+     clamps negatives), `932`/`1040` (list/count filters).
+   - `model_folder.c:415` (create `--parent_id`), `577`/`671` (update —
+     `atoi` then a *negatives-only* check, so `"12abc" → 12` passes),
+     `867` (move `--parent_id`).
+   - `skill_folder.c:418,545,665,766` — same create/update/move pattern.
+   **Fix:** route each site to the existing helper matching its semantics:
+   `parse_positive_id` for required refs, `parse_nonneg_int` for optional
+   filters ("absent = all"), `parse_folder_id` for folder/parent ids — after
+   settling the clamp-vs-reject question in #5.
 
 10. **Dead local `--count` flag** — every `list` action reads
     `cmd_args_flag(ga, "count", 0)` / `cmd_args_has_flag(ga, "count")` even
@@ -516,10 +549,12 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency
 
-3. **`exec` follows the "atoi" id dialect** (`get`/`start`/`cancel`/
-   `complete`), and not-found `get` → silent `EXIT_OK` — both systemic
-   patterns (Part 4 #6/#8) apply here as well, including the
-   `execution_id` atoi in `log list`/`log count`.
+3. **`exec` positional ids are now strict** (`parse_positive_id` in
+   `get`/`start`/`cancel`/`complete`, and `execution_log.c:535,649` for
+   `--execution-id` filters), but not-found `get` still → silent
+   `EXIT_OK` (`execution.c:663–664`), so Part 4 #6 still applies here.
+   The `exec create` flag ids and the `exec list`/`count` query filters
+   (`--context-id` etc.) remain bare `atoi` — see Part 4 #9.
 
 4. **Test architecture: in-process handler calls, global parse layer
    untested** (tests/ overall)
