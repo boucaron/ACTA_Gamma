@@ -67,6 +67,9 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 > - `json.h` header comment rewritten to describe the implemented parse
 >   layer (former P2 #12) (`9f19a6a`). The `json.c` serialize stubs and
 >   `json_print_table` remain open (P2 #3–4 / W4).
+> - Server-authoritative field forgery (former P2 #9 / P3 #5) verified
+>   closed at the lib: the create INSERTs take no client `created_at`, and
+>   exec status is forced `pending`; `content_hash` is accepted by design.
 > - Part 5 #3 (untested global parse layer) is narrowed, not closed: the
 >   `stest_run_argv` in-process raw-argv path now exercises
 >   `parse_globals` + handler in every JSON-input suite, but a dedicated
@@ -129,28 +132,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Bugs (worth fixing)
 
-1. **`--json <blob>` is ignored — all create commands read stdin instead**
-   (copy-pasted in 9 places: `model.c:470`, `skill.c:460,669`, `context.c:220`,
-   `execution.c:483`, `execution_log.c:335`, `model_folder.c:389`,
-   `skill_folder.c:392`)
-   ```c
-   if (gopts->json_input) {
-       char *blob = read_stdin_all();   /* ← blob in gopts->json_input unused */
-   ```
-   The JSON the user passed on the command line is silently discarded and the
-   program instead blocks on stdin — which *hangs* for an interactive user with
-   no pipe. Fix: use `gopts->json_input` (validate with `json_validate`, then
-   parse); only fall back to stdin/file for the other two sources.
-
-2. **`--stdin` and `--from_file` are dead flags**
-   `gopts->from_stdin` and `gopts->from_file` are parsed by `parse_globals` and
-   documented in `--help`, but no command handler ever references them (only
-   `db exec` consumes `from_stdin`, to reject it). All three input sources
-   (blob / stdin / file) collapsed into one mis-wired branch (see #1). Either
-   implement the selection logic once (a `resolve_input_source()` helper
-   returning the blob + ownership flag) or drop the flags from the parser and
-   help text.
-
 3. **Serialize half of the API is unimplemented stubs** (`json.c`)
    `json_serialize_{model,skill,context,execution}`, `json_serialize_model_array`
    all `return NULL` with a TODO, and the header documents `NULL` as the error
@@ -195,15 +176,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    also maps negative ids to 0 instead of erroring. Negative ids are almost
    certainly user error — clamp-to-root hides it. Flag negatives as invalid.
 
-9. **Client-supplied server-authoritative fields**
-   `json_parse_execution` accepts `status` and `created_at` from the input blob;
-   `json_parse_context` accepts `content_hash` and `created_at`. If a create
-   handler forwards the parsed struct straight to the db layer, a caller can
-   forge execution status, timestamps, and content hashes. Verify in Parts 3/5
-   that create paths drop/override these fields; the safer contract is a
-   `json_parse_*_create()` that excludes server-owned fields, or zeroing them
-   after the generic parse.
-
 10. **NULL conflation in string getters**
     `dup_or_null`/`jget_str` return NULL for both "key absent" and OOM. Same
     ambiguity as the absent/boolean-flag conflation in Part 1 #1. Low risk
@@ -214,11 +186,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     All parse failures return -1 with no detail. `cJSON_GetErrorPtr()` is right
     there — at minimum `VLOG(1, ...)` the error pointer + offset on failure so
     `--verbose` users can debug malformed input.
-
-12. **Stale header comment** (`json.h`)
-    "JSON serialize/parse stubs. Real implementation will use cJSON …
-    signatures are placeholders" — the file *is* the cJSON implementation now.
-    The comment describes a previous life of the file.
 
 ### Nitpicks
 
@@ -279,20 +246,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    JSON error line are now documented in `db_usage()` help; the
    cross-entity spec table remains open (see P4 #8).
 
-4. **Bare `--json` is not a valid invocation, yet help teaches it** (`context.c` usage)
-   `ctx_usage` shows `... | acta context create --json` (boolean, stdin
-   semantics), but `parse_globals` defines `--json <blob>` as a *value* flag:
-   a trailing bare `--json` returns `EXIT_CLI` (missing value), and a bare
-   `--json` mid-argv silently eats the next token as the blob. The usage text
-   and the parser describe two different features (this is the root cause of
-   Part 2 #1/#2: the intended trichotomy blob/stdin/file was never built).
-
-5. **Client-supplied `content_hash` and `created_at` in `context create`**
-    The hash is a client claim the DB never verifies (by design perhaps), but
-    `created_at` from the JSON blob is forwarded into
-    `acta_db_context_create` — confirm the lib ignores it (Part 2 #9 carries
-    into this entity concretely).
-
 ### Nitpicks
 
 - `context` list/count duplicate the `context_query_t q = {...}` construction
@@ -325,22 +278,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ## Part 4: big entities — model, skill, folders, revisions
 
-### Bugs (worth fixing)
-
-1. **`skill update` destroys data: partial struct passed to a full-replace API** (`skill.c` + `acta_db/include/skill.h`)
-   The db lib is explicit:
-   > "Optional fields: NULL in struct → SQL NULL in column, **overwriting prior value** … Populate the full struct. To change a single field: 1. `acta_db_skill_get` 2. modify the one field 3. call `acta_db_skill_update` with the **fully-populated** struct."
-   The CLI does neither: `skill_t s = {0}` + only the passed flags, then
-   `acta_db_skill_update(db, &s)`. Consequences for
-   `skill update 5 --name X --prompt_template Y` (the two required fields
-   only):
-   - `description`, `output_schema` → SQL NULL (wiped),
-   - `folder_id` 0 → **moved to root folder**.
-   Compare `model update`, which correctly fetches the live row and
-   shallow-merges. Either do the same fetch-and-merge in `skill update`, or
-   make the update API NULL-means-unchanged (COALESCE) — as written it is a
-   silent data-loss path in both flag and JSON modes.
-
 ### Systemic patterns (affect most of the family)
 
 2. **Silent not-found: `get` returns exit 0 with empty stdout when the row
@@ -365,14 +302,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     (Part 3 #2). Dead in model, skill, context, model_folder, skill_folder,
     and both revisions.
 
-5. **Update/rename paths skip the empty-string checks that create has**
-    `model create` rejects `name == ""`; `model update --name ""` and
-    `model_folder rename 7 --name ""` accept it. Apply the same check to
-    update/rename.
-
 6. **Help text bugs, family-wide**
-    - `--json` is documented as a bare flag ("read from stdin") — still the
-      Part 2 #1 / Part 3 #4 issue: the parser requires `--json <blob>`.
     - `model get --live` is documented as "Include soft-deleted rows"; the
       flag selects the *unfiltered* fetch — wording is backwards and should
       be "fetch even if soft-deleted".
@@ -410,7 +340,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     A small per-entity descriptor (field table: name, JSON key, required,
     type, flag name) + shared `create/get/list/count/delete/restore/move`
     drivers would collapse most of it *and* make the model/skill divergence
-    (#1, #5) impossible to repeat.
+    impossible to repeat.
 
 ### Positives
 
@@ -429,18 +359,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 ---
 
 ## Part 5: execution, log, Makefile, tests
-
-### Bugs (worth fixing)
-
-1. **`exec create` advertises `--status`, which is silently ignored** (`execution.c`)
-   The help lists `--status <str>  pending | running | …` for create, the CLI
-   validates the enum, and then `acta_db_execution_create` does the right
-   thing: *"e->status is deliberately ignored: a new execution is always
-   created 'pending'"* (good — this resolves the forgery concern raised in
-   Part 2 #9). But the CLI still accepts and validates the flag, so
-   `exec create … --status completed` looks like it worked and didn't.
-   Either reject `--status` on create with "status is managed by the
-   lifecycle actions" or mark it "(ignored)" in the help.
 
 ### Design / consistency
 
@@ -515,7 +433,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 - **The lib defends the state machine** (`acta_db_execution_create` forces
   `status='pending'`, transitions only via start/complete/fail/cancel) —
   the one server-authoritative-field risk from Part 2 turned out to be
-  handled correctly; the CLI just shouldn't advertise the dead flag.
+  handled correctly, and the CLI now rejects the dead flag (`cffe8fe`).
 - Test volume is proportionate: ~10.8k lines of tests vs ~9.2k of app.
 - Per-suite binaries isolate failures and keep link units small;
   `APP_OBJS_NO_MAIN` (link app minus `main.o` into tests) is a clean way to
@@ -527,13 +445,11 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ---
 
-# Summary (top 5 by severity)
+# Summary (unresolved, by severity)
 
-1. **`skill update` data loss** — partial struct to a full-replace API (wipes fields, moves to root). *(P4 #1)*
-2. **`--json <blob>` ignored, reads stdin, hangs interactively** — 9 call sites; `--stdin`/`--from_file` dead flags. *(P2 #1–2)*
-3. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #2)*
-4. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation (`db.c` is the reference). *(P4 #3)*
-5. **Global parse layer untested** — the layer that owns #2 and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
+1. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #2)*
+2. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation (`db.c` is the reference). *(P4 #3)*
+3. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
 
 **Structural recommendation:** the copy-paste family (P4 #10) is where most
 bugs live. A per-entity *field descriptor* (name, JSON key, flag, type,
