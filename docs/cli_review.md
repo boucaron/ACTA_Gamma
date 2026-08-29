@@ -10,6 +10,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 | 4 | Big entities (`model.c`, `skill.c`, `*_folder.c`, `*_revision.c`) | ✅ done |
 | 5 | `execution.c`, `execution_log.c`, Makefile, tests | ✅ done |
 
+> **Post-review changes (doc re-checked against the tree):**
+> - Flag names were standardized to **underscores** (`--context_id`,
+>   `--no_nulls`, `--id_only`, `--from_file`, `--create_dirs`,
+>   `--include_deleted`, …); dashed spellings below are updated.
+> - All bare-`atoi` sites (Part 4 #9) were converted to the strict helpers;
+>   Part 4 #5/#9 and the #12 flag-name mismatch are marked resolved.
+
 ---
 
 ## Part 1: entry point, arg parsing, dispatch
@@ -31,7 +38,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    (non-`=` form is a defensive counter-bump; only `--verbose=N` is
    reachable via the prefix match anyway).
 
-3. **`--create-dirs` silently swallowed** (`src/argparse.c`)
+3. **`--create_dirs` silently swallowed** (`src/argparse.c`)
    Accepted with `/* swallow; TODO: thread to open */` while open mode is
    `ACTA_DB_OPEN_EXISTING`. Users pass it expecting the DB file to be created;
    they instead get `cannot open database './acta.db'`.
@@ -132,7 +139,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    no pipe. Fix: use `gopts->json_input` (validate with `json_validate`, then
    parse); only fall back to stdin/file for the other two sources.
 
-2. **`--stdin` and `--from-file` are dead flags**
+2. **`--stdin` and `--from_file` are dead flags**
    `gopts->from_stdin` and `gopts->from_file` are parsed by `parse_globals` and
    documented in `--help`, but no command handler ever references them. All
    three input sources (blob / stdin / file) collapsed into one mis-wired
@@ -222,7 +229,8 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   `jget_int` instead, so the same input can be validated differently
   depending on which input mode the user chose. (The copy-pasted strtol
   block that was once unique to model.c has been extracted to `cli_util.h`;
-  Part 4 #8/#9 track the atoi sites not yet converted.)
+  the atoi sites tracked by Part 4 #8/#9 have since been converted —
+  both are resolved.)
 
 ### Positives
 
@@ -257,7 +265,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    `parse_globals` pulls `--stdin` into `gopts->from_stdin` and removes it from
    the command argv, so `cmd_args_flag(ga, "stdin", 0)` can never see it.
    Same class as Part 2 #2: entity-level flags must not collide with global
-   flag names. Rename the entity flag (e.g. `--sql-stdin`) or check
+   flag names. Rename the entity flag (e.g. `--sql_stdin`) or check
    `gopts->from_stdin` here.
 
 4. **`context create` leaks `created_at` on the JSON path** (`context.c`)
@@ -343,7 +351,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   "no recognised flags" early nudge.
 - Consistent `err` out-param handling around every lib call (free-on-error
   paths included).
-- `--fields`/`--no-nulls` filtering is implemented uniformly in
+- `--fields`/`--no_nulls` filtering is implemented uniformly in
   `ctx_to_json` and shared by `get` and `list`.
 - `list` empty → `[]` (valid JSON) rather than nothing.
 
@@ -386,17 +394,14 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    also mallocs `created_at`, `updated_at`, `deleted_at`. (Skill create's
    cleanup frees all seven — it's the reference implementation for the family.)
 
-5. **Negative `folder_id`/`parent_id` handling is inconsistent across paths**
-   Clamping-to-root is now deliberate and documented in `parse_folder_id`
-   (cli_util.h: "negatives … clamp to 0 (root/NULL in DB)"), and
-   model.c create/update/move use it. But sibling paths diverge:
-   `model_folder`/`skill_folder` update do their own `atoi` + *reject*
-   negatives ("must be non-negative"), `skill move` clamps
-   (`if (folder_id < 0) folder_id = 0`), and the `*_folder` create paths
-   pass `atoi` results through with no negative check at all. One flag
-   (`--folder_id`/`--parent_id`) should mean one thing: decide clamp vs
-   reject once, then route every path through `parse_folder_id` (or a
-   rejecting variant) and delete the ad-hoc checks.
+5. ~~Negative `folder_id`/`parent_id` handling is inconsistent across paths~~
+   — **resolved**
+   Decision: *reject* negatives (user typo). `parse_folder_id`
+   (cli_util.h) documents it: "Negatives are REJECTED … so
+   `--folder_id -3` is an error, not a silent move to root". Every
+   folder/parent path (model/skill create/update/move, both `*_folder`
+   create/update/move) now routes through it; the ad-hoc `atoi` +
+   clamp / negatives-only checks are gone.
 
 ### Systemic patterns (affect most of the family)
 
@@ -416,24 +421,23 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    one `finish_db_error(rc, what)` that emits the JSON line and returns the
    mapped code.
 
-8. ~~Two id-parsing dialects in sibling entities~~ — **resolved for
-   positional ids**
+8. ~~Two id-parsing dialects in sibling entities~~ — **resolved**
    The extraction was implemented: `cli_util.h` now provides
    `parse_positive_id` (rejects trailing garbage "12ab", non-numeric "abc",
-   zero, negatives, and ERANGE/overflow > INT_MAX via strtol+endptr) and
-   `parse_nonneg_int` (0 allowed, for `--offset`/`--limit`). Every *positional*
+   zero, negatives, and ERANGE/overflow > INT_MAX via strtol+endptr),
+   `parse_nonneg_int` (0 allowed, for `--offset`/`--limit`), and
+   `parse_folder_id` (0 = root, negatives rejected). Every *positional*
    id in all 8 entity files plus `execution`/`execution_log` (get/update/
    move/restore, `--model_id`/`--skill_id`/`--context_id` refs in revisions
-   and logs, offset/limit) goes through them. What remains: flag *values*
-   and list/count *filters* that still use bare `atoi` — enumerated in #9.
+   and logs, offset/limit) goes through them, as do the flag *values* and
+   list/count *filters* formerly enumerated in #9.
 
-9. **Remaining bare-`atoi` sites: flag values and filters** — after the #8
-   conversion these are the *only* non-strict number parses left in the CLI
-   (`atoi("abc") → 0`, `"12ab" → 12`, UB on overflow):
-   - `execution.c:514–517` (create: `--context-id`, `--skill-revision-id`,
-     `--model-revision-id`, `--parent-execution-id`) and `908–911`/`994–997`
-     (list/count query filters, same four flags).
-   - `execution_log.c:363` — `log create --execution-id`.
+9. ~~Remaining bare-`atoi` sites: flag values and filters~~ — **resolved**
+   All sites below are now strict (historical list, pre-fix):
+   - exec create flag ids and list/count query filters (`--context_id`,
+     `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`)
+     → `parse_id_flag` (local strict wrapper, `execution.c:35`).
+   - `execution_log.c:363` — `log create --execution_id`.
    - `model.c:1015,1117` — list/count `--folder_id` filter
      (`f_folder ? atoi(f_folder) : -1`; `"abc" → 0` silently filters *root*).
    - `skill.c:492` (create `--folder_id`), `704` (update), `893` (move,
@@ -442,10 +446,11 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
      `atoi` then a *negatives-only* check, so `"12abc" → 12` passes),
      `867` (move `--parent_id`).
    - `skill_folder.c:418,545,665,766` — same create/update/move pattern.
-   **Fix:** route each site to the existing helper matching its semantics:
-   `parse_positive_id` for required refs, `parse_nonneg_int` for optional
-   filters ("absent = all"), `parse_folder_id` for folder/parent ids — after
-   settling the clamp-vs-reject question in #5.
+   **Fix (as implemented):** each site was routed to the strict helper
+   matching its semantics: `parse_positive_id` for required refs,
+   `parse_nonneg_int` for optional filters ("absent = all"),
+   `parse_folder_id` for folder/parent ids, after settling the
+   clamp-vs-reject question in #5 (reject).
 
 10. **Dead local `--count` flag** — every `list` action reads
     `cmd_args_flag(ga, "count", 0)` / `cmd_args_has_flag(ga, "count")` even
@@ -459,9 +464,10 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     update/rename.
 
 12. **Help text bugs, family-wide**
-    - `--id_only` (underscore) is printed in every usage text; the actual
+    - ~~`--id_only` (underscore) is printed in every usage text; the actual
       global flag is `--id-only`. Users following the help get a positional
-      instead of a flag.
+      instead of a flag.~~ — **resolved**: flag names were standardized to
+      underscores, so help text and parser now agree.
     - `--json` is documented as a bare flag ("read from stdin") — still the
       Part 2/3 issue: the parser requires `--json <blob>`.
     - `model get --live` is documented as "Include soft-deleted rows"; the
@@ -544,10 +550,11 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 3. **`exec` positional ids are now strict** (`parse_positive_id` in
    `get`/`start`/`cancel`/`complete`, and `execution_log.c:535,649` for
-   `--execution-id` filters), but not-found `get` still → silent
+   `--execution_id` filters), but not-found `get` still → silent
    `EXIT_OK` (`execution.c:663–664`), so Part 4 #6 still applies here.
    The `exec create` flag ids and the `exec list`/`count` query filters
-   (`--context-id` etc.) remain bare `atoi` — see Part 4 #9.
+   (`--context_id` etc.) are now strict (`parse_id_flag`); only the
+   not-found issue above remains in this file.
 
 4. **Test architecture: in-process handler calls, global parse layer
    untested** (tests/ overall)
@@ -555,7 +562,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    call `cmd_*` directly — fast and well-structured, but the *entire* class
    of bugs found in Parts 1–4 (`--json` blob ignored + stdin hang, `--stdin`
    eaten by `parse_globals`, bare `--json` not parseable, dead local
-   `--count`, `--id-only` vs help's `--id_only`) lives in the argv layer the
+   `--count`) lives in the argv layer the
    tests skip. A suite that feeds raw `argv` through `parse_globals` +
    `commands_dispatch` (or spawns the built binary) would have caught all of
    them. This is the highest-value coverage gap in the project.
@@ -638,7 +645,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 # Summary (top 9 by severity)
 
 1. **`skill update` data loss** — partial struct to a full-replace API (wipes fields, moves to root). *(P4 #1)*
-2. **`--json <blob>` ignored, reads stdin, hangs interactively** — 9 call sites; `--stdin`/`--from-file` dead flags. *(P2 #1–2)*
+2. **`--json <blob>` ignored, reads stdin, hangs interactively** — 9 call sites; `--stdin`/`--from_file` dead flags. *(P2 #1–2)*
 3. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #6)*
 4. **`db version` prints `"test"`**; `db exec` positional form unimplemented, `--stdin` dead. *(P3 #1–3)*
 5. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation. *(P4 #7)*
