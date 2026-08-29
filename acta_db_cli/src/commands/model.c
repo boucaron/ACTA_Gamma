@@ -504,7 +504,8 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     char *endp = NULL;
                     errno = 0;
                     long fid = strtol(fid_str, &endp, 10);
-                    if (errno == ERANGE || endp == fid_str || *endp != '\0') {
+                    if (errno == ERANGE || endp == fid_str || *endp != '\0'
+                        || fid > (long)INT_MAX) {
                         VLOG(1, "  ERROR: 'folder_id' value '%s' is not a valid integer",
                              fid_str);
                         fprintf(stderr,
@@ -1082,9 +1083,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int offset = 0, limit = 0;
 
         if (s_off) {
-            char *end;
-            long v = strtol(s_off, &end, 10);
-            if (*end || v < 0) {
+            if (!parse_nonneg_int(s_off, &offset)) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -1092,12 +1091,9 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 usage_list(stderr);
                 return EXIT_INVALID;
             }
-            offset = (int)v;
         }
         if (s_lim) {
-            char *end;
-            long v = strtol(s_lim, &end, 10);
-            if (*end || v < 0) {
+            if (!parse_nonneg_int(s_lim, &limit)) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -1105,7 +1101,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 usage_list(stderr);
                 return EXIT_INVALID;
             }
-            limit = (int)v;   /* 0 = no limit (documented) */
         }
 
         VLOG(1, "model list: folder_id=%d offset=%d limit=%d",

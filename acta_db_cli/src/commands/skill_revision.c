@@ -441,9 +441,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         int offset = 0, limit = 0;
 
         if (s_off) {
-            char *end;
-            long v = strtol(s_off, &end, 10);
-            if (*end || v < 0) {
+            if (!parse_nonneg_int(s_off, &offset)) {
                 VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -451,12 +449,9 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
                 usage_sr_list(stderr);
                 return EXIT_INVALID;
             }
-            offset = (int)v;
         }
         if (s_lim) {
-            char *end;
-            long v = strtol(s_lim, &end, 10);
-            if (*end || v < 0) {
+            if (!parse_nonneg_int(s_lim, &limit)) {
                 VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
@@ -464,7 +459,6 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
                 usage_sr_list(stderr);
                 return EXIT_INVALID;
             }
-            limit = (int)v;   /* 0 = no limit (documented) */
         }
 
         VLOG(1, "skill_revision list: skill_id=%d offset=%d limit=%d",

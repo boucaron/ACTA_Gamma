@@ -3,6 +3,8 @@
 #define ACTA_DB_CLI_UTIL_H
 
 #include "cli.h"
+#include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,9 +57,27 @@ static inline int action_err(const char *entity, const char *action,
 static inline int parse_positive_id(const char *s, int *out)
 {
     if (!s || !out) return 0;
+    errno = 0;
     char *end;
     long v = strtol(s, &end, 10);
-    if (*end != '\0' || v <= 0) return 0;
+    if (errno == ERANGE || *end != '\0' || v <= 0 || v > (long)INT_MAX)
+        return 0;
+    *out = (int)v;
+    return 1;
+}
+
+/* Parse a non-negative integer ("0" is valid) for --offset/--limit.
+ * Same strict rules as parse_positive_id (strtol+endptr, ERANGE,
+ * INT_MAX) but 0 is accepted. Returns 1 on success, 0 on invalid
+ * input (*out left unmodified). */
+static inline int parse_nonneg_int(const char *s, int *out)
+{
+    if (!s || !out) return 0;
+    errno = 0;
+    char *end;
+    long v = strtol(s, &end, 10);
+    if (errno == ERANGE || *end != '\0' || v < 0 || v > (long)INT_MAX)
+        return 0;
     *out = (int)v;
     return 1;
 }
