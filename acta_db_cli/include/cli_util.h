@@ -133,6 +133,40 @@ static inline void json_str(FILE *f, const char *s)
     fputc('"', f);
 }
 
+/* ── Single-line JSON error contract (stderr) ─────────────────────── */
+/* Emit the canonical single-line JSON error on stderr:
+ *   {"error":"ACTA_DB_ERR_<NAME>","code":<rc>,"message":"<what>"}
+ * and return map_rc_to_exit(rc).  `what` is JSON-escaped via json_str
+ * and NULL-safe.  `rc` should be a negative ACTA_DB_ERR_* code;
+ * ACTA_DB_OK or an unknown code is reported as ACTA_DB_ERR_INVALID.
+ * Callers may print human/usage text AFTER the JSON line — stderr
+ * line 1 is the contract that scripts parse.  This is the centralized
+ * error emitter for library-failure paths (P4 #6); entity files adopt
+ * it incrementally. */
+static inline int finish_db_error(int rc, const char *what)
+{
+    static const struct { int code; const char *name; } names[] = {
+        { ACTA_DB_ERR_NOT_FOUND,  "ACTA_DB_ERR_NOT_FOUND"  },
+        { ACTA_DB_ERR_SQL,        "ACTA_DB_ERR_SQL"        },
+        { ACTA_DB_ERR_ALLOC,      "ACTA_DB_ERR_ALLOC"      },
+        { ACTA_DB_ERR_INVALID,    "ACTA_DB_ERR_INVALID"    },
+        { ACTA_DB_ERR_INVALID_DB, "ACTA_DB_ERR_INVALID_DB" },
+        { ACTA_DB_ERR_DUPLICATE,  "ACTA_DB_ERR_DUPLICATE"  },
+        { ACTA_DB_ERR_FK,         "ACTA_DB_ERR_FK"         },
+    };
+    const char *name = NULL;
+    if (rc != ACTA_DB_OK) {
+        for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++)
+            if (names[i].code == rc) { name = names[i].name; break; }
+    }
+    if (!name) { rc = ACTA_DB_ERR_INVALID; name = "ACTA_DB_ERR_INVALID"; }
+    fprintf(stderr, "{\"error\":\"%s\",\"code\":%d,\"message\":",
+            name, rc);
+    json_str(stderr, what ? what : "");
+    fputs("}\n", stderr);
+    return map_rc_to_exit(rc);
+}
+
 /* Verbose logging: VLOG() — single definition in cli.h. */
 
 

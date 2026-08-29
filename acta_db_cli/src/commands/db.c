@@ -49,11 +49,17 @@ void db_usage(FILE *f)
 "    --table            print 'ok' instead of JSON\n"
 "    --verbose <n>      debug level 0-3 (stderr)\n"
 "\n"
+"  stdout on success: {\"status\":\"ok\"}\n"
+"  stderr on failure: single-line JSON {\"error\":\"ACTA_DB_ERR_*\",\n"
+"  \"code\":<rc>,\"message\":\"...\"} (exit code mapped from rc)\n"
+"\n"
 "== version ======================================================\n"
 "  actagamma_db db version\n"
 "  Prints the SQLite library version.\n"
 "  Options:\n"
 "    --table          print 'SQLite <ver>' instead of JSON\n"
+"\n"
+"  stdout: {\"version\":\"<version>\"}\n"
 "\n"
 "Global options:\n"
 "  --table          columnar / plain output instead of JSON\n"
@@ -119,25 +125,16 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
          * letting it silently fall through to "no SQL source". */
         if (gopts->from_stdin) {
             VLOG(1, "  ERROR: global --stdin used; db exec expects --sql_stdin");
-            fprintf(stderr,
-                "Error: --stdin is a global JSON-input flag and is not used by 'db exec'.\n"
-                "  Read SQL from stdin with --sql_stdin:\n"
-                "    cat migration.sql | actagamma_db db exec --sql_stdin\n"
-                "  Run 'actagamma_db db help' for full usage.\n");
-            return EXIT_INVALID;
+            return finish_db_error(ACTA_DB_ERR_INVALID,
+                "global --stdin is a JSON-input flag; read SQL from stdin "
+                "with --sql_stdin (actagamma_db db exec --sql_stdin)");
         }
 
         if (!pos_sql && !sql && !fpath && !use_stdin) {
             VLOG(1, "  ERROR: no SQL source (need positional, --sql, --file, or --sql_stdin)");
-            fprintf(stderr,
-                "Error: no SQL source provided.\n"
-                "  Provide SQL via one of:\n"
-                "    actagamma_db db exec \"<SQL>\"            <- positional\n"
-                "    actagamma_db db exec --sql \"<SQL>\"      <- --sql flag\n"
-                "    actagamma_db db exec --file <path>      <- --file flag\n"
-                "    actagamma_db db exec --sql_stdin        <- stdin\n"
-                "  Run 'actagamma_db db help' for full usage.\n");
-            return EXIT_INVALID;
+            return finish_db_error(ACTA_DB_ERR_INVALID,
+                "no SQL source: provide SQL as a positional argument, "
+                "--sql, --file, or --sql_stdin");
         }
 
 
@@ -154,13 +151,11 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             FILE *fp = fopen(fpath, "r");
             if (!fp) {
                 VLOG(1, "  ERROR: cannot open file '%s'", fpath);
-                fprintf(stderr,
-                    "Error: cannot open file '%s'.\n"
-                    "  Check the path and permissions.\n"
-                    "  Usage: actagamma_db db exec --file <path>\n"
-                    "  Run 'actagamma_db db help' for full usage.\n",
-                    fpath);
-                return EXIT_INVALID;
+                char what[1024];
+                snprintf(what, sizeof what,
+                         "cannot open file '%s': check the path and permissions",
+                         fpath);
+                return finish_db_error(ACTA_DB_ERR_INVALID, what);
             }
             long sz = 0;
             fseek(fp, 0, SEEK_END);
@@ -168,19 +163,18 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fseek(fp, 0, SEEK_SET);
             if (sz < 0 || sz > 65536) {
                 fclose(fp);
-                fprintf(stderr,
-                    "Error: SQL file '%s' is too large (%ld bytes, max 65536).\n"
-                    "  Split the file or use --sql_stdin for large inputs.\n"
-                    "  Run 'actagamma_db db help' for full usage.\n",
-                    fpath, sz);
-                return EXIT_INVALID;
+                char what[1024];
+                snprintf(what, sizeof what,
+                         "SQL file '%s' too large (%ld bytes, max 65536): "
+                         "split the file or use --sql_stdin for large inputs",
+                         fpath, sz);
+                return finish_db_error(ACTA_DB_ERR_INVALID, what);
             }
             sql_buf = malloc((size_t)sz + 1);
             if (!sql_buf) {
                 fclose(fp);
-                fprintf(stderr,
-                    "Error: memory allocation failed.\n");
-                return EXIT_INVALID;
+                return finish_db_error(ACTA_DB_ERR_ALLOC,
+                                       "memory allocation failed");
             }
             size_t rd = fread(sql_buf, 1, (size_t)sz, fp);
             fclose(fp);
@@ -190,9 +184,8 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             VLOG(2, "  reading from stdin");
             sql_buf = malloc(65537);
             if (!sql_buf) {
-                fprintf(stderr,
-                    "Error: memory allocation failed.\n");
-                return EXIT_INVALID;
+                return finish_db_error(ACTA_DB_ERR_ALLOC,
+                                       "memory allocation failed");
             }
             size_t total = 0;
             size_t n;
@@ -201,11 +194,9 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 total += n;
                 if (total >= 65536 - 1) {
                     free(sql_buf);
-                    fprintf(stderr,
-                        "Error: stdin input too large (max 65536 bytes).\n"
-                        "  Pipe a smaller file or split the query.\n"
-                        "  Run 'actagamma_db db help' for full usage.\n");
-                    return EXIT_INVALID;
+                    return finish_db_error(ACTA_DB_ERR_INVALID,
+                        "stdin input too large (max 65536 bytes): "
+                        "pipe a smaller file or split the query");
                 }
             }
             sql_buf[total] = '\0';
@@ -215,11 +206,9 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (sql_ptr == NULL || *sql_ptr == '\0') {
             free(sql_buf);
             VLOG(1, "  ERROR: empty SQL resolved from source");
-            fprintf(stderr,
-                "Error: empty SQL provided.\n"
-                "  The SQL source (positional, --sql, --file, or --sql_stdin) resolved to 0 bytes.\n"
-                "  Run 'actagamma_db db help' for usage.\n");
-            return EXIT_INVALID;
+            return finish_db_error(ACTA_DB_ERR_INVALID,
+                "empty SQL: the source (positional, --sql, --file, or "
+                "--sql_stdin) resolved to 0 bytes");
         }
 
         VLOG(3, "  sql_ptr=%p sql_len=%zu",
@@ -236,12 +225,10 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             const char *msg = acta_db_last_error(db);
             VLOG(1, "  FAILED rc=%d (%s)", rc,
                  acta_db_strerror(rc));
-            fprintf(stderr,
-                "Error: SQL execution failed (rc=%d).\n"
-                "  SQLite: %s\n"
-                "  Check your SQL syntax. Run 'actagamma_db db help' for usage.\n",
-                rc, msg ? msg : "(no detail)");
-            return map_rc_to_exit(rc);
+            char what[1024];
+            snprintf(what, sizeof what, "SQL execution failed: %s",
+                     msg ? msg : "(no detail)");
+            return finish_db_error(rc, what);
         }
 
         VLOG(1, "  ok");
@@ -262,7 +249,15 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* ── Unknown action: suggest closest match + pointer to help ── */
+    /* ── Unknown action: JSON contract line first (stderr line 1,
+     *    scripts parse it), then the shared human "Unknown action"
+     *    suggestion block ── */
+    {
+        char what[80];
+        snprintf(what, sizeof what, "unknown action '%s'",
+                 action ? action : "(null)");
+        finish_db_error(ACTA_DB_ERR_INVALID, what);
+    }
     return unknown_action("db", action, "actagamma_db db help",
                           db_actions, DB_ACTIONS);
 }
