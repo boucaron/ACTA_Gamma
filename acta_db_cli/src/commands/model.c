@@ -82,7 +82,7 @@ void model_usage(FILE *f)
 "\n"
 "  Options:\n"
 "    --json               Read the entry as JSON from stdin\n"
-"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --id-only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
 "== get <id> ========================================================\n"
@@ -93,7 +93,7 @@ void model_usage(FILE *f)
 "\n"
 "  Options:\n"
 "    --live               Include soft-deleted rows\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n"
@@ -165,7 +165,7 @@ void model_usage(FILE *f)
 "  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
 "  --fields <csv>     comma-separated field whitelist\n"
 "  --no_nulls         omit null-valued fields from JSON output\n"
-"  --id_only          print only the id (create / get)\n"
+"  --id-only          print only the id (create / get)\n"
 "\n", f);
 }
 
@@ -204,7 +204,7 @@ static void usage_create(FILE *f)
 "\n"
 "  Options:\n"
 "    --json               Read the entry as JSON from stdin\n"
-"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --id-only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
 
@@ -219,7 +219,7 @@ static void usage_get(FILE *f)
 "\n"
 "  Options:\n"
 "    --live               Include soft-deleted rows\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);
@@ -675,7 +675,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         /* ── output ───────────────────────────────────────────────── */
         if (gopts->id_only) {
-            /* --id_only: bare integer, ignores fields/no_nulls/table */
+            /* --id-only: bare integer, ignores fields/no_nulls/table */
             fprintf(stdout, "%d\n", m->id);
 
         } else if (gopts->table) {

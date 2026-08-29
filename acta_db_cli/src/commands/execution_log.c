@@ -72,7 +72,7 @@ void execution_log_usage(FILE *f)
 "\n"
 "  Options:\n"
 "    --json               Read the entry as JSON from stdin\n"
-"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --id-only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
 "== get <id> ========================================================\n"
@@ -81,7 +81,7 @@ void execution_log_usage(FILE *f)
 "    actagamma_db log get 42\n"
 "\n"
 "  Options:\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n"
@@ -115,7 +115,7 @@ void execution_log_usage(FILE *f)
 "  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
 "  --fields <csv>     comma-separated field whitelist\n"
 "  --no_nulls         omit null-valued fields from JSON output\n"
-"  --id_only          print only the id (create / get)\n"
+"  --id-only          print only the id (create / get)\n"
 "\n", f);
 }
 
@@ -150,7 +150,7 @@ static void usage_create(FILE *f)
 "\n"
 "  Options:\n"
 "    --json               Read the entry as JSON from stdin\n"
-"    --id_only            Print only the new id (no JSON wrapper)\n"
+"    --id-only            Print only the new id (no JSON wrapper)\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
 
@@ -163,7 +163,7 @@ static void usage_get(FILE *f)
 "    actagamma_db log get 42\n"
 "\n"
 "  Options:\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);

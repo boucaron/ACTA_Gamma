@@ -53,7 +53,7 @@ void model_revision_usage(FILE *f)
 "    actagamma_db model_revision get 42\n"
 "\n"
 "  Options:\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n"
@@ -64,7 +64,7 @@ void model_revision_usage(FILE *f)
 "    actagamma_db model_revision get-latest 7\n"
 "\n"
 "  Options:\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n"
@@ -93,7 +93,7 @@ void model_revision_usage(FILE *f)
 "  --verbose <n>        debug level 0-3 (diagnostics on stderr)\n"
 "  --fields <csv>       comma-separated field whitelist\n"
 "  --no_nulls           omit null-valued fields from JSON output\n"
-"  --id_only            print only the id (get / get-latest)\n"
+"  --id-only            print only the id (get / get-latest)\n"
 "\n", f);
 }
 
@@ -108,7 +108,7 @@ static void usage_get(FILE *f)
 "    actagamma_db model_revision get 42\n"
 "\n"
 "  Options:\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);
@@ -123,7 +123,7 @@ static void usage_get_latest(FILE *f)
 "    actagamma_db model_revision get-latest 7\n"
 "\n"
 "  Options:\n"
-"    --id_only            Print only the id\n"
+"    --id-only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);
