@@ -543,7 +543,6 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         const char *s_parent = cmd_args_flag(ga, "parent_id", 1);
         const char *s_off    = cmd_args_flag(ga, "offset", 1);
         const char *s_lim    = cmd_args_flag(ga, "limit", 1);
-        int has_count  = cmd_args_has_flag(ga, "count");
 
         int offset = 0, limit = 0;
 
@@ -602,7 +601,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         VLOG(3, "  has_parent=%d parent_id=%d offset=%d limit=%d",
              has_parent, parent_id, offset, limit);
 
-        if (gopts->count || has_count) {
+        if (gopts->count) {
             int err = 0;
             int n;
             if (has_parent) {

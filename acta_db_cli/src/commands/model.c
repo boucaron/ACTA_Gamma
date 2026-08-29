@@ -779,11 +779,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             folder_val = (fv < 0) ? 0 : (int)fv;   /* clamp negatives to root */
         }
 
+        char folder_desc[16];
+        if (!has_folder)          snprintf(folder_desc, sizeof folder_desc, "(unchanged)");
+        else if (folder_val == 0) snprintf(folder_desc, sizeof folder_desc, "root");
+        else                     snprintf(folder_desc, sizeof folder_desc, "%d", folder_val);
+
         VLOG(1, "model update: id=%d name=%s folder_id=%s backend=%s "
                 "model_identifier=%s",
              id,
              f_name        ? f_name        : "(unchanged)",
-             has_folder    ? (folder_val == 0 ? "root" : (char[]){'0'+folder_val,0}) : "(unchanged)",
+             folder_desc,
              f_backend     ? f_backend     : "(unchanged)",
              f_model_ident ? f_model_ident : "(unchanged)");
 
@@ -1057,7 +1062,6 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
         const char *s_off     = cmd_args_flag(ga, "offset", 1);
         const char *s_lim     = cmd_args_flag(ga, "limit", 1);
-        const char *s_count   = cmd_args_flag(ga, "count", 0);
 
         int folder_id = f_folder ? atoi(f_folder) : -1;  /* -1 = all */
         int offset = 0, limit = 0;
@@ -1102,7 +1106,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              folder_id, offset, limit, (const void *)db);
 
         /* ── --count short-circuit ── */
-        if (gopts->count || s_count) {
+        if (gopts->count) {
             int err = 0;
             int n;
             if (folder_id >= 0)

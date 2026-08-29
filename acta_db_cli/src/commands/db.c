@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sqlite3.h>
 
 /* ── verbose logging to stderr (levels are cumulative) ────────────── */
 
@@ -233,7 +234,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── version ──────────────────────────────────────────────────── */
     if (strcmp(action, "version") == 0) {
-        const char *ver = "test";
+        const char *ver = sqlite3_libversion();
 
         VLOG(1, "db version: %s", ver);
 
