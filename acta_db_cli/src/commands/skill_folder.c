@@ -415,7 +415,16 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             const char *f_parent  = cmd_args_flag(ga, "parent_id", 1);
 
             sf.name      = (char *)f_name;
-            sf.parent_id = f_parent ? atoi(f_parent) : 0;
+            if (f_parent) {
+                if (!parse_folder_id(f_parent, &sf.parent_id)) {
+                    VLOG(1, "  ERROR: --parent_id must be a non-negative integer, got '%s'", f_parent);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"--parent_id must be a non-negative integer\"}\n");
+                    usage_sf_create(stderr);
+                    return EXIT_INVALID;
+                }
+            }
         }
 
         VLOG(1, "skill_folder create: name=%s parent_id=%d",
@@ -542,8 +551,14 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             if (strcmp(parent_str, "all") == 0) {
                 has_parent = 0;
             } else {
-                parent_id = atoi(parent_str);
-                if (parent_id < 0) parent_id = 0;
+                if (!parse_folder_id(parent_str, &parent_id)) {
+                    VLOG(1, "  ERROR: <parent_id> must be a non-negative integer, got '%s'", parent_str);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"<parent_id> must be a non-negative integer\"}\n");
+                    usage_sf_list(stderr);
+                    return EXIT_INVALID;
+                }
                 has_parent = 1;
             }
         }
@@ -662,8 +677,14 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             if (strcmp(parent_str, "all") == 0) {
                 has_parent = 0;
             } else {
-                parent_id = atoi(parent_str);
-                if (parent_id < 0) parent_id = 0;
+                if (!parse_folder_id(parent_str, &parent_id)) {
+                    VLOG(1, "  ERROR: <parent_id> must be a non-negative integer, got '%s'", parent_str);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"<parent_id> must be a non-negative integer\"}\n");
+                    usage_sf_count(stderr);
+                    return EXIT_INVALID;
+                }
                 has_parent = 1;
             }
         }
@@ -763,8 +784,14 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         const char *f_parent = cmd_args_flag(ga, "parent_id", 1);
         int new_parent_id = 0;
         if (f_parent) {
-            new_parent_id = atoi(f_parent);
-            if (new_parent_id < 0) new_parent_id = 0;
+            if (!parse_folder_id(f_parent, &new_parent_id)) {
+                VLOG(1, "skill_folder move: ERROR --parent_id must be a non-negative integer, got '%s'", f_parent);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--parent_id must be a non-negative integer\"}\n");
+                usage_sf_move(stderr);
+                return EXIT_INVALID;
+            }
         }
 
         VLOG(1, "skill_folder move: id=%d → parent_id=%d", id, new_parent_id);

@@ -84,8 +84,10 @@ static inline int parse_nonneg_int(const char *s, int *out)
     return 1;
 }
 
-/* Parse an optional folder id: strict format like parse_nonneg_int,
- * but negatives are NOT an error — they clamp to 0 (root/NULL in DB).
+/* Parse an optional folder/parent id: strict format, same rules as
+ * parse_nonneg_int (strtol+endptr, ERANGE, INT_MAX). 0 = root / no
+ * parent. Negatives are REJECTED (user typo) rather than clamped to
+ * root, so --folder_id -3 is an error, not a silent move to root.
  * Returns 1 on success, 0 on invalid format (*out left unmodified). */
 static inline int parse_folder_id(const char *s, int *out)
 {
@@ -93,9 +95,9 @@ static inline int parse_folder_id(const char *s, int *out)
     errno = 0;
     char *end;
     long v = strtol(s, &end, 10);
-    if (errno == ERANGE || *end != '\0' || v > (long)INT_MAX)
+    if (errno == ERANGE || *end != '\0' || v < 0 || v > (long)INT_MAX)
         return 0;
-    *out = (v < 0) ? 0 : (int)v;   /* negatives → root */
+    *out = (int)v;
     return 1;
 }
 

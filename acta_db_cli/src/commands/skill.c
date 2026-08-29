@@ -489,7 +489,17 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             s.prompt_template = (char *)f_prompt;
             s.description     = (char *)f_desc;
             s.output_schema   = (char *)f_schema;
-            s.folder_id       = f_folder ? atoi(f_folder) : 0;
+            s.folder_id = 0;
+            if (f_folder) {
+                if (!parse_folder_id(f_folder, &s.folder_id)) {
+                    VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                    usage_create(stderr);
+                    return EXIT_INVALID;
+                }
+            }
         }
 
         VLOG(1, "skill create: name=%s prompt_template=%s folder_id=%d",
@@ -701,7 +711,17 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             s.prompt_template = (char *)f_prompt;
             s.description     = (char *)f_desc;
             s.output_schema   = (char *)f_schema;
-            s.folder_id       = f_folder ? atoi(f_folder) : 0;
+            s.folder_id = 0;
+            if (f_folder) {
+                if (!parse_folder_id(f_folder, &s.folder_id)) {
+                    VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                    usage_update(stderr);
+                    return EXIT_INVALID;
+                }
+            }
         }
 
         VLOG(1, "skill update: id=%d name=%s prompt_template=%s folder_id=%d",
@@ -890,8 +910,15 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             usage_move(stderr);
             return EXIT_INVALID;
         }
-        int folder_id = atoi(f_folder);
-        if (folder_id < 0) folder_id = 0;  /* 0 = root (no folder) */
+        int folder_id = 0;
+        if (!parse_folder_id(f_folder, &folder_id)) {
+            VLOG(1, "skill move: ERROR --folder_id must be a non-negative integer, got '%s'", f_folder);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+            usage_move(stderr);
+            return EXIT_INVALID;
+        }
 
         VLOG(1, "skill move: skill_id=%d folder_id=%d", skill_id, folder_id);
 

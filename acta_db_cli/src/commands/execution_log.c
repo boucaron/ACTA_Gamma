@@ -360,7 +360,16 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             const char *f_message  = cmd_args_flag(ga, "message", 1);
             const char *f_metadata = cmd_args_flag(ga, "metadata", 1);
 
-            el.execution_id = f_exec_id ? atoi(f_exec_id) : 0;
+            if (f_exec_id) {
+                if (!parse_positive_id(f_exec_id, &el.execution_id)) {
+                    VLOG(1, "  ERROR: --execution_id must be a positive integer, got '%s'", f_exec_id);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"--execution_id must be a positive integer\"}\n");
+                    usage_create(stderr);
+                    return EXIT_INVALID;
+                }
+            }
             el.level        = (char *)f_level;
             el.event        = (char *)f_event;
             el.message      = (char *)f_message;

@@ -412,7 +412,16 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             const char *f_parent   = cmd_args_flag(ga, "parent_id", 1);
 
             mf.name      = (char *)f_name;
-            mf.parent_id = f_parent ? atoi(f_parent) : 0;
+            if (f_parent) {
+                if (!parse_folder_id(f_parent, &mf.parent_id)) {
+                    VLOG(1, "  ERROR: --parent_id must be a non-negative integer, got '%s'", f_parent);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"--parent_id must be a non-negative integer\"}\n");
+                    usage_mf_create(stderr);
+                    return EXIT_INVALID;
+                }
+            }
         }
 
         VLOG(1, "model_folder create: name=%s parent_id=%d",
@@ -574,12 +583,11 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         int parent_id = 0;  /* 0 = all (no filter) */
         int has_parent = 0;
         if (s_parent) {
-            parent_id = atoi(s_parent);
-            if (parent_id < 0) {
-                VLOG(1, "  ERROR: --parent_id must be non-negative, got '%s'", s_parent);
+            if (!parse_folder_id(s_parent, &parent_id)) {
+                VLOG(1, "  ERROR: --parent_id must be a non-negative integer, got '%s'", s_parent);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--parent_id must be non-negative\"}\n");
+                    "\"message\":\"--parent_id must be a non-negative integer\"}\n");
                 usage_mf_list(stderr);
                 return EXIT_INVALID;
             }
@@ -668,12 +676,11 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         int parent_id = 0;
         int has_parent = 0;
         if (s_parent) {
-            parent_id = atoi(s_parent);
-            if (parent_id < 0) {
-                VLOG(1, "  ERROR: --parent_id must be non-negative, got '%s'", s_parent);
+            if (!parse_folder_id(s_parent, &parent_id)) {
+                VLOG(1, "  ERROR: --parent_id must be a non-negative integer, got '%s'", s_parent);
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--parent_id must be non-negative\"}\n");
+                    "\"message\":\"--parent_id must be a non-negative integer\"}\n");
                 usage_mf_count(stderr);
                 return EXIT_INVALID;
             }
@@ -864,12 +871,12 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             usage_mf_move(stderr);
             return EXIT_INVALID;
         }
-        int new_parent_id = atoi(s_new_parent);
-        if (new_parent_id < 0) {
-            VLOG(1, "model_folder move: --parent_id must be non-negative, got '%s'", s_new_parent);
+        int new_parent_id = 0;
+        if (!parse_folder_id(s_new_parent, &new_parent_id)) {
+            VLOG(1, "model_folder move: --parent_id must be a non-negative integer, got '%s'", s_new_parent);
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"--parent_id must be non-negative\"}\n");
+                "\"message\":\"--parent_id must be a non-negative integer\"}\n");
             usage_mf_move(stderr);
             return EXIT_INVALID;
         }
