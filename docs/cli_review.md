@@ -14,8 +14,11 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 > - Flag names were standardized to **underscores** (`--context_id`,
 >   `--no_nulls`, `--id_only`, `--from_file`, `--create_dirs`,
 >   `--include_deleted`, …); dashed spellings below are updated.
-> - All bare-`atoi` sites (Part 4 #9) were converted to the strict helpers;
->   Part 4 #5/#9 and the #12 flag-name mismatch are marked resolved.
+> - Findings fixed since the review are no longer listed (strict
+>   `--verbose` parsing, bare-`atoi` sites, negative `folder_id`/
+>   `parent_id` handling, `--id_only` help mismatch). The strict id
+>   helpers live in `cli_util.h`: `parse_positive_id`, `parse_nonneg_int`,
+>   `parse_folder_id`.
 
 ---
 
@@ -30,21 +33,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    **Fix:** the parser needs to know which flags take values (e.g. a
    name→has_value table passed by the handler), not a positional heuristic.
 
-2. ~~`--verbose` handling: dead branch + token-swallowing risk~~ — **resolved** (`src/argparse.c`)
-   `--verbose=N` is validated with `parse_nonneg_int`; invalid or empty
-   levels emit a JSON error line and `EXIT_INVALID` (was: silently 3),
-   out-of-range levels clamp to 3 with a warning, `--verbose=0` works,
-   and the space-form branch that could swallow `argv[i+1]` is gone
-   (non-`=` form is a defensive counter-bump; only `--verbose=N` is
-   reachable via the prefix match anyway).
-
-3. **`--create_dirs` silently swallowed** (`src/argparse.c`)
+2. **`--create_dirs` silently swallowed** (`src/argparse.c`)
    Accepted with `/* swallow; TODO: thread to open */` while open mode is
    `ACTA_DB_OPEN_EXISTING`. Users pass it expecting the DB file to be created;
    they instead get `cannot open database './acta.db'`.
    **Fix:** either pass the flag through to `acta_db_open` or drop the flag.
 
-4. **`cli_error` emits invalid JSON when the message contains quotes/backslashes**
+3. **`cli_error` emits invalid JSON when the message contains quotes/backslashes**
    (`src/main.c`)
    The message is `vfprintf`'d raw into a JSON string; a db path containing `"`
    or `\` breaks the one-line JSON error contract that tools parse.
@@ -53,7 +48,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency issues
 
-5. **`cmd_args_flag` doc contradicts implementation** (`include/argparse.h`, `src/argparse.c`)
+4. **`cmd_args_flag` doc contradicts implementation** (`include/argparse.h`, `src/argparse.c`)
    Header claims the call "advances past it" and describes a
    value/boolean protocol; the implementation never advances `pos`, and returns
    `NULL` both for "flag absent" and "boolean flag present" — callers cannot
@@ -64,30 +59,30 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    small struct `{present, value}`), fix the docs, and reconcile the scan
    ranges.
 
-6. **Two duplicate "did you mean" mechanisms** (`include/cli_util.h`)
+5. **Two duplicate "did you mean" mechanisms** (`include/cli_util.h`)
    `action_err` (common-prefix scoring) and `closest_action`/`edit_distance`
    (Levenshtein) solve the same problem with different scoring. Keep one
    (Levenshtein is strictly more useful for mid-word typos).
 
-7. **Three conventions for verbose logging** (`include/cli.h`, `include/cli_util.h`)
+6. **Three conventions for verbose logging** (`include/cli.h`, `include/cli_util.h`)
    `vdbg` (cli.h), `VLOG` (cli_util.h), and a `VERBOSE` macro that depends on a
    magically-named local variable `gopts_local`. Keep one macro.
 
-8. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
+7. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
     - `exit_code` parameter is ignored (`(void)exit_code`).
     - Callers mix string codes (`"ACTA_CLI_ERR"`) with numeric `c_code` values
       of different provenance (`-10` CLI codes vs. raw library rc in
       `ACTA_DB_OPEN_FAIL`). Decide the schema once (spec §7.1 exists — enforce
       it here).
 
-9. **`parse_globals` conflates three error classes** (`src/argparse.c`)
+8. **`parse_globals` conflates three error classes** (`src/argparse.c`)
     OOM on the `rest` malloc, a missing value for `--db`/`--json`/etc., and
     "fewer than 2 positionals" all return `EXIT_CLI` (10) with no message;
     `main.c` then prints "missing entity and/or action" — misleading for the
     other two cases. OOM should be `EXIT_ALLOC` (3); missing flag values need
     their own message naming the flag.
 
-10. **Duplicate declaration of `cmd_skill`** at the bottom of
+9. **Duplicate declaration of `cmd_skill`** at the bottom of
     `include/commands.h` — copy-paste leftover.
 
 ### Nitpicks
@@ -118,7 +113,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   files.
 - `main` lifecycle is orderly: open → dispatch → close → `force_close`
   fallback with a warning.
-- Consistent single-line JSON error shape (once #4 is fixed).
+- Consistent single-line JSON error shape (once #3 is fixed).
 
 ---
 
@@ -202,7 +197,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 10. **NULL conflation in string getters**
     `dup_or_null`/`jget_str` return NULL for both "key absent" and OOM. Same
-    ambiguity as Part 1 #9. Low risk (OOM is fatal in practice) but a
+    ambiguity as Part 1 #8. Low risk (OOM is fatal in practice) but a
     `*ok` out-param or errno-style convention would make the contract explicit.
 
 11. **Opaque `-1` parse errors**
@@ -229,8 +224,8 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   `jget_int` instead, so the same input can be validated differently
   depending on which input mode the user chose. (The copy-pasted strtol
   block that was once unique to model.c has been extracted to `cli_util.h`;
-  the atoi sites tracked by Part 4 #8/#9 have since been converted —
-  both are resolved.)
+  the atoi sites it tracked have since been converted to the strict
+  helpers as well.)
 
 ### Positives
 
@@ -317,7 +312,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     `acta_db_context_create` — confirm the lib ignores it (Part 2 #9 carries
     into this entity concretely).
 
-12. **Per-TU `static vlog_gopts` + local `VLOG` macro redefined in every
+11. **Per-TU `static vlog_gopts` + local `VLOG` macro redefined in every
     command file** (`db.c`, `context.c`, and the same pattern in Part 4 files)
     That's now 4 coexisting verbosity mechanisms (cli.h `vdbg`, cli_util `VLOG`,
     cli_util `VERBOSE`, and per-TU `VLOG`). The per-TU copy also means a
@@ -394,25 +389,16 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    also mallocs `created_at`, `updated_at`, `deleted_at`. (Skill create's
    cleanup frees all seven — it's the reference implementation for the family.)
 
-5. ~~Negative `folder_id`/`parent_id` handling is inconsistent across paths~~
-   — **resolved**
-   Decision: *reject* negatives (user typo). `parse_folder_id`
-   (cli_util.h) documents it: "Negatives are REJECTED … so
-   `--folder_id -3` is an error, not a silent move to root". Every
-   folder/parent path (model/skill create/update/move, both `*_folder`
-   create/update/move) now routes through it; the ad-hoc `atoi` +
-   clamp / negatives-only checks are gone.
-
 ### Systemic patterns (affect most of the family)
 
-6. **Silent not-found: `get` returns exit 0 with empty stdout when the row
+5. **Silent not-found: `get` returns exit 0 with empty stdout when the row
    doesn't exist** — `context`, `model`, `skill`, `model_folder`,
    `skill_folder`, and both `*_revision` files all do
    `if (!row) { VLOG(1, "not found..."); return EXIT_OK; }`.
    Widespread now (Part 3 #5 was the first instance). Should be
    `EXIT_NOT_FOUND` (1) + the JSON error line.
 
-7. **Library failures exit non-zero with *nothing* on stderr**
+6. **Library failures exit non-zero with *nothing* on stderr**
    Every `if (rc != ACTA_DB_OK) { VLOG(...); return map_rc_to_exit(rc); }`
    path (get/update/delete/restore/move/list/count, all entities) prints no
    error JSON — the single-line-JSON-on-stderr contract (Part 1) is only
@@ -421,53 +407,18 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    one `finish_db_error(rc, what)` that emits the JSON line and returns the
    mapped code.
 
-8. ~~Two id-parsing dialects in sibling entities~~ — **resolved**
-   The extraction was implemented: `cli_util.h` now provides
-   `parse_positive_id` (rejects trailing garbage "12ab", non-numeric "abc",
-   zero, negatives, and ERANGE/overflow > INT_MAX via strtol+endptr),
-   `parse_nonneg_int` (0 allowed, for `--offset`/`--limit`), and
-   `parse_folder_id` (0 = root, negatives rejected). Every *positional*
-   id in all 8 entity files plus `execution`/`execution_log` (get/update/
-   move/restore, `--model_id`/`--skill_id`/`--context_id` refs in revisions
-   and logs, offset/limit) goes through them, as do the flag *values* and
-   list/count *filters* formerly enumerated in #9.
-
-9. ~~Remaining bare-`atoi` sites: flag values and filters~~ — **resolved**
-   All sites below are now strict (historical list, pre-fix):
-   - exec create flag ids and list/count query filters (`--context_id`,
-     `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`)
-     → `parse_id_flag` (local strict wrapper, `execution.c:35`).
-   - `execution_log.c:363` — `log create --execution_id`.
-   - `model.c:1015,1117` — list/count `--folder_id` filter
-     (`f_folder ? atoi(f_folder) : -1`; `"abc" → 0` silently filters *root*).
-   - `skill.c:492` (create `--folder_id`), `704` (update), `893` (move,
-     clamps negatives), `932`/`1040` (list/count filters).
-   - `model_folder.c:415` (create `--parent_id`), `577`/`671` (update —
-     `atoi` then a *negatives-only* check, so `"12abc" → 12` passes),
-     `867` (move `--parent_id`).
-   - `skill_folder.c:418,545,665,766` — same create/update/move pattern.
-   **Fix (as implemented):** each site was routed to the strict helper
-   matching its semantics: `parse_positive_id` for required refs,
-   `parse_nonneg_int` for optional filters ("absent = all"),
-   `parse_folder_id` for folder/parent ids, after settling the
-   clamp-vs-reject question in #5 (reject).
-
-10. **Dead local `--count` flag** — every `list` action reads
+7. **Dead local `--count` flag** — every `list` action reads
     `cmd_args_flag(ga, "count", 0)` / `cmd_args_has_flag(ga, "count")` even
     though `parse_globals` already consumed `--count` into `gopts->count`
     (Part 3 #6). Dead in model, skill, context, model_folder, skill_folder,
     and both revisions.
 
-11. **Update/rename paths skip the empty-string checks that create has**
+8. **Update/rename paths skip the empty-string checks that create has**
     `model create` rejects `name == ""`; `model update --name ""` and
     `model_folder rename 7 --name ""` accept it. Apply the same check to
     update/rename.
 
-12. **Help text bugs, family-wide**
-    - ~~`--id_only` (underscore) is printed in every usage text; the actual
-      global flag is `--id-only`. Users following the help get a positional
-      instead of a flag.~~ — **resolved**: flag names were standardized to
-      underscores, so help text and parser now agree.
+9. **Help text bugs, family-wide**
     - `--json` is documented as a bare flag ("read from stdin") — still the
       Part 2/3 issue: the parser requires `--json <blob>`.
     - `model get --live` is documented as "Include soft-deleted rows"; the
@@ -477,17 +428,17 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency
 
-13. **Root-folder representation differs by output path**
+10. **Root-folder representation differs by output path**
     `model_to_json` emits `"folder_id":null` for root; `model move`'s
     success line emits `"folder_id":0`; `skill move` emits 0. Pick one wire
     representation per entity (and document it; spec §?).
 
-14. **Success shapes keep multiplying**
+11. **Success shapes keep multiplying**
     `{"id":N}` / `{"id":N,"folder_id":M}` / `{"deleted":true}` /
     `{"id":N,"restored":true}` / bare `N`. Same ask as Part 3 #8: a single
     per-action output table in the spec, enforced by one emit helper.
 
-15. **`usage_*` snippets are static per file, `*_usage` are not declared
+12. **`usage_*` snippets are static per file, `*_usage` are not declared
     anywhere**
     `model_usage`, `ctx_usage`, `db_usage`, `model_folder_usage`, … are
     non-static ("the dispatch layer can call this") but no header declares
@@ -498,7 +449,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     but a `usage_<entity>_<action>` naming convention would let the
     declarations coexist.
 
-16. **Structural duplication is the dominant cost in this family**
+13. **Structural duplication is the dominant cost in this family**
     Each of the 8 files re-implements: the VLOG macro + `vlog_gopts`, the
     usage text + per-action snippets, the id-parse block (×1–5), the
     JSON-vs-flags input split, the `goto cleanup` free list, the
@@ -507,7 +458,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     A small per-entity descriptor (field table: name, JSON key, required,
     type, flag name) + shared `create/get/list/count/delete/restore/move`
     drivers would collapse most of it *and* make the model/skill divergence
-    (#1, #11, #9) impossible to repeat.
+    (#1, #8) impossible to repeat.
 
 ### Positives
 
@@ -551,7 +502,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 3. **`exec` positional ids are now strict** (`parse_positive_id` in
    `get`/`start`/`cancel`/`complete`, and `execution_log.c:535,649` for
    `--execution_id` filters), but not-found `get` still → silent
-   `EXIT_OK` (`execution.c:663–664`), so Part 4 #6 still applies here.
+   `EXIT_OK` (`execution.c:663–664`), so Part 4 #5 still applies here.
    The `exec create` flag ids and the `exec list`/`count` query filters
    (`--context_id` etc.) are now strict (`parse_id_flag`); only the
    not-found issue above remains in this file.
@@ -578,7 +529,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Makefile
 
-7. **Every new test suite needs ~7 manual edits**
+6. **Every new test suite needs ~7 manual edits**
    New-suite checklist today: `SRCS/OBJS/TARGET` vars, `ALL_TEST_TARGETS`,
    the `test` recipe line, the `clean` list, a `-Itests/<suite>` flag, the
    header comment, (and the suite's own `*_test_main.c`). Generate it:
@@ -589,7 +540,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    (or keep explicit targets but derive them) — one `tests/foo/` directory
    should "just work".
 
-8. **`libacta_db.a` is consumed with no dependency on it**
+7. **`libacta_db.a` is consumed with no dependency on it**
    `LDFLAGS += ../acta_db/libacta_db.a …` — if the lib is missing/stale you
    get a confusing link failure, and `make` will never rebuild it. Add:
    ```make
@@ -601,7 +552,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    `LDFLAGS` happens to expand after the objects; a user-supplied
    `LDFLAGS` would put them before and break static linking.)
 
-9. **POSIX-only assumptions, Windows artifacts in the tree**
+8. **POSIX-only assumptions, Windows artifacts in the tree**
    Targets have no `.exe`, `test` runs `./$(TEST_TARGET)`, `clean` uses
    `rm -f` — yet the tree contains `actagamma_db.exe`, `test_*.exe` and
    `.o` files, i.e. it *was* built under Windows somehow (patched makefile or
@@ -612,7 +563,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    All untracked, so not a commit bug, but one `make clean` + a few
    `.gitignore` lines away from a clean tree.
 
-10. **Shared test framework lives inside one suite**
+9. **Shared test framework lives inside one suite**
     `HELPERS_OBJ := tests/skill/skill_test_helpers.o` is linked into every
     other suite, and every suite's `-I` path includes `tests/skill` — the
     "shared" framework is owned by the skill suite's directory. Move to
@@ -620,7 +571,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     (Minor inconsistency: the skill target gets the helper via its own
     wildcard instead of `HELPERS_OBJ`.)
 
-11. **`test` stops at the first failing suite**
+10. **`test` stops at the first failing suite**
     Each recipe line is one shell; make aborts on first non-zero. Fine for
     CI red-early, but for local dev a `for t in …; do ./$t || fail=1; done`
     (or `make -k`) reports the full damage in one run.
@@ -646,15 +597,15 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 1. **`skill update` data loss** — partial struct to a full-replace API (wipes fields, moves to root). *(P4 #1)*
 2. **`--json <blob>` ignored, reads stdin, hangs interactively** — 9 call sites; `--stdin`/`--from_file` dead flags. *(P2 #1–2)*
-3. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #6)*
+3. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #5)*
 4. **`db version` prints `"test"`**; `db exec` positional form unimplemented, `--stdin` dead. *(P3 #1–3)*
-5. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation. *(P4 #7)*
-6. **`cli_error` emits unescaped JSON** — paths with `"`/`\` break the error contract. *(P1 #4)*
+5. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation. *(P4 #6)*
+6. **`cli_error` emits unescaped JSON** — paths with `"`/`\` break the error contract. *(P1 #3)*
 7. **`model move` without `--folder_id` → silent move to root** (help says required). *(P4 #2)*
 8. **JSON-path `created_at` leaks** in context / model_folder / exec / log creates. *(P2/P4/P5)*
 9. **Global parse layer untested** — the layer that owns bugs #2–3 and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #4)*
 
-**Structural recommendation:** the copy-paste family (P4 #16) is where most
+**Structural recommendation:** the copy-paste family (P4 #13) is where most
 bugs live. A per-entity *field descriptor* (name, JSON key, flag, type,
 required, root-vs-null semantics) plus shared `create/get/list/count/
 update/delete/restore/move` drivers would fix the divergences structurally
