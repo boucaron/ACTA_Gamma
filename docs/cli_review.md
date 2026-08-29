@@ -23,19 +23,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    **Fix:** the parser needs to know which flags take values (e.g. a
    name→has_value table passed by the handler), not a positional heuristic.
 
-2. **`--verbose` handling: dead branch + token-swallowing risk** (`src/argparse.c`)
-   - The space form `--verbose <N>` branch is unreachable: exact `--verbose`
-     is already caught by the earlier `strcmp` block and `continue`d.
-   - In the reachable `--verbose=`/prefix path, `atoi(argv[i+1])` on a
-     non-numeric token returns 0 → sets verbose=3 *and* consumes the token
-     that was actually the entity name.
-   Both call sites are still bare atoi (`src/argparse.c:98` `atoi(a + 10)`
-   and `:103` `atoi(argv[i + 1])`), and a non-numeric level clamps to 3
-   (max) rather than erroring.
-   **Fix:** handle `--verbose` with the same uniform `=`-split as other flags;
-   validate the level with a real integer parse. No new code needed — the
-   strict helper already exists: `parse_nonneg_int(a + 10, &lvl)` from
-   `cli_util.h`, then clamp to `0..3`.
+2. ~~`--verbose` handling: dead branch + token-swallowing risk~~ — **resolved** (`src/argparse.c`)
+   `--verbose=N` is validated with `parse_nonneg_int`; invalid or empty
+   levels emit a JSON error line and `EXIT_INVALID` (was: silently 3),
+   out-of-range levels clamp to 3 with a warning, `--verbose=0` works,
+   and the space-form branch that could swallow `argv[i+1]` is gone
+   (non-`=` form is a defensive counter-bump; only `--verbose=N` is
+   reachable via the prefix match anyway).
 
 3. **`--create-dirs` silently swallowed** (`src/argparse.c`)
    Accepted with `/* swallow; TODO: thread to open */` while open mode is
@@ -436,7 +430,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 9. **Remaining bare-`atoi` sites: flag values and filters** — after the #8
    conversion these are the *only* non-strict number parses left in the CLI
    (`atoi("abc") → 0`, `"12ab" → 12`, UB on overflow):
-   - `argparse.c:98,103` — `--verbose=`/`--verbose <N>` (Part 1 #2).
    - `execution.c:514–517` (create: `--context-id`, `--skill-revision-id`,
      `--model-revision-id`, `--parent-execution-id`) and `908–911`/`994–997`
      (list/count query filters, same four flags).
