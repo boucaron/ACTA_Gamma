@@ -929,7 +929,14 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int in_folder = 0;
 
         if (f_folder) {
-            folder_id = atoi(f_folder);
+            if (!parse_nonneg_int(f_folder, &folder_id)) {
+                VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                usage_list(stderr);
+                return EXIT_INVALID;
+            }
             in_folder = 1;
         }
 
@@ -1037,7 +1044,14 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int folder_id = 0;
         int in_folder = 0;
         if (f_folder) {
-            folder_id = atoi(f_folder);
+            if (!parse_nonneg_int(f_folder, &folder_id)) {
+                VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                usage_count(stderr);
+                return EXIT_INVALID;
+            }
             in_folder = 1;
         }
 

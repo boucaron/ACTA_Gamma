@@ -1012,8 +1012,19 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *s_lim     = cmd_args_flag(ga, "limit", 1);
         const char *s_count   = cmd_args_flag(ga, "count", 0);
 
-        int folder_id = f_folder ? atoi(f_folder) : -1;  /* -1 = all */
+        int folder_id = -1;  /* -1 = all */
         int offset = 0, limit = 0;
+
+        if (f_folder) {
+            if (!parse_nonneg_int(f_folder, &folder_id)) {
+                VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                usage_list(stderr);
+                return EXIT_INVALID;
+            }
+        }
 
         if (s_off) {
             if (!parse_nonneg_int(s_off, &offset)) {
@@ -1114,7 +1125,18 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
         const char *f_folder = cmd_args_flag(ga, "folder_id", 1);
-        int folder_id = f_folder ? atoi(f_folder) : -1;  /* -1 = all */
+        int folder_id = -1;  /* -1 = all */
+
+        if (f_folder) {
+            if (!parse_nonneg_int(f_folder, &folder_id)) {
+                VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                usage_count(stderr);
+                return EXIT_INVALID;
+            }
+        }
 
         VLOG(1, "model count: folder_id=%d", folder_id);
         VLOG(2, "  folder_id raw=%s", f_folder ? f_folder : "(all)");
