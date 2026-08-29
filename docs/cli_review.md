@@ -307,11 +307,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     `acta_db_context_create` — confirm the lib ignores it (Part 2 #9 carries
     into this entity concretely).
 
-11. **`context get` parses the id with `atoi`, `list` uses `strtol`+endptr**
-    `atoi("42abc")` silently accepts 42; "999999999999" wraps to a negative
-    and is rejected only by luck of the `id <= 0` check. Use the same
-    `strtol` + endptr + range pattern as `list`'s offset/limit.
-
 12. **Per-TU `static vlog_gopts` + local `VLOG` macro redefined in every
     command file** (`db.c`, `context.c`, and the same pattern in Part 4 files)
     That's now 4 coexisting verbosity mechanisms (cli.h `vdbg`, cli_util `VLOG`,
