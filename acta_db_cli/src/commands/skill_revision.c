@@ -314,7 +314,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         }
         if (!r) {
             VLOG(1, "  not found (id=%d)", id);
-            return EXIT_OK;
+            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "skill_revision not found");
         }
 
         vlog_sr_fields("  result", r);

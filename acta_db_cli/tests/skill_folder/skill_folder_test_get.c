@@ -107,8 +107,8 @@ static void test_get_nonexistent(stest_ctx_t *ctx)
     targs_pos(a, "99999", &g);
 
     int rc = do_get(ctx, a, g);
-    /* per implementation: not found → EXIT_OK with no stdout */
-    TEST_EQ(ctx, rc, EXIT_OK);
+    /* not found → EXIT_NOT_FOUND, no stdout, JSON error on stderr (P3) */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     const char *out = stest_stdout(ctx);
     TEST(ctx, !strstr(out, "\"id\":99999"));
     targs_free(a, &g);

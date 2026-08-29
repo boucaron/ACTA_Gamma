@@ -68,10 +68,8 @@ static void test_get_nonexistent(stest_ctx_t *ctx)
     targs_pos(a, "99999", &g);
 
     int rc = do_rev(ctx, "get", a, g);
-    /* ADAPT: depends on library semantics.
-     * If library returns NULL with ACTA_DB_OK → EXIT_OK, empty output.
-     * If library returns ACTA_DB_ERR_NOT_FOUND → mapped exit. */
-    (void)rc;
+    /* not found → EXIT_NOT_FOUND + JSON error on stderr (P3) */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     targs_free(a, &g);
 }
 

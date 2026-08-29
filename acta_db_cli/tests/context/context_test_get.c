@@ -132,8 +132,8 @@ static void test_get_not_found(stest_ctx_t *ctx)
     targs_pos(a, "9999", &g);
 
     int rc = do_get(ctx, a, g);
-    /* code returns EXIT_OK when row not found (no error, no output) */
-    TEST_EQ(ctx, rc, EXIT_OK);
+    /* not found → EXIT_NOT_FOUND + JSON error on stderr (P3) */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     targs_free(a, &g);
 }
 

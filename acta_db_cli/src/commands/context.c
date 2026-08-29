@@ -354,7 +354,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
         if (!c) {
             VLOG(1, "  not found (id=%d)", id);
-            return EXIT_OK;
+            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "context not found");
         }
 
         vlog_ctx_fields("  result", c);

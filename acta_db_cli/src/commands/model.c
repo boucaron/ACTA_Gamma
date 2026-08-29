@@ -624,7 +624,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
         if (!m) {
             VLOG(1, "  not found (id=%d, live=%d)", id, use_live);
-            return EXIT_OK;
+            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "model not found");
         }
 
         vlog_model_fields("  result", m);

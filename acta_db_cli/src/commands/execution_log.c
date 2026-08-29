@@ -483,7 +483,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
         }
         if (!c) {
             VLOG(1, "  not found (id=%d)", id);
-            return EXIT_OK;
+            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "execution_log not found");
         }
 
         vlog_el_fields("  result", c);

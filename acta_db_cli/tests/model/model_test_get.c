@@ -49,7 +49,8 @@ static void test_get_nonexistent(stest_ctx_t *ctx)
     targs_pos(a, "98999", &g);
 
     int rc = do_get(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
+    /* not found → EXIT_NOT_FOUND + JSON error on stderr (P3) */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     targs_free(a, &g);
 }
 
@@ -93,7 +94,8 @@ static void test_get_deleted_model(stest_ctx_t *ctx)
     targs_pos(a, "5", &g);
 
     int rc = do_get(ctx, a, g);
-    /* contract: deleted models are not returned */
+    /* plain get has no deleted filter (only --live does), so the deleted
+     * row is returned → EXIT_OK */
     TEST(ctx, rc == EXIT_OK);
     targs_free(a, &g);
 }

@@ -90,13 +90,13 @@ static void test_get_negative_id(stest_ctx_t *ctx)
 
 static void test_get_nonexistent(stest_ctx_t *ctx)
 {
-    /* id=9999 does not exist → EXIT_OK with no output (NULL result) */
+    /* id=9999 does not exist → EXIT_NOT_FOUND, empty stdout, JSON error on stderr (P3) */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "9999", &g);
 
     int rc = do_get(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     const char *out = stest_stdout(ctx);
     TEST(ctx, out[0] == '\0');  /* empty stdout */
     targs_free(a, &g);

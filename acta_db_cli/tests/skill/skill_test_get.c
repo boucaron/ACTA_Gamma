@@ -45,7 +45,7 @@ static void test_get_nonexistent(stest_ctx_t *ctx)
     targs_pos(a, "99999", &g);
 
     int rc = do_get(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);  /* not-found is not an error, just empty */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     targs_free(a, &g);
 }
 
@@ -163,12 +163,12 @@ static void test_get_include_deleted(stest_ctx_t *ctx)
     (void)cmd_skill("delete", del, &g, ctx->db);
     targs_free(del, &g);
 
-    /* without --include_deleted: should be "not found" (empty output) */
+    /* without --include_deleted: not found → EXIT_NOT_FOUND, no stdout (P3) */
     global_opts_t g1 = gopts_default();
     cmd_args_t *a1 = targs_new();
     targs_pos(a1, "5", &g1);
     int rc1 = do_get(ctx, a1, g1);
-    TEST_EQ(ctx, rc1, EXIT_OK);
+    TEST_EQ(ctx, rc1, EXIT_NOT_FOUND);
     /* output should be empty or not contain "summarize2" */
     TEST(ctx, !strstr(stest_stdout(ctx), "summarize2"));
     targs_free(a1, &g1);

@@ -326,7 +326,7 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         }
         if (!r) {
             VLOG(1, "  not found (id=%d)", id);
-            return EXIT_OK;
+            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "model_revision not found");
         }
 
         vlog_rev_fields("  result", r);
