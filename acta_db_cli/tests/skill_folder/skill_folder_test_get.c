@@ -127,6 +127,37 @@ static void test_get_table_output(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+static void test_get_soft_deleted_folder(stest_ctx_t *ctx)
+{
+    /* get is by primary key and does NOT filter out soft-deleted rows:
+     * seed a folder, soft-delete it, then get it back → deleted_at set */
+    int fid = stest_seed_folder(ctx, "GoneMe", 0);
+    if (fid <= 0) return;  /* skip if folder creation failed */
+
+    char idbuf[16];
+    snprintf(idbuf, sizeof idbuf, "%d", fid);
+
+    global_opts_t dg = gopts_default();
+    cmd_args_t *da = targs_new();
+    targs_pos(da, idbuf, &dg);
+    stest_capture_begin(ctx);
+    int drc = cmd_skill_folder("delete", da, &dg, ctx->db);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, drc, EXIT_OK);
+    targs_free(da, &dg);
+
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, idbuf, &g);
+
+    int rc = do_get(ctx, a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+    /* deleted_at must now be a value, not null */
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"deleted_at\":\"");
+    targs_free(a, &g);
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_skill_folder_test_get(void)
@@ -143,6 +174,7 @@ int run_skill_folder_test_get(void)
     test_get_invalid_id_negative(&ctx);
     test_get_nonexistent(&ctx);
     test_get_table_output(&ctx);
+    test_get_soft_deleted_folder(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

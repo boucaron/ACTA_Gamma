@@ -1,4 +1,6 @@
 #include "../skill/skill_test_helpers.h"
+#include <unistd.h>
+#include <fcntl.h>
 
 #define REF_DB  "acta_test_ref.db"
 
@@ -36,19 +38,63 @@ static void test_unknown_action(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* run an action with stderr captured into buf (suggestions go to stderr) */
+static int run_action_capturing_stderr(stest_ctx_t *ctx, const char *action,
+                                       cmd_args_t *args, global_opts_t gopts,
+                                       char *buf, size_t cap)
+{
+    fflush(NULL);
+
+#ifdef _WIN32
+    int saved_err = _dup(STDERR_FILENO);
+    int p[2];
+    if (saved_err < 0 || _pipe(p, 65536, O_BINARY) != 0) {
+        if (saved_err >= 0) _close(saved_err);
+        return -1;
+    }
+    _dup2(p[1], STDERR_FILENO);
+    _close(p[1]);
+#else
+    int saved_err = dup(STDERR_FILENO);
+    int p[2];
+    if (saved_err < 0 || pipe(p) != 0) {
+        if (saved_err >= 0) close(saved_err);
+        return -1;
+    }
+    dup2(p[1], STDERR_FILENO);
+    close(p[1]);
+#endif
+
+
+    int rc = cmd_skill_folder(action, args, &gopts, ctx->db);
+
+    fflush(stderr);
+    dup2(saved_err, STDERR_FILENO);
+    close(saved_err);
+
+    size_t n = 0;
+    for (;;) {
+        if (n >= cap - 1) break;
+        ssize_t r = read(p[0], buf + n, cap - 1 - n);
+        if (r <= 0) break;
+        n += (size_t)r;
+    }
+    close(p[0]);
+    buf[n] = '\0';
+    return rc;
+}
+
 static void test_unknown_action_suggests_closest(stest_ctx_t *ctx)
 {
-    /* "creat" should suggest "create" */
+    /* "creat" should suggest "create" (on stderr) */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
+    char errbuf[4096];
 
-    stest_capture_begin(ctx);
-    int rc = cmd_skill_folder("creat", a, &g, ctx->db);
-    stest_capture_end(ctx);
-
+    int rc = run_action_capturing_stderr(ctx, "creat", a, g,
+                                         errbuf, sizeof errbuf);
     TEST_EQ(ctx, rc, EXIT_INVALID);
-    /* stderr should contain suggestion, but we check stdout for now
-     * (adapt if capture includes stderr) */
+    TEST_CONTAINS(ctx, errbuf, "Did you mean 'create'?");
     targs_free(a, &g);
 }
 
@@ -92,23 +138,6 @@ static void test_get_no_nulls(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_list_non_numeric_positional_clamped(stest_ctx_t *ctx)
-{
-    /* passing garbage as parent_id → atoi gives 0 → treated as "all" */
-    global_opts_t g = gopts_default();
-    cmd_args_t *a = targs_new();
-    targs_pos(a, "abc", &g);
-
-    int rc;
-    stest_capture_begin(ctx);
-    rc = cmd_skill_folder("list", a, &g, ctx->db);
-    stest_capture_end(ctx);
-
-    /* atoi("abc") = 0 → has_parent=0 → list all */
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
-}
-
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_skill_folder_test_misc(void)
@@ -121,7 +150,6 @@ int run_skill_folder_test_misc(void)
     test_unknown_action_suggests_closest(&ctx);
     test_get_fields_filter(&ctx);
     test_get_no_nulls(&ctx);
-    test_list_non_numeric_positional_clamped(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

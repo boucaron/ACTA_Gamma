@@ -1,4 +1,6 @@
 #include "../skill/skill_test_helpers.h"
+#include <unistd.h>
+#include <fcntl.h> 
 
 #define REF_DB  "acta_test_ref.db"
 
@@ -120,16 +122,29 @@ static void test_create_same_name_different_parent_ok(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_create_negative_parent_clamped(stest_ctx_t *ctx)
+static void test_create_negative_parent_rejected(stest_ctx_t *ctx)
 {
-    /* code clamps parent_id < 0 → 0 (root) */
+    /* parse_folder_id rejects negatives (typo guard) → EXIT_INVALID;
+     * they are NOT clamped to root. */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "NegParent", &g);
     targs_flag(a, "parent_id", "-3", &g);
 
     int rc = do_create(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_create_non_numeric_parent(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "name", "BadParent", &g);
+    targs_flag(a, "parent_id", "abc", &g);
+
+    int rc = do_create(ctx, a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }
 
@@ -146,13 +161,121 @@ static void test_create_nonexistent_parent(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ── --json input: feed stdin through a pipe (unit-testable) ─────── */
+
+static char g_json_stdout[8192];
+
+/* Run the create action with stdin fed from stdin_blob and stdout
+ * captured into g_json_stdout. Returns the handler rc, or -1 if the
+ * fd plumbing itself failed. */
+static int run_create_json(stest_ctx_t *ctx, cmd_args_t *args,
+                           global_opts_t gopts, const char *stdin_blob)
+{
+    fflush(NULL);
+
+#ifdef _WIN32
+    int saved_in  = _dup(STDIN_FILENO);
+    int saved_out = _dup(STDOUT_FILENO);
+    int in_p[2], out_p[2];
+    if (saved_in < 0 || saved_out < 0 ||
+        _pipe(in_p,  65536, O_BINARY ) != 0 ||
+        _pipe(out_p, 65536, O_BINARY ) != 0) {
+        if (saved_in  >= 0) _close(saved_in);
+        if (saved_out >= 0) _close(saved_out);
+        return -1;
+    }
+#else
+    int saved_in  = dup(STDIN_FILENO);
+    int saved_out = dup(STDOUT_FILENO);
+    int in_p[2], out_p[2];
+    if (saved_in < 0 || saved_out < 0 ||
+        pipe(in_p) != 0 || pipe(out_p) != 0) {
+        if (saved_in  >= 0) close(saved_in);
+        if (saved_out >= 0) close(saved_out);
+        return -1;
+    }
+#endif
+
+
+    const char *data = stdin_blob ? stdin_blob : "";
+    size_t blen = strlen(data);
+    size_t off = 0;
+    while (off < blen) {
+        ssize_t w = write(in_p[1], data + off, blen - off);
+        if (w <= 0) break;
+        off += (size_t)w;
+    }
+    close(in_p[1]);
+
+    dup2(in_p[0], STDIN_FILENO);
+    dup2(out_p[1], STDOUT_FILENO);
+    close(in_p[0]);
+    close(out_p[1]);
+
+    int rc = cmd_skill_folder("create", args, &gopts, ctx->db);
+
+    fflush(stdout);
+    dup2(saved_out, STDOUT_FILENO);
+    dup2(saved_in, STDIN_FILENO);
+    close(saved_in);
+    close(saved_out);
+
+    size_t n = 0;
+    for (;;) {
+        if (n >= sizeof g_json_stdout - 1) break;
+        ssize_t r = read(out_p[0], g_json_stdout + n,
+                         sizeof g_json_stdout - 1 - n);
+        if (r <= 0) break;
+        n += (size_t)r;
+    }
+    close(out_p[0]);
+    g_json_stdout[n] = '\0';
+    return rc;
+}
+
 static void test_create_json_invalid(stest_ctx_t *ctx)
 {
-    /* --json with garbage stdin → EXIT_INVALID.
-     * In a unit test we can't easily fake stdin.
-     * ADAPT: if you have a way to inject stdin in unit tests, use it.
-     * Otherwise skip / mark as integration test. */
-    (void)ctx;
+    /* --json with garbage stdin → EXIT_INVALID */
+    global_opts_t g = gopts_json();
+    cmd_args_t *a = targs_new();
+
+    int rc = run_create_json(ctx, a, g, "this is not json");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_create_json_missing_name(stest_ctx_t *ctx)
+{
+    /* valid JSON object but no 'name' → EXIT_INVALID */
+    global_opts_t g = gopts_json();
+    cmd_args_t *a = targs_new();
+
+    int rc = run_create_json(ctx, a, g, "{}");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_create_json_valid(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_json();
+    cmd_args_t *a = targs_new();
+
+    int rc = run_create_json(ctx, a, g, "{\"name\":\"JsonFolder\"}");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, g_json_stdout, "\"id\":");
+    targs_free(a, &g);
+}
+
+static void test_create_json_with_parent(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_json();
+    cmd_args_t *a = targs_new();
+
+    int rc = run_create_json(ctx, a, g,
+                             "{\"name\":\"JsonChild\",\"parent_id\":1}");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, g_json_stdout, "\"id\":");
+    targs_free(a, &g);
 }
 
 /* ── runner ───────────────────────────────────────────────────────── */
@@ -170,9 +293,13 @@ int run_skill_folder_test_create(void)
     test_create_root_unique_violation(&ctx);
     test_create_child_unique_violation(&ctx);
     test_create_same_name_different_parent_ok(&ctx);
-    test_create_negative_parent_clamped(&ctx);
+    test_create_negative_parent_rejected(&ctx);
+    test_create_non_numeric_parent(&ctx);
     test_create_nonexistent_parent(&ctx);
     test_create_json_invalid(&ctx);
+    test_create_json_missing_name(&ctx);
+    test_create_json_valid(&ctx);
+    test_create_json_with_parent(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);
