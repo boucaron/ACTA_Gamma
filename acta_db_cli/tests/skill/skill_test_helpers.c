@@ -247,6 +247,10 @@ void stest_teardown(stest_ctx_t *ctx)
     }
     unlink(ctx->db_path);
     ctx->db_path[0] = '\0';
+    if (ctx->input_path[0]) {
+        unlink(ctx->input_path);
+        ctx->input_path[0] = '\0';
+    }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -313,6 +317,103 @@ void stest_capture_end(stest_ctx_t *ctx)
 const char *stest_stdout(stest_ctx_t *ctx)
 {
     return ctx->out_buf ? ctx->out_buf : "";
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ *  argv-level runner (parse_globals + handler, like main.c)
+ * ══════════════════════════════════════════════════════════════════ */
+
+int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
+                   int argc, char **argv, const char *stdin_blob)
+{
+    global_opts_t g;
+    if (parse_globals(argc, argv, &g) != 0)
+        return EXIT_CLI;
+
+#ifdef _WIN32
+    int saved_in  = _dup(STDIN_FILENO);
+    int saved_out = _dup(STDOUT_FILENO);
+    int in_p[2], out_p[2];
+    if (saved_in < 0 || saved_out < 0 ||
+        _pipe(in_p,  65536, _O_BINARY) != 0 ||
+        _pipe(out_p, 65536, _O_BINARY) != 0) {
+        if (saved_in  >= 0) _close(saved_in);
+        if (saved_out >= 0) _close(saved_out);
+        free(g.argv);
+        return EXIT_CLI;
+    }
+#else
+    int saved_in  = dup(STDIN_FILENO);
+    int saved_out = dup(STDOUT_FILENO);
+    int in_p[2], out_p[2];
+    if (saved_in < 0 || saved_out < 0 ||
+        pipe(in_p) != 0 || pipe(out_p) != 0) {
+        if (saved_in  >= 0) close(saved_in);
+        if (saved_out >= 0) close(saved_out);
+        free(g.argv);
+        return EXIT_CLI;
+    }
+#endif
+
+    /* feed stdin_blob to the handler; "" → immediate EOF */
+    const char *data = stdin_blob ? stdin_blob : "";
+    size_t blen = strlen(data);
+    size_t off = 0;
+    while (off < blen) {
+        ssize_t w = write(in_p[1], data + off, blen - off);
+        if (w <= 0) break;
+        off += (size_t)w;
+    }
+    close(in_p[1]);
+
+    dup2(in_p[0], STDIN_FILENO);
+    dup2(out_p[1], STDOUT_FILENO);
+    close(in_p[0]);
+    close(out_p[1]);
+
+    cmd_args_t ga;
+    cmd_args_init(&ga, g.argc - 2, g.argv + 2);
+    int rc = fn(g.argv[1], &ga, &g, ctx->db);
+
+    fflush(stdout);
+    dup2(saved_out, STDOUT_FILENO);
+    dup2(saved_in, STDIN_FILENO);
+    close(saved_in);
+    close(saved_out);
+
+    /* slurp captured stdout → stest_stdout(ctx) */
+    free(ctx->out_buf);
+    ctx->out_buf  = NULL;
+    ctx->out_len  = 0;
+    ctx->out_cap  = 0;
+    for (;;) {
+        if (ctx->out_len >= ctx->out_cap) {
+            ctx->out_cap = ctx->out_cap ? ctx->out_cap * 2 : 4096;
+            ctx->out_buf = realloc(ctx->out_buf, ctx->out_cap);
+            if (!ctx->out_buf) break;
+        }
+        ssize_t n = read(out_p[0], ctx->out_buf + ctx->out_len,
+                         ctx->out_cap - ctx->out_len - 1);
+        if (n <= 0) break;
+        ctx->out_len += (size_t)n;
+    }
+    close(out_p[0]);
+    if (ctx->out_buf) ctx->out_buf[ctx->out_len] = '\0';
+
+    free(g.argv);
+    return rc;
+}
+
+const char *stest_write_input(stest_ctx_t *ctx, const char *blob)
+{
+    static int counter = 0;
+    snprintf(ctx->input_path, sizeof ctx->input_path,
+             "./tmp/acta_test_in_%d_%d.json", (int)getpid(), counter++);
+    FILE *fp = fopen(ctx->input_path, "wb");
+    if (!fp) return NULL;
+    if (blob) fputs(blob, fp);
+    fclose(fp);
+    return ctx->input_path;
 }
 
 /* ══════════════════════════════════════════════════════════════════

@@ -154,12 +154,94 @@ static void test_create_nonexistent_parent(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ── input-source regression (P2) ───────────────────────────────────
+ *  --json <blob> (space + '=' form), --from_file (present + missing),
+ *  --stdin, and conflicting sources — run through parse_globals +
+ *  handler exactly like main.c does (stest_run_argv). */
+
 static void test_create_json_invalid(stest_ctx_t *ctx)
 {
-    /* --json with garbage stdin → EXIT_INVALID.
-     * In a unit test we cannot easily fake stdin.
-     * Skip / mark as integration test. */
-    (void)ctx;
+    /* --json <garbage> → EXIT_INVALID (the blob is used verbatim;
+     * stdin is not read). */
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--json", "this is not json" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
+static void test_create_src_json_space(stest_ctx_t *ctx)
+{
+    /* --json <blob> (space form): the flag value must be honoured
+     * (P2: it used to be ignored and stdin read instead). */
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--json", "{\"name\":\"SrcJsonSpace\"}" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_create_src_json_equals(stest_ctx_t *ctx)
+{
+    /* --json=<blob> (equals form) */
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--json={\"name\":\"SrcJsonEquals\"}" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 4, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_create_src_from_file_present(stest_ctx_t *ctx)
+{
+    const char *path = stest_write_input(ctx, "{\"name\":\"SrcFromFile\"}");
+    TEST_NOT_NULL(ctx, path);
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--from_file", (char *)path };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_create_src_from_file_missing(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--from_file", "./tmp/acta_no_such_input.json" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
+static void test_create_src_stdin(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "actagamma_db", "model_folder", "create", "--stdin" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 4, argv0,
+        "{\"name\":\"SrcStdin\"}");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_create_src_conflict_json_stdin(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--json", "{}", "--stdin" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
+static void test_create_src_conflict_json_file(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--json", "{}", "--from_file",
+                      "./tmp/acta_conflict_input.json" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 7, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
+static void test_create_src_conflict_stdin_file(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "actagamma_db", "model_folder", "create",
+                      "--stdin", "--from_file",
+                      "./tmp/acta_conflict_input.json" };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
 /* ── runner ───────────────────────────────────────────────────────── */
@@ -181,6 +263,14 @@ int run_model_folder_test_create(void)
     test_create_same_name_different_parent_ok(&ctx);
     test_create_nonexistent_parent(&ctx);
     test_create_json_invalid(&ctx);
+    test_create_src_json_space(&ctx);
+    test_create_src_json_equals(&ctx);
+    test_create_src_from_file_present(&ctx);
+    test_create_src_from_file_missing(&ctx);
+    test_create_src_stdin(&ctx);
+    test_create_src_conflict_json_stdin(&ctx);
+    test_create_src_conflict_json_file(&ctx);
+    test_create_src_conflict_stdin_file(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

@@ -15,6 +15,7 @@
 
 typedef struct {
     char    db_path[512];       /* temp copy of acta_test_ref.db */
+    char    input_path[512];    /* temp --from_file fixture (stest_write_input) */
     db_t  *db;
     FILE  *out;                 /* redirected stdout */
     int saved_stdout; 
@@ -33,6 +34,33 @@ void stest_teardown(stest_ctx_t *ctx);
 void stest_capture_begin(stest_ctx_t *ctx);
 void stest_capture_end(stest_ctx_t *ctx);
 const char *stest_stdout(stest_ctx_t *ctx);
+
+/* ── argv-level runner (parse_globals + handler, like main.c) ───── */
+
+/* Handler prototype; matches every cmd_* function in commands.h. */
+typedef int (*stest_cmd_fn_t)(const char *action, cmd_args_t *ga,
+                              const global_opts_t *gopts, db_t *db);
+
+/*
+ * Run a command exactly like main.c does: parse_globals(argv) →
+ * cmd_args_init → handler(action, ga, gopts, db).
+ *
+ *  - argv[0] is the program name (ignored by parse_globals).
+ *  - stdin is redirected from stdin_blob ("" → immediate EOF), so
+ *    --stdin works in unit tests and a stray read_stdin_all() can
+ *    never block a suite.
+ *  - the handler's stdout is captured; afterwards stest_stdout(ctx)
+ *    returns it.
+ *
+ * Returns the handler's rc, or the parse_globals rc when the argv is
+ * rejected (missing entity/action, missing value for --json, …).
+ */
+int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
+                   int argc, char **argv, const char *stdin_blob);
+
+/* Write blob to a temp file under ./tmp/ and remember its path in ctx
+ * (removed by stest_teardown).  Returns the path, or NULL on error. */
+const char *stest_write_input(stest_ctx_t *ctx, const char *blob);
 
 /* assert helpers (non-fatal, count failures) */
 void stest_assert(stest_ctx_t *ctx, int cond, const char *file, int line, const char *fmt, ...);

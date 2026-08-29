@@ -225,6 +225,101 @@ static void test_update_negative_folder_rejected(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ── input-source regression (P2) ───────────────────────────────────
+ *  skill update's JSON mode (--json/--stdin/--from_file) — run through
+ *  parse_globals + handler exactly like main.c does (stest_run_argv). */
+
+static void test_update_src_json_space(stest_ctx_t *ctx)
+{
+    int id = stest_seed_skill(ctx, 0, "upd_src_space", "orig prompt",
+                              NULL, NULL);
+    TEST(ctx, id > 0);
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+
+    char *argv0[] = { "actagamma_db", "skill", "update", idstr,
+                      "--json", "{\"description\":\"src json space\"}" };
+    int rc = stest_run_argv(ctx, cmd_skill, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_update_src_json_equals(stest_ctx_t *ctx)
+{
+    int id = stest_seed_skill(ctx, 0, "upd_src_equals", "orig prompt",
+                              NULL, NULL);
+    TEST(ctx, id > 0);
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+
+    char *argv0[] = { "actagamma_db", "skill", "update", idstr,
+                      "--json={\"description\":\"src json equals\"}" };
+    int rc = stest_run_argv(ctx, cmd_skill, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_update_src_from_file_present(stest_ctx_t *ctx)
+{
+    int id = stest_seed_skill(ctx, 0, "upd_src_file", "orig prompt",
+                              NULL, NULL);
+    TEST(ctx, id > 0);
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+
+    const char *path = stest_write_input(ctx,
+        "{\"description\":\"src from_file\"}");
+    TEST_NOT_NULL(ctx, path);
+    char *argv0[] = { "actagamma_db", "skill", "update", idstr,
+                      "--from_file", (char *)path };
+    int rc = stest_run_argv(ctx, cmd_skill, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_update_src_from_file_missing(stest_ctx_t *ctx)
+{
+    int id = stest_seed_skill(ctx, 0, "upd_src_file_missing", "orig prompt",
+                              NULL, NULL);
+    TEST(ctx, id > 0);
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+
+    char *argv0[] = { "actagamma_db", "skill", "update", idstr,
+                      "--from_file", "./tmp/acta_no_such_input.json" };
+    int rc = stest_run_argv(ctx, cmd_skill, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
+static void test_update_src_stdin(stest_ctx_t *ctx)
+{
+    int id = stest_seed_skill(ctx, 0, "upd_src_stdin", "orig prompt",
+                              NULL, NULL);
+    TEST(ctx, id > 0);
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+
+    char *argv0[] = { "actagamma_db", "skill", "update", idstr, "--stdin" };
+    int rc = stest_run_argv(ctx, cmd_skill, 5, argv0,
+                           "{\"description\":\"src stdin\"}");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_update_src_conflict_json_stdin(stest_ctx_t *ctx)
+{
+    int id = stest_seed_skill(ctx, 0, "upd_src_conflict", "orig prompt",
+                              NULL, NULL);
+    TEST(ctx, id > 0);
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+
+    char *argv0[] = { "actagamma_db", "skill", "update", idstr,
+                      "--json", "{\"description\":\"x\"}", "--stdin" };
+    int rc = stest_run_argv(ctx, cmd_skill, 7, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_skill_test_update(void)
@@ -244,6 +339,12 @@ int run_skill_test_update(void)
     test_update_missing_positional(&ctx);
     test_update_creates_revision(&ctx);
     test_update_negative_folder_rejected(&ctx);
+    test_update_src_json_space(&ctx);
+    test_update_src_json_equals(&ctx);
+    test_update_src_from_file_present(&ctx);
+    test_update_src_from_file_missing(&ctx);
+    test_update_src_stdin(&ctx);
+    test_update_src_conflict_json_stdin(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);
