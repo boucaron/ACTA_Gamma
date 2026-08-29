@@ -10,9 +10,8 @@
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
 
-/* Non-static: the global dispatch layer can call this for
- *   actagamma_db db --help                                                      */
-void db_usage(FILE *f)
+/* Static: only cmd_db (via the "help" action) calls this. */
+static void db_usage(FILE *f)
 {
     fputs(
 "Usage: actagamma_db db <action> [options]\n"
