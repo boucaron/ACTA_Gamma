@@ -156,8 +156,8 @@ static void test_get_latest_nonexistent_skill(stest_ctx_t *ctx)
     targs_pos(a, "99999", &g);
 
     int rc = do_rev(ctx, "get-latest", a, g);
-    /* ADAPT: same as test_get_nonexistent */
-    (void)rc;
+    /* no revisions → EXIT_NOT_FOUND + JSON error on stderr (P3) */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     targs_free(a, &g);
 }
 
