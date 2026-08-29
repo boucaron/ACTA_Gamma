@@ -14,7 +14,7 @@ typedef struct {
     const char *help;   /* short one-liner shown in the error list */
 } action_def_t;
 
-static int action_err(const char *entity, const char *action,
+static inline int action_err(const char *entity, const char *action,
                       const action_def_t *actions, size_t count)
 {
     /* build "actions":[...] */
@@ -144,7 +144,7 @@ static inline void json_str(FILE *f, const char *s)
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Fuzzy-matching helpers (for "did you mean …?")                    */
 /* ══════════════════════════════════════════════════════════════════ */
-static int edit_distance(const char *a, const char *b)
+static inline int edit_distance(const char *a, const char *b)
 {
     int la = (int)strlen(a);
     int lb = (int)strlen(b);
@@ -167,7 +167,7 @@ static int edit_distance(const char *a, const char *b)
     return dp[la][lb];
 }
 
-static const char *closest_action(const char *input,
+static inline const char *closest_action(const char *input,
                                   const action_def_t *actions, size_t n)
 {
     if (!input || !*input) return NULL;

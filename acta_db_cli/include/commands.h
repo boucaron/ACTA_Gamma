@@ -65,7 +65,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
 /* Read everything remaining on stdin into a NUL-terminated malloc'd
 * buffer.  Returns NULL on OOM, otherwise the buffer (free it). */
-static char *read_stdin_all(void)
+static inline char *read_stdin_all(void)
 {
     size_t cap = 8192;
     size_t len = 0;
