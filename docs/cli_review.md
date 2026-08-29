@@ -35,6 +35,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 >   (`execution_log` was reporting itself as `db`).
 > - `db version` now reports `sqlite3_libversion()` (former P3 #1 is
 >   resolved; it no longer appears in Part 3 below).
+> - `db.c` error output now follows the single-line JSON contract: the
+>   centralized `finish_db_error(rc, what)` helper (`cli_util.h`) emits
+>   `{"error":"ACTA_DB_ERR_*","code":<rc>,"message":"..."}` as stderr line 1
+>   and returns the mapped exit code; all 9 `db exec` error paths and
+>   `db`'s unknown-action path route through it (Part 3 #6, marked
+>   resolved below). The P4 #6 systemic work (silent lib-failure paths in
+>   the other entities) still stands.
 
 ---
 
@@ -281,17 +288,26 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency issues
 
-6. **Error output contract violation in `db.c`**
+6. **Error output contract violation in `db.c`** — ✅ **fixed**
    Every error in `db exec` / unknown-action is human text on stderr
    ("Error: SQL execution failed (rc=%d)…"), while the rest of the CLI
    (and Part 1's design) emits single-line JSON `"{\"error\":...}`. Pick one
    contract and keep it — scripts parsing stderr JSON will choke on db errors.
+   *Resolved:* all `db` error paths now use the centralized
+   `finish_db_error(rc, what)` helper (`cli_util.h`), which emits the
+   single-line JSON error and returns the mapped exit code; the
+   unknown-action path prints the JSON line first, then the shared
+   human suggestion block. See `cli_active_action.md` (plan #1).
 
 7. **Success-output shapes are inconsistent across entities**
    `context create` → `{"id":N}`; `db exec` → `{"status":"ok"}`; `db version`
    → `{"version":"..."}`. Fine if the spec defines per-action shapes, but there
    is no single place that documents them; `--table` variants add a third
    shape each. Worth a spec table (action → stdout schema).
+   *Partially resolved:* the `db` shapes (`db exec` →
+   `{"status":"ok"}`, `db version` → `{"version":"<version>"}`) plus the
+   JSON error line are now documented in `db_usage()` help; the
+   cross-entity spec table remains open (see P4 #11).
 
 8. **Bare `--json` is not a valid invocation, yet help teaches it** (`context.c` usage)
    `ctx_usage` shows `... | acta context create --json` (boolean, stdin
