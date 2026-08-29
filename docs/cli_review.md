@@ -33,6 +33,8 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 >   length-relative (`d<=1` for names <= 3 chars, else `d<=2`).
 >   Help-pointer entity names normalized to `actagamma_db <entity>`
 >   (`execution_log` was reporting itself as `db`).
+> - `db version` now reports `sqlite3_libversion()` (former P3 #1 is
+>   resolved; it no longer appears in Part 3 below).
 
 ---
 
@@ -243,32 +245,25 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Bugs (worth fixing)
 
-1. **`db version` prints the literal string `"test"`** (`db.c`)
-   ```c
-   const char *ver = "test";   /* placeholder never replaced */
-   ```
-   `acta db version` → `{"version":"test"}` / `SQLite test`. Should call
-   `sqlite3_libversion()` (or the db-lib wrapper).
-
-2. **`db exec` does not support the documented positional-argument form** (`db.c`)
+1. **`db exec` does not support the documented positional-argument form** (`db.c`)
    Help and the "no SQL source" error both advertise
    `acta db exec "INSERT INTO ..."` (positional), but the resolver only checks
    `--sql` / `--file` / `--stdin` — `cmd_args_next_positional` is never called.
    The documented form fails with "no SQL source provided".
 
-3. **`db exec --stdin` is dead: the global parser eats `--stdin`** (`db.c`)
+2. **`db exec --stdin` is dead: the global parser eats `--stdin`** (`db.c`)
    `parse_globals` pulls `--stdin` into `gopts->from_stdin` and removes it from
    the command argv, so `cmd_args_flag(ga, "stdin", 0)` can never see it.
    Same class as Part 2 #2: entity-level flags must not collide with global
    flag names. Rename the entity flag (e.g. `--sql_stdin`) or check
    `gopts->from_stdin` here.
 
-4. **`context create` leaks `created_at` on the JSON path** (`context.c`)
+3. **`context create` leaks `created_at` on the JSON path** (`context.c`)
    `json_parse_context` mallocs `ctx.created_at` when the blob carries the key,
    but `cleanup_create` only frees `type/content/content_hash/metadata`.
    Any JSON body containing `"created_at"` leaks.
 
-5. **`context get <missing-id>` returns exit 0 with empty stdout** (`context.c`)
+4. **`context get <missing-id>` returns exit 0 with empty stdout** (`context.c`)
    ```c
    if (!c) return EXIT_OK;   /* not found: silent success */
    ```
@@ -278,7 +273,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    `err==OK, c==NULL` is exactly the "not found" case). Compare: `list` at
    least prints `[]`.
 
-6. **`context list --count` local flag is dead** (`context.c`)
+5. **`context list --count` local flag is dead** (`context.c`)
    `--count` is a *global* flag, so `parse_globals` already consumes it into
    `gopts->count`; the local `s_count = cmd_args_flag(ga, "count", 0)` is
    unreachable and dead. The code happens to work via `gopts->count`, but the
@@ -286,19 +281,19 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency issues
 
-7. **Error output contract violation in `db.c`**
+6. **Error output contract violation in `db.c`**
    Every error in `db exec` / unknown-action is human text on stderr
    ("Error: SQL execution failed (rc=%d)…"), while the rest of the CLI
    (and Part 1's design) emits single-line JSON `"{\"error\":...}`. Pick one
    contract and keep it — scripts parsing stderr JSON will choke on db errors.
 
-8. **Success-output shapes are inconsistent across entities**
+7. **Success-output shapes are inconsistent across entities**
    `context create` → `{"id":N}`; `db exec` → `{"status":"ok"}`; `db version`
    → `{"version":"..."}`. Fine if the spec defines per-action shapes, but there
    is no single place that documents them; `--table` variants add a third
    shape each. Worth a spec table (action → stdout schema).
 
-9. **Bare `--json` is not a valid invocation, yet help teaches it** (`context.c` usage)
+8. **Bare `--json` is not a valid invocation, yet help teaches it** (`context.c` usage)
    `ctx_usage` shows `... | acta context create --json` (boolean, stdin
    semantics), but `parse_globals` defines `--json <blob>` as a *value* flag:
    a trailing bare `--json` returns `EXIT_CLI` (missing value), and a bare
@@ -306,7 +301,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    and the parser describe two different features (this is the root cause of
    Part 2 #1/#2: the intended trichotomy blob/stdin/file was never built).
 
-10. **Client-supplied `content_hash` and `created_at` in `context create`**
+9. **Client-supplied `content_hash` and `created_at` in `context create`**
     The hash is a client claim the DB never verifies (by design perhaps), but
     `created_at` from the JSON blob is forwarded into
     `acta_db_context_create` — confirm the lib ignores it (Part 2 #9 carries
@@ -387,7 +382,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    doesn't exist** — `context`, `model`, `skill`, `model_folder`,
    `skill_folder`, and both `*_revision` files all do
    `if (!row) { VLOG(1, "not found..."); return EXIT_OK; }`.
-   Widespread now (Part 3 #5 was the first instance). Should be
+   Widespread now (Part 3 #4 was the first instance). Should be
    `EXIT_NOT_FOUND` (1) + the JSON error line.
 
 6. **Library failures exit non-zero with *nothing* on stderr**
@@ -402,7 +397,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 7. **Dead local `--count` flag** — every `list` action reads
     `cmd_args_flag(ga, "count", 0)` / `cmd_args_has_flag(ga, "count")` even
     though `parse_globals` already consumed `--count` into `gopts->count`
-    (Part 3 #6). Dead in model, skill, context, model_folder, skill_folder,
+    (Part 3 #5). Dead in model, skill, context, model_folder, skill_folder,
     and both revisions.
 
 8. **Update/rename paths skip the empty-string checks that create has**
@@ -427,7 +422,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 11. **Success shapes keep multiplying**
     `{"id":N}` / `{"id":N,"folder_id":M}` / `{"deleted":true}` /
-    `{"id":N,"restored":true}` / bare `N`. Same ask as Part 3 #8: a single
+    `{"id":N,"restored":true}` / bare `N`. Same ask as Part 3 #7: a single
     per-action output table in the spec, enforced by one emit helper.
 
 12. **`usage_*` snippets are static per file, `*_usage` are not declared
@@ -590,7 +585,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 1. **`skill update` data loss** — partial struct to a full-replace API (wipes fields, moves to root). *(P4 #1)*
 2. **`--json <blob>` ignored, reads stdin, hangs interactively** — 9 call sites; `--stdin`/`--from_file` dead flags. *(P2 #1–2)*
 3. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #5)*
-4. **`db version` prints `"test"`**; `db exec` positional form unimplemented, `--stdin` dead. *(P3 #1–3)*
+4. **`db exec` positional form unimplemented, `--stdin` dead.** *(P3 #1–2)*
 5. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation. *(P4 #6)*
 6. **`cli_error` emits unescaped JSON** — paths with `"`/`\` break the error contract. *(P1 #2)*
 7. **`model move` without `--folder_id` → silent move to root** (help says required). *(P4 #2)*
