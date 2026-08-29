@@ -56,7 +56,7 @@ void exec_usage(FILE *f)
 "    actagamma_db exec create \\\n"
 "      --prompt \"What is the capital of France?\" \\\n"
 "      --context_id 1 --skill_revision_id 3 \\\n"
-"      --model_revision_id 2 --status pending\n"
+"      --model_revision_id 2\n"
 "        <- flag-based\n"
 "\n"
 "    cat exec.json | actagamma_db exec create --json\n"
@@ -70,7 +70,6 @@ void exec_usage(FILE *f)
 "\n"
 "  Optional fields:\n"
 "    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
-"    --status <str>               pending | running | completed | failed | cancelled\n"
 "\n"
 "  Options:\n"
 "    --json <blob>          Read the record as JSON; --stdin and --from_file <path> are the alternative sources\n"
@@ -176,7 +175,7 @@ static void usage_create(FILE *f)
 "    actagamma_db exec create \\\n"
 "      --prompt \"What is the capital of France?\" \\\n"
 "      --context_id 1 --skill_revision_id 3 \\\n"
-"      --model_revision_id 2 --status pending\n"
+"      --model_revision_id 2\n"
 "        <- flag-based\n"
 "\n"
 "    cat exec.json | actagamma_db exec create --json\n"
@@ -190,7 +189,6 @@ static void usage_create(FILE *f)
 "\n"
 "  Optional fields:\n"
 "    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
-"    --status <str>               pending | running | completed | failed | cancelled\n"
 "\n"
 "  Options:\n"
 "    --json <blob>          Read the record as JSON; --stdin and --from_file <path> are the alternative sources\n"
@@ -446,19 +444,6 @@ static const action_def_t exec_actions[] = {
 };
 #define EXEC_ACTIONS (sizeof(exec_actions) / sizeof(exec_actions[0]))
 
-/* ── valid_status ─────────────────────────────────────────────────── */
-static int valid_status(const char *s)
-{
-    if (!s)
-        return 0;
-    return strcmp(s, "pending")   == 0 ||
-           strcmp(s, "running")   == 0 ||
-           strcmp(s, "completed") == 0 ||
-           strcmp(s, "failed")    == 0 ||
-           strcmp(s, "cancelled") == 0;
-}
-
-
 int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              db_t *db)
 {
@@ -570,15 +555,17 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             goto cleanup_exec_create;
         }
 
-        /* ── optional-field validation ────────────────────────────── */
-        if (exec.status && !valid_status(exec.status)) {
-            VLOG(1, "  ERROR: 'status' must be one of: pending, running, "
-                    "completed, failed, cancelled (got '%s')",
-                    exec.status);
+        /* 'status' (flag or JSON body) is rejected outright: the lib
+         * always creates executions as "pending" (acta_db_execution_create
+         * ignores e->status), so accepting it would only pretend to work.
+         * Later state is reached via start/complete/fail/cancel. */
+        if (exec.status) {
+            VLOG(1, "  ERROR: 'status' is not accepted by exec create "
+                    "(new executions are always 'pending')");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"status must be one of: pending, running, "
-                "completed, failed, cancelled\"}\n");
+                "\"message\":\"'status' is not accepted by exec create: "
+                "new executions are always 'pending'\"}\n");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;

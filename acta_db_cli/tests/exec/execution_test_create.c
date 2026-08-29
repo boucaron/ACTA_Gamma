@@ -43,7 +43,6 @@ static void test_create_all_fields(stest_ctx_t *ctx)
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
     targs_flag(a, "parent_execution_id", "4", &g);
-    targs_flag(a, "status", "pending", &g);
 
     int rc = do_exec(ctx, "create", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -151,7 +150,40 @@ static void test_create_negative_skill_id(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_create_invalid_status(stest_ctx_t *ctx)
+/* W3: --status is dead on create (the lib forces "pending"), so it is
+ * rejected for ANY value — "pending" included. */
+
+static void test_create_status_pending_rejected(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "prompt", "dead status", &g);
+    targs_flag(a, "context_id", "1", &g);
+    targs_flag(a, "skill_revision_id", "1", &g);
+    targs_flag(a, "model_revision_id", "2", &g);
+    targs_flag(a, "status", "pending", &g);
+
+    int rc = do_exec(ctx, "create", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_create_status_running_rejected(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "prompt", "run me", &g);
+    targs_flag(a, "context_id", "1", &g);
+    targs_flag(a, "skill_revision_id", "1", &g);
+    targs_flag(a, "model_revision_id", "2", &g);
+    targs_flag(a, "status", "running", &g);
+
+    int rc = do_exec(ctx, "create", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_create_status_bogus_rejected(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
@@ -163,36 +195,6 @@ static void test_create_invalid_status(stest_ctx_t *ctx)
 
     int rc = do_exec(ctx, "create", a, g);
     TEST_EQ(ctx, rc, EXIT_INVALID);
-    targs_free(a, &g);
-}
-
-static void test_create_status_running(stest_ctx_t *ctx)
-{
-    global_opts_t g = gopts_default();
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "run me", &g);
-    targs_flag(a, "context_id", "1", &g);
-    targs_flag(a, "skill_revision_id", "1", &g);
-    targs_flag(a, "model_revision_id", "2", &g);
-    targs_flag(a, "status", "running", &g);
-
-    int rc = do_exec(ctx, "create", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
-}
-
-static void test_create_status_cancelled(stest_ctx_t *ctx)
-{
-    global_opts_t g = gopts_default();
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "cancel me", &g);
-    targs_flag(a, "context_id", "1", &g);
-    targs_flag(a, "skill_revision_id", "1", &g);
-    targs_flag(a, "model_revision_id", "2", &g);
-    targs_flag(a, "status", "cancelled", &g);
-
-    int rc = do_exec(ctx, "create", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
     targs_free(a, &g);
 }
 
@@ -367,6 +369,18 @@ static void test_create_src_conflict_stdin_file(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
+static void test_create_src_json_status_rejected(stest_ctx_t *ctx)
+{
+    /* "status" in the JSON body is rejected just like the flag (W3) */
+    char *argv0[] = { "actagamma_db", "exec", "create",
+                      "--json",
+                      "{\"prompt\":\"json status\",\"context_id\":1,"
+                      "\"skill_revision_id\":1,"
+                      "\"model_revision_id\":2,\"status\":\"completed\"}" };
+    int rc = stest_run_argv(ctx, cmd_exec, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
 /* ── runner ────────────────────────────────────────────────────────── */
 
 int run_execution_test_create(void)
@@ -383,9 +397,9 @@ int run_execution_test_create(void)
     test_create_missing_model_revision_id(&ctx);
     test_create_zero_context_id(&ctx);
     test_create_negative_skill_id(&ctx);
-    test_create_invalid_status(&ctx);
-    test_create_status_running(&ctx);
-    test_create_status_cancelled(&ctx);
+    test_create_status_pending_rejected(&ctx);
+    test_create_status_running_rejected(&ctx);
+    test_create_status_bogus_rejected(&ctx);
     test_create_valid_parent(&ctx);
     test_create_fk_violation_context(&ctx);
     test_create_fk_violation_skill_rev(&ctx);
@@ -400,6 +414,7 @@ int run_execution_test_create(void)
     test_create_src_conflict_json_stdin(&ctx);
     test_create_src_conflict_json_file(&ctx);
     test_create_src_conflict_stdin_file(&ctx);
+    test_create_src_json_status_rejected(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);
