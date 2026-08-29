@@ -165,34 +165,7 @@ static inline void json_str(FILE *f, const char *s)
     fputc('"', f);
 }
 
-/* ── verbose logging to stderr (levels are cumulative) ────────────── */
-
-/*
- *  Level 0  – silent (default)
- *  Level 1  – action summary        (one line per action)
- *  Level 2  – parameter/field dump  (every input & output field)
- *  Level 3  – raw internal trace    (pointers, raw rc, struct layout)
- *
- * All diagnostics go to stderr so stdout remains pipe-safe.
- */
-
-#define VLOG(lvl, gopts, fmt, ...)                                       \
-    do {                                                                 \
-        if ((gopts)->verbose >= (lvl)) {                                 \
-            fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);    \
-        }                                                                \
-    } while (0)
-
-#define VERBOSE(filt, lvl, ...)                                          \
-    do {                                                                 \
-        if ((gopts_local)->verbose >= (lvl)) {                           \
-            fprintf(stderr, "[v" #lvl "] " filt, ##__VA_ARGS__);        \
-        }                                                                \
-    } while (0)
-
-/* Small inline wrapper so call-sites read naturally.
- * The macro needs the local gopts pointer; we alias it at the
- * top of cmd_context and use it throughout. */
+/* Verbose logging: VLOG() — single definition in cli.h. */
 
 
 

@@ -5,29 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* ── verbose logging to stderr (levels are cumulative) ──────────────
- *
- *  Level 0  – silent (default)
- *  Level 1  – action summary
- *  Level 2  – parameter/field dump
- *  Level 3  – raw internal trace (pointers, raw rc)
- *
- *  All diagnostics → stderr so stdout stays pipe-safe.
- *
- *  Usage: set vlog_gopts at the top of cmd_model_revision, then call
- *         VLOG(1, "..."), VLOG(2, "...") etc. from anywhere in the
- *         translation unit, including helper functions.
- */
-
-static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
-
-#define VLOG(lvl, fmt, ...)                                              \
-    do {                                                                 \
-        if (vlog_gopts && vlog_gopts->verbose >= (lvl)) {                 \
-            fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
-        }                                                                \
-    } while (0)
-
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
@@ -307,8 +284,6 @@ static const action_def_t model_revision_actions[] = {
 int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                        db_t *db)
 {
-    vlog_gopts = gopts;   /* ← make VLOG() see the current verbose level */
-
     /* ── help (subcommand-level; only the bare word "help") ──────── */
     if (strcmp(action, "help") == 0) {
         model_revision_usage(stdout);

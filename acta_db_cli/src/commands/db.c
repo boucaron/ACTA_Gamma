@@ -6,17 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* ── verbose logging to stderr (levels are cumulative) ────────────── */
-
-static const global_opts_t *vlog_gopts;
-
-#define VLOG(lvl, fmt, ...)                                              \
-    do {                                                                 \
-        if (vlog_gopts && vlog_gopts->verbose >= (lvl)) {                 \
-            fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
-        }                                                                \
-    } while (0)
-
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
@@ -99,8 +88,6 @@ static const action_def_t db_actions[] = {
 int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
            db_t *db)
 {
-    vlog_gopts = gopts;
-
     /* ── help (subcommand-level; only the bare word "help") ─────── */
     if (strcmp(action, "help") == 0) {
         db_usage(stdout);

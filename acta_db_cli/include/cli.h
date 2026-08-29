@@ -46,22 +46,28 @@ typedef struct {
     char **argv;
 } global_opts_t;
 
-/* ---- verbose helpers ---- */
-
-/*
- * vdbg(GO, LEVEL, "fmt", ...)
- *   Prints to stderr only when GO->verbose >= LEVEL.
- *   LEVEL 1 = info,  2 = debug,  3 = trace.
+/* ---- verbose logging to stderr (levels are cumulative) ----
  *
- *   GO is a global_opts_t * (may be NULL → no-op).
+ *  Level 0  – silent (default)
+ *  Level 1  – action summary        (one line per action)
+ *  Level 2  – parameter/field dump  (every input & output field)
+ *  Level 3  – raw internal trace    (pointers, raw rc, struct layout)
+ *
+ * All diagnostics go to stderr so stdout remains pipe-safe.
+ *
+ * cli_gopts is defined in src/commands.c and set once at dispatch.
+ * The CLI is one process = one command = single-threaded, so this
+ * global is safe, and it lets helper functions log without threading
+ * the options pointer through every signature.
  */
-#define vdbg(GO, LEVEL, ...) do { \
-    if ((GO) && (GO)->verbose >= (LEVEL)) { \
-        fprintf(stderr, "[v" #LEVEL "] "); \
-        fprintf(stderr, __VA_ARGS__); \
-        fprintf(stderr, "\n"); \
-    } \
-} while (0)
+extern const global_opts_t *cli_gopts;
+
+#define VLOG(lvl, fmt, ...)                                              \
+    do {                                                                 \
+        if (cli_gopts && cli_gopts->verbose >= (lvl)) {                   \
+            fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
+        }                                                                \
+    } while (0)
 
 
 

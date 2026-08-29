@@ -5,6 +5,10 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Single definition; set once in commands_dispatch, read by VLOG()
+ * (cli.h) from every translation unit. */
+const global_opts_t *cli_gopts = NULL;
+
 #ifndef ACTA_DB_GIT_HASH
 #define ACTA_DB_GIT_HASH "unknown"
 #endif
@@ -66,7 +70,8 @@ int commands_dispatch(const char *entity, const char *action,
     if (!fn)
         return entity_not_found(entity);
 
-    vdbg(gopts, 2, "dispatch to %s", entity);
+    cli_gopts = gopts;   /* ← makes VLOG() see the current verbose level */
+    VLOG(2, "dispatch to %s", entity);
     return fn(action, ga, gopts, db);
 }
 

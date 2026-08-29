@@ -5,25 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* ── verbose logging to stderr (levels are cumulative) ──────────────
- *
- *  Level 0  – silent (default)
- *  Level 1  – action summary
- *  Level 2  – parameter/field dump
- *  Level 3  – raw internal trace (pointers, raw rc)
- *
- *  All diagnostics → stderr so stdout stays pipe-safe.
- */
-
-static const global_opts_t *vlog_gopts;
-
-#define VLOG(lvl, fmt, ...)                                              \
-    do {                                                                 \
-        if (vlog_gopts && vlog_gopts->verbose >= (lvl)) {                 \
-            fprintf(stderr, "[v" #lvl "] " fmt "\n", ##__VA_ARGS__);     \
-        }                                                                \
-    } while (0)
-
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
@@ -371,8 +352,6 @@ static const action_def_t model_folder_actions[] = {
 int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                      db_t *db)
 {
-    vlog_gopts = gopts;
-
     /* ── help (subcommand-level; only the bare word "help") ──────── */
     if (strcmp(action, "help") == 0) {
         model_folder_usage(stdout);
