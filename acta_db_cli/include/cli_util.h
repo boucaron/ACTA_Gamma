@@ -82,6 +82,8 @@ static inline void tcol(FILE *f, const char *s, int width)
     char buf[64];
     int len = (int)strlen(s);
     int n = len > width ? width : len;
+    if (n < 0) n = 0;                        /* negative width guard */
+    if (n > (int)sizeof(buf) - 1) n = (int)sizeof(buf) - 1;  /* buf overflow guard */
     memcpy(buf, s, n);
     buf[n] = '\0';
     fprintf(f, "%-*s ", width, buf);
