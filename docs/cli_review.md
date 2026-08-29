@@ -545,10 +545,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
      `#ifndef` is shadowed by the included `cli.h`) but it encodes a wrong
      mental model; delete it.
 
-6. **Orphan test file: `tests/tests_parse_globals.c`**
-   Not referenced by any Makefile rule (wildcards cover `tests/<suite>/`
-   subdirectories only) — it never compiles. It is also exactly the suite
-   proposed in #4. Wire it in.
 
 ### Makefile
 
