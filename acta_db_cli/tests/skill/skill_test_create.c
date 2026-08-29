@@ -139,9 +139,9 @@ static void test_create_same_name_different_folder_ok(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_create_negative_folder_clamped(stest_ctx_t *ctx)
+static void test_create_negative_folder_rejected(stest_ctx_t *ctx)
 {
-    /* code clamps folder_id < 0 → 0 (root) */
+    /* folder_id -5 → EXIT_INVALID (negatives are rejected, not clamped to root) */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "NegFolder", &g);
@@ -149,7 +149,21 @@ static void test_create_negative_folder_clamped(stest_ctx_t *ctx)
     targs_flag(a, "folder_id", "-5", &g);
 
     int rc = do_create(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_create_invalid_folder(stest_ctx_t *ctx)
+{
+    /* folder_id "abc" → EXIT_INVALID (atoi would have silently made it 0 = root) */
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "name", "BadFolder", &g);
+    targs_flag(a, "prompt_template", "x", &g);
+    targs_flag(a, "folder_id", "abc", &g);
+
+    int rc = do_create(ctx, a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }
 
@@ -178,7 +192,8 @@ int run_skill_test_create(void)
     test_create_root_unique_violation(&ctx);
     test_create_folder_unique_violation(&ctx);
     test_create_same_name_different_folder_ok(&ctx);
-    test_create_negative_folder_clamped(&ctx);
+    test_create_negative_folder_rejected(&ctx);
+    test_create_invalid_folder(&ctx);
     test_create_json_invalid(&ctx);
 
     int f = ctx.failures;

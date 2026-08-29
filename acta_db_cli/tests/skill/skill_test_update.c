@@ -129,7 +129,7 @@ static void test_update_creates_revision(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_update_negative_folder_clamped(stest_ctx_t *ctx)
+static void test_update_negative_folder_rejected(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
@@ -139,8 +139,8 @@ static void test_update_negative_folder_clamped(stest_ctx_t *ctx)
     targs_flag(a, "folder_id", "-1", &g);
 
     int rc = do_update(ctx, a, g);
-    /* folder_id -1 clamped to 0 (root) → same as before, should succeed */
-    TEST_EQ(ctx, rc, EXIT_OK);
+    /* folder_id -1 → EXIT_INVALID (negatives rejected, not clamped to root) */
+    TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }
 
@@ -159,7 +159,7 @@ int run_skill_test_update(void)
     test_update_invalid_id(&ctx);
     test_update_missing_positional(&ctx);
     test_update_creates_revision(&ctx);
-    test_update_negative_folder_clamped(&ctx);
+    test_update_negative_folder_rejected(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

@@ -103,16 +103,29 @@ static void test_move_nonexistent_folder(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_move_negative_folder_clamped(stest_ctx_t *ctx)
+static void test_move_negative_folder_rejected(stest_ctx_t *ctx)
 {
-    /* folder_id=-1 clamped to 0 → root; skill 7 ("summarize4") has no name collision at root */
+    /* folder_id=-1 → EXIT_INVALID (negatives rejected, not clamped to root) */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "7", &g);
     targs_flag(a, "folder_id", "-1", &g);
 
     int rc = do_move(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_move_invalid_folder(stest_ctx_t *ctx)
+{
+    /* folder_id "12abc" → EXIT_INVALID (atoi would have silently made it 12) */
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "7", &g);
+    targs_flag(a, "folder_id", "12abc", &g);
+
+    int rc = do_move(ctx, a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }
 
@@ -167,7 +180,8 @@ int run_skill_test_move(void)
     test_move_invalid_skill_id(&ctx);
     test_move_nonexistent_skill(&ctx);
     test_move_nonexistent_folder(&ctx);
-    test_move_negative_folder_clamped(&ctx);
+    test_move_negative_folder_rejected(&ctx);
+    test_move_invalid_folder(&ctx);
     test_move_unique_violation(&ctx);
     test_move_verify_folder_changed(&ctx);
 

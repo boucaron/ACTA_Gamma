@@ -168,6 +168,29 @@ static void test_list_invalid_limit(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+static void test_list_invalid_folder(stest_ctx_t *ctx)
+{
+    /* --folder_id abc → EXIT_INVALID (atoi would have silently filtered root) */
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "abc", &g);
+
+    int rc = do_list(ctx, a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_list_negative_folder(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_flag(a, "folder_id", "-1", &g);
+
+    int rc = do_list(ctx, a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
 static void test_list_table_output(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_table();
@@ -298,6 +321,8 @@ int run_skill_test_list_count(void)
     test_list_invalid_offset(&ctx);
     test_list_negative_offset(&ctx);
     test_list_invalid_limit(&ctx);
+    test_list_invalid_folder(&ctx);
+    test_list_negative_folder(&ctx);
     test_list_table_output(&ctx);
     test_list_fields_filter(&ctx);
     test_list_empty_folder(&ctx);
