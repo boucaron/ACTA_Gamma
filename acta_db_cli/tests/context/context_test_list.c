@@ -116,8 +116,8 @@ static void test_list_offset_limit(stest_ctx_t *ctx)
 static void test_list_count_flag(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
+    g.count = 1;   /* --count is a global flag; parse_globals strips it from ga */
     cmd_args_t *a = targs_new();
-    targs_flag_bool(a, "count", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -128,9 +128,9 @@ static void test_list_count_flag(stest_ctx_t *ctx)
 static void test_list_count_with_filter(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
+    g.count = 1;   /* --count is a global flag; parse_globals strips it from ga */
     cmd_args_t *a = targs_new();
     targs_flag(a, "type", "test", &g);
-    targs_flag_bool(a, "count", &g);
 
     int rc = do_list(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);

@@ -93,10 +93,12 @@ static void test_list_offset_and_limit(stest_ctx_t *ctx)
 
 static void test_list_count_flag(stest_ctx_t *ctx)
 {
+    /* --count is a global flag; parse_globals strips it from ga, so set it
+     * on the global opts like the real dispatch path does */
     global_opts_t g = gopts_default();
+    g.count = 1;
     cmd_args_t *a = targs_new();
     targs_pos(a, "1", &g);
-    targs_flag_bool(a, "count", &g);
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);

@@ -411,7 +411,6 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
         const char *s_off   = cmd_args_flag(ga, "offset", 1);
         const char *s_lim   = cmd_args_flag(ga, "limit", 1);
-        int has_count = cmd_args_has_flag(ga, "count");
 
         int offset = 0, limit = 0;
 
@@ -448,7 +447,7 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         VLOG(3, "  skill_id=%d offset=%d limit=%d",
              skill_id, offset, limit);
 
-        if (gopts->count || has_count) {
+        if (gopts->count) {
             int err = 0;
             int n = acta_db_skill_revision_count(db, skill_id, &err);
             if (err != ACTA_DB_OK) {

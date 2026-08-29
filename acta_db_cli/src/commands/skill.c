@@ -1004,7 +1004,6 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
         const char *s_off     = cmd_args_flag(ga, "offset", 1);
         const char *s_lim     = cmd_args_flag(ga, "limit", 1);
-        const char *s_count   = cmd_args_flag(ga, "count", 0);
         int has_all = cmd_args_has_flag(ga, "all");
 
         int offset = 0, limit = 0;
@@ -1060,7 +1059,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  folder_id=%d all=%d offset=%d limit=%d",
              folder_id, has_all ? 1 : 0, offset, limit);
 
-        if (gopts->count || s_count) {
+        if (gopts->count) {
             int err = 0;
             int n = (in_folder && !has_all )
                 ? acta_db_skill_count_in_folder(db, folder_id, &err)

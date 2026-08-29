@@ -526,7 +526,6 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
         const char *f_level  = cmd_args_flag(ga, "level", 1);
         const char *s_off    = cmd_args_flag(ga, "offset", 1);
         const char *s_lim    = cmd_args_flag(ga, "limit", 1);
-        int has_count  = cmd_args_has_flag (ga, "count");
 
         int offset = 0, limit = 0;
 
@@ -567,7 +566,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
         VLOG(3, "  exec_id=%d level=%p offset=%d limit=%d",
              execution_id, (const void *)f_level, offset, limit);
 
-        if (gopts->count || has_count) {
+        if (gopts->count) {
             int err = 0;
             int n = acta_db_execution_log_count(db, execution_id, f_level, &err);
             if (err != ACTA_DB_OK) {

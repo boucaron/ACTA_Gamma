@@ -291,10 +291,11 @@ static void test_count_all_flag(stest_ctx_t *ctx)
 
 static void test_count_list_flag(stest_ctx_t *ctx)
 {
-    /* --count on list action → returns count instead of rows */
+    /* --count on list action → returns count instead of rows
+     * (--count is a global flag; parse_globals strips it from ga) */
     global_opts_t g = gopts_default();
+    g.count = 1;
     cmd_args_t *a = targs_new();
-    targs_flag_bool(a, "count", &g);
 
     int rc = do_count(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);

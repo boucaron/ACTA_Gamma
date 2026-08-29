@@ -220,11 +220,12 @@ static void test_list_limit_non_numeric(stest_ctx_t *ctx)
 
 static void test_list_count_flag(stest_ctx_t *ctx)
 {
-    /* --count → prints just the number, no rows */
+    /* --count → prints just the number, no rows
+     * (--count is a global flag; parse_globals strips it from ga) */
     global_opts_t g = gopts_default();
+    g.count = 1;
     cmd_args_t *a = targs_new();
     targs_pos(a, "1", &g);
-    targs_flag(a, "count", "1", &g);
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -235,9 +236,9 @@ static void test_list_count_flag(stest_ctx_t *ctx)
 static void test_list_count_flag_nonexistent(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
+    g.count = 1;
     cmd_args_t *a = targs_new();
     targs_pos(a, "99999", &g);
-    targs_flag(a, "count", "1", &g);
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
