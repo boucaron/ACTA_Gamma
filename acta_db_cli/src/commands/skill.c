@@ -85,10 +85,10 @@ void skill_usage(FILE *f)
 "  Fetch a single skill by its primary key.\n"
 "\n"
 "    actagamma_db skill get 42\n"
-"    actagamma_db skill get 42 --include-deleted\n"
+"    actagamma_db skill get 42 --include_deleted\n"
 "\n"
 "  Options:\n"
-"    --include-deleted    Return the row even if soft-deleted\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -214,10 +214,10 @@ static void usage_get(FILE *f)
 "  Fetch a single skill by its primary key.\n"
 "\n"
 "    actagamma_db skill get 42\n"
-"    actagamma_db skill get 42 --include-deleted\n"
+"    actagamma_db skill get 42 --include_deleted\n"
 "\n"
 "  Options:\n"
-"    --include-deleted    Return the row even if soft-deleted\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -609,7 +609,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        int f_inc_del = cmd_args_has_flag(ga, "include-deleted");
+        int f_inc_del = cmd_args_has_flag(ga, "include_deleted");
 
         VLOG(1, "skill get: fetching id=%d include_deleted=%d",
              id, f_inc_del);

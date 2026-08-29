@@ -78,10 +78,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             }
             continue;
         }
-        /* ---- --no-nulls ---- */
-        if (strcmp(a, "--no-nulls") == 0) { g->no_nulls = 1; continue; }
-        /* ---- --id-only ---- */
-        if (strcmp(a, "--id-only") == 0)  { g->id_only = 1;  continue; }
+        /* ---- --no_nulls ---- */
+        if (strcmp(a, "--no_nulls") == 0) { g->no_nulls = 1; continue; }
+        /* ---- --id_only ---- */
+        if (strcmp(a, "--id_only") == 0)  { g->id_only = 1;  continue; }
         /* ---- --count ---- */
         if (strcmp(a, "--count") == 0)    { g->count = 1;    continue; }
         /* ---- --table ---- */
@@ -131,8 +131,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         /* ---- --stdin ---- */
         if (strcmp(a, "--stdin") == 0)    { g->from_stdin = 1;  continue; }
-        /* ---- --from-file <path> ---- */
-        if (flag_prefix_match(a, "from-file")) {
+        /* ---- --from_file <path> ---- */
+        if (flag_prefix_match(a, "from_file")) {
             if (a[11] == '=') g->from_file = a + 12;
             else {
                 if (i + 1 >= argc) { free(rest); return EXIT_CLI; }
@@ -140,8 +140,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             }
             continue;
         }
-        /* ---- --create-dirs (spec §3, not global per spec but harmless) ---- */
-        if (strcmp(a, "--create-dirs") == 0) { /* swallow; TODO: thread to open */ continue; }
+        /* ---- --create_dirs (spec §3, not global per spec but harmless) ---- */
+        if (strcmp(a, "--create_dirs") == 0) { /* swallow; TODO: thread to open */ continue; }
 
         /* not a recognised global → keep as entity/action/positional */
         rest[rest_n++] = a;

@@ -163,7 +163,7 @@ static void test_get_include_deleted(stest_ctx_t *ctx)
     (void)cmd_skill("delete", del, &g, ctx->db);
     targs_free(del, &g);
 
-    /* without --include-deleted: should be "not found" (empty output) */
+    /* without --include_deleted: should be "not found" (empty output) */
     global_opts_t g1 = gopts_default();
     cmd_args_t *a1 = targs_new();
     targs_pos(a1, "5", &g1);
@@ -173,11 +173,11 @@ static void test_get_include_deleted(stest_ctx_t *ctx)
     TEST(ctx, !strstr(stest_stdout(ctx), "summarize2"));
     targs_free(a1, &g1);
 
-    /* with --include-deleted: should return the row */
+    /* with --include_deleted: should return the row */
     global_opts_t g2 = gopts_default();
     cmd_args_t *a2 = targs_new();
     targs_pos(a2, "5", &g2);
-    targs_flag_bool(a2, "include-deleted", &g2);
+    targs_flag_bool(a2, "include_deleted", &g2);
     int rc2 = do_get(ctx, a2, g2);
     TEST_EQ(ctx, rc2, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "summarize2");

@@ -29,8 +29,8 @@ static const global_opts_t *vlog_gopts;   /* set once per cmd_* call */
     } while (0)
 
 /* Parse an optional integer id flag (create refs and list/count filters
- * such as --context-id / --skill-revision-id / --model-revision-id /
- * --parent-execution-id): absent → 0 ("all" / unset).
+ * such as --context_id / --skill_revision_id / --model_revision_id /
+ * --parent_execution_id): absent → 0 ("all" / unset).
  * Garbage input → standard error JSON + usage, returns 0. */
 static int parse_id_flag(const char *value, const char *flag, int *out,
                          void (*usage)(FILE *))
@@ -153,10 +153,10 @@ void exec_usage(FILE *f)
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
-"    --context-id <int>         Filter by context\n"
-"    --skill-revision-id <int>  Filter by skill revision\n"
-"    --model-revision-id <int>  Filter by model revision\n"
-"    --parent-execution-id <int> Filter by parent execution\n"
+"    --context_id <int>         Filter by context\n"
+"    --skill_revision_id <int>  Filter by skill revision\n"
+"    --model_revision_id <int>  Filter by model revision\n"
+"    --parent_execution_id <int> Filter by parent execution\n"
 "    --offset <n>               Skip first N rows (default 0)\n"
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
@@ -168,14 +168,14 @@ void exec_usage(FILE *f)
 "  Count executions matching optional filters.\n"
 "\n"
 "    actagamma_db exec count\n"
-"    actagamma_db exec count --status failed --context-id 7\n"
+"    actagamma_db exec count --status failed --context_id 7\n"
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
-"    --context-id <int>         Filter by context\n"
-"    --skill-revision-id <int>  Filter by skill revision\n"
-"    --model-revision-id <int>  Filter by model revision\n"
-"    --parent-execution-id <int> Filter by parent execution\n"
+"    --context_id <int>         Filter by context\n"
+"    --skill_revision_id <int>  Filter by skill revision\n"
+"    --model_revision_id <int>  Filter by model revision\n"
+"    --parent_execution_id <int> Filter by parent execution\n"
 "\n"
 "Global options:\n"
 "  --table            columnar / plain output instead of JSON\n"
@@ -301,10 +301,10 @@ static void usage_list(FILE *f)
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
-"    --context-id <int>         Filter by context\n"
-"    --skill-revision-id <int>  Filter by skill revision\n"
-"    --model-revision-id <int>  Filter by model revision\n"
-"    --parent-execution-id <int> Filter by parent execution\n"
+"    --context_id <int>         Filter by context\n"
+"    --skill_revision_id <int>  Filter by skill revision\n"
+"    --model_revision_id <int>  Filter by model revision\n"
+"    --parent_execution_id <int> Filter by parent execution\n"
 "    --offset <n>               Skip first N rows (default 0)\n"
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
@@ -320,14 +320,14 @@ static void usage_count(FILE *f)
 "  Count executions matching optional filters.\n"
 "\n"
 "    actagamma_db exec count\n"
-"    actagamma_db exec count --status failed --context-id 7\n"
+"    actagamma_db exec count --status failed --context_id 7\n"
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
-"    --context-id <int>         Filter by context\n"
-"    --skill-revision-id <int>  Filter by skill revision\n"
-"    --model-revision-id <int>  Filter by model revision\n"
-"    --parent-execution-id <int> Filter by parent execution\n", f);
+"    --context_id <int>         Filter by context\n"
+"    --skill_revision_id <int>  Filter by skill revision\n"
+"    --model_revision_id <int>  Filter by model revision\n"
+"    --parent_execution_id <int> Filter by parent execution\n", f);
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -893,10 +893,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
         const char *f_status   = cmd_args_flag(ga, "status", 1);
-        const char *f_ctx_id   = cmd_args_flag(ga, "context-id", 1);
-        const char *f_skill_id = cmd_args_flag(ga, "skill-revision-id", 1);
-        const char *f_model_id = cmd_args_flag(ga, "model-revision-id", 1);
-        const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 1);
+        const char *f_ctx_id   = cmd_args_flag(ga, "context_id", 1);
+        const char *f_skill_id = cmd_args_flag(ga, "skill_revision_id", 1);
+        const char *f_model_id = cmd_args_flag(ga, "model_revision_id", 1);
+        const char *f_parent   = cmd_args_flag(ga, "parent_execution_id", 1);
         const char *s_off      = cmd_args_flag(ga, "offset", 1);
         const char *s_lim      = cmd_args_flag(ga, "limit", 1);
         int has_count    = cmd_args_has_flag(ga, "count");
@@ -925,10 +925,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         int ctx_id = 0, skill_rev_id = 0, model_rev_id = 0, parent_id = 0;
-        if (!parse_id_flag(f_ctx_id, "--context-id", &ctx_id, usage_list) ||
-            !parse_id_flag(f_skill_id, "--skill-revision-id", &skill_rev_id, usage_list) ||
-            !parse_id_flag(f_model_id, "--model-revision-id", &model_rev_id, usage_list) ||
-            !parse_id_flag(f_parent, "--parent-execution-id", &parent_id, usage_list))
+        if (!parse_id_flag(f_ctx_id, "--context_id", &ctx_id, usage_list) ||
+            !parse_id_flag(f_skill_id, "--skill_revision_id", &skill_rev_id, usage_list) ||
+            !parse_id_flag(f_model_id, "--model_revision_id", &model_rev_id, usage_list) ||
+            !parse_id_flag(f_parent, "--parent_execution_id", &parent_id, usage_list))
             return EXIT_INVALID;
 
         execution_query_t q = {
@@ -1012,16 +1012,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
         const char *f_status   = cmd_args_flag(ga, "status", 1);
-        const char *f_ctx_id   = cmd_args_flag(ga, "context-id", 1);
-        const char *f_skill_id = cmd_args_flag(ga, "skill-revision-id", 1);
-        const char *f_model_id = cmd_args_flag(ga, "model-revision-id", 1);
-        const char *f_parent   = cmd_args_flag(ga, "parent-execution-id", 1);
+        const char *f_ctx_id   = cmd_args_flag(ga, "context_id", 1);
+        const char *f_skill_id = cmd_args_flag(ga, "skill_revision_id", 1);
+        const char *f_model_id = cmd_args_flag(ga, "model_revision_id", 1);
+        const char *f_parent   = cmd_args_flag(ga, "parent_execution_id", 1);
 
         int ctx_id = 0, skill_rev_id = 0, model_rev_id = 0, parent_id = 0;
-        if (!parse_id_flag(f_ctx_id, "--context-id", &ctx_id, usage_count) ||
-            !parse_id_flag(f_skill_id, "--skill-revision-id", &skill_rev_id, usage_count) ||
-            !parse_id_flag(f_model_id, "--model-revision-id", &model_rev_id, usage_count) ||
-            !parse_id_flag(f_parent, "--parent-execution-id", &parent_id, usage_count))
+        if (!parse_id_flag(f_ctx_id, "--context_id", &ctx_id, usage_count) ||
+            !parse_id_flag(f_skill_id, "--skill_revision_id", &skill_rev_id, usage_count) ||
+            !parse_id_flag(f_model_id, "--model_revision_id", &model_rev_id, usage_count) ||
+            !parse_id_flag(f_parent, "--parent_execution_id", &parent_id, usage_count))
             return EXIT_INVALID;
 
         execution_query_t q = {

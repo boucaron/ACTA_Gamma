@@ -50,7 +50,7 @@ const char *cmd_args_next_positional(cmd_args_t *it);
  *   const char *v = cmd_args_flag(&it, "name", 1);
  *   if (!v) { // not present  
  *   // v is the value for --name <v>
- *   // v is NULL for --no-nulls (boolean)
+ *   // v is NULL for --no_nulls (boolean)
  */
 const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value);
 

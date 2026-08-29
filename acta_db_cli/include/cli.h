@@ -24,11 +24,11 @@ typedef struct {
     const char *fields;      /* --fields */
     const char *json_input;  /* --json */
     int         from_stdin;  /* --stdin */
-    const char *from_file;   /* --from-file */
+    const char *from_file;   /* --from_file */
 
     /* output shaping */
-    int         no_nulls;    /* --no-nulls */
-    int         id_only;     /* --id-only */
+    int         no_nulls;    /* --no_nulls */
+    int         id_only;     /* --id_only */
     int         count;       /* --count */
     int         table;       /* --table */
     int         pretty;      /* --pretty */

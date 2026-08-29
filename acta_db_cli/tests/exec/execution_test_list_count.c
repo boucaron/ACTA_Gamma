@@ -63,7 +63,7 @@ static void test_list_filter_context_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "context-id", "1", &g);
+    targs_flag(a, "context_id", "1", &g);
 
     int rc = do_exec(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -75,7 +75,7 @@ static void test_list_filter_skill_revision_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "skill-revision-id", "1", &g);
+    targs_flag(a, "skill_revision_id", "1", &g);
 
     int rc = do_exec(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -88,7 +88,7 @@ static void test_list_filter_model_revision_id(stest_ctx_t *ctx)
     /* model_revision_id=2 → execs 1,3,4,5 (4 items) */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "model-revision-id", "2", &g);
+    targs_flag(a, "model_revision_id", "2", &g);
 
     int rc = do_exec(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -101,7 +101,7 @@ static void test_list_filter_parent(stest_ctx_t *ctx)
     /* only exec id=5 has parent_execution_id=4 */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "parent-execution-id", "4", &g);
+    targs_flag(a, "parent_execution_id", "4", &g);
 
     int rc = do_exec(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -251,7 +251,7 @@ static void test_count_filter_model_rev(stest_ctx_t *ctx)
     /* model_revision_id=1 → only exec id=2 */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "model-revision-id", "1", &g);
+    targs_flag(a, "model_revision_id", "1", &g);
 
     int rc = do_exec(ctx, "count", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -264,7 +264,7 @@ static void test_count_filter_parent(stest_ctx_t *ctx)
     /* parent_execution_id=4 → only exec id=5 */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "parent-execution-id", "4", &g);
+    targs_flag(a, "parent_execution_id", "4", &g);
 
     int rc = do_exec(ctx, "count", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);

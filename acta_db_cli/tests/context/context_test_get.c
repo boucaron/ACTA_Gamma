@@ -70,7 +70,7 @@ static void test_get_fields(stest_ctx_t *ctx)
 
 static void test_get_no_nulls(stest_ctx_t *ctx)
 {
-    /* row 1 has metadata=NULL → should be omitted with --no-nulls */
+    /* row 1 has metadata=NULL → should be omitted with --no_nulls */
     global_opts_t g = gopts_no_nulls();
     cmd_args_t *a = targs_new();
     targs_pos(a, "1", &g);
