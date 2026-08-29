@@ -72,24 +72,28 @@ void skill_usage(FILE *f)
 "    --no_nulls           Omit null-valued fields from JSON\n"
 "\n"
 "== update <id> ====================================================\n"
-"  Fully replace a skill's fields (all required fields must be\n"
-"  re-supplied).\n"
+"  Update one or more fields on an existing skill.\n"
+"  Unspecified fields are left unchanged.\n"
 "\n"
 "    actagamma_db skill update 42 \\\n"
 "      --name \"Summarize v2\" \\\n"
 "      --prompt_template \"Summarize (v2): {{input}}\"\n"
 "\n"
-"  Required fields (same as create):\n"
+"    cat patch.json | actagamma_db skill update 42 --json\n"
+"        <- JSON patch via stdin (any subset of the fields)\n"
+"\n"
+"  At least one field is required:\n"
 "    --name <str>             Display name\n"
 "    --prompt_template <str>  Prompt template body\n"
-"\n"
-"  Optional fields:\n"
 "    --folder_id <int>        Owning folder (0 = root)\n"
 "    --description <str>      Human-readable description\n"
 "    --output_schema <json>   Expected output JSON schema\n"
 "\n"
+"  Note: a JSON body cannot move a skill back to the root folder\n"
+"  (use: actagamma_db skill move <id> --folder_id 0).\n"
+"\n"
 "  Options:\n"
-"    --json               Read the skill as JSON from stdin\n"
+"    --json               Read the skill patch as JSON from stdin\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n"
 "\n"
 "== delete <id> ====================================================\n"
@@ -205,24 +209,28 @@ static void usage_update(FILE *f)
 {
     fputs(
 "== update <id> ====================================================\n"
-"  Fully replace a skill's fields (all required fields must be\n"
-"  re-supplied).\n"
+"  Update one or more fields on an existing skill.\n"
+"  Unspecified fields are left unchanged.\n"
 "\n"
 "    actagamma_db skill update 42 \\\n"
 "      --name \"Summarize v2\" \\\n"
 "      --prompt_template \"Summarize (v2): {{input}}\"\n"
 "\n"
-"  Required fields (same as create):\n"
+"    cat patch.json | actagamma_db skill update 42 --json\n"
+"        <- JSON patch via stdin (any subset of the fields)\n"
+"\n"
+"  At least one field is required:\n"
 "    --name <str>             Display name\n"
 "    --prompt_template <str>  Prompt template body\n"
-"\n"
-"  Optional fields:\n"
 "    --folder_id <int>        Owning folder (0 = root)\n"
 "    --description <str>      Human-readable description\n"
 "    --output_schema <json>   Expected output JSON schema\n"
 "\n"
+"  Note: a JSON body cannot move a skill back to the root folder\n"
+"  (use: actagamma_db skill move <id> --folder_id 0).\n"
+"\n"
 "  Options:\n"
-"    --json               Read the skill as JSON from stdin\n"
+"    --json               Read the skill patch as JSON from stdin\n"
 "    --verbose <n>        debug level 0-3 (stderr)\n", f);
 }
 
@@ -645,10 +653,75 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
         }
 
-        skill_t s = {0};
-        s.id = id;
-        int json_owned = 0;
+        /* ── input flags (flag mode; JSON mode reads stdin) ───────── */
+        const char *f_name    = cmd_args_flag(ga, "name", 1);
+        const char *f_prompt  = cmd_args_flag(ga, "prompt_template", 1);
+        const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
+        const char *f_desc    = cmd_args_flag(ga, "description", 1);
+        const char *f_schema  = cmd_args_flag(ga, "output_schema", 1);
+
+        int has_folder = 0;   /* 1 once we've decided folder_id is being set */
+        int folder_val = 0;   /* 0 == root (NULL) */
         int ret = EXIT_OK;
+
+        if (!gopts->json_input) {
+            /* At least one field must be provided for update. */
+            if (!f_name && !f_prompt && !f_desc && !f_schema && !f_folder) {
+                VLOG(1, "  ERROR: no fields provided for update");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"at least one field required for update\"}\n");
+                usage_update(stderr);
+                return EXIT_INVALID;
+            }
+            if (f_name && !*f_name) {
+                VLOG(1, "  ERROR: --name must not be empty");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"--name must not be empty\"}\n");
+                usage_update(stderr);
+                return EXIT_INVALID;
+            }
+            if (f_folder) {
+                if (!parse_folder_id(f_folder, &folder_val)) {
+                    VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
+                    fprintf(stderr,
+                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                        "\"message\":\"--folder_id must be a non-negative integer\"}\n");
+                    usage_update(stderr);
+                    return EXIT_INVALID;
+                }
+                has_folder = 1;
+            }
+        }
+
+        /*
+         * Fetch the current row so we can fill in any fields the caller
+         * did not supply (partial-update → full-update merge).
+         * Done before reading stdin so a missing id fails fast.
+         */
+        int err = 0;
+        skill_t *cur = acta_db_skill_get_live(db, id, &err);
+        if (err != ACTA_DB_OK) {
+            VLOG(1, "  FAILED fetching current row err=%d", err);
+            acta_db_skill_free(cur);
+            return map_rc_to_exit(err);
+        }
+        if (!cur) {
+            VLOG(1, "  not found or already deleted (id=%d)", id);
+            fprintf(stderr,
+                "{\"error\":\"ACTA_DB_ERR_NOT_FOUND\",\"code\":-5,"
+                "\"message\":\"skill not found\"}\n");
+            return EXIT_NOT_FOUND;
+        }
+
+        /* Shallow-merge: start from the live row, override only what
+         * the caller actually provided.  String pointers either point
+         * into `cur` (freed with cur) or into `parsed`'s blob buffers
+         * (freed separately below); argv strings are owned by main. */
+        skill_t s = *cur;
+        skill_t parsed = {0};
+        int parsed_owned = 0;
 
         if (gopts->json_input) {
             char *blob = read_stdin_all();
@@ -657,46 +730,55 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"failed to read JSON input\"}\n");
                 usage_update(stderr);
-                return EXIT_INVALID;
+                ret = EXIT_INVALID;
+                goto cleanup_skill_update;
             }
             VLOG(1, "skill update: JSON input (%zu bytes)", strlen(blob));
 
-            if (json_parse_skill(blob, &s) != 0) {
+            if (json_parse_skill(blob, &parsed) != 0) {
                 VLOG(1, "  JSON parse error");
                 fprintf(stderr,
                     "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
                     "\"message\":\"invalid JSON body\"}\n");
                 usage_update(stderr);
                 free(blob);
-                return EXIT_INVALID;
+                ret = EXIT_INVALID;
+                goto cleanup_skill_update;
             }
             free(blob);
-            json_owned = 1;
+            parsed_owned = 1;
 
             /* positional <id> is the authority */
-            s.id = id;
-        } else {
-            const char *f_name    = cmd_args_flag(ga, "name", 1);
-            const char *f_prompt  = cmd_args_flag(ga, "prompt_template", 1);
-            const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
-            const char *f_desc    = cmd_args_flag(ga, "description", 1);
-            const char *f_schema  = cmd_args_flag(ga, "output_schema", 1);
+            parsed.id = id;
 
-            s.name            = (char *)f_name;
-            s.prompt_template = (char *)f_prompt;
-            s.description     = (char *)f_desc;
-            s.output_schema   = (char *)f_schema;
-            s.folder_id = 0;
-            if (f_folder) {
-                if (!parse_folder_id(f_folder, &s.folder_id)) {
-                    VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
-                    fprintf(stderr,
-                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                        "\"message\":\"--folder_id must be a non-negative integer\"}\n");
-                    usage_update(stderr);
-                    return EXIT_INVALID;
-                }
+            /* At least one recognised field must be present. */
+            if (!parsed.name && !parsed.prompt_template &&
+                !parsed.description && !parsed.output_schema &&
+                parsed.folder_id <= 0) {
+                VLOG(1, "  ERROR: no fields provided in JSON body");
+                fprintf(stderr,
+                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
+                    "\"message\":\"at least one field required in JSON body\"}\n");
+                usage_update(stderr);
+                ret = EXIT_INVALID;
+                goto cleanup_skill_update;
             }
+
+            /* patch: adopt only the fields present in the blob */
+            if (parsed.name)            s.name            = parsed.name;
+            if (parsed.prompt_template) s.prompt_template = parsed.prompt_template;
+            if (parsed.description)     s.description     = parsed.description;
+            if (parsed.output_schema)   s.output_schema   = parsed.output_schema;
+            /* folder_id == 0 means "absent" as well as "root", so a
+             * JSON body cannot move the skill back to the root folder
+             * (use: skill move <id> --folder_id 0). */
+            if (parsed.folder_id > 0)   s.folder_id       = parsed.folder_id;
+        } else {
+            if (f_name)        s.name            = (char *)f_name;
+            if (f_prompt)      s.prompt_template = (char *)f_prompt;
+            if (f_desc)        s.description     = (char *)f_desc;
+            if (f_schema)      s.output_schema   = (char *)f_schema;
+            if (has_folder)    s.folder_id       = folder_val;
         }
 
         VLOG(1, "skill update: id=%d name=%s prompt_template=%s folder_id=%d",
@@ -717,37 +799,37 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p json_owned=%d s=%p name=%p prompt=%p "
+        VLOG(3, "  raw: ga=%p parsed_owned=%d s=%p name=%p prompt=%p "
                 "folder=%d desc=%p schema=%p",
-             (const void *)ga, json_owned, (const void *)&s,
+             (const void *)ga, parsed_owned, (const void *)&s,
              (const void *)s.name,
              (const void *)s.prompt_template,
              s.folder_id,
              (const void *)s.description,
              (const void *)s.output_schema);
 
-        /* ── required-field validation (full replacement) ────────── */
+        /* ── post-merge validation ──────────────────────────────────
+         * The live row always carries a non-empty name/prompt (create
+         * rejects empty), so these only fire when the caller passed an
+         * explicitly empty string (e.g. JSON "name":""). */
         if (!s.name || !*s.name) {
-            VLOG(1, "  ERROR: missing required field 'name'");
+            VLOG(1, "  ERROR: 'name' is empty");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: name\"}\n");
+                "\"message\":\"name must not be empty\"}\n");
             usage_update(stderr);
             ret = EXIT_INVALID;
             goto cleanup_skill_update;
         }
         if (!s.prompt_template || !*s.prompt_template) {
-            VLOG(1, "  ERROR: missing required field 'prompt_template'");
+            VLOG(1, "  ERROR: 'prompt_template' is empty");
             fprintf(stderr,
                 "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: prompt_template\"}\n");
+                "\"message\":\"prompt_template must not be empty\"}\n");
             usage_update(stderr);
             ret = EXIT_INVALID;
             goto cleanup_skill_update;
         }
-
-        /* ── optional-field validation ───────────────────────────── */
-        if (s.folder_id < 0) s.folder_id = 0;
 
         vlog_skill_fields("  pre-update", &s);
 
@@ -768,14 +850,17 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         goto cleanup_skill_update;
 
     cleanup_skill_update:
-        if (json_owned) {
-            free(s.name);
-            free(s.description);
-            free(s.prompt_template);
-            free(s.output_schema);
-            free(s.created_at);
-            free(s.updated_at);
-            free(s.deleted_at);
+        /* `s` shares string pointers with `cur` (live row) and/or
+         * `parsed` (blob); free each allocation exactly once. */
+        acta_db_skill_free(cur);
+        if (parsed_owned) {
+            free(parsed.name);
+            free(parsed.description);
+            free(parsed.prompt_template);
+            free(parsed.output_schema);
+            free(parsed.created_at);
+            free(parsed.updated_at);
+            free(parsed.deleted_at);
         }
         return ret;
     }
