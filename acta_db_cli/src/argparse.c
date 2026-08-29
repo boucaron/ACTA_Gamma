@@ -140,9 +140,6 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             }
             continue;
         }
-        /* ---- --create_dirs (spec §3, not global per spec but harmless) ---- */
-        if (strcmp(a, "--create_dirs") == 0) { /* swallow; TODO: thread to open */ continue; }
-
         /* not a recognised global → keep as entity/action/positional */
         rest[rest_n++] = a;
     }

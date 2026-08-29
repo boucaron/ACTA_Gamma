@@ -12,8 +12,8 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 > **Post-review changes (doc re-checked against the tree):**
 > - Flag names were standardized to **underscores** (`--context_id`,
->   `--no_nulls`, `--id_only`, `--from_file`, `--create_dirs`,
->   `--include_deleted`, …); dashed spellings below are updated.
+>   `--no_nulls`, `--id_only`, `--from_file`, `--include_deleted`, …);
+>   dashed spellings below are updated.
 > - Findings fixed since the review are no longer listed (strict
 >   `--verbose` parsing, bare-`atoi` sites, negative `folder_id`/
 >   `parent_id` handling, `--id_only` help mismatch). The strict id
@@ -33,13 +33,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    **Fix:** the parser needs to know which flags take values (e.g. a
    name→has_value table passed by the handler), not a positional heuristic.
 
-2. **`--create_dirs` silently swallowed** (`src/argparse.c`)
-   Accepted with `/* swallow; TODO: thread to open */` while open mode is
-   `ACTA_DB_OPEN_EXISTING`. Users pass it expecting the DB file to be created;
-   they instead get `cannot open database './acta.db'`.
-   **Fix:** either pass the flag through to `acta_db_open` or drop the flag.
-
-3. **`cli_error` emits invalid JSON when the message contains quotes/backslashes**
+2. **`cli_error` emits invalid JSON when the message contains quotes/backslashes**
    (`src/main.c`)
    The message is `vfprintf`'d raw into a JSON string; a db path containing `"`
    or `\` breaks the one-line JSON error contract that tools parse.
@@ -48,7 +42,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency issues
 
-4. **`cmd_args_flag` doc contradicts implementation** (`include/argparse.h`, `src/argparse.c`)
+3. **`cmd_args_flag` doc contradicts implementation** (`include/argparse.h`, `src/argparse.c`)
    Header claims the call "advances past it" and describes a
    value/boolean protocol; the implementation never advances `pos`, and returns
    `NULL` both for "flag absent" and "boolean flag present" — callers cannot
@@ -59,30 +53,30 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    small struct `{present, value}`), fix the docs, and reconcile the scan
    ranges.
 
-5. **Two duplicate "did you mean" mechanisms** (`include/cli_util.h`)
+4. **Two duplicate "did you mean" mechanisms** (`include/cli_util.h`)
    `action_err` (common-prefix scoring) and `closest_action`/`edit_distance`
    (Levenshtein) solve the same problem with different scoring. Keep one
    (Levenshtein is strictly more useful for mid-word typos).
 
-6. **Three conventions for verbose logging** (`include/cli.h`, `include/cli_util.h`)
+5. **Three conventions for verbose logging** (`include/cli.h`, `include/cli_util.h`)
    `vdbg` (cli.h), `VLOG` (cli_util.h), and a `VERBOSE` macro that depends on a
    magically-named local variable `gopts_local`. Keep one macro.
 
-7. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
+6. **Dead/inconsistent error-code plumbing in `cli_error`** (`src/main.c`)
     - `exit_code` parameter is ignored (`(void)exit_code`).
     - Callers mix string codes (`"ACTA_CLI_ERR"`) with numeric `c_code` values
       of different provenance (`-10` CLI codes vs. raw library rc in
       `ACTA_DB_OPEN_FAIL`). Decide the schema once (spec §7.1 exists — enforce
       it here).
 
-8. **`parse_globals` conflates three error classes** (`src/argparse.c`)
+7. **`parse_globals` conflates three error classes** (`src/argparse.c`)
     OOM on the `rest` malloc, a missing value for `--db`/`--json`/etc., and
     "fewer than 2 positionals" all return `EXIT_CLI` (10) with no message;
     `main.c` then prints "missing entity and/or action" — misleading for the
     other two cases. OOM should be `EXIT_ALLOC` (3); missing flag values need
     their own message naming the flag.
 
-9. **Duplicate declaration of `cmd_skill`** at the bottom of
+8. **Duplicate declaration of `cmd_skill`** at the bottom of
     `include/commands.h` — copy-paste leftover.
 
 ### Nitpicks
@@ -113,7 +107,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   files.
 - `main` lifecycle is orderly: open → dispatch → close → `force_close`
   fallback with a warning.
-- Consistent single-line JSON error shape (once #3 is fixed).
+- Consistent single-line JSON error shape (once #2 is fixed).
 
 ---
 
@@ -197,7 +191,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 10. **NULL conflation in string getters**
     `dup_or_null`/`jget_str` return NULL for both "key absent" and OOM. Same
-    ambiguity as Part 1 #8. Low risk (OOM is fatal in practice) but a
+    ambiguity as Part 1 #7. Low risk (OOM is fatal in practice) but a
     `*ok` out-param or errno-style convention would make the contract explicit.
 
 11. **Opaque `-1` parse errors**
@@ -600,7 +594,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 3. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #5)*
 4. **`db version` prints `"test"`**; `db exec` positional form unimplemented, `--stdin` dead. *(P3 #1–3)*
 5. **DB failures exit non-zero with no stderr output** — JSON error contract only implemented for input validation. *(P4 #6)*
-6. **`cli_error` emits unescaped JSON** — paths with `"`/`\` break the error contract. *(P1 #3)*
+6. **`cli_error` emits unescaped JSON** — paths with `"`/`\` break the error contract. *(P1 #2)*
 7. **`model move` without `--folder_id` → silent move to root** (help says required). *(P4 #2)*
 8. **JSON-path `created_at` leaks** in context / model_folder / exec / log creates. *(P2/P4/P5)*
 9. **Global parse layer untested** — the layer that owns bugs #2–3 and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #4)*
