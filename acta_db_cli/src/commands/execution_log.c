@@ -459,6 +459,7 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
             free(el.event);
             free(el.message);
             free(el.metadata);
+            free(el.created_at);
         }
         return ret;
     }

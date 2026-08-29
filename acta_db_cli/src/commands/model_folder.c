@@ -479,6 +479,9 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
     cleanup_mf_create:
         if (json_owned) {
             free(mf.name);
+            free(mf.created_at);
+            free(mf.updated_at);
+            free(mf.deleted_at);
         }
         return ret;
     }

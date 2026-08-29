@@ -619,6 +619,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (json_owned) {
             free(exec.prompt);
             free((void *)exec.status);
+            free(exec.created_at);
         }
         return ret;
     }

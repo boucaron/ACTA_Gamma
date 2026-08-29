@@ -336,6 +336,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             free(ctx.content);
             free(ctx.content_hash);
             free(ctx.metadata);
+            free(ctx.created_at);
         }
         return ret;
     }
