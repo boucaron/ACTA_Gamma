@@ -1,5 +1,5 @@
 /* ── skill_rev_test_get.c ──────────────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #define REF_DB  "acta_test_ref.db"
 

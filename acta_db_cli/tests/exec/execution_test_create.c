@@ -2,7 +2,7 @@
  * execution_test_create.c
  * Unit tests for:  actagamma_db exec create
  * ───────────────────────────────────────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #define REF_DB "acta_test_ref.db"
 

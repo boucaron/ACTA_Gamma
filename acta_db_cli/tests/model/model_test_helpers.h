@@ -1,7 +1,7 @@
 #ifndef MODEL_TEST_HELPERS_H
 #define MODEL_TEST_HELPERS_H
 
-#include "skill_test_helpers.h"
+#include "test_helpers.h"
 
 /* ── model-specific seed helpers ──────────────────────────────────── */
 

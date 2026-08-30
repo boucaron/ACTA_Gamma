@@ -11,7 +11,7 @@
  *   stdout:         empty (JSON errors never go to stdout)
  *   exit:           map_rc_to_exit(rc)  (ACTA_DB_ERR_NOT_FOUND → 1)
  */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #include <unistd.h>
 #include <fcntl.h>

@@ -2,7 +2,7 @@
  * execution_test_main.c
  * Top-level runner for all execution unit tests.
  * ───────────────────────────────────────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 #include <stdio.h>
 
 

@@ -1,4 +1,4 @@
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #include "internal.h"
 #include "model_test_helpers.h"

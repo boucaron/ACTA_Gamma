@@ -2,7 +2,7 @@
  * execution_test_list_count.c
  * Unit tests for:  exec list / exec count
  * ───────────────────────────────────────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #define REF_DB "acta_test_ref.db"
 

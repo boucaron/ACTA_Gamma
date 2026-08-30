@@ -1,5 +1,5 @@
 /* ── execution_log_test_create.c ──────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #define REF_DB  "acta_test_ref.db"
 

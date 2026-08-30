@@ -8,7 +8,8 @@
 #   include/              headers
 #   src/                  top-level .c  (argparse.c, json.c, …)
 #   src/commands/         per-entity .c
-#   tests/skill/          skill CLI tests  (also holds shared skill_test_helpers.*)
+#   tests/skill/          skill CLI tests
+#   tests/helpers/        shared test framework (test_helpers.*)
 #   tests/skill_rev/      skill_revision CLI tests
 #   tests/skill_folder/   skill_folder CLI tests
 #   tests/model/          model CLI tests
@@ -27,7 +28,8 @@
 CC      ?= cc
 CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
-           -Itests/skill -Itests/skill_folder -Itests/model_folder \
+           -Itests/helpers -Itests/skill_folder \
+           -Itests/model_folder \
            -Itests/context -Itests/db \
            -Itests/execution_log -Itests/exec \
            -Itests/model
@@ -108,8 +110,8 @@ EXEC_TEST_SRCS   := $(wildcard tests/exec/*.c)
 EXEC_TEST_OBJS   := $(patsubst %.c, %.o, $(EXEC_TEST_SRCS))
 EXEC_TEST_TARGET := test_exec$(EXEEXT)
 
-# shared test-framework object (lives in tests/skill/, used by all suites)
-HELPERS_OBJ := tests/skill/skill_test_helpers.o
+# shared test-framework object (lives in tests/helpers/, used by all suites)
+HELPERS_OBJ := tests/helpers/test_helpers.o
 
 # all test targets (drives the `test` phony + clean)
 ALL_TEST_TARGETS := $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) \
@@ -130,8 +132,8 @@ $(TARGET): $(OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
 # ---- test binary: skill ----
-$(TEST_TARGET): $(TEST_OBJS) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+$(TEST_TARGET): $(TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: skill_revision ----
 $(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)

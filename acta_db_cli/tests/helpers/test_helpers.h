@@ -1,5 +1,5 @@
-#ifndef SKILL_TEST_HELPERS_H
-#define SKILL_TEST_HELPERS_H
+#ifndef TEST_HELPERS_H
+#define TEST_HELPERS_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -120,4 +120,4 @@ int run_skill_test_move(void);
 int run_skill_test_list_count(void);
 int run_skill_test_misc(void);
 
-#endif /* SKILL_TEST_HELPERS_H */
+#endif /* TEST_HELPERS_H */

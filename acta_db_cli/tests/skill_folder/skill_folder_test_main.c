@@ -1,4 +1,4 @@
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 #include <stdio.h>
 
 extern int run_skill_folder_test_create();

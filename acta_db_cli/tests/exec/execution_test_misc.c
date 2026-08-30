@@ -2,7 +2,7 @@
  * execution_test_misc.c
  * Unit tests for:  exec help / unknown action / closest match
  * ───────────────────────────────────────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 
 #define REF_DB "acta_test_ref.db"
 

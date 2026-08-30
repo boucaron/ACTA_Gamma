@@ -1,5 +1,5 @@
 /* ── skill_rev_test_main.c ─────────────────────────────────────────── */
-#include "../skill/skill_test_helpers.h"
+#include "test_helpers.h"
 #include <stdio.h>
 
 
