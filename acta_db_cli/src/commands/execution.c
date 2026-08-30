@@ -5,26 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Parse an optional integer id flag (create refs and list/count filters
- * such as --context_id / --skill_revision_id / --model_revision_id /
- * --parent_execution_id): absent → 0 ("all" / unset).
- * Garbage input → standard error JSON + usage, returns 0. */
-static int parse_id_flag(const char *value, const char *flag, int *out,
-                         void (*usage)(FILE *))
-{
-    int v = 0;
-    if (value && !parse_nonneg_int(value, &v)) {
-        VLOG(1, "  ERROR: %s must be a non-negative integer, got '%s'", flag, value);
-        fprintf(stderr,
-            "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-            "\"message\":\"%s must be a non-negative integer\"}\n", flag);
-        usage(stderr);
-        return 0;
-    }
-    *out = v;
-    return 1;
-}
-
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
@@ -331,6 +311,12 @@ static void vlog_exec_raw(const char *tag, const execution_t *e, int rc)
          tag, (const void *)e, e ? e->id : -1, rc);
 }
 
+/* free_row adapter for load_row_or_notfound (void* signature). */
+static void execution_free_wrap(void *e)
+{
+    acta_db_execution_free((execution_t *)e);
+}
+
 /* ── execution_t → JSON object ────────────────────────────────────── */
 
 static void exec_to_json(FILE *f, const execution_t *e, const global_opts_t *gopts)
@@ -470,9 +456,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
             if (json_parse_execution(blob, &exec) != 0) {
                 VLOG(1, "  JSON parse error");
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"invalid JSON body\"}\n");
+                emit_error("invalid JSON body");
                 usage_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
@@ -480,19 +464,23 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             free(blob);
             json_owned = 1;
         } else {
-            const char *f_prompt          = cmd_args_flag(ga, "prompt", 1);
-            const char *f_ctx_id          = cmd_args_flag(ga, "context_id", 1);
-            const char *f_skill_id        = cmd_args_flag(ga, "skill_revision_id", 1);
-            const char *f_model_id        = cmd_args_flag(ga, "model_revision_id", 1);
-            const char *f_parent_id       = cmd_args_flag(ga, "parent_execution_id", 1);
-            const char *f_status          = cmd_args_flag(ga, "status", 1);
+            exec.prompt = (char *)cmd_args_flag(ga, "prompt", 1);
+            exec.status = (char *)cmd_args_flag(ga, "status", 1);
 
-            exec.prompt             = (char *)f_prompt;
-            exec.status             = (char *)f_status;
-            if (!parse_id_flag(f_ctx_id, "--context_id", &exec.context_id, usage_create) ||
-                !parse_id_flag(f_skill_id, "--skill_revision_id", &exec.skill_revision_id, usage_create) ||
-                !parse_id_flag(f_model_id, "--model_revision_id", &exec.model_revision_id, usage_create) ||
-                !parse_id_flag(f_parent_id, "--parent_execution_id", &exec.parent_execution_id, usage_create))
+            /* Optional ref filters: absent → 0 ("all" / unset, exec is
+             * zero-initialized above). */
+            exec.context_id          = 0;
+            exec.skill_revision_id   = 0;
+            exec.model_revision_id   = 0;
+            exec.parent_execution_id = 0;
+            if (parse_nonneg_int_flag(ga, "context_id", &exec.context_id, 0,
+                                      usage_create, "exec create") < 0 ||
+                parse_nonneg_int_flag(ga, "skill_revision_id", &exec.skill_revision_id, 0,
+                                      usage_create, "exec create") < 0 ||
+                parse_nonneg_int_flag(ga, "model_revision_id", &exec.model_revision_id, 0,
+                                      usage_create, "exec create") < 0 ||
+                parse_nonneg_int_flag(ga, "parent_execution_id", &exec.parent_execution_id, 0,
+                                      usage_create, "exec create") < 0)
                 return EXIT_INVALID;
         }
 
@@ -520,36 +508,28 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         /* ── required-field validation ────────────────────────────── */
         if (!exec.prompt) {
             VLOG(1, "  ERROR: missing required field 'prompt'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: prompt\"}\n");
+            emit_error("missing required field: prompt");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
         if (exec.context_id <= 0) {
             VLOG(1, "  ERROR: missing required field 'context_id'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: context_id\"}\n");
+            emit_error("missing required field: context_id");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
         if (exec.skill_revision_id <= 0) {
             VLOG(1, "  ERROR: missing required field 'skill_revision_id'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: skill_revision_id\"}\n");
+            emit_error("missing required field: skill_revision_id");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
         }
         if (exec.model_revision_id <= 0) {
             VLOG(1, "  ERROR: missing required field 'model_revision_id'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: model_revision_id\"}\n");
+            emit_error("missing required field: model_revision_id");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
@@ -562,10 +542,8 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (exec.status) {
             VLOG(1, "  ERROR: 'status' is not accepted by exec create "
                     "(new executions are always 'pending')");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"'status' is not accepted by exec create: "
-                "new executions are always 'pending'\"}\n");
+            emit_error("'status' is not accepted by exec create: "
+                      "new executions are always 'pending'");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_exec_create;
@@ -587,11 +565,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  created exec id=%d", out_id);
-
-        if (gopts->id_only)
-            fprintf(stdout, "%d\n", out_id);
-        else
-            fprintf(stdout, "{\"id\":%d}\n", out_id);
+        emit_ok_id(gopts, out_id);
 
         ret = EXIT_OK;
         goto cleanup_exec_create;
@@ -608,24 +582,9 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "exec get: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_get(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "exec get: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_get(stderr);
+        if (!parse_id_positional(ga, "id", usage_get, "exec get", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "exec get: fetching id=%d", id);
 
@@ -635,15 +594,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  acta_db_execution_get(%d) → ptr=%p err=%d",
              id, (const void *)e, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_execution_free(e);
-            return finish_op_error(db, err, "execution get");
-        }
-        if (!e) {
-            VLOG(1, "  not found (id=%d)", id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "execution not found");
-        }
+        int rc = load_row_or_notfound(db, err, e, id, execution_free_wrap,
+                                      "execution get", "execution");
+        if (rc)
+            return rc;
 
         vlog_exec_fields("  result", e);
         vlog_exec_raw("  raw", e, 0);
@@ -663,24 +617,9 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── start <id> ───────────────────────────────────────────────── */
     if (strcmp(action, "start") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "exec start: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_start(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "exec start: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_start(stderr);
+        if (!parse_id_positional(ga, "id", usage_start, "exec start", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "exec start: id=%d", id);
 
@@ -697,24 +636,9 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── cancel <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "cancel") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "exec cancel: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_cancel(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "exec cancel: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_cancel(stderr);
+        if (!parse_id_positional(ga, "id", usage_cancel, "exec cancel", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "exec cancel: id=%d", id);
 
@@ -731,24 +655,9 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── complete <id> ────────────────────────────────────────────── */
     if (strcmp(action, "complete") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "exec complete: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_complete(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "exec complete: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_complete(stderr);
+        if (!parse_id_positional(ga, "id", usage_complete, "exec complete", &id))
             return EXIT_INVALID;
-        }
 
         const char *f_result = cmd_args_flag(ga, "result", 0);
 
@@ -769,24 +678,9 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── fail <id> ────────────────────────────────────────────────── */
     if (strcmp(action, "fail") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "exec fail: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_fail(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "exec fail: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_fail(stderr);
+        if (!parse_id_positional(ga, "id", usage_fail, "exec fail", &id))
             return EXIT_INVALID;
-        }
 
         const char *f_error = cmd_args_flag(ga, "error", 0);
 
@@ -807,31 +701,16 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── set-raw <id> ─────────────────────────────────────────────── */
     if (strcmp(action, "set-raw") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "exec set-raw: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_set_raw(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "exec set-raw: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_set_raw(stderr);
+        if (!parse_id_positional(ga, "id", usage_set_raw, "exec set-raw", &id))
             return EXIT_INVALID;
-        }
 
-        const char *f_raw = cmd_args_flag(ga, "raw", 1);
+        const char *f_raw = NULL;
+        if (require_flag(ga, "raw", &f_raw, usage_set_raw, "exec set-raw") < 0)
+            return EXIT_INVALID;
         if (!f_raw) {
             VLOG(1, "exec set-raw: ERROR missing required --raw");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required flag: --raw\"}\n");
+            emit_error("missing required flag: --raw");
             usage_set_raw(stderr);
             return EXIT_INVALID;
         }
@@ -857,37 +736,21 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *f_skill_id = cmd_args_flag(ga, "skill_revision_id", 1);
         const char *f_model_id = cmd_args_flag(ga, "model_revision_id", 1);
         const char *f_parent   = cmd_args_flag(ga, "parent_execution_id", 1);
-        const char *s_off      = cmd_args_flag(ga, "offset", 1);
-        const char *s_lim      = cmd_args_flag(ga, "limit", 1);
 
         int offset = 0, limit = 0;
-
-        if (s_off) {
-            if (!parse_nonneg_int(s_off, &offset)) {
-                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--offset must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
-        if (s_lim) {
-            if (!parse_nonneg_int(s_lim, &limit)) {
-                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--limit must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_offset_limit(ga, &offset, &limit,
+                               usage_list, "exec list") < 0)
+            return EXIT_INVALID;
 
         int ctx_id = 0, skill_rev_id = 0, model_rev_id = 0, parent_id = 0;
-        if (!parse_id_flag(f_ctx_id, "--context_id", &ctx_id, usage_list) ||
-            !parse_id_flag(f_skill_id, "--skill_revision_id", &skill_rev_id, usage_list) ||
-            !parse_id_flag(f_model_id, "--model_revision_id", &model_rev_id, usage_list) ||
-            !parse_id_flag(f_parent, "--parent_execution_id", &parent_id, usage_list))
+        if (parse_nonneg_int_flag(ga, "context_id", &ctx_id, 0,
+                                  usage_list, "exec list") < 0 ||
+            parse_nonneg_int_flag(ga, "skill_revision_id", &skill_rev_id, 0,
+                                  usage_list, "exec list") < 0 ||
+            parse_nonneg_int_flag(ga, "model_revision_id", &model_rev_id, 0,
+                                  usage_list, "exec list") < 0 ||
+            parse_nonneg_int_flag(ga, "parent_execution_id", &parent_id, 0,
+                                  usage_list, "exec list") < 0)
             return EXIT_INVALID;
 
         execution_query_t q = {
@@ -970,17 +833,17 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *f_status   = cmd_args_flag(ga, "status", 1);
-        const char *f_ctx_id   = cmd_args_flag(ga, "context_id", 1);
-        const char *f_skill_id = cmd_args_flag(ga, "skill_revision_id", 1);
-        const char *f_model_id = cmd_args_flag(ga, "model_revision_id", 1);
-        const char *f_parent   = cmd_args_flag(ga, "parent_execution_id", 1);
+        const char *f_status = cmd_args_flag(ga, "status", 1);
 
         int ctx_id = 0, skill_rev_id = 0, model_rev_id = 0, parent_id = 0;
-        if (!parse_id_flag(f_ctx_id, "--context_id", &ctx_id, usage_count) ||
-            !parse_id_flag(f_skill_id, "--skill_revision_id", &skill_rev_id, usage_count) ||
-            !parse_id_flag(f_model_id, "--model_revision_id", &model_rev_id, usage_count) ||
-            !parse_id_flag(f_parent, "--parent_execution_id", &parent_id, usage_count))
+        if (parse_nonneg_int_flag(ga, "context_id", &ctx_id, 0,
+                                  usage_count, "exec count") < 0 ||
+            parse_nonneg_int_flag(ga, "skill_revision_id", &skill_rev_id, 0,
+                                  usage_count, "exec count") < 0 ||
+            parse_nonneg_int_flag(ga, "model_revision_id", &model_rev_id, 0,
+                                  usage_count, "exec count") < 0 ||
+            parse_nonneg_int_flag(ga, "parent_execution_id", &parent_id, 0,
+                                  usage_count, "exec count") < 0)
             return EXIT_INVALID;
 
         execution_query_t q = {
