@@ -47,18 +47,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   plus the final `free(gopts.argv)` is the kind of ownership protocol a future
   edit can double-free. Consider `g->argv = NULL` after freeing, unconditionally.
 
-### Positives
-
-- Clean two-pass parsing design (globals vs. per-command).
-- Strict stdout/stderr separation: JSON on stdout, all diagnostics on stderr —
-  pipe-safe.
-- Dispatch table + `entity_fn` callback is the right shape for per-entity
-  files.
-- `main` lifecycle is orderly: open → dispatch → close → `force_close`
-  fallback with a warning.
-- Consistent single-line JSON error shape across CLI and db error paths
-  (`cli_error` / `finish_db_error`).
-
 ---
 
 ## Part 2: JSON layer (`json.h` / `json.c`) and input-source plumbing
@@ -119,16 +107,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   `jget_int` instead, so the same input can be validated differently
   depending on which input mode the user chose.
 
-### Positives
-
-- Uniform, correct parse pattern: every path `cJSON_Delete(root)`s on exit,
-  including all error branches (no leaks).
-- `cJSON_GetObjectItemCaseSensitive` + `cJSON_IsString`/`IsNumber` guards make
-  type-coercion behavior explicit rather than relying on cJSON's implicit
-  conversions.
-- Keeping stdout pipe-safe (JSON out, everything else stderr) is maintained in
-  this layer.
-
 ---
 
 ## Part 3: small entities — `db.c`, `context.c`
@@ -156,22 +134,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 - `context create` via flags prints a *warning* (non-fatal) when all four
   flags are missing, then a *hard error* for `type` — the warning is pure
   noise since the error follows immediately; drop one.
-
-### Positives
-
-- `db exec` is contract-clean: positional / `--sql` / `--file` /
-  `--sql_stdin` sources (mutually exclusive, first wins), empty SQL rejected,
-  all error paths emit the single-line JSON error via `finish_db_error`,
-  success shapes documented in `db_usage()`.
-- `context` is the best-structured command file: single `goto cleanup_create`
-  with ownership tracking (`json_owned`), required-field table with per-source
-  (flag vs JSON key) hinting, `strtol` validation on numeric flags, and the
-  "no recognised flags" early nudge.
-- Consistent `err` out-param handling around every lib call (free-on-error
-  paths included).
-- `--fields`/`--no_nulls` filtering is implemented uniformly in
-  `ctx_to_json` and shared by `get` and `list`.
-- `list` empty → `[]` (valid JSON) rather than nothing.
 
 ---
 
@@ -234,20 +196,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     suite (V4) were dropped; the per-verb control-flow skeleton remains
     hand-written per file, divergence prevented by review.
 
-### Positives
-
-- `model.c` is the best file in the CLI: robust id parsing, fetch-and-merge
-  update (the correct pattern), required-field validation on create, and
-  the `json_owned` cleanup discipline. `model move` correctly errors on the
-  missing required `--folder_id` (unlike the old silent move-to-root).
-- The family's uniformity (same section banners, same action order, same
-  cleanup pattern) is a real virtue — it's what makes the review above
-  transferable file-to-file.
-- `skill create`'s cleanup list is complete (all 7 malloc-able fields) —
-  the standard the other cleanups should meet.
-- Read-only revision entities are appropriately minimal (get / get-latest /
-  list / count, no mutations).
-
 ---
 
 ## Part 5: execution, log, Makefile, tests
@@ -288,21 +236,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    rather than `LDLIBS` — they only link correctly because `LDFLAGS` happens
    to expand after the objects; a user-supplied `LDFLAGS` would put them
    before and break static linking.
-
-### Positives
-
-- **The lib defends the state machine** (`acta_db_execution_create` forces
-  `status='pending'`, transitions only via start/complete/fail/cancel) —
-  the one server-authoritative-field risk from Part 2 turned out to be
-  handled correctly, and the CLI now rejects the dead flag (`cffe8fe`).
-- Test volume is proportionate: ~10.8k lines of tests vs ~9.2k of app.
-- Per-suite binaries isolate failures and keep link units small;
-  `APP_OBJS_NO_MAIN` (link app minus `main.o` into tests) is a clean way to
-  test handlers in-process without an HTTP/shell layer.
-- Reference-DB pattern (`acta_test_ref.db` + `.sql` committed, copied per
-  run) gives suites hermetic, reproducible state.
-- Non-fatal assert counters + per-suite `main` aggregation give good failure
-  summaries already.
 
 ---
 
