@@ -135,25 +135,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ## Part 3: small entities — `db.c`, `context.c`
 
-### Bugs (worth fixing)
-
-1. **`context get <missing-id>` returns exit 0 with empty stdout** (`context.c`)
-   ```c
-   if (!c) return EXIT_OK;   /* not found: silent success */
-   ```
-   A not-found lookup prints nothing and exits 0 — indistinguishable from
-   success to any caller/script; the spec's `EXIT_NOT_FOUND` (1) + JSON error
-   line is the documented contract (and `acta_db_context_get` signaling
-   `err==OK, c==NULL` is exactly the "not found" case). Compare: `list` at
-   least prints `[]`. Widespread now (see Part 4 #2).
-
-2. **`context list --count` local flag is dead** (`context.c`)
-   `--count` is a *global* flag, so `parse_globals` already consumes it into
-   `gopts->count`; the local `s_count = cmd_args_flag(ga, "count", 0)` is
-   unreachable and dead. The code happens to work via `gopts->count`, but the
-   dead branch misleads readers about where the flag is handled. (Family-wide:
-   Part 4 #4.)
-
 ### Design / consistency issues
 
 3. **Success-output shapes are inconsistent across entities**
@@ -199,19 +180,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 ## Part 4: big entities — model, skill, folders, revisions
 
 ### Systemic patterns (affect most of the family)
-
-2. **Silent not-found: `get` returns exit 0 with empty stdout when the row
-   doesn't exist** — `context`, `model`, `skill`, `model_folder`,
-   `skill_folder`, and both `*_revision` files all do
-   `if (!row) { VLOG(1, "not found..."); return EXIT_OK; }`.
-   Widespread now (Part 3 #1 was the first instance). Should be
-   `EXIT_NOT_FOUND` (1) + the JSON error line.
-
-4. **Dead local `--count` flag** — every `list` action reads
-    `cmd_args_flag(ga, "count", 0)` / `cmd_args_has_flag(ga, "count")` even
-    though `parse_globals` already consumed `--count` into `gopts->count`
-    (Part 3 #2). Dead in model, skill, context, model_folder, skill_folder,
-    and both revisions.
 
 6. **Help text bugs, family-wide**
     - `model get --live` is documented as "Include soft-deleted rows"; the
@@ -273,13 +241,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 ### Design / consistency
 
-2. **`exec` positional ids are strict** (`parse_positive_id` in
-   `get`/`start`/`cancel`/`complete`, and `execution_log.c` for
-   `--execution_id` filters), but not-found `get` still → silent
-   `EXIT_OK`, so Part 4 #2 still applies here. The `exec create` flag ids and
-   the `exec list`/`count` query filters (`--context_id` etc.) are strict
-   (`parse_id_flag`); only the not-found issue above remains in this file.
-
 3. **Test architecture: in-process handler calls, global parse layer
    untested** (tests/ overall)
    The suites build `cmd_args_t`/`global_opts_t` via `targs_*` helpers and
@@ -304,40 +265,16 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    (or keep explicit targets but derive them) — one `tests/foo/` directory
    should "just work".
 
-5. **`libacta_db.a` is consumed with no dependency on it**
+5. **`libacta_db.a` consumed with no dependency on it**
    `LDFLAGS += ../acta_db/libacta_db.a …` — if the lib is missing/stale you
    get a confusing link failure, and `make` will never rebuild it. Add:
    ```make
-   ../acta_db/libacta_db.a:
-   	$(MAKE) -C ../acta_db
-   ```
-   and list it (order-only) on the link targets. (Also: libraries belong in
-   `LDLIBS`, not `LDFLAGS` — currently they only link correctly because
-   `LDFLAGS` happens to expand after the objects; a user-supplied
-   `LDFLAGS` would put them before and break static linking.)
-
-6. **POSIX-only assumptions, Windows artifacts in the tree**
-   Targets have no `.exe`, `test` runs `./$(TEST_TARGET)`, `clean` uses
-   `rm -f` — yet the tree contains `actagamma_db.exe`, `test_*.exe` and
-   `.o` files, i.e. it *was* built under Windows somehow (patched makefile or
-   separate toolchain). Either document "POSIX only" or add `$(EXEEXT)` and
-   a `del`-equivalent path. Related hygiene: the root `.gitignore` covers
-   `*.db` but not `*.o`, `*.exe`, `*.a` — the tree currently carries dozens
-   of `.o` and 9 `.exe` binaries. All untracked, so not a commit bug, but one
-   `make clean` + a few `.gitignore` lines away from a clean tree.
-
-7. **Shared test framework lives inside one suite**
-   `HELPERS_OBJ := tests/skill/skill_test_helpers.o` is linked into every
-   other suite, and every suite's `-I` path includes `tests/skill` — the
-   "shared" framework is owned by the skill suite's directory. Move to
-   `tests/helpers/` (or `tests/common/`) so the ownership is visible.
-   (Minor inconsistency: the skill target gets the helper via its own
-   wildcard instead of `HELPERS_OBJ`.)
-
-8. **`test` stops at the first failing suite**
-   Each recipe line is one shell; make aborts on first non-zero. Fine for
-   CI red-early, but for local dev a `for t in …; do ./$t || fail=1; done`
-   (or `make -k`) reports the full damage in one run.
+   *Resolved (`787b518`):* the Makefile now builds `../acta_db/libacta_db.a`
+   via a rule keyed on the lib sources and lists it as a prerequisite on the
+   app and all test targets. Residual: the libraries still sit in `LDFLAGS`
+   rather than `LDLIBS` — they only link correctly because `LDFLAGS` happens
+   to expand after the objects; a user-supplied `LDFLAGS` would put them
+   before and break static linking.
 
 ### Positives
 
@@ -358,8 +295,7 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 # Summary (unresolved, by severity)
 
-1. **Silent not-found: `get` → exit 0, empty stdout** — all 8 entities. *(P4 #2)*
-2. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
+1. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
 
 **Structural recommendation:** the copy-paste family (P4 #10) is where most
 bugs live. A per-entity *field descriptor* (name, JSON key, flag, type,
