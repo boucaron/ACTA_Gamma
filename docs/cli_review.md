@@ -40,15 +40,6 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   `a[11]`) are correct today but fragile. A uniform
   `const char *eq = strchr(a, '=');` after `flag_prefix_match` covers every
   flag in one code path.
-- Unknown-*entity* error has no suggestion list while unknown-*action* does —
-  inconsistent UX for a one-line addition.
-  *Resolved (`73591d4`):* `closest_name()` factored out of `closest_action()`
-  in `cli_util.h`; `entity_not_found()` in `commands.c` now appends a
-  "Did you mean …?" line after the JSON contract line (exit code unchanged).
-  Tested by the `cli_util` suite (`1139a0c`): matcher thresholds incl.
-  transposition = 2 (Levenshtein, not Damerau), and the dispatch contract
-  (byte-stable JSON line 1, optional suggestion line, `EXIT_CLI` unchanged,
-  known entities still dispatch).
 - `--tools` prints `[]` (TODO) yet help advertises it as "full command
   reference" — implement it or remove it from help text.
 - `main.c` re-checks `gopts.argc < 2` although `parse_globals` already
