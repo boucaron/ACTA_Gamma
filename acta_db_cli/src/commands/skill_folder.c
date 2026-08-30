@@ -262,6 +262,12 @@ static void vlog_sf_raw(const char *tag, const skill_folder_t *f, int rc)
          tag, (const void *)f, f ? f->id : -1, rc);
 }
 
+/* free_row adapter for load_row_or_notfound (void* signature). */
+static void sf_free_wrap(void *p)
+{
+    acta_db_skill_folder_free((skill_folder_t *)p);
+}
+
 /* ── skill_folder_t → JSON object ─────────────────────────────────── */
 
 static void sf_to_json(FILE *f, const skill_folder_t *c, const global_opts_t *gopts)
@@ -374,9 +380,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
             if (json_parse_skill_folder(blob, &sf) != 0) {
                 VLOG(1, "  JSON parse error");
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"invalid JSON body\"}\n");
+                emit_error("invalid JSON body");
                 usage_sf_create(stderr);
                 free(blob);
                 return EXIT_INVALID;
@@ -384,19 +388,13 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             free(blob);
             json_owned = 1;
         } else {
-            const char *f_name    = cmd_args_flag(ga, "name", 1);
-            const char *f_parent  = cmd_args_flag(ga, "parent_id", 1);
+            sf.name = (char *)cmd_args_flag(ga, "name", 1);
 
-            sf.name      = (char *)f_name;
-            if (f_parent) {
-                if (!parse_folder_id(f_parent, &sf.parent_id)) {
-                    VLOG(1, "  ERROR: --parent_id must be a non-negative integer, got '%s'", f_parent);
-                    fprintf(stderr,
-                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                        "\"message\":\"--parent_id must be a non-negative integer\"}\n");
-                    usage_sf_create(stderr);
-                    return EXIT_INVALID;
-                }
+            if (parse_nonneg_int_flag(ga, "parent_id", &sf.parent_id, 0,
+                                      usage_sf_create,
+                                      "skill_folder create") < 0) {
+                ret = EXIT_INVALID;
+                goto cleanup_sf_create;
             }
         }
 
@@ -417,9 +415,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         /* ── required-field validation ────────────────────────────── */
         if (!sf.name || !*sf.name) {
             VLOG(1, "  ERROR: missing required field 'name'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: name\"}\n");
+            emit_error("missing required field: name");
             usage_sf_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_sf_create;
@@ -443,10 +439,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
         VLOG(1, "  created skill_folder id=%d", out_id);
 
-        if (gopts->id_only)
-            fprintf(stdout, "%d\n", out_id);
-        else
-            fprintf(stdout, "{\"id\":%d}\n", out_id);
+        emit_ok_id(gopts, out_id);
 
         ret = EXIT_OK;
         goto cleanup_sf_create;
@@ -461,24 +454,9 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "skill_folder get: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_sf_get(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "skill_folder get: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_sf_get(stderr);
+        if (!parse_id_positional(ga, "id", usage_sf_get, "skill_folder get", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "skill_folder get: fetching id=%d", id);
 
@@ -488,15 +466,10 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         VLOG(3, "  acta_db_skill_folder_get(%d) → ptr=%p err=%d",
              id, (const void *)c, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_skill_folder_free(c);
-            return finish_op_error(db, err, "skill_folder get");
-        }
-        if (!c) {
-            VLOG(1, "  not found (id=%d)", id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "skill_folder not found");
-        }
+        int rc = load_row_or_notfound(db, err, c, id, sf_free_wrap,
+                                      "skill_folder get", "skill_folder");
+        if (rc)
+            return rc;
 
         vlog_sf_fields("  result", c);
         vlog_sf_raw("  raw", c, 0);
@@ -526,9 +499,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             } else {
                 if (!parse_folder_id(parent_str, &parent_id)) {
                     VLOG(1, "  ERROR: <parent_id> must be a non-negative integer, got '%s'", parent_str);
-                    fprintf(stderr,
-                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                        "\"message\":\"<parent_id> must be a non-negative integer\"}\n");
+                    emit_error("<parent_id> must be a non-negative integer");
                     usage_sf_list(stderr);
                     return EXIT_INVALID;
                 }
@@ -536,31 +507,10 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             }
         }
 
-        const char *s_off = cmd_args_flag(ga, "offset", 1);
-        const char *s_lim = cmd_args_flag(ga, "limit", 1);
-
         int offset = 0, limit = 0;
-
-        if (s_off) {
-            if (!parse_nonneg_int(s_off, &offset)) {
-                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--offset must be a non-negative integer\"}\n");
-                usage_sf_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
-        if (s_lim) {
-            if (!parse_nonneg_int(s_lim, &limit)) {
-                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--limit must be a non-negative integer\"}\n");
-                usage_sf_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_offset_limit(ga, &offset, &limit,
+                               usage_sf_list, "skill_folder list") < 0)
+            return EXIT_INVALID;
 
         if (has_parent)
             VLOG(1, "skill_folder list: parent_id=%d offset=%d limit=%d",
@@ -651,9 +601,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             } else {
                 if (!parse_folder_id(parent_str, &parent_id)) {
                     VLOG(1, "  ERROR: <parent_id> must be a non-negative integer, got '%s'", parent_str);
-                    fprintf(stderr,
-                        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                        "\"message\":\"<parent_id> must be a non-negative integer\"}\n");
+                    emit_error("<parent_id> must be a non-negative integer");
                     usage_sf_count(stderr);
                     return EXIT_INVALID;
                 }
@@ -686,31 +634,17 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── rename <id> --name <new> ─────────────────────────────────── */
     if (strcmp(action, "rename") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "skill_folder rename: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_sf_rename(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "skill_folder rename: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_sf_rename(stderr);
+        if (!parse_id_positional(ga, "id", usage_sf_rename, "skill_folder rename", &id))
             return EXIT_INVALID;
-        }
 
-        const char *f_name = cmd_args_flag(ga, "name", 1);
-        if (!f_name || !*f_name) {
+        const char *f_name = NULL;
+        if (require_flag(ga, "name", &f_name, usage_sf_rename,
+                         "skill_folder rename") < 0)
+            return EXIT_INVALID;
+        if (!f_name) {
             VLOG(1, "  ERROR: missing required field 'name'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required flag: --name\"}\n");
+            emit_error("missing required flag: --name");
             usage_sf_rename(stderr);
             return EXIT_INVALID;
         }
@@ -728,47 +662,25 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  renamed skill_folder id=%d → %s", id, f_name);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+        emit_ok_id(gopts, id);
         return EXIT_OK;
     }
 
     /* ── move <id> --parent_id <pid> ──────────────────────────────── */
     if (strcmp(action, "move") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "skill_folder move: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_sf_move(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "skill_folder move: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_sf_move(stderr);
+        if (!parse_id_positional(ga, "id", usage_sf_move, "skill_folder move", &id))
             return EXIT_INVALID;
-        }
 
-        const char *f_parent = cmd_args_flag(ga, "parent_id", 1);
-        int new_parent_id = 0;
-        if (f_parent) {
-            if (!parse_folder_id(f_parent, &new_parent_id)) {
-                VLOG(1, "skill_folder move: ERROR --parent_id must be a non-negative integer, got '%s'", f_parent);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--parent_id must be a non-negative integer\"}\n");
-                usage_sf_move(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        int new_parent_id = 0;   /* 0 == root */
+        if (parse_nonneg_int_flag(ga, "parent_id", &new_parent_id, 0,
+                                  usage_sf_move, "skill_folder move") < 0)
+            return EXIT_INVALID;
 
         VLOG(1, "skill_folder move: id=%d → parent_id=%d", id, new_parent_id);
         VLOG(2, "  params: id=%d new_parent_id=%d", id, new_parent_id);
-        VLOG(3, "  ga=%p f_parent=%p", (const void *)ga, (const void *)f_parent);
+        VLOG(3, "  id=%d new_parent_id=%d db=%p",
+             id, new_parent_id, (const void *)db);
 
         int rc = acta_db_skill_folder_move_to(db, id, new_parent_id);
         VLOG(3, "  acta_db_skill_folder_move_to → rc=%d", rc);
@@ -779,30 +691,15 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  moved skill_folder id=%d → parent_id=%d", id, new_parent_id);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+        emit_ok_folder(gopts, id, new_parent_id);
         return EXIT_OK;
     }
 
     /* ── delete <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "delete") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "skill_folder delete: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_sf_delete(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "skill_folder delete: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_sf_delete(stderr);
+        if (!parse_id_positional(ga, "id", usage_sf_delete, "skill_folder delete", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "skill_folder delete: id=%d", id);
         VLOG(2, "  params: id=%d", id);
@@ -816,30 +713,15 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  deleted skill_folder id=%d", id);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+        emit_deleted();
         return EXIT_OK;
     }
 
     /* ── restore <id> ─────────────────────────────────────────────── */
     if (strcmp(action, "restore") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "skill_folder restore: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_sf_restore(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "skill_folder restore: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_sf_restore(stderr);
+        if (!parse_id_positional(ga, "id", usage_sf_restore, "skill_folder restore", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "skill_folder restore: id=%d", id);
         VLOG(2, "  params: id=%d", id);
@@ -853,7 +735,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  restored skill_folder id=%d", id);
-        fprintf(stdout, "{\"id\":%d}\n", id);
+        emit_ok_id(gopts, id);
         return EXIT_OK;
     }
 
