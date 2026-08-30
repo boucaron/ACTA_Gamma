@@ -197,6 +197,12 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     `{"id":N}` / `{"id":N,"folder_id":M}` / `{"deleted":true}` /
     `{"id":N,"restored":true}` / bare `N`. Same ask as Part 3 #3: a single
     per-action output table in the spec, enforced by one emit helper.
+    *Partially resolved (S1/V1):* the emit-helper half is done — the shared
+    atoms `emit_ok_id` / `emit_ok_folder` / `emit_deleted` in `cli_util.h`
+    are adopted by all 9 entity files (`08ebc26`–`829fd5a`). The spec table
+    remains open (S3); evidence to settle it: `model_folder restore` →
+    hand-rolled `{"id":N,"restored":true}` (`model_folder.c:707`) vs
+    `{"id":N}` on `model`/`skill`/`skill_folder` restore.
 
 9. **`usage_*` snippets are static per file, `*_usage` are not declared
     anywhere**
@@ -220,6 +226,15 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
     type, flag name) + shared `create/get/list/count/delete/restore/move`
     drivers would collapse most of it *and* make the model/skill divergence
     impossible to repeat.
+    *Partially resolved (S1/V1):* the atom half landed — the common atom set
+    (`parse_id_positional`, `parse_nonneg_int_flag`, `parse_offset_limit`,
+    `require_flag`, `load_row_or_notfound`, `emit_*`) lives in `cli_util.h`
+    and is adopted by all 9 entity files (`08ebc26`–`829fd5a`), collapsing
+    the id-parse / flag / pagination / not-found / success-emit blocks to
+    one-liners. The field-descriptor + shared-driver half was considered and
+    excluded (V3), and the per-verb kernels (V2) and per-entity contract
+    suite (V4) were dropped; the per-verb control-flow skeleton remains
+    hand-written per file, divergence prevented by review.
 
 ### Positives
 
@@ -297,8 +312,10 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
 
 1. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
 
-**Structural recommendation:** the copy-paste family (P4 #10) is where most
-bugs live. A per-entity *field descriptor* (name, JSON key, flag, type,
-required, root-vs-null semantics) plus shared `create/get/list/count/
-update/delete/restore/move` drivers would fix the divergences structurally
-(silent not-found, dead `--count`, success shapes) rather than file-by-file.
+**Structural (S1) — resolved:** the copy-paste family (P4 #10) was fixed
+atom-first and stopped there: the common atom set landed in `cli_util.h`
+and was adopted by all 9 entity files (`08ebc26`–`829fd5a`), canonicalizing
+id/flag/offset-limit parsing, fetch+not-found, and success emits. The
+field-descriptor + shared-driver form (V3) was excluded; per-verb kernels
+(V2) and the per-entity contract suite (V4) were dropped. Per-verb skeletons
+remain hand-written per file, divergence prevented by review.
