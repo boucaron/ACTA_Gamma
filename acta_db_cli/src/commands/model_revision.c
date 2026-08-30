@@ -166,6 +166,12 @@ static void vlog_rev_raw(const char *tag, const model_revision_t *r, int rc)
          rc);
 }
 
+/* free_row adapter for load_row_or_notfound (void* signature). */
+static void model_revision_free_wrap(void *r)
+{
+    acta_db_model_revision_free((model_revision_t *)r);
+}
+
 /* ── model_revision_t → JSON object ───────────────────────────────── */
 
 static void rev_to_json(FILE *f, const model_revision_t *r, const global_opts_t *gopts)
@@ -292,24 +298,9 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "model_revision get: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_get(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "model_revision get: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_get(stderr);
+        if (!parse_id_positional(ga, "id", usage_get, "model_revision get", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "model_revision get: fetching id=%d", id);
 
@@ -319,15 +310,10 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         VLOG(3, "  acta_db_model_revision_get(%d) → ptr=%p err=%d",
              id, (const void *)r, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_model_revision_free(r);
-            return finish_op_error(db, err, "model_revision get");
-        }
-        if (!r) {
-            VLOG(1, "  not found (id=%d)", id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "model_revision not found");
-        }
+        int rc = load_row_or_notfound(db, err, r, id, model_revision_free_wrap,
+                                      "model_revision get", "model_revision");
+        if (rc)
+            return rc;
 
         vlog_rev_fields("  result", r);
         vlog_rev_raw("  raw", r, 0);
@@ -347,24 +333,10 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
 
     /* ── get-latest <model_id> ────────────────────────────────────── */
     if (strcmp(action, "get-latest") == 0) {
-        const char *model_id_str = cmd_args_next_positional(ga);
-        if (!model_id_str) {
-            VLOG(1, "model_revision get-latest: ERROR missing <model_id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <model_id>\"}\n");
-            usage_get_latest(stderr);
-            return EXIT_INVALID;
-        }
         int model_id;
-        if (!parse_positive_id(model_id_str, &model_id)) {
-            VLOG(1, "model_revision get-latest: invalid model_id=%s", model_id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <model_id>: must be a positive integer\"}\n");
-            usage_get_latest(stderr);
+        if (!parse_id_positional(ga, "model_id", usage_get_latest,
+                                 "model_revision get-latest", &model_id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "model_revision get-latest: fetching latest for model_id=%d", model_id);
 
@@ -374,15 +346,10 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         VLOG(3, "  acta_db_model_revision_get_latest(%d) → ptr=%p err=%d",
              model_id, (const void *)r, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_model_revision_free(r);
-            return finish_op_error(db, err, "model_revision latest");
-        }
-        if (!r) {
-            VLOG(1, "  no revisions found (model_id=%d)", model_id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "no revisions found");
-        }
+        int rc = load_row_or_notfound(db, err, r, model_id, model_revision_free_wrap,
+                                      "model_revision latest", "model_revision");
+        if (rc)
+            return rc;
 
         vlog_rev_fields("  result", r);
         vlog_rev_raw("  raw", r, 0);
@@ -402,50 +369,15 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
 
     /* ── list <model_id> ──────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *model_id_str = cmd_args_next_positional(ga);
-        if (!model_id_str) {
-            VLOG(1, "model_revision list: ERROR missing <model_id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <model_id>\"}\n");
-            usage_list(stderr);
-            return EXIT_INVALID;
-        }
         int model_id;
-        if (!parse_positive_id(model_id_str, &model_id)) {
-            VLOG(1, "model_revision list: invalid model_id=%s", model_id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <model_id>: must be a positive integer\"}\n");
-            usage_list(stderr);
+        if (!parse_id_positional(ga, "model_id", usage_list,
+                                 "model_revision list", &model_id))
             return EXIT_INVALID;
-        }
-
-        const char *s_off   = cmd_args_flag(ga, "offset", 1);
-        const char *s_lim   = cmd_args_flag(ga, "limit", 1);
 
         int offset = 0, limit = 0;
-
-        if (s_off) {
-            if (!parse_nonneg_int(s_off, &offset)) {
-                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--offset must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
-        if (s_lim) {
-            if (!parse_nonneg_int(s_lim, &limit)) {
-                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--limit must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_offset_limit(ga, &offset, &limit,
+                               usage_list, "model_revision list") < 0)
+            return EXIT_INVALID;
 
         VLOG(1, "model_revision list: model_id=%d offset=%d limit=%d",
              model_id, offset, limit);
@@ -509,24 +441,10 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
 
     /* ── count <model_id> ─────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *model_id_str = cmd_args_next_positional(ga);
-        if (!model_id_str) {
-            VLOG(1, "model_revision count: ERROR missing <model_id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <model_id>\"}\n");
-            usage_count(stderr);
-            return EXIT_INVALID;
-        }
         int model_id;
-        if (!parse_positive_id(model_id_str, &model_id)) {
-            VLOG(1, "model_revision count: invalid model_id=%s", model_id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <model_id>: must be a positive integer\"}\n");
-            usage_count(stderr);
+        if (!parse_id_positional(ga, "model_id", usage_count,
+                                 "model_revision count", &model_id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "model_revision count: model_id=%d", model_id);
 
