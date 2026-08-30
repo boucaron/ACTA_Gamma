@@ -9,7 +9,6 @@ in-scope items; what remains there (F2, F3) is folded into the plan below
 
 | # | Action | Source | Severity | Notes / dependencies |
 |---|--------|--------|----------|----------------------|
-| P3 | **Silent not-found** — all 8 entities' `get` return `EXIT_OK` with empty stdout when the row doesn't exist. Return `EXIT_NOT_FOUND` (1) + JSON error line via `finish_db_error` | P4 #2 / P3 #1 | High — contract violation | Helper already in `cli_util.h`; `list` → `[]` is the existing correct pattern for empty |
 
 ## Cheap wins
 
