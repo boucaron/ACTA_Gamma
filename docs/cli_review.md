@@ -42,6 +42,9 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
   flag in one code path.
 - Unknown-*entity* error has no suggestion list while unknown-*action* does —
   inconsistent UX for a one-line addition.
+  *Resolved (`73591d4`):* `closest_name()` factored out of `closest_action()`
+  in `cli_util.h`; `entity_not_found()` in `commands.c` now appends a
+  "Did you mean …?" line after the JSON contract line (exit code unchanged).
 - `--tools` prints `[]` (TODO) yet help advertises it as "full command
   reference" — implement it or remove it from help text.
 - `main.c` re-checks `gopts.argc < 2` although `parse_globals` already
