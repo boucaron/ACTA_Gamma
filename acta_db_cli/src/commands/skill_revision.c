@@ -161,6 +161,12 @@ static void vlog_sr_raw(const char *tag, const skill_revision_t *r, int rc)
          tag, (const void *)r, r ? r->id : -1, rc);
 }
 
+/* free_row adapter for load_row_or_notfound (void* signature). */
+static void sr_free_wrap(void *r)
+{
+    acta_db_skill_revision_free((skill_revision_t *)r);
+}
+
 /* ── skill_revision_t → JSON object ───────────────────────────────── */
 
 static void sr_to_json(FILE *f, const skill_revision_t *r, const global_opts_t *gopts)
@@ -280,24 +286,10 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "skill_revision get: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_sr_get(stderr);
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "skill_revision get: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_sr_get(stderr);
+        if (!parse_id_positional(ga, "id", usage_sr_get,
+                                 "skill_revision get", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "skill_revision get: fetching id=%d", id);
 
@@ -307,15 +299,10 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         VLOG(3, "  acta_db_skill_revision_get(%d) → ptr=%p err=%d",
              id, (const void *)r, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_skill_revision_free(r);
-            return finish_op_error(db, err, "skill_revision get");
-        }
-        if (!r) {
-            VLOG(1, "  not found (id=%d)", id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "skill_revision not found");
-        }
+        int rc = load_row_or_notfound(db, err, r, id, sr_free_wrap,
+                                      "skill_revision get", "skill_revision");
+        if (rc)
+            return rc;
 
         vlog_sr_fields("  result", r);
         vlog_sr_raw("  raw", r, 0);
@@ -335,24 +322,10 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
     /* ── get-latest <skill_id> ────────────────────────────────────── */
     if (strcmp(action, "get-latest") == 0) {
-        const char *skill_str = cmd_args_next_positional(ga);
-        if (!skill_str) {
-            VLOG(1, "skill_revision get-latest: ERROR missing <skill_id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <skill_id>\"}\n");
-            usage_sr_latest(stderr);
-            return EXIT_INVALID;
-        }
         int skill_id;
-        if (!parse_positive_id(skill_str, &skill_id)) {
-            VLOG(1, "skill_revision get-latest: invalid skill_id=%s", skill_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
-            usage_sr_latest(stderr);
+        if (!parse_id_positional(ga, "skill_id", usage_sr_latest,
+                                 "skill_revision get-latest", &skill_id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "skill_revision get-latest: skill_id=%d", skill_id);
 
@@ -362,15 +335,10 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
         VLOG(3, "  acta_db_skill_revision_get_latest(%d) → ptr=%p err=%d",
              skill_id, (const void *)r, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_skill_revision_free(r);
-            return finish_op_error(db, err, "skill_revision latest");
-        }
-        if (!r) {
-            VLOG(1, "  no revisions found (skill_id=%d)", skill_id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "no revisions found");
-        }
+        int rc = load_row_or_notfound(db, err, r, skill_id, sr_free_wrap,
+                                      "skill_revision latest", "skill_revision");
+        if (rc)
+            return rc;
 
         vlog_sr_fields("  result", r);
         vlog_sr_raw("  raw", r, 0);
@@ -390,50 +358,15 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
     /* ── list <skill_id> ──────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *skill_str = cmd_args_next_positional(ga);
-        if (!skill_str) {
-            VLOG(1, "skill_revision list: ERROR missing <skill_id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <skill_id>\"}\n");
-            usage_sr_list(stderr);
-            return EXIT_INVALID;
-        }
         int skill_id;
-        if (!parse_positive_id(skill_str, &skill_id)) {
-            VLOG(1, "skill_revision list: invalid skill_id=%s", skill_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
-            usage_sr_list(stderr);
+        if (!parse_id_positional(ga, "skill_id", usage_sr_list,
+                                 "skill_revision list", &skill_id))
             return EXIT_INVALID;
-        }
-
-        const char *s_off   = cmd_args_flag(ga, "offset", 1);
-        const char *s_lim   = cmd_args_flag(ga, "limit", 1);
 
         int offset = 0, limit = 0;
-
-        if (s_off) {
-            if (!parse_nonneg_int(s_off, &offset)) {
-                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--offset must be a non-negative integer\"}\n");
-                usage_sr_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
-        if (s_lim) {
-            if (!parse_nonneg_int(s_lim, &limit)) {
-                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--limit must be a non-negative integer\"}\n");
-                usage_sr_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_offset_limit(ga, &offset, &limit,
+                               usage_sr_list, "skill_revision list") < 0)
+            return EXIT_INVALID;
 
         VLOG(1, "skill_revision list: skill_id=%d offset=%d limit=%d",
              skill_id, offset, limit);
@@ -498,24 +431,10 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
     /* ── count <skill_id> ─────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *skill_str = cmd_args_next_positional(ga);
-        if (!skill_str) {
-            VLOG(1, "skill_revision count: ERROR missing <skill_id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <skill_id>\"}\n");
-            usage_sr_count(stderr);
-            return EXIT_INVALID;
-        }
         int skill_id;
-        if (!parse_positive_id(skill_str, &skill_id)) {
-            VLOG(1, "skill_revision count: invalid skill_id=%s", skill_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <skill_id>: must be a positive integer\"}\n");
-            usage_sr_count(stderr);
+        if (!parse_id_positional(ga, "skill_id", usage_sr_count,
+                                 "skill_revision count", &skill_id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "skill_revision count: skill_id=%d", skill_id);
 
