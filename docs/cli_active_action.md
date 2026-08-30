@@ -15,10 +15,8 @@ in-scope items; what remains there (F2, F3) is folded into the plan below
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| W1 | Remove the dead local `--count` flag in all 8 `list` actions (`parse_globals` already consumed it into `gopts->count`) | P4 #4 / P3 #2 | Dead branch misleads readers; `gopts->count` already used |
 | W6 | Move the shared test helpers out of `tests/skill/` into `tests/helpers/` (or `tests/common/`) so ownership is visible; every suite currently links `tests/skill/skill_test_helpers.o` and carries a `-Itests/skill` path | P5 #7 | Minor: skill target gets the helper via its own wildcard instead of `HELPERS_OBJ` |
 | W7 | Makefile hygiene: auto-derive test targets from `$(wildcard tests/*)`; add the missing `../acta_db/libacta_db.a` dependency (lib consumed with no rebuild rule); move the lib from `LDFLAGS` to `LDLIBS`; make `test` run all suites and report (`for … || fail=1` or `make -k`) instead of stopping at the first failure | P5 #4, #5, #8 | `LDFLAGS` ordering only works today by accident |
-| W8 | POSIX/Windows mismatch: targets have no `$(EXEEXT)` but the tree carries `.o`/`.exe` artifacts; document "POSIX only" or add `$(EXEEXT)`. Extend root `.gitignore` with `*.o`, `*.exe`, `*.a` (covers `*.db` only today) | P5 #6 | Tree hygiene, not a commit bug |
 
 ## Structural (highest long-term payoff)
 
@@ -31,7 +29,7 @@ in-scope items; what remains there (F2, F3) is folded into the plan below
 
 ## Summary
 
-- **Next:** cheap wins W6–W8, mostly mechanical.
+- **Next:** cheap wins W6–W7, mostly mechanical.
 - **Finally:** S1–S4 structural work; S1 should land before any of P3/W1
   patterns are re-touched per-file (or those per-file fixes become throwaway).
 - Done so far: P3 `get` not-found → `EXIT_NOT_FOUND` + JSON error (`e6c86fe`),
@@ -44,5 +42,7 @@ in-scope items; what remains there (F2, F3) is folded into the plan below
   `model_folder rename` (`341de4b`), W3 `exec create` rejects dead
   `--status` (`cffe8fe`), W4 removed `json_serialize_*` stubs +
   `json_print_table` (`2e34bbc`), W5 stale `json.h` comment
-  (`9f19a6a`, done during the P2 round); round 3's db-surface scope is closed,
+  (`9f19a6a`, done during the P2 round), W8 `$(EXEEXT)` on all CLI
+  executable targets + root `.gitignore` `*.o`/`*.exe`/`*.a`
+  (`5959ea1`); round 3's db-surface scope is closed,
   F2/F3 are carried as S3 / S2.
