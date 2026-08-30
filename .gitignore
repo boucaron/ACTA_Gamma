@@ -15,6 +15,11 @@ data/
 outputs/
 executions/
 
+# Build artifacts
+*.o
+*.exe
+*.a
+
 
 # IDE
 .idea/

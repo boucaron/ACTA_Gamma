@@ -41,6 +41,11 @@ endif
 
 LDFLAGS += ../acta_db/libacta_db.a -lsqlite3 $(CJSON_LIB)
 
+# Executable targets carry $(EXEEXT): empty under POSIX make, ".exe" under
+# Windows (mingw) make, so the same Makefile builds on both.
+EXEEXT ?=
+
+
 # ---- build metadata (auto-injected) ----
 GIT_HASH    := $(shell git rev-parse --short=8 HEAD 2>/dev/null)
 ifeq ($(GIT_HASH),)
@@ -55,52 +60,52 @@ SRCS    := $(wildcard src/*.c)
 SRCS   += $(wildcard src/commands/*.c)
 OBJS    := $(patsubst %.c, %.o, $(SRCS))
 APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS))
-TARGET  := actagamma_db
+TARGET  := actagamma_db$(EXEEXT)
 
 # ---- sources (tests: skill) ----
 TEST_SRCS   := $(wildcard tests/skill/*.c)
 TEST_OBJS   := $(patsubst %.c, %.o, $(TEST_SRCS))
-TEST_TARGET := test_skill
+TEST_TARGET := test_skill$(EXEEXT)
 
 # ---- sources (tests: skill_revision) ----
 SRV_TEST_SRCS   := $(wildcard tests/skill_revision/*.c)
 SRV_TEST_OBJS   := $(patsubst %.c, %.o, $(SRV_TEST_SRCS))
-SRV_TEST_TARGET := test_skill_rev
+SRV_TEST_TARGET := test_skill_rev$(EXEEXT)
 
 # ---- sources (tests: skill_folder) ----
 SFL_TEST_SRCS   := $(wildcard tests/skill_folder/*.c)
 SFL_TEST_OBJS   := $(patsubst %.c, %.o, $(SFL_TEST_SRCS))
-SFL_TEST_TARGET := test_skill_folder
+SFL_TEST_TARGET := test_skill_folder$(EXEEXT)
 
 # ---- sources (tests: model) ----
 MOD_TEST_SRCS   := $(wildcard tests/model/*.c)
 MOD_TEST_OBJS   := $(patsubst %.c, %.o, $(MOD_TEST_SRCS))
-MOD_TEST_TARGET := test_model
+MOD_TEST_TARGET := test_model$(EXEEXT)
 
 # ---- sources (tests: model_folder) ----
 MF_TEST_SRCS   := $(wildcard tests/model_folder/*.c)
 MF_TEST_OBJS   := $(patsubst %.c, %.o, $(MF_TEST_SRCS))
-MF_TEST_TARGET := test_model_folder
+MF_TEST_TARGET := test_model_folder$(EXEEXT)
 
 # ---- sources (tests: context) ----
 CTX_TEST_SRCS   := $(wildcard tests/context/*.c)
 CTX_TEST_OBJS   := $(patsubst %.c, %.o, $(CTX_TEST_SRCS))
-CTX_TEST_TARGET := test_context
+CTX_TEST_TARGET := test_context$(EXEEXT)
 
 # ---- sources (tests: db) ----
 DB_TEST_SRCS   := $(wildcard tests/db/*.c)
 DB_TEST_OBJS   := $(patsubst %.c, %.o, $(DB_TEST_SRCS))
-DB_TEST_TARGET := test_db
+DB_TEST_TARGET := test_db$(EXEEXT)
 
 # ---- sources (tests: execution_log) ----
 EL_TEST_SRCS   := $(wildcard tests/execution_log/*.c)
 EL_TEST_OBJS   := $(patsubst %.c, %.o, $(EL_TEST_SRCS))
-EL_TEST_TARGET := test_execution_log
+EL_TEST_TARGET := test_execution_log$(EXEEXT)
 
 # ---- sources (tests: exec) ----
 EXEC_TEST_SRCS   := $(wildcard tests/exec/*.c)
 EXEC_TEST_OBJS   := $(patsubst %.c, %.o, $(EXEC_TEST_SRCS))
-EXEC_TEST_TARGET := test_exec
+EXEC_TEST_TARGET := test_exec$(EXEEXT)
 
 # shared test-framework object (lives in tests/skill/, used by all suites)
 HELPERS_OBJ := tests/skill/skill_test_helpers.o
