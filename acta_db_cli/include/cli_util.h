@@ -3,6 +3,7 @@
 #define ACTA_DB_CLI_UTIL_H
 
 #include "cli.h"
+#include "argparse.h"
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
@@ -188,6 +189,199 @@ static inline int finish_op_error(db_t *db, int rc, const char *op)
     snprintf(what, sizeof what, "%s failed: %s",
              op ? op : "operation", msg ? msg : "(no detail)");
     return finish_db_error(rc, what);
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  S1/V1 common atoms — the six re-typed units shared by every        */
+/*  entity file.  Entities adopt them opt-in, site by site; each       */
+/*  atom replaces one hand-rolled block with a one-liner.              */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* ── error / success emitters (stdout-schema strings live here — S3) ─ */
+
+/* Emit the canonical invalid-argument error line on stderr:
+ *   {"error":"ACTA_DB_ERR_INVALID","code":-4,"message":"<msg>"}
+ * Pure emitter (no exit code): callers keep their own control flow and
+ * return EXIT_INVALID.  `msg` is JSON-escaped via json_str. */
+static inline void emit_error(const char *msg)
+{
+    fprintf(stderr,
+        "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4," 
+        "\"message\":");
+    json_str(stderr, msg ? msg : "");
+    fputs("}\n", stderr);
+}
+
+/* Emit the canonical not-found error line on stderr:
+ *   {"error":"ACTA_DB_ERR_NOT_FOUND","code":-5,"message":"<entity> not found"}
+ * and return EXIT_NOT_FOUND (callers: `return emit_not_found("model");`).
+ * Same bytes as finish_db_error(ACTA_DB_ERR_NOT_FOUND, "<entity> not found"). */
+static inline int emit_not_found(const char *entity)
+{
+    char what[128];
+    snprintf(what, sizeof what, "%s not found", entity ? entity : "entity");
+    return finish_db_error(ACTA_DB_ERR_NOT_FOUND, what);
+}
+
+/* Emit a success id on stdout.  Honours --id_only (bare `N`) vs the
+ * default JSON wrapper ({"id":N}). */
+static inline void emit_ok_id(const global_opts_t *g, int id)
+{
+    if (g && g->id_only)
+        fprintf(stdout, "%d\n", id);
+    else
+        fprintf(stdout, "{\"id\":%d}\n", id);
+}
+
+/* Emit a move success on stdout: {"id":N,"folder_id":M} (or bare N with
+ * --id_only).  folder_id is the raw int (0 = root) — the S3 root-folder
+ * wire question (null vs 0) is decided per entity, not here. */
+static inline void emit_ok_folder(const global_opts_t *g, int id, int folder_id)
+{
+    if (g && g->id_only)
+        fprintf(stdout, "%d\n", id);
+    else
+        fprintf(stdout, "{\"id\":%d,\"folder_id\":%d}\n", id, folder_id);
+}
+
+/* Emit a delete success on stdout: {"deleted":true}. */
+static inline void emit_deleted(void)
+{
+    fputs("{\"deleted\":true}\n", stdout);
+}
+
+/* ── input atoms ──────────────────────────────────────────────────── */
+
+/* Consume the id positional from the command iterator.
+ * Returns 1 on success (id stored in *out), 0 on error — the error
+ * (JSON line + per-action usage) is already on stderr; callers do
+ * `if (!parse_id_positional(ga, "id", usage_get, "model get", &id))
+ *  return EXIT_INVALID;`.
+ * `pos` is the documented positional name ("id", "model_id", …); the
+ * messages are canonical:
+ *   "missing positional: <pos>" / "invalid <pos>: must be a positive
+ *   integer". */
+static inline int parse_id_positional(cmd_args_t *ga, const char *pos,
+                                      void (*usage)(FILE *),
+                                      const char *vlog_label, int *out)
+{
+    const char *s = cmd_args_next_positional(ga);
+    char msg[96];
+    if (!s) {
+        VLOG(1, "%s: ERROR missing <%s>", vlog_label, pos);
+        snprintf(msg, sizeof msg, "missing positional: <%s>", pos);
+        emit_error(msg);
+        usage(stderr);
+        return 0;
+    }
+    if (!parse_positive_id(s, out)) {
+        VLOG(1, "%s: invalid id=%s", vlog_label, s);
+        snprintf(msg, sizeof msg, "invalid <%s>: must be a positive integer",
+                 pos);
+        emit_error(msg);
+        usage(stderr);
+        return 0;
+    }
+    return 1;
+}
+
+/* Read a non-negative-integer flag from the command iterator.
+ * Returns 1 = present (*out set), 0 = absent (*out untouched),
+ * -1 = error (JSON line + usage already on stderr; callers return
+ * EXIT_INVALID).  `required` = 1 turns absence into the "missing
+ * required flag: --<name>" error.  The invalid-value message is
+ * canonical: "--<name> must be a non-negative integer". */
+static inline int parse_nonneg_int_flag(cmd_args_t *ga, const char *name,
+                                        int *out, int required,
+                                        void (*usage)(FILE *),
+                                        const char *vlog_label)
+{
+    const char *v = cmd_args_flag(ga, name, 1);
+    char msg[96];
+    if (!v) {
+        if (!required) return 0;
+        VLOG(1, "%s: ERROR missing --%s", vlog_label, name);
+        snprintf(msg, sizeof msg, "missing required flag: --%s", name);
+        emit_error(msg);
+        usage(stderr);
+        return -1;
+    }
+    {
+        int val;
+        if (!parse_nonneg_int(v, &val)) {
+            VLOG(1, "%s: ERROR --%s must be a non-negative integer, got '%s'",
+                 vlog_label, name, v);
+            snprintf(msg, sizeof msg,
+                     "--%s must be a non-negative integer", name);
+            emit_error(msg);
+            usage(stderr);
+            return -1;
+        }
+        *out = val;
+        return 1;
+    }
+}
+
+/* Read the optional --offset / --limit pagination pair (both default 0).
+ * Thin composition over parse_nonneg_int_flag.  Returns 0 on success
+ * (both stored), -1 on error (JSON line + usage already on stderr;
+ * callers return EXIT_INVALID). */
+static inline int parse_offset_limit(cmd_args_t *ga, int *offset, int *limit,
+                                     void (*usage)(FILE *),
+                                     const char *vlog_label)
+{
+    if (parse_nonneg_int_flag(ga, "offset", offset, 0, usage, vlog_label) < 0)
+        return -1;
+    return parse_nonneg_int_flag(ga, "limit", limit, 0, usage, vlog_label);
+}
+
+/* Read a string flag and require a non-empty value when present.
+ * Returns 1 = present + non-empty (*out_val = value), 0 = absent
+ * (*out_val = NULL, not an error), -1 = present but empty (JSON line
+ * "field '<name>' must not be empty" + usage already on stderr;
+ * callers return EXIT_INVALID). */
+static inline int require_flag(cmd_args_t *ga, const char *name,
+                               const char **out_val,
+                               void (*usage)(FILE *),
+                               const char *vlog_label)
+{
+    const char *v = cmd_args_flag(ga, name, 1);
+    char msg[96];
+    if (!v) { *out_val = NULL; return 0; }
+    if (!*v) {
+        VLOG(1, "%s: ERROR --%s must not be empty", vlog_label, name);
+        snprintf(msg, sizeof msg, "field '%s' must not be empty", name);
+        emit_error(msg);
+        usage(stderr);
+        return -1;
+    }
+    *out_val = v;
+    return 1;
+}
+
+/* Post-fetch check + emit: the not-found unit the P3 fix had to land
+ * in every entity file.  `err`/`row` come from the entity's fetch call
+ * (already performed — fetch signatures vary per entity); `free_row`
+ * frees the row on the library-error path (may be passed a cast
+ * `acta_db_<e>_free`).  Returns 0 on success (row stays owned by the
+ * caller); on a library error the row is freed, the finish_op_error
+ * JSON line is emitted, and the mapped exit code is returned; on a
+ * NULL row the not-found line is emitted and EXIT_NOT_FOUND returned.
+ * Callers: `if ((rc = load_row_or_notfound(…))) return rc;`. */
+static inline int load_row_or_notfound(db_t *db, int err, void *row, int id,
+                                       void (*free_row)(void *),
+                                       const char *op, const char *entity)
+{
+    if (err != ACTA_DB_OK) {
+        VLOG(1, "  FAILED err=%d → exit mapping", err);
+        free_row(row);
+        return finish_op_error(db, err, op);
+    }
+    if (!row) {
+        VLOG(1, "  not found (id=%d)", id);
+        return emit_not_found(entity);
+    }
+    return 0;
 }
 
 /* Verbose logging: VLOG() — single definition in cli.h. */

@@ -315,6 +315,12 @@ static void vlog_model_raw(const char *tag, const model_t *m, int rc)
          tag, (const void *)m, m ? m->id : -1, rc);
 }
 
+/* free_row adapter for load_row_or_notfound (void* signature). */
+static void model_free_wrap(void *m)
+{
+    acta_db_model_free((model_t *)m);
+}
+
 /* ── model_t → JSON object ────────────────────────────────────────── */
 
 static void model_to_json(FILE *f, const model_t *m, const global_opts_t *gopts)
@@ -469,22 +475,12 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             m.model_identifier = (char *)cmd_args_flag(ga, "model_identifier", 1);
             m.configuration    = (char *)cmd_args_flag(ga, "configuration", 1);
 
-            /* --- folder_id: validate & clamp --- */
+            /* --- folder_id: validate (atom) --- */
             m.folder_id = 0;  /* default: root (NULL) */
-            {
-                const char *fid_str = cmd_args_flag(ga, "folder_id", 1);
-                if (fid_str && strlen(fid_str) > 0) {
-                    if (!parse_folder_id(fid_str, &m.folder_id)) {
-                        VLOG(1, "  ERROR: 'folder_id' value '%s' is not a valid integer",
-                             fid_str);
-                        fprintf(stderr,
-                            "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                            "\"message\":\"'folder_id' must be a valid integer\"}\n");
-                        usage_create(stderr);
-                        ret = EXIT_INVALID;
-                        goto cleanup_create;
-                    }
-                }
+            if (parse_nonneg_int_flag(ga, "folder_id", &m.folder_id, 0,
+                                      usage_create, "model create") < 0) {
+                ret = EXIT_INVALID;
+                goto cleanup_create;
             }
         }
 
@@ -507,36 +503,28 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (!m.name) {
             VLOG(1, "  ERROR: missing required field 'name'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: name\"}\n");
+            emit_error("missing required field: name");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
         if (m.name && strlen(m.name) == 0) {
             VLOG(1, "  ERROR: 'name' must not be empty");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"field 'name' must not be empty\"}\n");
+            emit_error("field 'name' must not be empty");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
         if (!m.backend) {
             VLOG(1, "  ERROR: missing required field 'backend'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: backend\"}\n");
+            emit_error("missing required field: backend");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
         if (!m.model_identifier) {
             VLOG(1, "  ERROR: missing required field 'model_identifier'");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required field: model_identifier\"}\n");
+            emit_error("missing required field: model_identifier");
             usage_create(stderr);
             ret = EXIT_INVALID;
             goto cleanup_create;
@@ -555,10 +543,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  created model id=%d", out_id);
-        if (gopts->id_only)
-            fprintf(stdout, "%d\n", out_id);
-        else
-            fprintf(stdout, "{\"id\":%d}\n", out_id);
+        emit_ok_id(gopts, out_id);
 
         ret = EXIT_OK;
         goto cleanup_create;
@@ -579,27 +564,9 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "model get: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_get(stderr);
-            return EXIT_INVALID;
-        }
-
-        /* ── robust integer parse ─────────────────────────────────── */
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "model get: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_get(stderr);
+        if (!parse_id_positional(ga, "id", usage_get, "model get", &id))
             return EXIT_INVALID;
-        }
-        /* ──────────────────────────────────────────────────────────── */
 
         int  use_live   = (cmd_args_flag(ga, "live", 0) != NULL);
 
@@ -617,15 +584,10 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  fetch(id=%d, live=%d) → ptr=%p err=%d",
              id, use_live, (const void *)m, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_model_free(m);
-            return finish_op_error(db, err, "model get");
-        }
-        if (!m) {
-            VLOG(1, "  not found (id=%d, live=%d)", id, use_live);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "model not found");
-        }
+        int rc = load_row_or_notfound(db, err, m, id, model_free_wrap,
+                                      "model get", "model");
+        if (rc)
+            return rc;
 
         vlog_model_fields("  result", m);
         vlog_model_raw("  raw", m, 0);
@@ -657,74 +619,46 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── update <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "update") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "model update: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_update(stderr);
-            return EXIT_INVALID;
-        }
-
-        /* ── robust <id> parse ────────────────────────────────────── */
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "model update: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_update(stderr);
+        if (!parse_id_positional(ga, "id", usage_update, "model update", &id))
             return EXIT_INVALID;
-        }
-        /* ──────────────────────────────────────────────────────────── */
 
-        const char *f_name        = cmd_args_flag(ga, "name", 1);
-        const char *f_folder_id   = cmd_args_flag(ga, "folder_id", 1);
-        const char *f_description = cmd_args_flag(ga, "description", 1);
-        const char *f_backend     = cmd_args_flag(ga, "backend", 1);
-        const char *f_base_url    = cmd_args_flag(ga, "base_url", 1);
-        const char *f_model_ident = cmd_args_flag(ga, "model_identifier", 1);
-        const char *f_config      = cmd_args_flag(ga, "configuration", 1);
+        /* ── input flags (flag mode; JSON mode: --json/--stdin/--from_file) ── */
+        const char *f_name        = NULL;
+        const char *f_description = NULL;
+        const char *f_backend     = NULL;
+        const char *f_base_url    = NULL;
+        const char *f_model_ident = NULL;
+        const char *f_config      = NULL;
+        int has_folder = 0;   /* 1 once we've decided folder_id is being set */
+        int  folder_val = 0;  /* 0 == root (NULL) */
+
+        /* --name: present → non-empty (atom emits the empty-value error).
+         * --folder_id: "0" → root (NULL), junk → EXIT_INVALID (atom). */
+        if (require_flag(ga, "name", &f_name, usage_update,
+                         "model update") < 0)
+            return EXIT_INVALID;
+        {
+            int r_folder = parse_nonneg_int_flag(ga, "folder_id", &folder_val,
+                                                 0, usage_update,
+                                                 "model update");
+            if (r_folder < 0)
+                return EXIT_INVALID;
+            has_folder = r_folder;
+        }
+        f_description = cmd_args_flag(ga, "description", 1);
+        f_backend     = cmd_args_flag(ga, "backend", 1);
+        f_base_url    = cmd_args_flag(ga, "base_url", 1);
+        f_model_ident = cmd_args_flag(ga, "model_identifier", 1);
+        f_config      = cmd_args_flag(ga, "configuration", 1);
 
         /* At least one field must be provided for update. */
         if (!f_name && !f_description && !f_backend && !f_base_url &&
-            !f_model_ident && !f_config && !f_folder_id) {
+            !f_model_ident && !f_config && !has_folder) {
             VLOG(1, "  ERROR: no fields provided for update");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"at least one field required for update\"}\n");
+            emit_error("at least one field required for update");
             usage_update(stderr);
             return EXIT_INVALID;
-        }
-        if (f_name && strlen(f_name) == 0) {
-            VLOG(1, "  ERROR: 'name' must not be empty");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"field 'name' must not be empty\"}\n");
-            usage_update(stderr);
-            return EXIT_INVALID;
-        }
-
-        /* ── validate & parse --folder_id ──────────────────────────
-         *   "0"  → move to root (folder_id = NULL)
-         *   "-1" → clamp to root  (mirrors create behaviour)
-         *   "N"  → valid positive integer
-         *   junk → EXIT_INVALID
-         */
-        int  has_folder = 0;   /* 1 once we've decided folder_id is being set */
-        int  folder_val = 0;   /* 0 == root (NULL) */
-
-        if (f_folder_id) {
-            if (!parse_folder_id(f_folder_id, &folder_val)) {
-                VLOG(1, "model update: invalid folder_id=%s", f_folder_id);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"invalid <folder_id>: must be a non-negative integer\"}\n");
-                usage_update(stderr);
-                return EXIT_INVALID;
-            }
-            has_folder = 1;
         }
 
         {
@@ -746,10 +680,10 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                  f_model_ident ? f_model_ident : "(unchanged)");
         }
 
-        VLOG(2, "  params: name=%s folder_id=%s description=%s backend=%s "
+        VLOG(2, "  params: name=%s folder_id=%d description=%s backend=%s "
                 "base_url=%s model_identifier=%s configuration=%s",
              f_name        ? f_name        : "(null)",
-             f_folder_id   ? f_folder_id   : "(null)",
+             has_folder    ? folder_val    : -1,
              f_description ? f_description : "(null)",
              f_backend     ? f_backend     : "(null)",
              f_base_url    ? f_base_url    : "(null)",
@@ -762,17 +696,12 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
          */
         int err = 0;
         model_t *cur = acta_db_model_get_live(db, id, &err);
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED fetching current row err=%d", err);
-            acta_db_model_free(cur);
-            return finish_op_error(db, err, "model update");
-        }
-        if (!cur) {
-            VLOG(1, "  not found or already deleted (id=%d)", id);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_NOT_FOUND\",\"code\":-5,"
-                "\"message\":\"model not found\"}\n");
-            return EXIT_NOT_FOUND;
+        {
+            int rc_check = load_row_or_notfound(db, err, cur, id,
+                                                model_free_wrap,
+                                                "model update", "model");
+            if (rc_check)
+                return rc_check;
         }
 
         /* Shallow-merge: start from the live row, override only what
@@ -811,38 +740,15 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  updated model id=%d", id);
-
-        if (gopts->id_only) {
-            fprintf(stdout, "%d\n", id);
-        } else {
-            fprintf(stdout, "{\"id\":%d}\n", id);
-        }
+        emit_ok_id(gopts, id);
         return EXIT_OK;
     }
 
     /* ── delete <id> ──────────────────────────────────────────────── */
     if (strcmp(action, "delete") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "model delete: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_delete(stderr);
-            return EXIT_INVALID;
-        }
-
-        /* ── robust <id> parse ────────────────────────────────────── */
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "model delete: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_delete(stderr);
+        if (!parse_id_positional(ga, "id", usage_delete, "model delete", &id))
             return EXIT_INVALID;
-        }
-        /* ──────────────────────────────────────────────────────────── */
 
         VLOG(1, "model delete: id=%d", id);
         VLOG(3, "  id=%d db=%p", id, (const void *)db);
@@ -857,38 +763,15 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  deleted model id=%d", id);
-
-        if (gopts->id_only) {
-            fprintf(stdout, "%d\n", id);
-        } else {
-            fprintf(stdout, "{\"id\":%d}\n", id);
-        }
+        emit_ok_id(gopts, id);
         return EXIT_OK;
     }
 
     /* ── restore <id> ─────────────────────────────────────────────── */
     if (strcmp(action, "restore") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "model restore: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_restore(stderr);
-            return EXIT_INVALID;
-        }
-
-        /* ── robust <id> parse ────────────────────────────────────── */
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "model restore: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_restore(stderr);
+        if (!parse_id_positional(ga, "id", usage_restore, "model restore", &id))
             return EXIT_INVALID;
-        }
-        /* ──────────────────────────────────────────────────────────── */
 
         VLOG(1, "model restore: id=%d", id);
         VLOG(3, "  id=%d db=%p", id, (const void *)db);
@@ -903,64 +786,24 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  restored model id=%d", id);
-
-        if (gopts->id_only) {
-            fprintf(stdout, "%d\n", id);
-        } else {
-            fprintf(stdout, "{\"id\":%d}\n", id);
-        }
+        emit_ok_id(gopts, id);
         return EXIT_OK;
     }
 
 
     /* ── move <id> --folder_id <fid> ──────────────────────────────── */
     if (strcmp(action, "move") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "model move: ERROR missing <id>");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing positional: <id>\"}\n");
-            usage_move(stderr);
-            return EXIT_INVALID;
-        }
-
-        /* ── robust <id> parse ────────────────────────────────────── */
         int model_id;
-        if (!parse_positive_id(id_str, &model_id)) {
-            VLOG(1, "model move: invalid id=%s", id_str);
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"invalid <id>: must be a positive integer\"}\n");
-            usage_move(stderr);
+        if (!parse_id_positional(ga, "id", usage_move, "model move", &model_id))
             return EXIT_INVALID;
-        }
-        /* ──────────────────────────────────────────────────────────── */
 
-        const char *f_folder_id = cmd_args_flag(ga, "folder_id", 1);
-        if (!f_folder_id) {
-            VLOG(1, "model move: ERROR missing --folder_id");
-            fprintf(stderr,
-                "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                "\"message\":\"missing required flag: --folder_id\"}\n");
-            usage_move(stderr);
-            return EXIT_INVALID;
-        }
         int folder_id = 0;   /* 0 == root (NULL) */
-
-        if (f_folder_id) {
-            if (!parse_folder_id(f_folder_id, &folder_id)) {
-                VLOG(1, "model move: invalid folder_id=%s", f_folder_id);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"invalid <folder_id>: must be a non-negative integer\"}\n");
-                usage_move(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_nonneg_int_flag(ga, "folder_id", &folder_id, 1,
+                                  usage_move, "model move") < 0)
+            return EXIT_INVALID;
 
         VLOG(1, "model move: id=%d → folder_id=%d", model_id, folder_id);
-        VLOG(2, "  folder_id raw=%s", f_folder_id ? f_folder_id : "(root)");
+        VLOG(2, "  folder_id=%d", folder_id);
         VLOG(3, "  model_id=%d folder_id=%d db=%p",
              model_id, folder_id, (const void *)db);
 
@@ -975,57 +818,22 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  moved model id=%d → folder_id=%d", model_id, folder_id);
-
-        if (gopts->id_only) {
-            fprintf(stdout, "%d\n", model_id);
-        } else {
-            fprintf(stdout,
-                "{\"id\":%d,\"folder_id\":%d}\n", model_id, folder_id);
-        }
+        emit_ok_folder(gopts, model_id, folder_id);
         return EXIT_OK;
     }
 
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *f_folder  = cmd_args_flag(ga, "folder_id", 1);
-        const char *s_off     = cmd_args_flag(ga, "offset", 1);
-        const char *s_lim     = cmd_args_flag(ga, "limit", 1);
-
         int folder_id = -1;  /* -1 = all */
         int offset = 0, limit = 0;
 
-        if (f_folder) {
-            if (!parse_nonneg_int(f_folder, &folder_id)) {
-                VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--folder_id must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
-
-        if (s_off) {
-            if (!parse_nonneg_int(s_off, &offset)) {
-                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--offset must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
-        if (s_lim) {
-            if (!parse_nonneg_int(s_lim, &limit)) {
-                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--limit must be a non-negative integer\"}\n");
-                usage_list(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_nonneg_int_flag(ga, "folder_id", &folder_id, 0,
+                                  usage_list, "model list") < 0)
+            return EXIT_INVALID;
+        if (parse_offset_limit(ga, &offset, &limit,
+                               usage_list, "model list") < 0)
+            return EXIT_INVALID;
 
         VLOG(1, "model list: folder_id=%d offset=%d limit=%d",
              folder_id, offset, limit);
@@ -1104,22 +912,13 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
-        const char *f_folder = cmd_args_flag(ga, "folder_id", 1);
         int folder_id = -1;  /* -1 = all */
 
-        if (f_folder) {
-            if (!parse_nonneg_int(f_folder, &folder_id)) {
-                VLOG(1, "  ERROR: --folder_id must be a non-negative integer, got '%s'", f_folder);
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_DB_ERR_INVALID\",\"code\":-4,"
-                    "\"message\":\"--folder_id must be a non-negative integer\"}\n");
-                usage_count(stderr);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_nonneg_int_flag(ga, "folder_id", &folder_id, 0,
+                                  usage_count, "model count") < 0)
+            return EXIT_INVALID;
 
         VLOG(1, "model count: folder_id=%d", folder_id);
-        VLOG(2, "  folder_id raw=%s", f_folder ? f_folder : "(all)");
         VLOG(3, "  folder_id=%d db=%p", folder_id, (const void *)db);
 
         int err = 0;
