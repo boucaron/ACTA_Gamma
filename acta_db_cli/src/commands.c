@@ -54,6 +54,15 @@ static int entity_not_found(const char *entity) {
         "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
         "\"message\":\"unknown entity: %s\"}\n",
         entity);
+
+    /* Suggestion line, appended *after* the JSON contract line (scripts
+     * parse line 1), same fuzzy matcher as unknown_action(). */
+    const char *names[ENTITY_COUNT];
+    for (size_t i = 0; i < ENTITY_COUNT; ++i)
+        names[i] = entity_table[i].name;
+    const char *guess = closest_name(entity, names, ENTITY_COUNT);
+    if (guess)
+        fprintf(stderr, "  Did you mean '%s'?\n", guess);
     return EXIT_CLI;
 }
 

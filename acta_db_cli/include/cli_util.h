@@ -422,23 +422,33 @@ static inline int edit_distance(const char *a, const char *b)
     return dp[la][lb];
 }
 
-static inline const char *closest_action(const char *input,
-                                  const action_def_t *actions, size_t n)
+/* Generic closest-match over a flat name list. Threshold is length-relative
+ * (per target name): 1 edit is meaningful, 3+ never are. Short names
+ * (≤ 3 chars) get only 1, so "cat" does not suggest "get" (d=2) while
+ * "creat"→"create" (d=1) and "cretae"→"create" (d=2) still fire. */
+static inline const char *closest_name(const char *input,
+                                       const char *const *names, size_t n)
 {
     if (!input || !*input) return NULL;
     const char *best = NULL;
     int best_dist = INT_MAX;
     for (size_t i = 0; i < n; i++) {
-        const char *name = actions[i].name;
-        /* Length-relative acceptance threshold (per target name): 1 edit
-         * is meaningful, 3+ never are. Short names (≤ 3 chars) get only
-         * 1, so "cat" does not suggest "get" (d=2) while "creat"→
-         * "create" (d=1) and "cretae"→"create" (d=2) still fire. */
+        const char *name = names[i];
         int limit = (int)strlen(name) <= 3 ? 1 : 2;
         int d = edit_distance(input, name);
         if (d > 0 && d <= limit && d < best_dist) { best_dist = d; best = name; }
     }
     return best;
+}
+
+static inline const char *closest_action(const char *input,
+                                  const action_def_t *actions, size_t n)
+{
+    if (n == 0) return NULL;
+    const char *names[n];
+    for (size_t i = 0; i < n; ++i)
+        names[i] = actions[i].name;
+    return closest_name(input, names, n);
 }
 
 /* Emit the canonical unknown-action error for an entity and return its
