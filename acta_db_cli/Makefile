@@ -32,7 +32,7 @@ CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
            -Itests/model_folder \
            -Itests/context -Itests/db \
            -Itests/execution_log -Itests/exec \
-           -Itests/model
+           -Itests/model -Itests/cli_util
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
 CJSON_DIR ?=
@@ -110,6 +110,11 @@ EXEC_TEST_SRCS   := $(wildcard tests/exec/*.c)
 EXEC_TEST_OBJS   := $(patsubst %.c, %.o, $(EXEC_TEST_SRCS))
 EXEC_TEST_TARGET := test_exec$(EXEEXT)
 
+# ---- sources (tests: cli_util) ----
+CU_TEST_SRCS   := $(wildcard tests/cli_util/*.c)
+CU_TEST_OBJS   := $(patsubst %.c, %.o, $(CU_TEST_SRCS))
+CU_TEST_TARGET := test_cli_util$(EXEEXT)
+
 # shared test-framework object (lives in tests/helpers/, used by all suites)
 HELPERS_OBJ := tests/helpers/test_helpers.o
 
@@ -117,7 +122,7 @@ HELPERS_OBJ := tests/helpers/test_helpers.o
 ALL_TEST_TARGETS := $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) \
                     $(MOD_TEST_TARGET) $(MF_TEST_TARGET) \
                     $(CTX_TEST_TARGET) $(DB_TEST_TARGET) \
-                    $(EL_TEST_TARGET) $(EXEC_TEST_TARGET)
+                    $(EL_TEST_TARGET) $(EXEC_TEST_TARGET) $(CU_TEST_TARGET)
 
 .PHONY: all clean test
 
@@ -167,6 +172,10 @@ $(EL_TEST_TARGET): $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_
 $(EXEC_TEST_TARGET): $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
+# ---- test binary: cli_util ----
+$(CU_TEST_TARGET): $(CU_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(CU_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
+
 test: $(ALL_TEST_TARGETS)
 	@fail=0; \
 	for t in $(ALL_TEST_TARGETS); do \
@@ -184,5 +193,5 @@ clean:
 	      $(MOD_TEST_OBJS) \
 	      $(MF_TEST_OBJS) \
 	      $(CTX_TEST_OBJS) $(DB_TEST_OBJS) $(EL_TEST_OBJS) \
-	      $(EXEC_TEST_OBJS) \
+	      $(EXEC_TEST_OBJS) $(CU_TEST_OBJS) \
 	      $(TARGET) $(ALL_TEST_TARGETS)
