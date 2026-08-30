@@ -39,7 +39,8 @@ ifneq ($(CJSON_DIR),)
 CFLAGS   += -I$(CJSON_DIR)
 endif
 
-LDFLAGS += ../acta_db/libacta_db.a -lsqlite3 $(CJSON_LIB)
+ACTA_DB_LIB := ../acta_db/libacta_db.a
+LDFLAGS += $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB)
 
 # Executable targets carry $(EXEEXT): empty under POSIX make, ".exe" under
 # Windows (mingw) make, so the same Makefile builds on both.
@@ -120,55 +121,57 @@ ALL_TEST_TARGETS := $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) \
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
+# Rebuild the lib when missing or when any of its sources changed.
+# (Must stay below `all` or it would become the default goal.)
+$(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h)
+	$(MAKE) -C ../acta_db libacta_db.a
+
+$(TARGET): $(OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
 # ---- test binary: skill ----
-$(TEST_TARGET): $(TEST_OBJS) $(APP_OBJS_NO_MAIN)
+$(TEST_TARGET): $(TEST_OBJS) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: skill_revision ----
-$(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: skill_folder ----
-$(SFL_TEST_TARGET): $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(SFL_TEST_TARGET): $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: model ----
-$(MOD_TEST_TARGET): $(MOD_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(MOD_TEST_TARGET): $(MOD_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(MOD_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: model_folder ----
-$(MF_TEST_TARGET): $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(MF_TEST_TARGET): $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: context ----
-$(CTX_TEST_TARGET): $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(CTX_TEST_TARGET): $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: db ----
-$(DB_TEST_TARGET): $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(DB_TEST_TARGET): $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: execution_log ----
-$(EL_TEST_TARGET): $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(EL_TEST_TARGET): $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 # ---- test binary: exec ----
-$(EXEC_TEST_TARGET): $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN)
+$(EXEC_TEST_TARGET): $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDFLAGS)
 
 test: $(ALL_TEST_TARGETS)
-	./$(TEST_TARGET)
-	./$(SRV_TEST_TARGET)
-	./$(SFL_TEST_TARGET)
-	./$(MOD_TEST_TARGET)
-	./$(MF_TEST_TARGET)
-	./$(CTX_TEST_TARGET)
-	./$(DB_TEST_TARGET)
-	./$(EL_TEST_TARGET)
-	./$(EXEC_TEST_TARGET)
+	@fail=0; \
+	for t in $(ALL_TEST_TARGETS); do \
+		echo "== $$t =="; \
+		./$$t || fail=1; \
+	done; \
+	exit $$fail
 
 # ---- pattern rule ----
 %.o: %.c
