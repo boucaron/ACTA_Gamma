@@ -102,6 +102,12 @@ static void vlog_ctx_raw(const char *tag, const context_t *c, int rc)
          tag, (const void *)c, c ? c->id : -1, rc);
 }
 
+/* free_row adapter for load_row_or_notfound (void* signature). */
+static void ctx_free_wrap(void *c)
+{
+    acta_db_context_free((context_t *)c);
+}
+
 /* ── context_t → JSON object ──────────────────────────────────────── */
 
 static void ctx_to_json(FILE *f, const context_t *c, const global_opts_t *gopts)
@@ -196,6 +202,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         char *blob = NULL;
         int src = resolve_input_source(gopts, &blob);
         if (src < 0) {
+            ctx_usage(stderr);
             return EXIT_INVALID;   /* error line already on stderr */
         }
         if (src) {
@@ -203,11 +210,8 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
             if (json_parse_context(blob, &ctx) != 0) {
                 VLOG(1, "  JSON parse error");
-                fprintf(stderr,
-                    "Error: invalid JSON body for 'create'.\n"
-                    "  Expected: {\"type\":\"...\",\"content\":\"...\","
-                    "\"content_hash\":\"...\",\"metadata\":\"...\"}\n"
-                    "  Run 'actagamma_db context help' for full usage.\n");
+                emit_error("invalid JSON body");
+                ctx_usage(stderr);
                 free(blob);
                 return EXIT_INVALID;
             }
@@ -250,34 +254,20 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         /* ── required-field validation (uses ctx, not locals) ── */
         {
-            struct { const char *field; const char *flag;
-                     const char *json_key; const char *example; } reqs[] = {
-                { "type",    "--type",    "type",
-                  "--type \"session\"" },
-                { "content", "--content", "content",
-                  "--content \"hello world\"" },
-                { "hash",    "--hash",    "content_hash",
-                  "--hash \"<sha256-hex>\"" },
+            struct { const char *field; const char *val; } reqs[] = {
+                { "type",    ctx.type         },
+                { "content", ctx.content      },
+                { "hash",    ctx.content_hash },
             };
             for (size_t i = 0; i < sizeof reqs / sizeof reqs[0]; i++) {
-                const char *val = (i == 0) ? ctx.type
-                              : (i == 1)   ? ctx.content
-                                            : ctx.content_hash;
-                if (!val) {
+                if (!reqs[i].val) {
                     VLOG(1, "  ERROR: missing required field '%s'",
                          reqs[i].field);
-                    fprintf(stderr,
-                        "Error: '%s' is required.\n"
-                        "  Via flag:\n"
-                        "    %s <value>\n"
-                        "  Via JSON (--json), key: \"%s\"\n"
-                        "  Example:\n"
-                        "    actagamma_db context create %s --content \"...\" --hash \"...\"\n"
-                        "  Run 'actagamma_db context help' for full usage.\n",
-                        reqs[i].field,
-                        reqs[i].flag,
-                        reqs[i].json_key,
-                        reqs[i].example);
+                    char msg[96];
+                    snprintf(msg, sizeof msg,
+                             "missing required field: %s", reqs[i].field);
+                    emit_error(msg);
+                    ctx_usage(stderr);
                     ret = EXIT_INVALID;
                     goto cleanup_create;
                 }
@@ -297,10 +287,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  created context id=%d", out_id);
-        if (gopts->id_only)
-            fprintf(stdout, "%d\n", out_id);
-        else
-            fprintf(stdout, "{\"id\":%d}\n", out_id);
+        emit_ok_id(gopts, out_id);
 
         ret = EXIT_OK;
         goto cleanup_create;
@@ -318,26 +305,9 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── get <id> ─────────────────────────────────────────────────── */
     if (strcmp(action, "get") == 0) {
-        const char *id_str = cmd_args_next_positional(ga);
-        if (!id_str) {
-            VLOG(1, "context get: ERROR missing <id>");
-            fprintf(stderr,
-                "Error: 'get' requires a positional <id>.\n"
-                "  Usage: actagamma_db context get <positive-integer-id>\n"
-                "  Example: actagamma_db context get 42\n"
-                "  Run 'actagamma_db context help' for full usage.\n");
-            return EXIT_INVALID;
-        }
         int id;
-        if (!parse_positive_id(id_str, &id)) {
-            VLOG(1, "context get: invalid id=%s", id_str);
-            fprintf(stderr,
-                "Error: id must be a positive integer, got '%s'.\n"
-                "  Usage: actagamma_db context get <positive-integer-id>\n"
-                "  Run 'actagamma_db context help' for full usage.\n",
-                id_str);
+        if (!parse_id_positional(ga, "id", ctx_usage, "context get", &id))
             return EXIT_INVALID;
-        }
 
         VLOG(1, "context get: fetching id=%d", id);
 
@@ -347,15 +317,10 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  acta_db_context_get(%d) → ptr=%p err=%d",
              id, (const void *)c, err);
 
-        if (err != ACTA_DB_OK) {
-            VLOG(1, "  FAILED err=%d → exit mapping", err);
-            acta_db_context_free(c);
-            return finish_op_error(db, err, "context get");
-        }
-        if (!c) {
-            VLOG(1, "  not found (id=%d)", id);
-            return finish_db_error(ACTA_DB_ERR_NOT_FOUND, "context not found");
-        }
+        int rc = load_row_or_notfound(db, err, c, id, ctx_free_wrap,
+                                      "context get", "context");
+        if (rc)
+            return rc;
 
         vlog_ctx_fields("  result", c);
         vlog_ctx_raw("  raw", c, 0);
@@ -375,35 +340,13 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
-        const char *f_type  = cmd_args_flag(ga, "type", 1);
-        const char *f_hash  = cmd_args_flag(ga, "hash", 1);
-        const char *s_off   = cmd_args_flag(ga, "offset", 1);
-        const char *s_lim   = cmd_args_flag(ga, "limit", 1);
+        const char *f_type = cmd_args_flag(ga, "type", 1);
+        const char *f_hash = cmd_args_flag(ga, "hash", 1);
 
         int offset = 0, limit = 0;
-
-        if (s_off) {
-            if (!parse_nonneg_int(s_off, &offset)) {
-                VLOG(1, "  ERROR: --offset must be a non-negative integer, got '%s'", s_off);
-                fprintf(stderr,
-                    "Error: --offset must be a non-negative integer, got '%s'.\n"
-                    "  Usage: actagamma_db context list [--offset <int>] [--limit <int>] ...\n"
-                    "  Run 'actagamma_db context help' for full usage.\n",
-                    s_off);
-                return EXIT_INVALID;
-            }
-        }
-        if (s_lim) {
-            if (!parse_nonneg_int(s_lim, &limit)) {
-                VLOG(1, "  ERROR: --limit must be a non-negative integer, got '%s'", s_lim);
-                fprintf(stderr,
-                    "Error: --limit must be a non-negative integer, got '%s'.\n"
-                    "  (Use 0 or omit --limit for unlimited.)\n"
-                    "  Run 'actagamma_db context help' for full usage.\n",
-                    s_lim);
-                return EXIT_INVALID;
-            }
-        }
+        if (parse_offset_limit(ga, &offset, &limit,
+                               ctx_usage, "context list") < 0)
+            return EXIT_INVALID;
 
         context_query_t q = { .type = f_type, .hash = f_hash };
 
