@@ -100,7 +100,7 @@ void SkillPanel::reload()
 
     acta_db_skill_folder_list_free(folders, nFolders);
 
-    for (int i = 0; i < tree->topLevelCount(); ++i)
+    for (int i = 0; i < tree->topLevelItemCount(); ++i)
         tree->topLevelItem(i)->setExpanded(true);
 }
 
