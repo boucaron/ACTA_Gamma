@@ -122,12 +122,15 @@ void skill_usage(FILE *f)
 "    actagamma_db skill list\n"
 "    actagamma_db skill list --folder_id 3\n"
 "    actagamma_db skill list --all --offset 10 --limit 25\n"
+"    actagamma_db skill list --all --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Only skills in this folder\n"
 "    --all                Include skills from all folders\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --count              Return only the row count (no rows)\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -139,10 +142,13 @@ void skill_usage(FILE *f)
 "    actagamma_db skill count\n"
 "    actagamma_db skill count --folder_id 3\n"
 "    actagamma_db skill count --all\n"
+"    actagamma_db skill count --all --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Count only skills in this folder\n"
 "    --all                Count across all folders\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "\n"
 "Global options:\n"
 "  --table            columnar / plain output instead of JSON\n"
@@ -276,12 +282,15 @@ static void usage_list(FILE *f)
 "    actagamma_db skill list\n"
 "    actagamma_db skill list --folder_id 3\n"
 "    actagamma_db skill list --all --offset 10 --limit 25\n"
+"    actagamma_db skill list --all --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Only skills in this folder\n"
 "    --all                Include skills from all folders\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --count              Return only the row count (no rows)\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -297,10 +306,13 @@ static void usage_count(FILE *f)
 "    actagamma_db skill count\n"
 "    actagamma_db skill count --folder_id 3\n"
 "    actagamma_db skill count --all\n"
+"    actagamma_db skill count --all --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Count only skills in this folder\n"
-"    --all                Count across all folders\n", f);
+"    --all                Count across all folders\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n", f);
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -881,6 +893,7 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     if (strcmp(action, "list") == 0) {
         const char *f_folder = cmd_args_flag(ga, "folder_id", 1); /* VLOG display only */
         int has_all = cmd_args_has_flag(ga, "all");
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
         int offset = 0, limit = 0;
         int folder_id = 0;
@@ -894,27 +907,35 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                                usage_list, "skill list") < 0)
             return EXIT_INVALID;
 
-        VLOG(1, "skill list: folder_id=%s all=%d offset=%d limit=%d",
+        VLOG(1, "skill list: folder_id=%s all=%d offset=%d limit=%d "
+                "include_deleted=%d",
              f_folder ? f_folder : (has_all ? "(any/all)" : "(root)"),
              has_all ? 1 : 0,
-             offset, limit);
+             offset, limit, include_deleted);
 
         VLOG(2, "  full: folder_id=%s all=%d offset=%d limit=%d "
-                "no_nulls=%d table=%d fields=%s",
+                "include_deleted=%d no_nulls=%d table=%d fields=%s",
              f_folder ? f_folder : "(null)",
              has_all ? 1 : 0,
-             offset, limit,
+             offset, limit, include_deleted,
              gopts->no_nulls, gopts->table,
              gopts->fields ? gopts->fields : "(all)");
 
-        VLOG(3, "  folder_id=%d all=%d offset=%d limit=%d",
-             folder_id, has_all ? 1 : 0, offset, limit);
+        VLOG(3, "  folder_id=%d all=%d offset=%d limit=%d include_deleted=%d",
+             folder_id, has_all ? 1 : 0, offset, limit, include_deleted);
 
         if (gopts->count) {
             int err = 0;
-            int n = (in_folder && !has_all )
-                ? acta_db_skill_count_in_folder(db, folder_id, &err)
-                : acta_db_skill_count_all(db, &err);
+            int n;
+            if (in_folder && !has_all)
+                n = include_deleted
+                    ? acta_db_skill_count_in_folder_with_deleted(
+                          db, folder_id, &err)
+                    : acta_db_skill_count_in_folder(db, folder_id, &err);
+            else
+                n = include_deleted
+                    ? acta_db_skill_count_all_with_deleted(db, &err)
+                    : acta_db_skill_count_all(db, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
                 return finish_op_error(db, err, "skill count");
@@ -928,12 +949,18 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         skill_t **items;
 
         if (in_folder && !has_all) {
-            items = acta_db_skill_list_in_folder(db, folder_id,
-                                                 offset, limit,
-                                                 &out_count, &err);
+            items = include_deleted
+                ? acta_db_skill_list_in_folder_with_deleted(
+                      db, folder_id, offset, limit, &out_count, &err)
+                : acta_db_skill_list_in_folder(db, folder_id,
+                                               offset, limit,
+                                               &out_count, &err);
         } else {
-            items = acta_db_skill_list_all(db, offset, limit,
-                                           &out_count, &err);
+            items = include_deleted
+                ? acta_db_skill_list_all_with_deleted(
+                      db, offset, limit, &out_count, &err)
+                : acta_db_skill_list_all(db, offset, limit,
+                                         &out_count, &err);
         }
 
         if (err != ACTA_DB_OK) {
@@ -980,17 +1007,26 @@ int cmd_skill(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (r_folder < 0)
             return EXIT_INVALID;
         int in_folder = r_folder;
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
-        VLOG(1, "skill count: folder_id=%s all=%d",
+        VLOG(1, "skill count: folder_id=%s all=%d include_deleted=%d",
              f_folder ? f_folder : (has_all ? "(any/all)" : "(root)"),
-             has_all ? 1 : 0);
+             has_all ? 1 : 0, include_deleted);
 
-        VLOG(2, "  folder_id=%d all=%d", folder_id, has_all ? 1 : 0);
+        VLOG(2, "  folder_id=%d all=%d include_deleted=%d",
+             folder_id, has_all ? 1 : 0, include_deleted);
 
         int err = 0;
-        int n = (in_folder && !has_all)
-            ? acta_db_skill_count_in_folder(db, folder_id, &err)
-            : acta_db_skill_count_all(db, &err);
+        int n;
+        if (in_folder && !has_all)
+            n = include_deleted
+                ? acta_db_skill_count_in_folder_with_deleted(
+                      db, folder_id, &err)
+                : acta_db_skill_count_in_folder(db, folder_id, &err);
+        else
+            n = include_deleted
+                ? acta_db_skill_count_all_with_deleted(db, &err)
+                : acta_db_skill_count_all(db, &err);
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
