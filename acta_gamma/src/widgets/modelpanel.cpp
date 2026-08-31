@@ -38,8 +38,15 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     showDeletedCheck = new QCheckBox("Show deleted items");
     lay->addWidget(showDeletedCheck);
 
+    auto *actionRow = new QHBoxLayout;
+    newBtn = new QPushButton("New");
+    showBtn = new QPushButton("Show");
     editBtn = new QPushButton("Edit Model");
-    lay->addWidget(editBtn);
+    actionRow->addWidget(newBtn);
+    actionRow->addWidget(showBtn);
+    actionRow->addWidget(editBtn);
+    actionRow->addStretch();
+    lay->addLayout(actionRow);
 
     auto *btnRow = new QHBoxLayout;
     deleteBtn = new QPushButton("Delete");
@@ -52,6 +59,8 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
     });
+    connect(newBtn, &QPushButton::clicked, this, &ModelPanel::onNewBtnClicked);
+    connect(showBtn, &QPushButton::clicked, this, &ModelPanel::onShowBtnClicked);
     connect(editBtn, &QPushButton::clicked, this, &ModelPanel::onEditBtnClicked);
     connect(deleteBtn, &QPushButton::clicked, this, [this]() {
         const int modelId = selectedModelId();
@@ -69,7 +78,10 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 const bool hasModel =
                     cur != nullptr && cur->data(0, RoleModelId).toInt() != 0;
-                editBtn->setEnabled(hasModel);
+                const bool isDeleted =
+                    hasModel && cur->data(0, RoleIsDeleted).toBool();
+                showBtn->setEnabled(hasModel);
+                editBtn->setEnabled(hasModel && !isDeleted);
                 deleteBtn->setEnabled(
                     hasModel && !cur->data(0, RoleIsDeleted).toBool());
                 restoreBtn->setEnabled(
@@ -179,6 +191,36 @@ int ModelPanel::selectedModelId() const
     return cur ? cur->data(0, RoleModelId).toInt() : 0;
 }
 
+int ModelPanel::selectedFolderId() const
+{
+    const auto *cur = tree->currentItem();
+    return cur ? cur->data(0, RoleFolderId).toInt() : 0;
+}
+
+void ModelPanel::onNewBtnClicked()
+{
+    if (!m_db)
+        return;
+
+    // New model goes into the selected folder when one is selected,
+    // otherwise at the root level.
+    ModelDialog dlg(this);
+    dlg.newModel(m_db, selectedFolderId());
+    dlg.exec();
+    reload();
+}
+
+void ModelPanel::onShowBtnClicked()
+{
+    const int modelId = selectedModelId();
+    if (modelId == 0 || !m_db)
+        return;
+
+    ModelDialog dlg(this);
+    dlg.showModel(m_db, modelId);
+    dlg.exec();
+}
+
 void ModelPanel::onEditBtnClicked()
 {
     const int modelId = selectedModelId();
@@ -188,4 +230,5 @@ void ModelPanel::onEditBtnClicked()
     ModelDialog dlg(this);
     dlg.editModel(m_db, modelId);
     dlg.exec();
+    reload();
 }

@@ -65,7 +65,7 @@ ExecutionDialog::ExecutionDialog(QWidget *parent)
         if (m_modelId == 0 || !m_db)
             return;
         ModelDialog dlg(this);
-        dlg.editModel(m_db, m_modelId);
+        dlg.showModel(m_db, m_modelId);
         dlg.exec();
     });
 }
