@@ -592,9 +592,11 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         /* ── fetch ────────────────────────────────────────────────── */
         int err = 0;
+        /* include_deleted → unfiltered fetch (row even if soft-deleted);
+         * otherwise live rows only (get_live returns NULL for deleted). */
         model_t *m = include_deleted
-            ? acta_db_model_get_live(db, id, &err)
-            : acta_db_model_get(db, id, &err);
+            ? acta_db_model_get(db, id, &err)
+            : acta_db_model_get_live(db, id, &err);
 
         VLOG(3, "  fetch(id=%d, include_deleted=%d) → ptr=%p err=%d",
              id, include_deleted, (const void *)m, err);

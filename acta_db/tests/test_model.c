@@ -1328,6 +1328,193 @@ static void test_model_list_in_folder_with_deleted_null_outs(void) {
     test_db_teardown(db, path);
 }
 
+/* ---------- 4.61: list_all_with_deleted — includes soft-deleted from all folders ---------- */
+static void test_model_list_all_with_deleted_all_folders(void) {
+    const char *path = "test/acta_test_m_lawd_allfolders.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int fid;
+    acta_db_model_folder_create(db, "F", 0, &fid);
+
+    model_t ma = { .name = "A", .backend = "b", .model_identifier = "mid" };
+    model_t mb = { .name = "B", .backend = "b", .model_identifier = "mid", .folder_id = fid };
+    model_t mc = { .name = "C", .backend = "b", .model_identifier = "mid" };
+    int idA, idB, idC;
+    acta_db_model_create(db, &ma, &idA);
+    acta_db_model_create(db, &mb, &idB);
+    acta_db_model_create(db, &mc, &idC);
+    acta_db_model_soft_delete(db, idA);
+    acta_db_model_soft_delete(db, idB);
+
+    /* Live-only lister still excludes both deleted rows */
+    int err = 0;
+    int count = 0;
+    model_t **live = acta_db_model_list_all(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(live[0]->name, "C");
+    acta_db_model_list_free(live, count);
+
+    /* With-deleted lister returns all three, in id order */
+    count = 0;
+    err = 0;
+    model_t **items = acta_db_model_list_all_with_deleted(db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);
+    TEST_ASSERT_EQ_STR(items[0]->name, "A");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[1]->name, "B");
+    TEST_ASSERT_NOT_NULL(items[1]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[2]->name, "C");
+    TEST_ASSERT_NULL(items[2]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.62: list_all_with_deleted — invalid args ---------- */
+static void test_model_list_all_with_deleted_invalid_args(void) {
+    const char *path = "test/acta_test_m_lawd_args.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
+    int count = 0;
+
+    /* NULL db */
+    model_t **items = acta_db_model_list_all_with_deleted(NULL, 0, -1, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    /* Negative offset */
+    err = 0;
+    items = acta_db_model_list_all_with_deleted(db, -1, -1, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.63: list_all_with_deleted — pagination over mixed rows ---------- */
+static void test_model_list_all_with_deleted_pagination(void) {
+    const char *path = "test/acta_test_m_lawd_page.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    for (int i = 0; i < 4; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "M%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        int id = 0;
+        acta_db_model_create(db, &m, &id);
+        if (i % 2 == 0)
+            acta_db_model_soft_delete(db, id); /* delete M0, M2 */
+    }
+
+    int err = 0;
+    int count = 0;
+
+    /* Page 1: M0 (deleted), M1 (live) */
+    model_t **items = acta_db_model_list_all_with_deleted(db, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "M0");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[1]->name, "M1");
+    TEST_ASSERT_NULL(items[1]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    /* Page 2: M2 (deleted), M3 (live) */
+    count = 0;
+    err = 0;
+    items = acta_db_model_list_all_with_deleted(db, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "M2");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[1]->name, "M3");
+    TEST_ASSERT_NULL(items[1]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.64: count_in_folder_with_deleted ---------- */
+static void test_model_count_in_folder_with_deleted(void) {
+    const char *path = "test/acta_test_m_cifwd.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int fid;
+    acta_db_model_folder_create(db, "F", 0, &fid);
+
+    /* Folder: 1 live + 1 deleted; root: 1 live + 1 deleted */
+    model_t mf = { .name = "F1", .backend = "b", .model_identifier = "mid", .folder_id = fid };
+    model_t mf2 = { .name = "F2", .backend = "b", .model_identifier = "mid", .folder_id = fid };
+    model_t mr = { .name = "R1", .backend = "b", .model_identifier = "mid" };
+    model_t mr2 = { .name = "R2", .backend = "b", .model_identifier = "mid" };
+    int idF1, idF2, idR1, idR2;
+    acta_db_model_create(db, &mf, &idF1);
+    acta_db_model_create(db, &mf2, &idF2);
+    acta_db_model_create(db, &mr, &idR1);
+    acta_db_model_create(db, &mr2, &idR2);
+    acta_db_model_soft_delete(db, idF2);
+    acta_db_model_soft_delete(db, idR2);
+
+    int err = 0;
+
+    /* Folder: live-only vs with-deleted */
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder(db, fid, &err), 1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder_with_deleted(db, fid, &err), 2);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+
+    /* Root (folder_id == 0): live-only vs with-deleted */
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder(db, 0, &err), 1);
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder_with_deleted(db, 0, &err), 2);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+
+    /* NULL db */
+    TEST_ASSERT_EQ_INT(acta_db_model_count_in_folder_with_deleted(NULL, fid, &err), -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.65: count_all_with_deleted ---------- */
+static void test_model_count_all_with_deleted(void) {
+    const char *path = "test/acta_test_m_cawd.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    for (int i = 0; i < 4; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "C%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        int id = 0;
+        acta_db_model_create(db, &m, &id);
+        if (i % 2 == 0)
+            acta_db_model_soft_delete(db, id); /* delete C0, C2 */
+    }
+
+    int err = 0;
+    TEST_ASSERT_EQ_INT(acta_db_model_count_all(db, &err), 2);
+    TEST_ASSERT_EQ_INT(acta_db_model_count_all_with_deleted(db, &err), 4);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+
+    /* NULL db */
+    TEST_ASSERT_EQ_INT(acta_db_model_count_all_with_deleted(NULL, &err), -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
 /* ---------- runner ---------- */
 
 void run_model_tests(void) {
@@ -1385,6 +1572,11 @@ void run_model_tests(void) {
     test_model_list_in_folder_with_deleted_pagination();
     test_model_list_in_folder_with_deleted_null_outs();
 
+    /* list_all_with_deleted */
+    test_model_list_all_with_deleted_all_folders();
+    test_model_list_all_with_deleted_invalid_args();
+    test_model_list_all_with_deleted_pagination();
+
     /* free */
     test_model_free_valid();
     test_model_free_null();
@@ -1418,6 +1610,8 @@ void run_model_tests(void) {
     test_model_count_null_err();
     test_model_count_null_db();
     test_model_count_pagination_roundtrip();
+    test_model_count_in_folder_with_deleted();
+    test_model_count_all_with_deleted();
 
     test_model_restore_not_found();
 }

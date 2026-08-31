@@ -94,10 +94,20 @@ static void test_get_deleted_model(stest_ctx_t *ctx)
     targs_pos(a, "5", &g);
 
     int rc = do_get(ctx, a, g);
-    /* plain get has no deleted filter (only --live does), so the deleted
-     * row is returned → EXIT_OK */
-    TEST(ctx, rc == EXIT_OK);
+    /* plain get is live-only: a soft-deleted row is NOT FOUND */
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
     targs_free(a, &g);
+
+    /* --include_deleted returns the row even if soft-deleted */
+    global_opts_t g2 = gopts_default();
+    cmd_args_t *a2 = targs_new();
+    targs_pos(a2, "5", &g2);
+    targs_flag_bool(a2, "include_deleted", &g2);
+
+    int rc2 = do_get(ctx, a2, g2);
+    TEST_EQ(ctx, rc2, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":5");
+    targs_free(a2, &g2);
 }
 
 static void test_get_json_output(stest_ctx_t *ctx)
