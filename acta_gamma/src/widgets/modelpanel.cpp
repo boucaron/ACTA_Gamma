@@ -1,9 +1,12 @@
 #include "modelPanel.h"
 
+#include <QCheckBox>
+#include <QIcon>
 #include <QLabel>
 #include <QList>
 #include <QPushButton>
 #include <QSet>
+#include <QStyle>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
@@ -28,9 +31,17 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     tree->setHeaderHidden(true);
     lay->addWidget(tree);
 
+    m_deletedIcon = tree->style()->standardIcon(QStyle::SP_TrashIcon);
+
+    showDeletedCheck = new QCheckBox("Show deleted items");
+    lay->addWidget(showDeletedCheck);
+
     editBtn = new QPushButton("Edit Model");
     lay->addWidget(editBtn);
 
+    connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
+        reload();
+    });
     connect(editBtn, &QPushButton::clicked, this, &ModelPanel::onEditBtnClicked);
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
@@ -108,8 +119,12 @@ void ModelPanel::addModels(QTreeWidgetItem *parent, int folderId)
 {
     int n = 0;
     int err = ACTA_DB_OK;
-    model_t **models =
-        acta_db_model_list_in_folder(m_db, folderId, 0, 0, &n, &err);
+    const bool showDeleted =
+        showDeletedCheck != nullptr && showDeletedCheck->isChecked();
+    model_t **models = showDeleted
+        ? acta_db_model_list_in_folder_with_deleted(m_db, folderId, 0, 0, &n,
+                                                    &err)
+        : acta_db_model_list_in_folder(m_db, folderId, 0, 0, &n, &err);
     if (!models) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_model_list_in_folder(%d) failed: %s", folderId,
@@ -122,6 +137,8 @@ void ModelPanel::addModels(QTreeWidgetItem *parent, int folderId)
             ? new QTreeWidgetItem(parent, {QString::fromUtf8(models[i]->name)})
             : new QTreeWidgetItem(tree, {QString::fromUtf8(models[i]->name)});
         item->setData(0, RoleModelId, models[i]->id);
+        if (models[i]->deleted_at && models[i]->deleted_at[0])
+            item->setIcon(0, m_deletedIcon);
     }
     acta_db_model_list_free(models, n);
 }

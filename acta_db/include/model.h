@@ -142,6 +142,23 @@ model_t **acta_db_model_list_in_folder(db_t *db,
                                        int *out_count, int *err);
 
 /*
+ * Lister – like acta_db_model_list_in_folder, but includes soft-deleted
+ * models (deleted_at IS NOT NULL).  Callers must check deleted_at to
+ * distinguish live rows from deleted ones.
+ *
+ *   folder_id – the folder to list (0 = root-level only).
+ *
+ *   offset / limit – same pagination contract as list_in_folder.
+ *
+ *   *out_count / *err – same out-parameters as list_in_folder;
+ *   both may be NULL.
+ */
+model_t **acta_db_model_list_in_folder_with_deleted(db_t *db,
+                                                    int folder_id,
+                                                    int offset, int limit,
+                                                    int *out_count, int *err);
+
+/*
  * Lister – all models (across all folders), ordered by id.
  *
  *   offset – zero-based row offset.  Must be >= 0.

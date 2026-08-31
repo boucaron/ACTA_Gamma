@@ -26,6 +26,16 @@ static const char *SQL_LIST_ALL =
     "WHERE deleted_at IS NULL "
     "ORDER BY id LIMIT ? OFFSET ?;";
 
+static const char *SQL_LIST_IN_FOLDER_WITH_DELETED =
+    "SELECT " SQL_COLS " FROM models "
+    "WHERE folder_id = ? "
+    "ORDER BY id LIMIT ? OFFSET ?;";
+
+static const char *SQL_LIST_ROOT_WITH_DELETED =
+    "SELECT " SQL_COLS " FROM models "
+    "WHERE folder_id IS NULL "
+    "ORDER BY id LIMIT ? OFFSET ?;";
+
 
 /* ---------- row decoding ---------- */
 
@@ -364,6 +374,37 @@ model_t **acta_db_model_list_in_folder(db_t *db,
     }
 
     const char *sql = (folder_id == 0) ? SQL_LIST_ROOT : SQL_LIST_IN_FOLDER;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
+
+    int p = 1;
+    if (folder_id != 0)
+        sqlite3_bind_int(stmt, p++, folder_id);
+    sqlite3_bind_int(stmt, p++, db_clamp_limit(limit));
+    sqlite3_bind_int(stmt, p, offset);
+
+    return run_model_query(stmt, out_count, err);
+}
+
+model_t **acta_db_model_list_in_folder_with_deleted(db_t *db,
+                                                    int folder_id,
+                                                    int offset, int limit,
+                                                    int *out_count, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+    if (offset < 0) {
+        if (out_count) *out_count = 0;
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+
+    const char *sql = (folder_id == 0)
+        ? SQL_LIST_ROOT_WITH_DELETED : SQL_LIST_IN_FOLDER_WITH_DELETED;
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
