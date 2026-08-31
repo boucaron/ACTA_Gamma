@@ -26,6 +26,10 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     list->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(list, &QTreeWidget::customContextMenuRequested,
             this, &ContextPanel::onListContextMenu);
+    connect(list, &QTreeWidget::currentItemChanged, this,
+            [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
+                showContext(cur);
+            });
     lay->addWidget(list);
 
     editor = new QTextEdit;
@@ -70,6 +74,27 @@ void ContextPanel::reload()
     }
 
     acta_db_context_list_free(contexts, n);
+}
+
+void ContextPanel::showContext(QTreeWidgetItem *item)
+{
+    const int contextId = item ? item->data(0, RoleContextId).toInt() : 0;
+    if (contextId == 0 || !m_db) {
+        editor->clear();
+        return;
+    }
+
+    int err = ACTA_DB_OK;
+    context_t *c = acta_db_context_get(m_db, contextId, &err);
+    if (!c) {
+        if (err != ACTA_DB_OK)
+            qWarning("acta_db_context_get(%d) failed: %s", contextId,
+                     acta_db_strerror(err));
+        editor->clear();
+        return;
+    }
+    editor->setPlainText(c->content ? c->content : "");
+    acta_db_context_free(c);
 }
 
 void ContextPanel::onListContextMenu(const QPoint &pos)
