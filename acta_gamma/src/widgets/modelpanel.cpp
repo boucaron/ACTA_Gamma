@@ -28,13 +28,13 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     tree->setHeaderHidden(true);
     lay->addWidget(tree);
 
-    loadBtn = new QPushButton("Load Model");
-    lay->addWidget(loadBtn);
+    editBtn = new QPushButton("Edit Model");
+    lay->addWidget(editBtn);
 
-    connect(loadBtn, &QPushButton::clicked, this, &ModelPanel::onLoadBtnClicked);
+    connect(editBtn, &QPushButton::clicked, this, &ModelPanel::onEditBtnClicked);
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
-                loadBtn->setEnabled(
+                editBtn->setEnabled(
                     cur != nullptr && cur->data(0, RoleModelId).toInt() != 0);
             });
 
@@ -132,13 +132,13 @@ int ModelPanel::selectedModelId() const
     return cur ? cur->data(0, RoleModelId).toInt() : 0;
 }
 
-void ModelPanel::onLoadBtnClicked()
+void ModelPanel::onEditBtnClicked()
 {
     const int modelId = selectedModelId();
     if (modelId == 0 || !m_db)
         return;
 
     ModelDialog dlg(this);
-    dlg.loadModel(m_db, modelId);
+    dlg.editModel(m_db, modelId);
     dlg.exec();
 }

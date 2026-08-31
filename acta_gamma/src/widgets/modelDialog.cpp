@@ -46,7 +46,7 @@ ModelDialog::~ModelDialog()
     delete ui;
 }
 
-void ModelDialog::loadModel(db_t *db, int modelId)
+void ModelDialog::editModel(db_t *db, int modelId)
 {
     int err = ACTA_DB_OK;
     model_t *m = acta_db_model_get(db, modelId, &err);

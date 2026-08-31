@@ -13,8 +13,8 @@ public:
     explicit ModelDialog(QWidget *parent = nullptr);
     ~ModelDialog();
 
-    // Read-only load: fetch model `modelId` and fill every field.
-    void loadModel(db_t *db, int modelId);
+    // Read-only edit: fetch model `modelId` and fill every field.
+    void editModel(db_t *db, int modelId);
 
 private:
     Ui_modelDialog *ui;
