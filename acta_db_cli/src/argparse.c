@@ -189,6 +189,7 @@ static const flag_spec_t entity_flag_specs[] = {
     { "content", 1 },
     { "context_id", 1 },
     { "count", 0 },
+    { "deleted", 0 },
     { "description", 1 },
     { "error", 0 },
     { "event", 1 },
@@ -250,6 +251,56 @@ const char *cmd_args_next_positional(cmd_args_t *it) {
     }
     return NULL;
 }
+
+/*
+ * Rewrite documented flag aliases to their canonical names, in place
+ * on the raw argv pointer array (g->argv), BEFORE cmd_args_init().
+ * Currently: --deleted → --include_deleted (boolean). The rewrite lets
+ * every entity handler (get / list / count) honour the alias through
+ * its existing cmd_args_has_flag(..., "include_deleted") call.
+ */
+void apply_flag_aliases(char **argv, int argc) {
+    for (int i = 0; i < argc; i++) {
+        if (flag_prefix_match(argv[i], "deleted"))
+            argv[i] = (char *)"--include_deleted";
+    }
+}
+
+/*
+ * Strict pass over the pass-2 flags: every --name token must be a known
+ * entity flag (entity_flag_specs).  Before this check, unknown long
+ * options were silently ignored, so a typo such as `model list
+ * --deletd` exited 0 while quietly dropping soft-deleted rows.
+ * Returns EXIT_OK, or prints the JSON error to stderr and returns
+ * EXIT_INVALID.
+ */
+int cmd_args_validate(const cmd_args_t *it) {
+    for (int i = 0; i < it->argc; i++) {
+        const char *tok = it->argv[i];
+        if (!is_flag(tok)) continue;
+        const char *eq = strchr(tok + 2, '=');
+        size_t len = eq ? (size_t)(eq - (tok + 2)) : strlen(tok + 2);
+        int known = 0;
+        for (size_t k = 0;
+             k < sizeof(entity_flag_specs) / sizeof(entity_flag_specs[0]); k++) {
+            if (strlen(entity_flag_specs[k].name) == len &&
+                strncmp(entity_flag_specs[k].name, tok + 2, len) == 0) {
+                known = 1;
+                break;
+            }
+        }
+        if (!known) {
+            fprintf(stderr,
+                "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
+                "\"message\":\"unknown option '");
+            json_str(stderr, tok);
+            fprintf(stderr, "' (see --help)\"}\n");
+            return EXIT_INVALID;
+        }
+    }
+    return EXIT_OK;
+}
+
 
 const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value)
 {

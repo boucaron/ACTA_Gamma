@@ -66,10 +66,11 @@ void model_usage(FILE *f)
 "  Fetch a single model by its primary key.\n"
 "\n"
 "    actagamma_db model get 42\n"
-"    actagamma_db model get 42 --live\n"
+"    actagamma_db model get 42 --include_deleted\n"
 "\n"
 "  Options:\n"
-"    --live               Include soft-deleted rows\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -118,11 +119,14 @@ void model_usage(FILE *f)
 "\n"
 "    actagamma_db model list\n"
 "    actagamma_db model list --folder_id 3 --offset 10 --limit 25\n"
+"    actagamma_db model list --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Filter by folder (omit = all)\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --count              Return only the row count (no rows)\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -133,9 +137,12 @@ void model_usage(FILE *f)
 "\n"
 "    actagamma_db model count\n"
 "    actagamma_db model count --folder_id 3\n"
+"    actagamma_db model count --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Filter by folder (omit = all)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "\n"
 "Global options:\n"
 "  --table            columnar / plain output instead of JSON\n"
@@ -192,10 +199,11 @@ static void usage_get(FILE *f)
 "  Fetch a single model by its primary key.\n"
 "\n"
 "    actagamma_db model get 42\n"
-"    actagamma_db model get 42 --live\n"
+"    actagamma_db model get 42 --include_deleted\n"
 "\n"
 "  Options:\n"
-"    --live               Include soft-deleted rows\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -264,11 +272,14 @@ static void usage_list(FILE *f)
 "\n"
 "    actagamma_db model list\n"
 "    actagamma_db model list --folder_id 3 --offset 10 --limit 25\n"
+"    actagamma_db model list --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --folder_id <int>    Filter by folder (omit = all)\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --count              Return only the row count (no rows)\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
@@ -283,9 +294,12 @@ static void usage_count(FILE *f)
 "\n"
 "    actagamma_db model count\n"
 "    actagamma_db model count --folder_id 3\n"
+"    actagamma_db model count --include_deleted\n"
 "\n"
 "  Options:\n"
-"    --folder_id <int>    Filter by folder (omit = all)\n", f);
+"    --folder_id <int>    Filter by folder (omit = all)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n", f);
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -395,9 +409,9 @@ static void model_to_json(FILE *f, const model_t *m, const global_opts_t *gopts)
 static void model_table(FILE *f, const model_t *m, int header)
 {
     if (header) {
-        fprintf(f, " %4s  %8s  %-20s  %-20s  %-10s  %-20s  %-30s  %-19s\n",
+        fprintf(f, " %4s  %8s  %-20s  %-20s  %-10s  %-20s  %-30s  %-19s  %-19s\n",
                 "ID", "FOLDER", "NAME", "DESCRIPTION", "BACKEND",
-                "BASE_URL", "MODEL_IDENTIFIER", "CREATED_AT");
+                "BASE_URL", "MODEL_IDENTIFIER", "CREATED_AT", "DELETED_AT");
         return;
     }
     char idb[16];
@@ -412,6 +426,7 @@ static void model_table(FILE *f, const model_t *m, int header)
     tcol(f, m->base_url,        20);
     tcol(f, m->model_identifier,30);
     tcol(f, m->created_at,      19);
+    tcol(f, m->deleted_at,      19);
     fputc('\n', f);
 }
 
@@ -568,21 +583,21 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", usage_get, "model get", &id))
             return EXIT_INVALID;
 
-        int  use_live   = (cmd_args_flag(ga, "live", 0) != NULL);
+        int  include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
-        VLOG(1, "model get: id=%d live=%d fields=%s no_nulls=%d",
-             id, use_live,
+        VLOG(1, "model get: id=%d include_deleted=%d fields=%s no_nulls=%d",
+             id, include_deleted,
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls);
 
         /* ── fetch ────────────────────────────────────────────────── */
         int err = 0;
-        model_t *m = use_live
+        model_t *m = include_deleted
             ? acta_db_model_get_live(db, id, &err)
             : acta_db_model_get(db, id, &err);
 
-        VLOG(3, "  fetch(id=%d, live=%d) → ptr=%p err=%d",
-             id, use_live, (const void *)m, err);
+        VLOG(3, "  fetch(id=%d, include_deleted=%d) → ptr=%p err=%d",
+             id, include_deleted, (const void *)m, err);
 
         int rc = load_row_or_notfound(db, err, m, id, model_free_wrap,
                                       "model get", "model");
@@ -827,6 +842,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     if (strcmp(action, "list") == 0) {
         int folder_id = -1;  /* -1 = all */
         int offset = 0, limit = 0;
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
         if (parse_nonneg_int_flag(ga, "folder_id", &folder_id, 0,
                                   usage_list, "model list") < 0)
@@ -835,26 +851,31 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                                usage_list, "model list") < 0)
             return EXIT_INVALID;
 
-        VLOG(1, "model list: folder_id=%d offset=%d limit=%d",
-             folder_id, offset, limit);
+        VLOG(1, "model list: folder_id=%d offset=%d limit=%d include_deleted=%d",
+             folder_id, offset, limit, include_deleted);
 
-        VLOG(2, "  full: folder_id=%d offset=%d limit=%d "
+        VLOG(2, "  full: folder_id=%d offset=%d limit=%d include_deleted=%d "
                 "no_nulls=%d table=%d fields=%s",
-             folder_id, offset, limit,
+             folder_id, offset, limit, include_deleted,
              gopts->no_nulls, gopts->table,
              gopts->fields ? gopts->fields : "(all)");
 
-        VLOG(3, "  folder_id=%d offset=%d limit=%d db=%p",
-             folder_id, offset, limit, (const void *)db);
+        VLOG(3, "  folder_id=%d offset=%d limit=%d include_deleted=%d db=%p",
+             folder_id, offset, limit, include_deleted, (const void *)db);
 
         /* ── --count short-circuit ── */
         if (gopts->count) {
             int err = 0;
             int n;
             if (folder_id >= 0)
-                n = acta_db_model_count_in_folder(db, folder_id, &err);
+                n = include_deleted
+                    ? acta_db_model_count_in_folder_with_deleted(
+                          db, folder_id, &err)
+                    : acta_db_model_count_in_folder(db, folder_id, &err);
             else
-                n = acta_db_model_count_all(db, &err);
+                n = include_deleted
+                    ? acta_db_model_count_all_with_deleted(db, &err)
+                    : acta_db_model_count_all(db, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
                 return finish_op_error(db, err, "model count");
@@ -869,13 +890,19 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         model_t **items;
 
         if (folder_id >= 0)
-            items = acta_db_model_list_in_folder(db, folder_id,
-                                                 offset, limit,
-                                                 &out_count, &err);
+            items = include_deleted
+                ? acta_db_model_list_in_folder_with_deleted(
+                      db, folder_id, offset, limit, &out_count, &err)
+                : acta_db_model_list_in_folder(db, folder_id,
+                                               offset, limit,
+                                               &out_count, &err);
         else
-            items = acta_db_model_list_all(db,
-                                           offset, limit,
-                                           &out_count, &err);
+            items = include_deleted
+                ? acta_db_model_list_all_with_deleted(
+                      db, offset, limit, &out_count, &err)
+                : acta_db_model_list_all(db,
+                                         offset, limit,
+                                         &out_count, &err);
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
@@ -913,20 +940,28 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     /* ── count ────────────────────────────────────────────────────── */
     if (strcmp(action, "count") == 0) {
         int folder_id = -1;  /* -1 = all */
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
         if (parse_nonneg_int_flag(ga, "folder_id", &folder_id, 0,
                                   usage_count, "model count") < 0)
             return EXIT_INVALID;
 
-        VLOG(1, "model count: folder_id=%d", folder_id);
-        VLOG(3, "  folder_id=%d db=%p", folder_id, (const void *)db);
+        VLOG(1, "model count: folder_id=%d include_deleted=%d",
+             folder_id, include_deleted);
+        VLOG(3, "  folder_id=%d include_deleted=%d db=%p",
+             folder_id, include_deleted, (const void *)db);
 
         int err = 0;
         int n;
         if (folder_id >= 0)
-            n = acta_db_model_count_in_folder(db, folder_id, &err);
+            n = include_deleted
+                ? acta_db_model_count_in_folder_with_deleted(
+                      db, folder_id, &err)
+                : acta_db_model_count_in_folder(db, folder_id, &err);
         else
-            n = acta_db_model_count_all(db, &err);
+            n = include_deleted
+                ? acta_db_model_count_all_with_deleted(db, &err)
+                : acta_db_model_count_all(db, &err);
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);

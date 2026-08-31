@@ -372,7 +372,18 @@ int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
     close(out_p[1]);
 
     cmd_args_t ga;
+    apply_flag_aliases(g.argv, g.argc);
     cmd_args_init(&ga, g.argc - 2, g.argv + 2);
+    if (cmd_args_validate(&ga) != EXIT_OK) {
+        fflush(stdout);
+        dup2(saved_out, STDOUT_FILENO);
+        dup2(saved_in, STDIN_FILENO);
+        close(saved_in);
+        close(saved_out);
+        close(out_p[0]);
+        free(g.argv);
+        return EXIT_INVALID;
+    }
     int rc = fn(g.argv[1], &ga, &g, ctx->db);
 
     fflush(stdout);

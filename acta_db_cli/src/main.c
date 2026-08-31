@@ -79,8 +79,19 @@ int main(int argc, char **argv) {
     const char *entity = gopts.argv[0];
     const char *action = gopts.argv[1];
 
+    /* Normalise documented flag aliases before dispatch
+     * (--deleted → --include_deleted). */
+    apply_flag_aliases(gopts.argv, gopts.argc);
     cmd_args_t ga;
     cmd_args_init(&ga, gopts.argc - 2, gopts.argv + 2);
+
+    /* Unknown --name tokens must not be silently ignored: the old
+     * behaviour let a typo'd filter flag through, which exited 0 with
+     * a plausible-looking but wrong result set. */
+    if (cmd_args_validate(&ga) != EXIT_OK) {
+        free(gopts.argv);
+        return EXIT_INVALID;
+    }
 
     /* ---- resolve DB path ---- */
     const char *db_path = resolve_db_path(gopts.db);

@@ -35,6 +35,21 @@ typedef struct {
 void cmd_args_init(cmd_args_t *it, int argc, char **argv);
 
 /*
+ * Rewrite documented flag aliases to canonical names, in place, on the
+ * raw argv pointer array. Call BEFORE cmd_args_init().
+ * Currently: --deleted → --include_deleted.
+ */
+void apply_flag_aliases(char **argv, int argc);
+
+/*
+ * Strict check of the pass-2 flags: every --name token must be a known
+ * entity flag; unknown long options used to be silently ignored (a
+ * typo'd filter flag then produced a plausible-looking but wrong list).
+ * Prints the JSON error to stderr. Returns EXIT_OK or EXIT_INVALID.
+ */
+int cmd_args_validate(const cmd_args_t *it);
+
+/*
  * Returns the next positional (non-flag) argument, or NULL.
  * Skips past flags automatically; a flag's value token is skipped
  * only if the flag name is known to take a value (name→has_value

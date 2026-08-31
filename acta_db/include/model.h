@@ -180,6 +180,19 @@ model_t **acta_db_model_list_all(db_t *db,
                                  int *out_count, int *err);
 
 /*
+ * Lister – like acta_db_model_list_all, but includes soft-deleted models
+ * (deleted_at IS NOT NULL).  Callers must check deleted_at to distinguish
+ * live rows from deleted ones.
+ *
+ *   offset / limit – same pagination contract as list_all.
+ *
+ *   *out_count / *err – same out-parameters as list_all; both may be NULL.
+ */
+model_t **acta_db_model_list_all_with_deleted(db_t *db,
+                                              int offset, int limit,
+                                              int *out_count, int *err);
+
+/*
  * Count – live models in a specific folder.
  *
  *   folder_id – the folder to count (0 = root-level only).
@@ -194,6 +207,13 @@ model_t **acta_db_model_list_all(db_t *db,
 int      acta_db_model_count_in_folder(db_t *db, int folder_id, int *err);
 
 /*
+ * Count – like acta_db_model_count_in_folder, but includes soft-deleted
+ * models (deleted_at IS NOT NULL).
+ */
+int      acta_db_model_count_in_folder_with_deleted(db_t *db, int folder_id,
+                                                    int *err);
+
+/*
  * Count – all live models (across all folders).
  *
  * Returns the row count (>= 0) on success, or -1 on failure.
@@ -204,6 +224,12 @@ int      acta_db_model_count_in_folder(db_t *db, int folder_id, int *err);
  * you would get from list_all(db, 0, -1, …).
  */
 int      acta_db_model_count_all(db_t *db, int *err);
+
+/*
+ * Count – like acta_db_model_count_all, but includes soft-deleted models
+ * (deleted_at IS NOT NULL).
+ */
+int      acta_db_model_count_all_with_deleted(db_t *db, int *err);
 
 /* ---------- free ---------- */
 

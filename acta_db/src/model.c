@@ -36,6 +36,10 @@ static const char *SQL_LIST_ROOT_WITH_DELETED =
     "WHERE folder_id IS NULL "
     "ORDER BY id LIMIT ? OFFSET ?;";
 
+static const char *SQL_LIST_ALL_WITH_DELETED =
+    "SELECT " SQL_COLS " FROM models "
+    "ORDER BY id LIMIT ? OFFSET ?;";
+
 
 /* ---------- row decoding ---------- */
 
@@ -420,6 +424,32 @@ model_t **acta_db_model_list_in_folder_with_deleted(db_t *db,
     return run_model_query(stmt, out_count, err);
 }
 
+model_t **acta_db_model_list_all_with_deleted(db_t *db,
+                                              int offset, int limit,
+                                              int *out_count, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+    if (offset < 0) {
+        if (out_count) *out_count = 0;
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, SQL_LIST_ALL_WITH_DELETED, -1,
+                          &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
+
+    sqlite3_bind_int(stmt, 1, db_clamp_limit(limit));
+    sqlite3_bind_int(stmt, 2, offset);
+
+    return run_model_query(stmt, out_count, err);
+}
+
 model_t **acta_db_model_list_all(db_t *db,
                                  int offset, int limit,
                                  int *out_count, int *err) {
@@ -466,6 +496,64 @@ int acta_db_model_count_in_folder(db_t *db, int folder_id, int *err) {
     }
     if (folder_id != 0)
         sqlite3_bind_int(stmt, 1, folder_id);
+
+    int count = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        count = (int)sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    if (count < 0) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+    } else if (err) {
+        *err = ACTA_DB_OK;
+    }
+    return count;
+}
+
+int acta_db_model_count_in_folder_with_deleted(db_t *db, int folder_id,
+                                               int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
+
+    const char *sql = (folder_id == 0)
+        ? "SELECT COUNT(*) FROM models WHERE folder_id IS NULL;"
+        : "SELECT COUNT(*) FROM models WHERE folder_id = ?;";
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
+    if (folder_id != 0)
+        sqlite3_bind_int(stmt, 1, folder_id);
+
+    int count = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        count = (int)sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    if (count < 0) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+    } else if (err) {
+        *err = ACTA_DB_OK;
+    }
+    return count;
+}
+
+int acta_db_model_count_all_with_deleted(db_t *db, int *err) {
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return -1;
+    }
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, "SELECT COUNT(*) FROM models;",
+                          -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return -1;
+    }
 
     int count = -1;
     if (sqlite3_step(stmt) == SQLITE_ROW)
