@@ -11,6 +11,7 @@ void run_model_revision_tests(void);
 
 void run_skill_count_tests(void);
 void run_skill_crud_tests(void);
+void run_skill_deleted_tests(void);
 void run_skill_pagination_tests(void);
 void run_skill_placement_tests(void);
 
@@ -45,6 +46,7 @@ int main(void) {
     // Skill
     run_skill_count_tests();
     run_skill_crud_tests();
+    run_skill_deleted_tests();
     run_skill_pagination_tests();
     run_skill_placement_tests();
 
