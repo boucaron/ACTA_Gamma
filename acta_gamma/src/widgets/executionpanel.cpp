@@ -124,7 +124,14 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
 
 void ExecutionPanel::onShowBtnClicked()
 {
+    const QTreeWidgetItem *cur = list->currentItem();
+    const int executionId =
+        cur ? cur->data(0, RoleExecutionId).toInt() : 0;
+    if (executionId == 0 || !m_db)
+        return;
+
     ExecutionDialog dlg(this);
+    dlg.editExecution(m_db, executionId);
     if (dlg.exec() == QDialog::Accepted) {
         // TODO
     }
