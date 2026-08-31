@@ -1,10 +1,29 @@
 #include "contextDialog.h"
 #include "ui_contextDialog.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QLocale>
+#include <QMessageBox>
+#include <QPushButton>
 
 #include <QtGlobal>
+
+#include <cstdlib>
+#include <cstring>
+
+// strdup is not part of the C standard; duplicate into a malloc block
+// freed by free().
+static char *dupString(const char *s)
+{
+    if (!s)
+        return nullptr;
+    const size_t n = std::strlen(s) + 1;
+    char *copy = static_cast<char *>(std::malloc(n));
+    if (copy)
+        std::memcpy(copy, s, n);
+    return copy;
+}
 
 namespace {
 
@@ -37,7 +56,7 @@ ContextDialog::ContextDialog(QWidget *parent)
 {
     ui->setupUi(this);
     setWindowTitle("Context");
-    // connect your buttons, validators, etc. here
+    setMode(Mode::ReadOnly);
 }
 
 ContextDialog::~ContextDialog()
@@ -45,8 +64,31 @@ ContextDialog::~ContextDialog()
     delete ui;
 }
 
+void ContextDialog::setMode(Mode mode)
+{
+    m_mode = mode;
+    const bool readOnly = (mode == Mode::ReadOnly);
+
+    ui->buttonBox->setStandardButtons(
+        readOnly ? QDialogButtonBox::StandardButton::Close
+                 : QDialogButtonBox::StandardButton::Save |
+                       QDialogButtonBox::StandardButton::Close);
+    if (!readOnly) {
+        connect(ui->buttonBox->button(QDialogButtonBox::StandardButton::Save),
+                &QPushButton::clicked, this, &ContextDialog::onSaveClicked);
+    }
+
+    ui->typeLineEdit->setReadOnly(readOnly);
+    ui->contentTextEdit->setReadOnly(readOnly);
+    ui->metaDataTextEdit->setReadOnly(readOnly);
+    // The hash is always computed by the application, never typed in.
+    ui->contextHashLineEdit->setReadOnly(true);
+}
+
 void ContextDialog::editContext(db_t *db, int contextId)
 {
+    m_db = db;
+
     int err = ACTA_DB_OK;
     context_t *c = acta_db_context_get(db, contextId, &err);
     if (!c) {
@@ -66,4 +108,69 @@ void ContextDialog::editContext(db_t *db, int contextId)
     ui->metaDataTextEdit->setPlainText(utf8(c->metadata));
 
     acta_db_context_free(c);
+
+    setMode(Mode::ReadOnly);
+    setWindowTitle(QStringLiteral("Context: %1")
+                       .arg(ui->typeLineEdit->text()));
+}
+
+void ContextDialog::newContext(db_t *db)
+{
+    m_db = db;
+
+    ui->typeLineEdit->clear();
+    ui->contentTextEdit->clear();
+    ui->contextHashLineEdit->clear();
+    ui->dateTimeEdit->setDateTime(QDateTime());
+    ui->metaDataTextEdit->clear();
+
+    setMode(Mode::New);
+    setWindowTitle("New Context");
+}
+
+void ContextDialog::onSaveClicked()
+{
+    if (!m_db || m_mode != Mode::New)
+        return;
+
+    const QString type = ui->typeLineEdit->text().trimmed();
+    const QString content = ui->contentTextEdit->toPlainText();
+    if (type.isEmpty() || content.isEmpty()) {
+        QMessageBox::warning(this, "Context",
+                             "Type and content are required.");
+        return;
+    }
+
+    const QByteArray typeBa = type.toUtf8();
+    const QByteArray contentBa = content.toUtf8();
+    const QByteArray metaDataBa =
+        ui->metaDataTextEdit->toPlainText().toUtf8();
+
+    context_t c{};
+    c.type = dupString(typeBa.constData());
+    c.content = dupString(contentBa.constData());
+    // Content hash: SHA-256 of the content, lowercase hex.
+    const QByteArray hash =
+        QCryptographicHash::hash(contentBa, QCryptographicHash::Sha256)
+            .toHex();
+    c.content_hash = dupString(hash.constData());
+    c.metadata = dupString(metaDataBa.isEmpty() ? nullptr
+                                                : metaDataBa.constData());
+
+    int newId = 0;
+    int rc = acta_db_context_create(m_db, &c, &newId);
+    std::free(c.type);
+    std::free(c.content);
+    std::free(c.content_hash);
+    std::free(c.metadata);
+    if (rc != ACTA_DB_OK) {
+        QMessageBox::warning(
+            this, "Context",
+            QStringLiteral("Could not create context: %1")
+                .arg(acta_db_strerror(rc)));
+        return;
+    }
+
+    // Contexts are immutable: show the created row read-only.
+    editContext(m_db, newId);
 }

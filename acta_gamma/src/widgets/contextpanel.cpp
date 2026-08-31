@@ -1,4 +1,5 @@
 #include "contextPanel.h"
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QTreeWidget>
@@ -37,10 +38,16 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     editor->setPlaceholderText("Immutable input JSON...");
     lay->addWidget(editor);
 
+    auto *btnRow = new QHBoxLayout;
+    newBtn = new QPushButton("New");
     showBtn = new QPushButton("Show");
-    lay->addWidget(showBtn);
+    btnRow->addWidget(newBtn);
+    btnRow->addWidget(showBtn);
+    btnRow->addStretch();
+    lay->addLayout(btnRow);
 
     // callback
+    connect(newBtn, &QPushButton::clicked, this, &ContextPanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this, &ContextPanel::onShowBtnClicked);
 
     reload();
@@ -122,6 +129,18 @@ void ContextPanel::editContext(int contextId)
     }
 }
 
+void ContextPanel::onNewBtnClicked()
+{
+    if (!m_db)
+        return;
+
+    ContextDialog dlg(this);
+    dlg.newContext(m_db);
+    dlg.exec();
+    // The save happened inside the dialog; refresh the list either way.
+    reload();
+}
+
 void ContextPanel::onShowBtnClicked()
 {
     const QTreeWidgetItem *cur = list->currentItem();
@@ -131,7 +150,5 @@ void ContextPanel::onShowBtnClicked()
 
     ContextDialog dlg(this);
     dlg.editContext(m_db, contextId);
-    if (dlg.exec() == QDialog::Accepted) {
-        // TODO
-    }
+    dlg.exec();
 }

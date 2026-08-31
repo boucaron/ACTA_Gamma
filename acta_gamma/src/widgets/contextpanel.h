@@ -13,6 +13,7 @@ public:
     QTreeWidget *list;
     QTextEdit *editor;
 
+    QPushButton *newBtn;
     QPushButton *showBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
@@ -30,6 +31,7 @@ private:
     void editContext(int contextId);
 
 private slots:
+    void onNewBtnClicked();
     void onShowBtnClicked();
     void onListContextMenu(const QPoint &pos);
 };
