@@ -119,5 +119,6 @@ int run_skill_test_delete_restore(void);
 int run_skill_test_move(void);
 int run_skill_test_list_count(void);
 int run_skill_test_misc(void);
+int run_skill_test_deleted(void);
 
 #endif /* TEST_HELPERS_H */

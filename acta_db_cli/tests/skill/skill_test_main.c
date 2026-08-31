@@ -12,6 +12,7 @@ int main(void)
     f += run_skill_test_move();
     f += run_skill_test_list_count();
     f += run_skill_test_misc();
+    f += run_skill_test_deleted();
 
     if (f == 0) {
         printf("PASS: all skill tests passed\n");
