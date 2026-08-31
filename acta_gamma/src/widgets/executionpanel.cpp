@@ -3,15 +3,15 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QStringList>
-#include <QTextEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
 #include "executionDialog.h"
+#include "executionLogDialog.h"
 
 namespace {
 const int RoleExecutionId = Qt::UserRole;
+const int RoleLogId = Qt::UserRole + 1;
 } // namespace
 
 ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
@@ -28,15 +28,19 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 showExecutionLogs(cur);
             });
+    connect(list, &QTreeWidget::itemDoubleClicked, this,
+            &ExecutionPanel::onExecutionDoubleClicked);
     lay->addWidget(list);
 
     runBtn = new QPushButton("Run One-Shot");
     lay->addWidget(runBtn);
 
-    log = new QTextEdit;
-    log->setReadOnly(true);
-    log->setPlaceholderText("Execution log...");
-    lay->addWidget(log);
+    logList = new QTreeWidget;
+    logList->setColumnCount(4);
+    logList->setHeaderLabels({"Date", "Level", "Event", "Message"});
+    logList->setRootIsDecorated(false);
+    logList->setUniformRowHeights(true);
+    lay->addWidget(logList);
 
     showBtn = new QPushButton("Show");
     lay->addWidget(showBtn);
@@ -83,7 +87,7 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
 {
     const int executionId = item ? item->data(0, RoleExecutionId).toInt() : 0;
     if (executionId == 0 || !m_db) {
-        log->clear();
+        logList->clear();
         return;
     }
 
@@ -92,41 +96,34 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
     execution_log_t **lines =
         acta_db_execution_log_list_by_execution(m_db, executionId, nullptr,
                                                 0, 0, &n, &err);
+    logList->clear();
     if (!lines) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_execution_log_list_by_execution(%d) failed: %s",
                      executionId, acta_db_strerror(err));
-        log->clear();
         return;
     }
 
-    QStringList text;
     for (int i = 0; i < n; ++i) {
-        // "created_at  level: event – message" (metadata not shown).
-        text << QStringLiteral("%1  %2: %3%4")
-                       .arg(lines[i]->created_at
-                                 ? QString::fromUtf8(lines[i]->created_at)
-                                 : QString())
-                       .arg(lines[i]->level
-                                 ? QString::fromUtf8(lines[i]->level)
-                                 : QString())
-                       .arg(lines[i]->event
-                                 ? QString::fromUtf8(lines[i]->event)
-                                 : QString())
-                       .arg(lines[i]->message && lines[i]->message[0]
-                                  ? QStringLiteral(" – ")
-                                    + QString::fromUtf8(lines[i]->message)
-                                  : QString());
+        auto *logItem = new QTreeWidgetItem(logList, {
+            lines[i]->created_at
+                ? QString::fromUtf8(lines[i]->created_at)
+                : QString(),
+            lines[i]->level ? QString::fromUtf8(lines[i]->level) : QString(),
+            lines[i]->event ? QString::fromUtf8(lines[i]->event) : QString(),
+            lines[i]->message
+                ? QString::fromUtf8(lines[i]->message)
+                : QString(),
+        });
+        logItem->setData(0, RoleLogId, lines[i]->id);
     }
-    log->setPlainText(text.join(QStringLiteral("\n")));
     acta_db_execution_log_list_free(lines, n);
 }
 
-void ExecutionPanel::onShowBtnClicked()
+void ExecutionPanel::onExecutionDoubleClicked(QTreeWidgetItem *item, int)
 {
-    const QTreeWidgetItem *cur = list->currentItem();
     const int executionId =
-        cur ? cur->data(0, RoleExecutionId).toInt() : 0;
+        item ? item->data(0, RoleExecutionId).toInt() : 0;
     if (executionId == 0 || !m_db)
         return;
 
@@ -135,4 +132,16 @@ void ExecutionPanel::onShowBtnClicked()
     if (dlg.exec() == QDialog::Accepted) {
         // TODO
     }
+}
+
+void ExecutionPanel::onShowBtnClicked()
+{
+    const QTreeWidgetItem *cur = logList->currentItem();
+    const int logId = cur ? cur->data(0, RoleLogId).toInt() : 0;
+    if (logId == 0 || !m_db)
+        return;
+
+    ExecutionLogDialog dlg(this);
+    dlg.showLog(m_db, logId);
+    dlg.exec();
 }
