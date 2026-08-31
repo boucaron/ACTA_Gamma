@@ -134,7 +134,12 @@ int SkillPanel::selectedSkillId() const
 
 void SkillPanel::onEditBtnClicked()
 {
+    const int skillId = selectedSkillId();
+    if (skillId == 0 || !m_db)
+        return;
+
     SkillDialog dlg(this);
+    dlg.editSkill(m_db, skillId);
     if (dlg.exec() == QDialog::Accepted) {
         // TODO
     }
