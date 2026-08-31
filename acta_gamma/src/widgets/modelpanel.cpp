@@ -1,6 +1,7 @@
 #include "modelPanel.h"
 
 #include <QCheckBox>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
 #include <QList>
@@ -17,8 +18,9 @@
 #include "modelDialog.h"
 
 namespace {
-const int RoleFolderId = Qt::UserRole;
-const int RoleModelId  = Qt::UserRole + 1;
+const int RoleFolderId  = Qt::UserRole;
+const int RoleModelId   = Qt::UserRole + 1;
+const int RoleIsDeleted = Qt::UserRole + 2;
 } // namespace
 
 ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
@@ -39,14 +41,39 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     editBtn = new QPushButton("Edit Model");
     lay->addWidget(editBtn);
 
+    auto *btnRow = new QHBoxLayout;
+    deleteBtn = new QPushButton("Delete");
+    restoreBtn = new QPushButton("Restore");
+    btnRow->addWidget(deleteBtn);
+    btnRow->addWidget(restoreBtn);
+    btnRow->addStretch();
+    lay->addLayout(btnRow);
+
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
     });
     connect(editBtn, &QPushButton::clicked, this, &ModelPanel::onEditBtnClicked);
+    connect(deleteBtn, &QPushButton::clicked, this, [this]() {
+        const int modelId = selectedModelId();
+        if (m_db && modelId != 0 &&
+            acta_db_model_soft_delete(m_db, modelId) == ACTA_DB_OK)
+            reload();
+    });
+    connect(restoreBtn, &QPushButton::clicked, this, [this]() {
+        const int modelId = selectedModelId();
+        if (m_db && modelId != 0 &&
+            acta_db_model_restore(m_db, modelId) == ACTA_DB_OK)
+            reload();
+    });
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
-                editBtn->setEnabled(
-                    cur != nullptr && cur->data(0, RoleModelId).toInt() != 0);
+                const bool hasModel =
+                    cur != nullptr && cur->data(0, RoleModelId).toInt() != 0;
+                editBtn->setEnabled(hasModel);
+                deleteBtn->setEnabled(
+                    hasModel && !cur->data(0, RoleIsDeleted).toBool());
+                restoreBtn->setEnabled(
+                    hasModel && cur->data(0, RoleIsDeleted).toBool());
             });
 
     reload();
@@ -137,7 +164,10 @@ void ModelPanel::addModels(QTreeWidgetItem *parent, int folderId)
             ? new QTreeWidgetItem(parent, {QString::fromUtf8(models[i]->name)})
             : new QTreeWidgetItem(tree, {QString::fromUtf8(models[i]->name)});
         item->setData(0, RoleModelId, models[i]->id);
-        if (models[i]->deleted_at && models[i]->deleted_at[0])
+        const bool isDeleted =
+            models[i]->deleted_at && models[i]->deleted_at[0];
+        item->setData(0, RoleIsDeleted, isDeleted);
+        if (isDeleted)
             item->setIcon(0, m_deletedIcon);
     }
     acta_db_model_list_free(models, n);
