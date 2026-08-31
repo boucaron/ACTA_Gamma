@@ -5,8 +5,11 @@ TEMPLATE = app
 
 RESOURCES += ../assets.qrc
 
+INCLUDEPATH += $$PWD/../../acta_db/include
+
 SOURCES += \
     main.cpp \
+    dbhandle.cpp \
     mainWindow.cpp \
     widgets/skillPanel.cpp \
     widgets/modelPanel.cpp \
@@ -18,6 +21,7 @@ SOURCES += \
     widgets/contextDialog.cpp
 
 HEADERS += \
+    dbhandle.h \
     mainWindow.h \
     widgets/skillPanel.h \
     widgets/modelPanel.h \
@@ -35,6 +39,8 @@ FORMS += \
     ../ui/contextDialog.ui
 
 DISTFILES +=
+
+LIBS += $$PWD/../../acta_db/libacta_db.a -lsqlite3
 
 OBJECTS_DIR = build/obj
 MOC_DIR     = build/moc
