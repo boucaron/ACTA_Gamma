@@ -1144,6 +1144,190 @@ static void test_model_count_pagination_roundtrip(void) {
 }
 
 
+/* ---------- 4.55: list_in_folder_with_deleted — includes soft-deleted (root) ---------- */
+static void test_model_list_in_folder_with_deleted_root(void) {
+    const char *path = "test/acta_test_m_lwfd_root.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m1 = { .name = "A", .backend = "b", .model_identifier = "mid" };
+    model_t m2 = { .name = "B", .backend = "b", .model_identifier = "mid" };
+    int id1, id2;
+    acta_db_model_create(db, &m1, &id1);
+    acta_db_model_create(db, &m2, &id2);
+    acta_db_model_soft_delete(db, id1);
+
+    /* Live-only lister still excludes the deleted row */
+    int err = 0;
+    int count = 0;
+    model_t **live = acta_db_model_list_in_folder(db, 0, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(live[0]->name, "B");
+    acta_db_model_list_free(live, count);
+
+    /* With-deleted lister returns both, in id order, with deleted_at set */
+    count = 0;
+    err = 0;
+    model_t **items = acta_db_model_list_in_folder_with_deleted(db, 0, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "A");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[1]->name, "B");
+    TEST_ASSERT_NULL(items[1]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.56: list_in_folder_with_deleted — specific folder ---------- */
+static void test_model_list_in_folder_with_deleted_folder(void) {
+    const char *path = "test/acta_test_m_lwfd_folder.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int fid;
+    acta_db_model_folder_create(db, "F", 0, &fid);
+
+    model_t m1 = { .name = "InF", .backend = "b", .model_identifier = "mid", .folder_id = fid };
+    model_t m2 = { .name = "Root", .backend = "b", .model_identifier = "mid" };
+    int id1, id2;
+    acta_db_model_create(db, &m1, &id1);
+    acta_db_model_create(db, &m2, &id2);
+    acta_db_model_soft_delete(db, id1);
+
+    /* Folder view: deleted folder model is the only row, visible here */
+    int err = 0;
+    int count = 0;
+    model_t **items = acta_db_model_list_in_folder_with_deleted(db, fid, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "InF");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    /* Root view: deleted root model, live root model untouched */
+    count = 0;
+    err = 0;
+    items = acta_db_model_list_in_folder_with_deleted(db, 0, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 1);
+    TEST_ASSERT_EQ_STR(items[0]->name, "Root");
+    TEST_ASSERT_NULL(items[0]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.57: list_in_folder_with_deleted — empty ---------- */
+static void test_model_list_in_folder_with_deleted_empty(void) {
+    const char *path = "test/acta_test_m_lwfd_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = 0;
+    int err = 0;
+    model_t **items = acta_db_model_list_in_folder_with_deleted(db, 0, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.58: list_in_folder_with_deleted — invalid args ---------- */
+static void test_model_list_in_folder_with_deleted_invalid_args(void) {
+    const char *path = "test/acta_test_m_lwfd_args.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int err = 0;
+    int count = 0;
+
+    /* NULL db */
+    model_t **items = acta_db_model_list_in_folder_with_deleted(NULL, 0, 0, -1, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    /* Negative offset */
+    err = 0;
+    items = acta_db_model_list_in_folder_with_deleted(db, 0, -1, -1, &count, &err);
+    TEST_ASSERT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.59: list_in_folder_with_deleted — pagination over mixed rows ---------- */
+static void test_model_list_in_folder_with_deleted_pagination(void) {
+    const char *path = "test/acta_test_m_lwfd_page.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    for (int i = 0; i < 4; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "M%d", i);
+        model_t m = { .name = name, .backend = "b", .model_identifier = "mid" };
+        int id = 0;
+        acta_db_model_create(db, &m, &id);
+        if (i % 2 == 0)
+            acta_db_model_soft_delete(db, id); /* delete M0, M2 */
+    }
+
+    int err = 0;
+    int count = 0;
+
+    /* Page 1: M0 (deleted), M1 (live) */
+    model_t **items = acta_db_model_list_in_folder_with_deleted(db, 0, 0, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "M0");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[1]->name, "M1");
+    TEST_ASSERT_NULL(items[1]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    /* Page 2: M2 (deleted), M3 (live) */
+    count = 0;
+    err = 0;
+    items = acta_db_model_list_in_folder_with_deleted(db, 0, 2, 2, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "M2");
+    TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
+    TEST_ASSERT_EQ_STR(items[1]->name, "M3");
+    TEST_ASSERT_NULL(items[1]->deleted_at);
+    acta_db_model_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ---------- 4.60: list_in_folder_with_deleted — NULL out-params ---------- */
+static void test_model_list_in_folder_with_deleted_null_outs(void) {
+    const char *path = "test/acta_test_m_lwfd_nullouts.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    model_t m = { .name = "M", .backend = "b", .model_identifier = "mid" };
+    int id = 0;
+    acta_db_model_create(db, &m, &id);
+    acta_db_model_soft_delete(db, id);
+
+    /* Both out_count and err NULL: must not crash */
+    model_t **items = acta_db_model_list_in_folder_with_deleted(db, 0, 0, -1, NULL, NULL);
+    TEST_ASSERT_NOT_NULL(items);
+    acta_db_model_list_free(items, 1);
+
+    test_db_teardown(db, path);
+}
+
 /* ---------- runner ---------- */
 
 void run_model_tests(void) {
@@ -1192,6 +1376,14 @@ void run_model_tests(void) {
     test_model_list_all_excludes_deleted();
     test_model_list_all_null_out_count();
     test_model_list_in_folder_null_outs();
+
+    /* list_in_folder_with_deleted */
+    test_model_list_in_folder_with_deleted_root();
+    test_model_list_in_folder_with_deleted_folder();
+    test_model_list_in_folder_with_deleted_empty();
+    test_model_list_in_folder_with_deleted_invalid_args();
+    test_model_list_in_folder_with_deleted_pagination();
+    test_model_list_in_folder_with_deleted_null_outs();
 
     /* free */
     test_model_free_valid();
