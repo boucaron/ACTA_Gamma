@@ -127,12 +127,40 @@ skill_t **acta_db_skill_list_in_folder(db_t *db,
                                        int offset, int limit,
                                        int *out_count, int *err);
 
+/* Lister – like acta_db_skill_list_in_folder, but includes soft-deleted
+ * skills (deleted_at IS NOT NULL).  Callers must check deleted_at to
+ * distinguish live rows from deleted ones.
+ *
+ *   folder_id – the folder to list (0 = root-level only).
+ *
+ *   offset / limit – same pagination contract as list_in_folder.
+ *
+ *   *out_count / *err – same out-parameters as list_in_folder;
+ *   both may be NULL.
+ */
+skill_t **acta_db_skill_list_in_folder_with_deleted(db_t *db,
+                                                    int folder_id,
+                                                    int offset, int limit,
+                                                    int *out_count, int *err);
+
 /* List all live skills, ordered by id.
  *
  * Pagination: same contract as list_in_folder. */
 skill_t **acta_db_skill_list_all(db_t *db,
                                  int offset, int limit,
                                  int *out_count, int *err);
+
+/* Lister – like acta_db_skill_list_all, but includes soft-deleted skills
+ * (deleted_at IS NOT NULL).  Callers must check deleted_at to distinguish
+ * live rows from deleted ones.
+ *
+ *   offset / limit – same pagination contract as list_all.
+ *
+ *   *out_count / *err – same out-parameters as list_all; both may be NULL.
+ */
+skill_t **acta_db_skill_list_all_with_deleted(db_t *db,
+                                              int offset, int limit,
+                                              int *out_count, int *err);
 
 /* ── Count ───────────────────────────────────────────────────────── */
 
@@ -148,6 +176,12 @@ skill_t **acta_db_skill_list_all(db_t *db,
  * rows you would get from list_in_folder(db, folder_id, 0, -1, …). */
 int acta_db_skill_count_in_folder(db_t *db, int folder_id, int *err);
 
+/* Count – like acta_db_skill_count_in_folder, but includes soft-deleted
+ * skills (deleted_at IS NOT NULL).
+ */
+int acta_db_skill_count_in_folder_with_deleted(db_t *db, int folder_id,
+                                               int *err);
+
 /* Count all live skills (across all folders).
  *
  * Returns the count (>= 0) on success, or -1 on error.
@@ -157,6 +191,12 @@ int acta_db_skill_count_in_folder(db_t *db, int folder_id, int *err);
  * Mirrors acta_db_skill_list_all: the count equals the number of rows
  * you would get from list_all(db, 0, -1, …). */
 int acta_db_skill_count_all(db_t *db, int *err);
+
+/*
+ * Count – like acta_db_skill_count_all, but includes soft-deleted skills
+ * (deleted_at IS NOT NULL).
+ */
+int acta_db_skill_count_all_with_deleted(db_t *db, int *err);
 
 /* ── Free ────────────────────────────────────────────────────────── */
 
