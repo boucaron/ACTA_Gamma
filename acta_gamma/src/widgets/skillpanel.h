@@ -24,7 +24,7 @@ public:
     explicit SkillPanel(db_t *db = nullptr, QWidget *parent = nullptr);
 
     QTreeWidget *tree = nullptr;
-    QPushButton *loadBtn = nullptr;
+    QPushButton *editBtn = nullptr;
 
     // Rebuild the tree from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
@@ -42,5 +42,5 @@ private:
     void addSkills(QTreeWidgetItem *parent, int folderId);
 
 private slots:
-    void onLoadBtnClicked();
+    void onEditBtnClicked();
 };

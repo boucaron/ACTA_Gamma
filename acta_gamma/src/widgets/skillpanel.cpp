@@ -28,13 +28,13 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     tree->setHeaderHidden(true);
     lay->addWidget(tree);
 
-    loadBtn = new QPushButton("Load Skill");
-    lay->addWidget(loadBtn);
+    editBtn = new QPushButton("Edit Skill");
+    lay->addWidget(editBtn);
 
-    connect(loadBtn, &QPushButton::clicked, this, &SkillPanel::onLoadBtnClicked);
+    connect(editBtn, &QPushButton::clicked, this, &SkillPanel::onEditBtnClicked);
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
-                loadBtn->setEnabled(
+                editBtn->setEnabled(
                     cur != nullptr && cur->data(0, RoleSkillId).toInt() != 0);
             });
 
@@ -132,7 +132,7 @@ int SkillPanel::selectedSkillId() const
     return cur ? cur->data(0, RoleSkillId).toInt() : 0;
 }
 
-void SkillPanel::onLoadBtnClicked()
+void SkillPanel::onEditBtnClicked()
 {
     SkillDialog dlg(this);
     if (dlg.exec() == QDialog::Accepted) {
