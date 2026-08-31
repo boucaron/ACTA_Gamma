@@ -38,8 +38,15 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     showDeletedCheck = new QCheckBox("Show deleted items");
     lay->addWidget(showDeletedCheck);
 
+    auto *actionRow = new QHBoxLayout;
+    newBtn = new QPushButton("New");
+    showBtn = new QPushButton("Show");
     editBtn = new QPushButton("Edit Skill");
-    lay->addWidget(editBtn);
+    actionRow->addWidget(newBtn);
+    actionRow->addWidget(showBtn);
+    actionRow->addWidget(editBtn);
+    actionRow->addStretch();
+    lay->addLayout(actionRow);
 
     auto *btnRow = new QHBoxLayout;
     deleteBtn = new QPushButton("Delete");
@@ -52,6 +59,8 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
     });
+    connect(newBtn, &QPushButton::clicked, this, &SkillPanel::onNewBtnClicked);
+    connect(showBtn, &QPushButton::clicked, this, &SkillPanel::onShowBtnClicked);
     connect(editBtn, &QPushButton::clicked, this, &SkillPanel::onEditBtnClicked);
     connect(deleteBtn, &QPushButton::clicked, this, [this]() {
         const int skillId = selectedSkillId();
@@ -69,7 +78,10 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 const bool hasSkill =
                     cur != nullptr && cur->data(0, RoleSkillId).toInt() != 0;
-                editBtn->setEnabled(hasSkill);
+                const bool isDeleted =
+                    hasSkill && cur->data(0, RoleIsDeleted).toBool();
+                showBtn->setEnabled(hasSkill);
+                editBtn->setEnabled(hasSkill && !isDeleted);
                 deleteBtn->setEnabled(
                     hasSkill && !cur->data(0, RoleIsDeleted).toBool());
                 restoreBtn->setEnabled(
@@ -179,6 +191,36 @@ int SkillPanel::selectedSkillId() const
     return cur ? cur->data(0, RoleSkillId).toInt() : 0;
 }
 
+int SkillPanel::selectedFolderId() const
+{
+    const auto *cur = tree->currentItem();
+    return cur ? cur->data(0, RoleFolderId).toInt() : 0;
+}
+
+void SkillPanel::onNewBtnClicked()
+{
+    if (!m_db)
+        return;
+
+    // New skill goes into the selected folder when one is selected,
+    // otherwise at the root level.
+    SkillDialog dlg(this);
+    dlg.newSkill(m_db, selectedFolderId());
+    dlg.exec();
+    reload();
+}
+
+void SkillPanel::onShowBtnClicked()
+{
+    const int skillId = selectedSkillId();
+    if (skillId == 0 || !m_db)
+        return;
+
+    SkillDialog dlg(this);
+    dlg.showSkill(m_db, skillId);
+    dlg.exec();
+}
+
 void SkillPanel::onEditBtnClicked()
 {
     const int skillId = selectedSkillId();
@@ -187,7 +229,6 @@ void SkillPanel::onEditBtnClicked()
 
     SkillDialog dlg(this);
     dlg.editSkill(m_db, skillId);
-    if (dlg.exec() == QDialog::Accepted) {
-        // TODO
-    }
+    dlg.exec();
+    reload();
 }

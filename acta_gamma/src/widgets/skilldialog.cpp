@@ -3,10 +3,28 @@
 
 #include <QDateTime>
 #include <QLocale>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
 #include <QtGlobal>
+
+#include <cstdlib>
+#include <cstring>
+
+// strdup is not part of the C standard; duplicate into a malloc block
+// freed by free().
+static char *dupString(const char *s)
+{
+    if (!s)
+        return nullptr;
+    const size_t n = std::strlen(s) + 1;
+    char *copy = static_cast<char *>(std::malloc(n));
+    if (copy)
+        std::memcpy(copy, s, n);
+    return copy;
+}
 
 namespace {
 
@@ -52,7 +70,7 @@ SkillDialog::SkillDialog(QWidget *parent)
                 showRevision(cur);
             });
 
-    // connect your buttons, validators, etc. here
+    setMode(Mode::ReadOnly);
 }
 
 SkillDialog::~SkillDialog()
@@ -60,18 +78,77 @@ SkillDialog::~SkillDialog()
     delete ui;
 }
 
+void SkillDialog::setMode(Mode mode)
+{
+    m_mode = mode;
+    const bool readOnly = (mode == Mode::ReadOnly);
+
+    ui->buttonBox->setStandardButtons(
+        readOnly ? QDialogButtonBox::StandardButton::Close
+                 : QDialogButtonBox::StandardButton::Save |
+                       QDialogButtonBox::StandardButton::Close);
+    if (!readOnly) {
+        connect(ui->buttonBox->button(QDialogButtonBox::StandardButton::Save),
+                &QPushButton::clicked, this, &SkillDialog::onSaveClicked);
+    }
+
+    ui->nameLineEdit->setReadOnly(readOnly);
+    ui->descriptionTextEdit->setReadOnly(readOnly);
+    ui->promptTextEdit->setReadOnly(readOnly);
+    ui->outputSchemaTextEdit->setReadOnly(readOnly);
+}
+
+void SkillDialog::newSkill(db_t *db, int folderId)
+{
+    m_db = db;
+    m_skillId = 0;
+    m_folderId = folderId;
+
+    ui->nameLineEdit->clear();
+    ui->descriptionTextEdit->clear();
+    ui->revisionLineEdit->clear();
+    ui->promptTextEdit->clear();
+    ui->outputSchemaTextEdit->clear();
+    ui->creationDateTimeEdit->setDateTime(QDateTime());
+    ui->updateDateTimeEdit->setDateTime(QDateTime());
+    ui->deleteDateTimeEdit->setDateTime(QDateTime());
+    ui->revisionTreeWidget->clear();
+
+    setMode(Mode::New);
+    setWindowTitle("New Skill");
+}
+
+void SkillDialog::showSkill(db_t *db, int skillId)
+{
+    m_db = db;
+    loadSkill(skillId);
+    setMode(Mode::ReadOnly);
+    setWindowTitle(
+        QStringLiteral("Skill: %1").arg(ui->nameLineEdit->text()));
+}
+
 void SkillDialog::editSkill(db_t *db, int skillId)
 {
     m_db = db;
+    loadSkill(skillId);
+    setMode(Mode::Edit);
+    setWindowTitle(
+        QStringLiteral("Edit Skill: %1").arg(ui->nameLineEdit->text()));
+}
 
+void SkillDialog::loadSkill(int skillId)
+{
     int err = ACTA_DB_OK;
-    skill_t *s = acta_db_skill_get(db, skillId, &err);
+    skill_t *s = acta_db_skill_get(m_db, skillId, &err);
     if (!s) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_skill_get(%d) failed: %s", skillId,
                      acta_db_strerror(err));
         return;
     }
+
+    m_skillId = s->id;
+    m_folderId = s->folder_id;
 
     // Details
     ui->nameLineEdit->setText(utf8(s->name));
@@ -90,7 +167,8 @@ void SkillDialog::editSkill(db_t *db, int skillId)
     err = ACTA_DB_OK;
     int nRevs = 0;
     skill_revision_t **revs =
-        acta_db_skill_revision_list_by_skill(db, skillId, 0, 0, &nRevs, &err);
+        acta_db_skill_revision_list_by_skill(m_db, skillId, 0, 0, &nRevs,
+                                             &err);
     ui->revisionTreeWidget->clear();
     if (revs) {
         for (int i = 0; i < nRevs; ++i) {
@@ -105,11 +183,116 @@ void SkillDialog::editSkill(db_t *db, int skillId)
             ui->revisionTreeWidget->setCurrentItem(
                 ui->revisionTreeWidget->topLevelItem(nRevs - 1));
     } else if (err != ACTA_DB_OK) {
-        qWarning("acta_db_skill_revision_list_by_skill(%d) failed: %s", skillId,
-                 acta_db_strerror(err));
+        qWarning("acta_db_skill_revision_list_by_skill(%d) failed: %s",
+                 skillId, acta_db_strerror(err));
     }
 
     acta_db_skill_free(s);
+}
+
+void SkillDialog::onSaveClicked()
+{
+    if (!m_db)
+        return;
+
+    const QString name = ui->nameLineEdit->text().trimmed();
+    const QString prompt = ui->promptTextEdit->toPlainText();
+    if (name.isEmpty() || prompt.isEmpty()) {
+        QMessageBox::warning(this, "Skill",
+                             "Name and prompt are required.");
+        return;
+    }
+
+    const QByteArray nameBa = name.toUtf8();
+    const QByteArray descriptionBa =
+        ui->descriptionTextEdit->toPlainText().toUtf8();
+    const QByteArray promptBa = prompt.toUtf8();
+    const QByteArray outputSchemaBa =
+        ui->outputSchemaTextEdit->toPlainText().toUtf8();
+
+    int err = ACTA_DB_OK;
+    if (m_mode == Mode::New) {
+        skill_t s{};
+        s.folder_id = m_folderId;
+        s.name = dupString(nameBa.constData());
+        s.description =
+            dupString(descriptionBa.isEmpty() ? nullptr
+                                               : descriptionBa.constData());
+        s.prompt_template = dupString(promptBa.constData());
+        s.output_schema =
+            dupString(outputSchemaBa.isEmpty() ? nullptr
+                                                : outputSchemaBa.constData());
+
+        int newId = 0;
+        int rc = acta_db_skill_create(m_db, &s, &newId);
+        std::free(s.name);
+        std::free(s.description);
+        std::free(s.prompt_template);
+        std::free(s.output_schema);
+        if (rc != ACTA_DB_OK) {
+            QMessageBox::warning(
+                this, "Skill",
+                QStringLiteral("Could not create skill: %1")
+                    .arg(acta_db_strerror(rc)));
+            return;
+        }
+
+        // Keep the dialog open on the created row, now editable.
+        m_skillId = newId;
+        loadSkill(newId);
+        setMode(Mode::Edit);
+        setWindowTitle(
+            QStringLiteral("Edit Skill: %1").arg(ui->nameLineEdit->text()));
+    } else if (m_mode == Mode::Edit && m_skillId != 0) {
+        // Full-row update: fetch the live row, replace the editable
+        // fields, write it back.
+        skill_t *s = acta_db_skill_get_live(m_db, m_skillId, &err);
+        if (!s) {
+            if (err != ACTA_DB_OK)
+                qWarning("acta_db_skill_get_live(%d) failed: %s", m_skillId,
+                         acta_db_strerror(err));
+            return;
+        }
+        std::free(s->name);
+        std::free(s->description);
+        std::free(s->prompt_template);
+        std::free(s->output_schema);
+        s->name = dupString(nameBa.constData());
+        s->description =
+            dupString(descriptionBa.isEmpty() ? nullptr
+                                               : descriptionBa.constData());
+        s->prompt_template = dupString(promptBa.constData());
+        s->output_schema =
+            dupString(outputSchemaBa.isEmpty() ? nullptr
+                                                : outputSchemaBa.constData());
+
+        const int rc = acta_db_skill_update(m_db, s);
+        // We own these duplicates now; null them so acta_db_skill_free
+        // only releases what it allocated.
+        std::free(s->name);
+        std::free(s->description);
+        std::free(s->prompt_template);
+        std::free(s->output_schema);
+        s->name = nullptr;
+        s->description = nullptr;
+        s->prompt_template = nullptr;
+        s->output_schema = nullptr;
+        acta_db_skill_free(s);
+        if (rc != ACTA_DB_OK) {
+            QMessageBox::warning(
+                this, "Skill",
+                QStringLiteral("Could not save skill: %1")
+                    .arg(acta_db_strerror(rc)));
+            return;
+        }
+
+        // The update triggered a revision snapshot: reload and switch
+        // back to the read-only view.
+        loadSkill(m_skillId);
+        setMode(Mode::ReadOnly);
+        setWindowTitle(
+            QStringLiteral("Skill: %1").arg(ui->nameLineEdit->text()));
+    }
 }
 
 void SkillDialog::showRevision(QTreeWidgetItem *item)

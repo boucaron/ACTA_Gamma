@@ -30,6 +30,8 @@ public:
 
     QTreeWidget *tree = nullptr;
     QCheckBox *showDeletedCheck = nullptr;
+    QPushButton *newBtn = nullptr;
+    QPushButton *showBtn = nullptr;
     QPushButton *editBtn = nullptr;
     QPushButton *deleteBtn = nullptr;
     QPushButton *restoreBtn = nullptr;
@@ -52,6 +54,12 @@ private:
     // "Show deleted items" checkbox is checked.
     void addSkills(QTreeWidgetItem *parent, int folderId);
 
+    // Id of the currently selected folder, or 0 if the selection is not
+    // a folder (used as the target folder by the New button).
+    int selectedFolderId() const;
+
 private slots:
+    void onNewBtnClicked();
+    void onShowBtnClicked();
     void onEditBtnClicked();
 };

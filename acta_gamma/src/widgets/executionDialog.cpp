@@ -58,7 +58,7 @@ ExecutionDialog::ExecutionDialog(QWidget *parent)
         if (m_skillId == 0 || !m_db)
             return;
         SkillDialog dlg(this);
-        dlg.editSkill(m_db, m_skillId);
+        dlg.showSkill(m_db, m_skillId);
         dlg.exec();
     });
     connect(ui->showModelPushButton, &QPushButton::clicked, this, [this]() {
