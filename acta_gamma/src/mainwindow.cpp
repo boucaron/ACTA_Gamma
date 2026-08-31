@@ -65,7 +65,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto left = new QWidget;
     auto leftLayout = new QVBoxLayout(left);
     leftLayout->addWidget(new SkillPanel(m_db.handle()));
-    leftLayout->addWidget(new ModelPanel);
+    leftLayout->addWidget(new ModelPanel(m_db.handle()));
     left->setMaximumWidth(320);
 
     auto right = new QWidget;
