@@ -64,7 +64,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto splitter = new QSplitter(Qt::Horizontal);
     auto left = new QWidget;
     auto leftLayout = new QVBoxLayout(left);
-    leftLayout->addWidget(new SkillPanel);
+    leftLayout->addWidget(new SkillPanel(m_db.handle()));
     leftLayout->addWidget(new ModelPanel);
     left->setMaximumWidth(320);
 
