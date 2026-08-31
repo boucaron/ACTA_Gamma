@@ -1,9 +1,12 @@
 #include "skillPanel.h"
 
+#include <QCheckBox>
+#include <QIcon>
 #include <QLabel>
 #include <QList>
 #include <QPushButton>
 #include <QSet>
+#include <QStyle>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
@@ -28,9 +31,17 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     tree->setHeaderHidden(true);
     lay->addWidget(tree);
 
+    m_deletedIcon = tree->style()->standardIcon(QStyle::SP_TrashIcon);
+
+    showDeletedCheck = new QCheckBox("Show deleted items");
+    lay->addWidget(showDeletedCheck);
+
     editBtn = new QPushButton("Edit Skill");
     lay->addWidget(editBtn);
 
+    connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
+        reload();
+    });
     connect(editBtn, &QPushButton::clicked, this, &SkillPanel::onEditBtnClicked);
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
@@ -108,8 +119,12 @@ void SkillPanel::addSkills(QTreeWidgetItem *parent, int folderId)
 {
     int n = 0;
     int err = ACTA_DB_OK;
-    skill_t **skills =
-        acta_db_skill_list_in_folder(m_db, folderId, 0, 0, &n, &err);
+    const bool showDeleted =
+        showDeletedCheck != nullptr && showDeletedCheck->isChecked();
+    skill_t **skills = showDeleted
+        ? acta_db_skill_list_in_folder_with_deleted(m_db, folderId, 0, 0, &n,
+                                                    &err)
+        : acta_db_skill_list_in_folder(m_db, folderId, 0, 0, &n, &err);
     if (!skills) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_skill_list_in_folder(%d) failed: %s", folderId,
@@ -122,6 +137,8 @@ void SkillPanel::addSkills(QTreeWidgetItem *parent, int folderId)
             ? new QTreeWidgetItem(parent, {QString::fromUtf8(skills[i]->name)})
             : new QTreeWidgetItem(tree, {QString::fromUtf8(skills[i]->name)});
         item->setData(0, RoleSkillId, skills[i]->id);
+        if (skills[i]->deleted_at && skills[i]->deleted_at[0])
+            item->setIcon(0, m_deletedIcon);
     }
     acta_db_skill_list_free(skills, n);
 }
