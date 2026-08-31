@@ -31,6 +31,8 @@ public:
     QTreeWidget *tree = nullptr;
     QCheckBox *showDeletedCheck = nullptr;
     QPushButton *editBtn = nullptr;
+    QPushButton *deleteBtn = nullptr;
+    QPushButton *restoreBtn = nullptr;
 
     // Rebuild the tree from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).

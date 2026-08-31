@@ -1,6 +1,7 @@
 #include "skillPanel.h"
 
 #include <QCheckBox>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
 #include <QList>
@@ -17,8 +18,9 @@
 #include "skillDialog.h"
 
 namespace {
-const int RoleFolderId = Qt::UserRole;
-const int RoleSkillId  = Qt::UserRole + 1;
+const int RoleFolderId  = Qt::UserRole;
+const int RoleSkillId   = Qt::UserRole + 1;
+const int RoleIsDeleted = Qt::UserRole + 2;
 } // namespace
 
 SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
@@ -39,14 +41,39 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     editBtn = new QPushButton("Edit Skill");
     lay->addWidget(editBtn);
 
+    auto *btnRow = new QHBoxLayout;
+    deleteBtn = new QPushButton("Delete");
+    restoreBtn = new QPushButton("Restore");
+    btnRow->addWidget(deleteBtn);
+    btnRow->addWidget(restoreBtn);
+    btnRow->addStretch();
+    lay->addLayout(btnRow);
+
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
     });
     connect(editBtn, &QPushButton::clicked, this, &SkillPanel::onEditBtnClicked);
+    connect(deleteBtn, &QPushButton::clicked, this, [this]() {
+        const int skillId = selectedSkillId();
+        if (m_db && skillId != 0 &&
+            acta_db_skill_soft_delete(m_db, skillId) == ACTA_DB_OK)
+            reload();
+    });
+    connect(restoreBtn, &QPushButton::clicked, this, [this]() {
+        const int skillId = selectedSkillId();
+        if (m_db && skillId != 0 &&
+            acta_db_skill_restore(m_db, skillId) == ACTA_DB_OK)
+            reload();
+    });
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
-                editBtn->setEnabled(
-                    cur != nullptr && cur->data(0, RoleSkillId).toInt() != 0);
+                const bool hasSkill =
+                    cur != nullptr && cur->data(0, RoleSkillId).toInt() != 0;
+                editBtn->setEnabled(hasSkill);
+                deleteBtn->setEnabled(
+                    hasSkill && !cur->data(0, RoleIsDeleted).toBool());
+                restoreBtn->setEnabled(
+                    hasSkill && cur->data(0, RoleIsDeleted).toBool());
             });
 
     reload();
@@ -137,7 +164,10 @@ void SkillPanel::addSkills(QTreeWidgetItem *parent, int folderId)
             ? new QTreeWidgetItem(parent, {QString::fromUtf8(skills[i]->name)})
             : new QTreeWidgetItem(tree, {QString::fromUtf8(skills[i]->name)});
         item->setData(0, RoleSkillId, skills[i]->id);
-        if (skills[i]->deleted_at && skills[i]->deleted_at[0])
+        const bool isDeleted =
+            skills[i]->deleted_at && skills[i]->deleted_at[0];
+        item->setData(0, RoleIsDeleted, isDeleted);
+        if (isDeleted)
             item->setIcon(0, m_deletedIcon);
     }
     acta_db_skill_list_free(skills, n);
