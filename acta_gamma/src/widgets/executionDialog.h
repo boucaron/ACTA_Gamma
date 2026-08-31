@@ -20,6 +20,12 @@ public:
 private:
     Ui_executionDialog *ui;
     db_t *m_db = nullptr;
+
+    // Ids of the execution's context / skill / model, used by the
+    // "Show" buttons of the Input tab (0 = nothing loaded yet).
+    int m_contextId = 0;
+    int m_skillId = 0;
+    int m_modelId = 0;
 };
 
 #endif

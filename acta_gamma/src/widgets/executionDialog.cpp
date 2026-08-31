@@ -2,6 +2,11 @@
 #include "ui_executionDialog.h"
 
 #include <QDateTime>
+
+#include "contextDialog.h"
+#include "modelDialog.h"
+#include "skillDialog.h"
+
 #include <QLocale>
 #include <QStandardItem>
 #include <QStandardItemModel>
@@ -40,7 +45,29 @@ ExecutionDialog::ExecutionDialog(QWidget *parent)
 {
     ui->setupUi(this);
     setWindowTitle("Execution");
-    // connect your buttons, validators, etc. here
+
+    // Input tab: open the read-only dialog of the associated row.
+    connect(ui->showContextPushButton, &QPushButton::clicked, this, [this]() {
+        if (m_contextId == 0 || !m_db)
+            return;
+        ContextDialog dlg(this);
+        dlg.editContext(m_db, m_contextId);
+        dlg.exec();
+    });
+    connect(ui->showSkillPushButton, &QPushButton::clicked, this, [this]() {
+        if (m_skillId == 0 || !m_db)
+            return;
+        SkillDialog dlg(this);
+        dlg.editSkill(m_db, m_skillId);
+        dlg.exec();
+    });
+    connect(ui->showModelPushButton, &QPushButton::clicked, this, [this]() {
+        if (m_modelId == 0 || !m_db)
+            return;
+        ModelDialog dlg(this);
+        dlg.editModel(m_db, m_modelId);
+        dlg.exec();
+    });
 }
 
 ExecutionDialog::~ExecutionDialog()
@@ -62,6 +89,7 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     }
 
     // Input: context content, skill name, model name.
+    m_contextId = e->context_id;
     context_t *ctx = acta_db_context_get(db, e->context_id, &err);
     if (ctx) {
         ui->contextTextEdit->setPlainText(utf8(ctx->content));
@@ -70,6 +98,7 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     skill_revision_t *srev =
         acta_db_skill_revision_get(db, e->skill_revision_id, &err);
     if (srev) {
+        m_skillId = srev->skill_id;
         ui->skillLineEdit->setText(
             QStringLiteral("%1 (rev %2)")
                 .arg(utf8(srev->name)).arg(srev->revision));
@@ -78,6 +107,7 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     model_revision_t *mrev =
         acta_db_model_revision_get(db, e->model_revision_id, &err);
     if (mrev) {
+        m_modelId = mrev->model_id;
         ui->modelLineEdit->setText(
             QStringLiteral("%1 (rev %2)")
                 .arg(utf8(mrev->name)).arg(mrev->revision));
