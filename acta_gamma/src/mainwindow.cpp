@@ -70,7 +70,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     auto right = new QWidget;
     auto rightLayout = new QVBoxLayout(right);
-    rightLayout->addWidget(new ContextPanel);
+    rightLayout->addWidget(new ContextPanel(m_db.handle()));
     rightLayout->addWidget(new ExecutionPanel);
 
     splitter->addWidget(left);
