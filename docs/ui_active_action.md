@@ -88,7 +88,7 @@ stays queued below.
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
 | H5 | **Execution tree columns** — skill / model / context names next to Date + Status | UR #23 | revision fetches already done in `ExecutionDialog`; reuse in the panel |
 | H6 | **Context menu in the Skill tree** — right-click menu on `SkillPanel` rows offering the same actions as the button rows (`New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and the folder row: `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder`), with enable/disable mirroring `updateButtonStates()` (folder actions on folder rows, `New`/`New Folder` target the selected folder or root) | UR #3 (pattern: `ContextPanel`'s right-click menu) | **Done** (`affcfcf`): menu wired via `customContextMenuRequested`; skill delete/restore logic moved into shared `onSkillDeleteClicked` / `onSkillRestoreClicked` slots used by both the buttons and the menu |
-| H7 | **Context menu in the Model tree** — same as H6 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, folder actions) | UR #3 (pattern: `ContextPanel`'s right-click menu) | **Done**: menu wired via `customContextMenuRequested`; model delete/restore logic moved into shared `onModelDeleteClicked` / `onModelRestoreClicked` slots used by both the buttons and the menu, mirroring H6 one-to-one. Both panels stay in sync explicitly until the UR #7 base class lands |
+| H7 | **Context menu in the Model tree** — same as H6 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, folder actions) | UR #3 (pattern: `ContextPanel`'s right-click menu) | **Done** (`101fe38`): menu wired via `customContextMenuRequested`; model delete/restore logic moved into shared `onModelDeleteClicked` / `onModelRestoreClicked` slots used by both the buttons and the menu, mirroring H6 one-to-one (also records the SkillPanel header declarations the H6 `.cpp` depends on). Both panels stay in sync explicitly until the UR #7 base class lands |
 
 ### Polish
 
@@ -100,15 +100,18 @@ stays queued below.
 | P4 | Keyboard/accelerator support — `F2` rename (natural fit once F1 lands), `Delete` key, accelerators | UR #39 | F1 supplies the first rename target |
 | P5 | Redundant "Show" affordances, empty-state placeholders, data lifecycle (delete/prune executions + contexts) | UR #31, #41, #42 | |
 | P6 | Friendlier error mapping for all `acta_db_strerror` surfaces (unique-name constraint → "already exists in this folder") | UR #45 | F1 establishes the pattern |
+| P7 | **Icons + tooltips on the `SkillPanel` buttons** — give each action button an icon and a tooltip (including the folder row): `New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder` (standard style icons, e.g. `SP_DialogYesButton`/`SP_DialogNoButton`/`SP_DialogResetButton`/`SP_TrashIcon`/`SP_DialogRestoreButton`/`SP_DirIcon`) | UR #28 | tooltips clarify the text-only buttons and match the menu entries from H6 |
+| P8 | **Icons + tooltips on the `ModelPanel` buttons** — same as P7 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, and the folder row) | UR #28 | keep the two panels in sync explicitly until the UR #7 base class lands |
 
 ## Summary
 
 - **Done:** F1 and F2 (folders in both panels, incl. the
   `…_folder_list_all_with_deleted` DB additions + tests for each),
-  N2 (the zero-risk dead-code cleanups), and N1 (dead "Run One-Shot"
+  N2 (the zero-risk dead-code cleanups), N1 (dead "Run One-Shot"
   button removed; the one-shot flow itself is deferred pending a
-  backend protocol).
-- **Now:** N3–N5, then H1–H5 (the model-tree context menu H7 is now done, mirroring H6).
-- **Polish last:** P1–P6.
+  backend protocol), and the context menus H6 (Skill tree) and H7
+  (Model tree).
+- **Now:** N3–N5, then H1–H5.
+- **Polish last:** P1–P8.
 
 (Full original list lives in `ui_review.md`.)
