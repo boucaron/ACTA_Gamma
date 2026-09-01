@@ -112,7 +112,9 @@ void ContextPanel::onListContextMenu(const QPoint &pos)
         return;
     const int contextId = item->data(0, RoleContextId).toInt();
     QMenu menu(this);
-    menu.addAction(tr("Edit"), this,
+    // Contexts are immutable; the dialog opens read-only, so the
+    // entry is labelled "Show", not "Edit".
+    menu.addAction(tr("Show"), this,
                    [this, contextId] { editContext(contextId); });
     menu.exec(list->viewport()->mapToGlobal(pos));
 }
@@ -124,9 +126,10 @@ void ContextPanel::editContext(int contextId)
 
     ContextDialog dlg(this);
     dlg.editContext(m_db, contextId);
-    if (dlg.exec() == QDialog::Accepted) {
-        // TODO
-    }
+    // Contexts are immutable: the dialog opens read-only and changes
+    // nothing, so there is nothing to do (and no reload needed) after
+    // it closes.
+    dlg.exec();
 }
 
 void ContextPanel::onNewBtnClicked()

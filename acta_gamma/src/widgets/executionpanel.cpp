@@ -129,9 +129,10 @@ void ExecutionPanel::onExecutionDoubleClicked(QTreeWidgetItem *item, int)
 
     ExecutionDialog dlg(this);
     dlg.editExecution(m_db, executionId);
-    if (dlg.exec() == QDialog::Accepted) {
-        // TODO
-    }
+    // Execution rows are immutable: the dialog opens read-only and
+    // changes nothing, so there is nothing to do (and no reload needed)
+    // after it closes.
+    dlg.exec();
 }
 
 void ExecutionPanel::onShowBtnClicked()

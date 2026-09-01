@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "widgets/skillpanel.h"
-#include "widgets/modelpanel.h"
+#include "widgets/modelPanel.h"
 #include "widgets/contextpanel.h"
 #include "widgets/executionpanel.h"
 
@@ -11,11 +11,6 @@
 #include <QLabel>
 #include <QPixmap>
 #include <QStatusBar>
-
-#include "widgets/skillpanel.h"
-#include "widgets/modelpanel.h"
-#include "widgets/contextpanel.h"
-#include "widgets/executionpanel.h"
 
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
