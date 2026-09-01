@@ -11,7 +11,6 @@ class ExecutionPanel : public QWidget {
 public:
     explicit ExecutionPanel(db_t *db = nullptr, QWidget *parent = nullptr);
     QTreeWidget *list;
-    QPushButton *runBtn;
     QTreeWidget *logList;
     QPushButton *showBtn;
 

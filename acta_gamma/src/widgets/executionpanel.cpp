@@ -32,8 +32,9 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
             &ExecutionPanel::onExecutionDoubleClicked);
     lay->addWidget(list);
 
-    runBtn = new QPushButton("Run One-Shot");
-    lay->addWidget(runBtn);
+    // The one-shot execution flow (create execution row, call the model
+    // backend, write logs, update status) has no backend client yet,
+    // so the "Run One-Shot" button was removed instead of left dead.
 
     logList = new QTreeWidget;
     logList->setColumnCount(4);
