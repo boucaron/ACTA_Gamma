@@ -2,16 +2,16 @@
 
 Action plan derived from [`ui_review.md`](ui_review.md). Item numbers
 (`UR #N`) reference that document. The active round is the **folder
-round**: the Skill panel got real folder management (F1, done), and the
-Model panel mirrors it next (F2). Everything else from the review stays
-queued below.
+round**: the Skill panel got real folder management (F1, done) and the
+Model panel mirrors it (F2, done). Everything else from the review
+stays queued below.
 
 ## Folder round (active)
 
 | # | Action | Source | Status / notes |
 |---|--------|--------|----------------|
 | F1 | **Folders in the Skill panel** — create / rename / delete / restore folders in `SkillPanel` | UR #17 | **Done** (see the F1 notes below). F2 depends on the patterns established here |
-| F2 | **Folders in the Model panel** — mirror F1 in `ModelPanel` | UR #17 | active. Same button set and dialog flows as F1; `acta_db_model_folder_soft_delete` additionally rejects live *models*, so the friendly error text differs |
+| F2 | **Folders in the Model panel** — mirror F1 in `ModelPanel` | UR #17 | **Done** (see the F2 notes below). Same button set and dialog flows as F1; `acta_db_model_folder_soft_delete` additionally rejects live *models*, so the friendly error text differs |
 
 ### F1 — Folders in the Skill panel ✅ done
 
@@ -38,18 +38,37 @@ queued below.
     (new; the old surface had no deleted-folder lister) — covered by
     tests 6.59–6.64 in `tests/test_skill_folder.c`.
 
-### F2 — Folders in the Model panel
+### F2 — Folders in the Model panel ✅ done
 
-- Mirror F1 one-to-one in `ModelPanel` (`New Folder` / `Rename` /
-  `Delete Folder` / `Restore Folder`), same dialog flows and enable
-  rules.
-- Error mapping difference: `acta_db_model_folder_soft_delete` rejects
-  when the folder has live child folders **or live models** — the
-  friendly message must say "delete or move its folders and models
-  first".
-- Reuse whatever helper F1 introduced (folder button row, input-dialog
-  flow, error mapping). Until the UR #7 panel/dedup base class lands,
-  keep the two implementations in sync explicitly.
+- **Status:** implemented and committed (`2821092`, UI + DB; `8a51c49`,
+  tests). Mirrors F1 one-to-one in `ModelPanel`.
+- **What shipped:**
+  - Folder button row: `New Folder` / `Rename Folder` / `Delete Folder`
+    / `Restore Folder`, with selection-based enable/disable centralized
+    in `updateButtonStates()` (also called after every `reload()`):
+    rename/delete on live folders, restore on soft-deleted folders,
+    New Folder always enabled (parent = selected folder, else root).
+  - Create/rename via `QInputDialog` (empty name → no-op);
+    delete via `QMessageBox::question` confirmation before
+    `acta_db_model_folder_soft_delete`, with `ACTA_DB_ERR_INVALID`
+    (live child folders **or live models**) mapped to the friendly
+    "delete or move them first" text — the model-specific difference
+    from F1 (UR #45).
+  - The "Show deleted items" checkbox now also lists soft-deleted
+    *folders* (trash icon + grey foreground) so `Restore Folder` is
+    reachable; deleted models got the grey treatment too. `SP_DirIcon`
+    on live folder rows.
+  - Selection preserved across `reload()` via `findItemByRole()`
+    (UR #8).
+  - **DB addition:** `acta_db_model_folder_list_all_with_deleted`
+    (new; same pattern as F1's skill-folder lister) — covered by the
+    `list_allwd_*` tests in `tests/test_model_folder.c`.
+- **Known gap:** N2's zero-risk cleanups were *not* done in the same
+  pass (the `QDialog::Accepted` `// TODO` branches, the mislabeled
+  "Edit" context-menu entry, duplicate includes in `mainWindow.cpp`,
+  and the `modelpanel.cpp` case mismatch in the tracked filename).
+- Until the UR #7 panel/dedup base class lands, keep the two
+  implementations in sync explicitly.
 
 ## Queued (from `ui_review.md`)
 
@@ -86,11 +105,10 @@ queued below.
 
 ## Summary
 
-- **Done:** F1 (folders in the Skill panel, incl. the
-  `acta_db_skill_folder_list_all_with_deleted` DB addition + tests).
-- **Now:** F2 (folders in the Model panel); do N2's zero-risk cleanups
-  in the same pass.
-- **Next:** N1 (the Run flow), then N3–N5, then H1–H5.
+- **Done:** F1 and F2 (folders in both panels, incl. the
+  `…_folder_list_all_with_deleted` DB additions + tests for each).
+- **Now:** N2 (the zero-risk dead-code cleanups, still pending), then
+  N1 (the Run flow), then N3–N5, then H1–H5.
 - **Polish last:** P1–P6.
 
 (Full original list lives in `ui_review.md`.)
