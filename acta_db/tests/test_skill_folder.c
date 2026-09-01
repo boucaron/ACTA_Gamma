@@ -1,4 +1,4 @@
-/* test_skill_folder.c — Tests for skill_folder.h (tests 6.1 – 6.56) */
+/* test_skill_folder.c — Tests for skill_folder.h (tests 6.1 – 6.64) */
 
 #include "test_common.h"
 #include "skill_folder.h"
@@ -685,6 +685,173 @@ static void test_sf_list_all_negative_offset(void) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
+ *  list_all_with_deleted
+ * ════════════════════════════════════════════════════════════════════ */
+
+/* 6.59 */
+static void test_sf_list_all_with_deleted_includes_deleted(void) {
+    const char *path = "test/acta_test_sf_list_allwd_includes.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id_live = 0, id_deleted = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "Keep", 0, &id_live),
+                       ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "Gone", 0, &id_deleted),
+                       ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_soft_delete(db, id_deleted),
+                       ACTA_DB_OK);
+
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all_with_deleted(
+        db, 0, -1, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+
+    for (int i = 0; i < count; i++) {
+        if (items[i]->id == id_live) {
+            TEST_ASSERT_EQ_STR(items[i]->name, "Keep");
+            TEST_ASSERT(items[i]->deleted_at == NULL);
+        } else if (items[i]->id == id_deleted) {
+            TEST_ASSERT_EQ_STR(items[i]->name, "Gone");
+            TEST_ASSERT(items[i]->deleted_at != NULL);
+        } else {
+            TEST_ASSERT(false); /* unexpected row */
+        }
+    }
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* 6.60 */
+static void test_sf_list_all_with_deleted_empty(void) {
+    const char *path = "test/acta_test_sf_list_allwd_empty.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all_with_deleted(
+        db, 0, -1, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 0);
+    if (items) acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* 6.61 */
+static void test_sf_list_all_with_deleted_null_db(void) {
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all_with_deleted(
+        NULL, 0, -1, &count, &err);
+    TEST_ASSERT(items == NULL);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+/* 6.62 */
+static void test_sf_list_all_with_deleted_negative_offset(void) {
+    const char *path = "test/acta_test_sf_list_allwd_neg_offset.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int count = -1, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all_with_deleted(
+        db, -5, 10, &count, &err);
+    TEST_ASSERT(items == NULL);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(count, 0);
+
+    test_db_teardown(db, path);
+}
+
+/* 6.63 */
+static void test_sf_list_all_with_deleted_paged(void) {
+    const char *path = "test/acta_test_sf_list_allwd_paged.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    const char *names[] = {"F1", "F2", "F3", "F4"};
+    int ids[4] = {0};
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, names[i], 0, &ids[i]),
+                           ACTA_DB_OK);
+    }
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_soft_delete(db, ids[1]), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_soft_delete(db, ids[3]), ACTA_DB_OK);
+
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all_with_deleted(
+        db, 0, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "F1");
+    TEST_ASSERT(items[0]->deleted_at == NULL);
+    TEST_ASSERT_EQ_STR(items[1]->name, "F2");
+    TEST_ASSERT(items[1]->deleted_at != NULL);
+    acta_db_skill_folder_list_free(items, count);
+
+    count = 0;
+    err = 0;
+    items = acta_db_skill_folder_list_all_with_deleted(db, 2, 2, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+    TEST_ASSERT_EQ_STR(items[0]->name, "F3");
+    TEST_ASSERT(items[0]->deleted_at == NULL);
+    TEST_ASSERT_EQ_STR(items[1]->name, "F4");
+    TEST_ASSERT(items[1]->deleted_at != NULL);
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* 6.64 */
+static void test_sf_list_all_with_deleted_nested(void) {
+    const char *path = "test/acta_test_sf_list_allwd_nested.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_id = 0, child_id = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "Parent", 0, &parent_id),
+                       ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "Child", parent_id, &child_id),
+                       ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_soft_delete(db, child_id),
+                       ACTA_DB_OK);
+
+    int count = 0, err = 0;
+    skill_folder_t **items = acta_db_skill_folder_list_all_with_deleted(
+        db, 0, -1, &count, &err);
+    TEST_ASSERT_NOT_NULL(items);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 2);
+
+    for (int i = 0; i < count; i++) {
+        if (items[i]->id == child_id) {
+            /* Soft-deleted child still reports its (live) parent. */
+            TEST_ASSERT_EQ_INT(items[i]->parent_id, parent_id);
+            TEST_ASSERT(items[i]->deleted_at != NULL);
+        } else if (items[i]->id == parent_id) {
+            TEST_ASSERT_EQ_INT(items[i]->parent_id, 0);
+            TEST_ASSERT(items[i]->deleted_at == NULL);
+        } else {
+            TEST_ASSERT(false); /* unexpected row */
+        }
+    }
+    acta_db_skill_folder_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+/* ════════════════════════════════════════════════════════════════════
  *  count_children
  * ════════════════════════════════════════════════════════════════════ */
 
@@ -1181,6 +1348,14 @@ void run_skill_folder_tests(void) {
     test_sf_list_all_excludes_deleted();
     test_sf_list_all_paged();
     test_sf_list_all_negative_offset();
+
+    /* list_all_with_deleted */
+    test_sf_list_all_with_deleted_includes_deleted();
+    test_sf_list_all_with_deleted_empty();
+    test_sf_list_all_with_deleted_null_db();
+    test_sf_list_all_with_deleted_negative_offset();
+    test_sf_list_all_with_deleted_paged();
+    test_sf_list_all_with_deleted_nested();
 
     /* count_children */
     test_sf_count_children_with();
