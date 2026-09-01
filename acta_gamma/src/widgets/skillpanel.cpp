@@ -15,6 +15,7 @@
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <QHash>
+#include <QMenu>
 
 #include <functional>
 
@@ -79,18 +80,10 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     connect(newBtn, &QPushButton::clicked, this, &SkillPanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this, &SkillPanel::onShowBtnClicked);
     connect(editBtn, &QPushButton::clicked, this, &SkillPanel::onEditBtnClicked);
-    connect(deleteBtn, &QPushButton::clicked, this, [this]() {
-        const int skillId = selectedSkillId();
-        if (m_db && skillId != 0 &&
-            acta_db_skill_soft_delete(m_db, skillId) == ACTA_DB_OK)
-            reload();
-    });
-    connect(restoreBtn, &QPushButton::clicked, this, [this]() {
-        const int skillId = selectedSkillId();
-        if (m_db && skillId != 0 &&
-            acta_db_skill_restore(m_db, skillId) == ACTA_DB_OK)
-            reload();
-    });
+    connect(deleteBtn, &QPushButton::clicked, this,
+            &SkillPanel::onSkillDeleteClicked);
+    connect(restoreBtn, &QPushButton::clicked, this,
+            &SkillPanel::onSkillRestoreClicked);
     connect(newFolderBtn, &QPushButton::clicked, this,
             &SkillPanel::onNewFolderBtnClicked);
     connect(renameFolderBtn, &QPushButton::clicked, this,
@@ -103,6 +96,10 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
             [this](QTreeWidgetItem *, QTreeWidgetItem *) {
                 updateButtonStates();
             });
+    connect(tree, &QTreeWidget::customContextMenuRequested, this,
+            &SkillPanel::onListContextMenu);
+
+    tree->setContextMenuPolicy(Qt::CustomContextMenu);
 
     reload();
 }
@@ -325,6 +322,73 @@ void SkillPanel::onEditBtnClicked()
     dlg.editSkill(m_db, skillId);
     dlg.exec();
     reload();
+}
+
+void SkillPanel::onSkillDeleteClicked()
+{
+    const int skillId = selectedSkillId();
+    if (!m_db || skillId == 0)
+        return;
+    if (acta_db_skill_soft_delete(m_db, skillId) == ACTA_DB_OK)
+        reload();
+}
+
+void SkillPanel::onSkillRestoreClicked()
+{
+    const int skillId = selectedSkillId();
+    if (!m_db || skillId == 0)
+        return;
+    if (acta_db_skill_restore(m_db, skillId) == ACTA_DB_OK)
+        reload();
+}
+
+void SkillPanel::onListContextMenu(const QPoint &pos)
+{
+    const auto *item = tree->itemAt(pos);
+    if (!item)
+        return;
+    // A right-click selects the row, so the handlers operate on it
+    // exactly as the button row does.
+    tree->setCurrentItem(const_cast<QTreeWidgetItem *>(item));
+
+    const bool hasSkill = item->data(0, RoleSkillId).toInt() != 0;
+    const bool isSkillDeleted =
+        hasSkill && item->data(0, RoleIsDeleted).toBool();
+    const bool hasFolder = item->data(0, RoleFolderId).toInt() != 0;
+    const bool isFolderDeleted =
+        hasFolder && item->data(0, RoleFolderIsDeleted).toBool();
+
+    QMenu menu(this);
+    auto *aNew = menu.addAction(tr("New"), this, &SkillPanel::onNewBtnClicked);
+    auto *aShow = menu.addAction(tr("Show"), this, &SkillPanel::onShowBtnClicked);
+    auto *aEdit = menu.addAction(tr("Edit Skill"), this, &SkillPanel::onEditBtnClicked);
+    auto *aDelete = menu.addAction(tr("Delete"), this,
+                                  &SkillPanel::onSkillDeleteClicked);
+    auto *aRestore = menu.addAction(tr("Restore"), this,
+                                   &SkillPanel::onSkillRestoreClicked);
+    menu.addSeparator();
+    auto *aNewFolder = menu.addAction(tr("New Folder"), this,
+                                     &SkillPanel::onNewFolderBtnClicked);
+    auto *aRenameFolder = menu.addAction(tr("Rename Folder"), this,
+                                         &SkillPanel::onRenameFolderBtnClicked);
+    auto *aDeleteFolder = menu.addAction(tr("Delete Folder"), this,
+                                         &SkillPanel::onDeleteFolderBtnClicked);
+    auto *aRestoreFolder = menu.addAction(tr("Restore Folder"), this,
+                                          &SkillPanel::onRestoreFolderBtnClicked);
+
+    // Same rules as updateButtonStates(): "New" / "New Folder" are
+    // always usable, the rest depend on what the row is.
+    aNew->setEnabled(m_db != nullptr);
+    aShow->setEnabled(hasSkill);
+    aEdit->setEnabled(hasSkill && !isSkillDeleted);
+    aDelete->setEnabled(hasSkill && !isSkillDeleted);
+    aRestore->setEnabled(hasSkill && isSkillDeleted);
+    aNewFolder->setEnabled(m_db != nullptr);
+    aRenameFolder->setEnabled(hasFolder && !isFolderDeleted);
+    aDeleteFolder->setEnabled(hasFolder && !isFolderDeleted);
+    aRestoreFolder->setEnabled(hasFolder && isFolderDeleted);
+
+    menu.exec(tree->viewport()->mapToGlobal(pos));
 }
 
 void SkillPanel::onNewFolderBtnClicked()
