@@ -431,6 +431,38 @@ model_folder_t **acta_db_model_folder_list_all(
     return (c_err == ACTA_DB_OK) ? items : NULL;
 }
 
+model_folder_t **acta_db_model_folder_list_all_with_deleted(
+    db_t *db, int offset, int limit,
+    int *out_count, int *err)
+{
+    if (!db || offset < 0) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+
+    const char *sql =
+        "SELECT id, name, parent_id, created_at, updated_at, deleted_at "
+        "FROM model_folders "
+        "ORDER BY id LIMIT ? OFFSET ?;";
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
+    sqlite3_bind_int(stmt, 1, db_clamp_limit(limit));
+    sqlite3_bind_int(stmt, 2, offset);
+
+    int count = 0;
+    int c_err = 0;
+    model_folder_t **items = collect_rows(stmt, &count, &c_err);
+    sqlite3_finalize(stmt);
+
+    if (out_count) *out_count = (c_err == ACTA_DB_OK) ? count : 0;
+    if (err)       *err       = c_err;
+    return (c_err == ACTA_DB_OK) ? items : NULL;
+}
+
 /* ================================================================== */
 /*  Counts                                                            */
 /* ================================================================== */

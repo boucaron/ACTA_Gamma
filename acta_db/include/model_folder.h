@@ -135,6 +135,19 @@ model_folder_t **acta_db_model_folder_list_all(db_t *db,
                                                int offset, int limit,
                                                int *out_count, int *err);
 
+/* Return a page of all folders, ordered by id, including soft-deleted
+ * rows.
+ *
+ * Mirrors the query of list_all without the deleted_at filter, so
+ * soft-deleted folders can be listed (and restored) from the UI.
+ *
+ * Pagination: see common contract above. */
+model_folder_t **acta_db_model_folder_list_all_with_deleted(db_t *db,
+                                                             int offset,
+                                                             int limit,
+                                                             int *out_count,
+                                                             int *err);
+
 /* --- Counts ----------------------------------------------------------- */
 
 /* Return the number of live direct children of the given folder.
