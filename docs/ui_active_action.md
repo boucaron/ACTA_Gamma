@@ -2,45 +2,41 @@
 
 Action plan derived from [`ui_review.md`](ui_review.md). Item numbers
 (`UR #N`) reference that document. The active round is the **folder
-round**: give the Skill panel real folder management first, then mirror
-it in the Model panel. Everything else from the review stays queued
-below.
+round**: the Skill panel got real folder management (F1, done), and the
+Model panel mirrors it next (F2). Everything else from the review stays
+queued below.
 
 ## Folder round (active)
 
-| # | Action | Source | Notes / dependencies |
-|---|--------|--------|----------------------|
-| F1 | **Folders in the Skill panel** — create / rename / delete / restore folders in `SkillPanel` | UR #17 | the whole `acta_db_skill_folder_*` surface already exists (`create`, `rename`, `move_to`, `soft_delete`, `restore`, `get`, `list_all`, `count_all`); only the UI is missing. F2 depends on the patterns established here |
-| F2 | **Folders in the Model panel** — mirror F1 in `ModelPanel` | UR #17 | same button set and dialog flows as F1; `acta_db_model_folder_soft_delete` additionally rejects live *models*, so the friendly error text differs |
+| # | Action | Source | Status / notes |
+|---|--------|--------|----------------|
+| F1 | **Folders in the Skill panel** — create / rename / delete / restore folders in `SkillPanel` | UR #17 | **Done** (see the F1 notes below). F2 depends on the patterns established here |
+| F2 | **Folders in the Model panel** — mirror F1 in `ModelPanel` | UR #17 | active. Same button set and dialog flows as F1; `acta_db_model_folder_soft_delete` additionally rejects live *models*, so the friendly error text differs |
 
-### F1 — Folders in the Skill panel
+### F1 — Folders in the Skill panel ✅ done
 
-- **Buttons.** One standard folder row: `New Folder`, `Rename`,
-  `Delete Folder`, `Restore Folder`, with the same selection-based
-  enable/disable wiring the skill buttons already use
-  (`currentItemChanged`, folder role ≠ 0). Enable rules:
-  - `New Folder`: always enabled (parent = selected folder, else root);
-  - `Rename` / `Delete Folder`: selected item is a live folder;
-  - `Restore Folder`: selected item is a soft-deleted folder.
-- **Create.** `QInputDialog::getText` for the name (empty → `Cancel`,
-  matching `ACTA_DB_ERR_INVALID` on NULL/empty name). Parent is the
-  selected folder, or `0` (root) when a skill or nothing is selected.
-  After `acta_db_skill_folder_create`, `reload()` and select the new
-  folder by its id.
-- **Rename.** `QInputDialog::getLineEdit` pre-filled with the current
-  name; `acta_db_skill_folder_rename`.
-- **Delete.** Confirm with `QMessageBox::question` (UR #33) before
-  `acta_db_skill_folder_soft_delete`. Map `ACTA_DB_ERR_INVALID`
-  (folder still has live children) to the friendly "delete or move its
-  children first" text (UR #45) instead of the raw strerror.
-- **Show deleted.** The existing "Show deleted items" checkbox must also
-  surface soft-deleted *folders* (icon + grey-out, UR #23) so
-  `Restore Folder` is reachable.
-- **Reload hygiene.** Preserve the current selection across `reload()`
-  by re-selecting the same folder/skill id (UR #8).
-- **Folder icon.** `SP_DirIcon` on folder rows (UR #23) — part of this
-  change because selection states must visually distinguish folders from
-  skills.
+- **Status:** implemented and committed (`7a15399`, UI + DB;
+  `f90f306` / `68d08a0`, tests). F1 is the template F2 must mirror.
+- **What shipped:**
+  - Folder button row: `New Folder` / `Rename Folder` / `Delete Folder`
+    / `Restore Folder`, with selection-based enable/disable centralized
+    in `updateButtonStates()` (also called after every `reload()`):
+    rename/delete on live folders, restore on soft-deleted folders,
+    New Folder always enabled (parent = selected folder, else root).
+  - Create/rename via `QInputDialog` (empty name → no-op);
+    delete via `QMessageBox::question` confirmation before
+    `acta_db_skill_folder_soft_delete`, with `ACTA_DB_ERR_INVALID`
+    (live child folders or skills) mapped to the friendly "delete or
+    move them first" text (UR #45).
+  - The "Show deleted items" checkbox now also lists soft-deleted
+    *folders* (trash icon + grey foreground) so `Restore Folder` is
+    reachable; deleted skills got the grey treatment too. `SP_DirIcon`
+    on live folder rows.
+  - Selection preserved across `reload()` via `findItemByRole()`
+    (UR #8).
+  - **DB addition:** `acta_db_skill_folder_list_all_with_deleted`
+    (new; the old surface had no deleted-folder lister) — covered by
+    tests 6.59–6.64 in `tests/test_skill_folder.c`.
 
 ### F2 — Folders in the Model panel
 
@@ -90,8 +86,10 @@ below.
 
 ## Summary
 
-- **Now:** F1 (folders in the Skill panel), then F2 (folders in the
-  Model panel); do N2's zero-risk cleanups in the same pass.
+- **Done:** F1 (folders in the Skill panel, incl. the
+  `acta_db_skill_folder_list_all_with_deleted` DB addition + tests).
+- **Now:** F2 (folders in the Model panel); do N2's zero-risk cleanups
+  in the same pass.
 - **Next:** N1 (the Run flow), then N3–N5, then H1–H5.
 - **Polish last:** P1–P6.
 
