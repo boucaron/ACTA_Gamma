@@ -63,10 +63,6 @@ stays queued below.
   - **DB addition:** `acta_db_model_folder_list_all_with_deleted`
     (new; same pattern as F1's skill-folder lister) — covered by the
     `list_allwd_*` tests in `tests/test_model_folder.c`.
-- **Known gap:** N2's zero-risk cleanups were *not* done in the same
-  pass (the `QDialog::Accepted` `// TODO` branches, the mislabeled
-  "Edit" context-menu entry, duplicate includes in `mainWindow.cpp`,
-  and the `modelpanel.cpp` case mismatch in the tracked filename).
 - Until the UR #7 panel/dedup base class lands, keep the two
   implementations in sync explicitly.
 
@@ -77,7 +73,7 @@ stays queued below.
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | N1 | **Resolve the dead "Run One-Shot" button** — implement the one-shot execution flow (create execution row → call backend → write logs → update status) or remove/hide the button | UR #1, #18 | the app's core feature; once implemented, add live status + auto-scrolling logs (UR #44) |
-| N2 | **Remove dead code** — the `QDialog::Accepted` `// TODO` branches in `ContextPanel::editContext` and `ExecutionPanel::onExecutionDoubleClicked`; the mislabeled "Edit" context-menu entry for immutable contexts; duplicate includes in `mainWindow.cpp`; `modelpanel.cpp` case mismatch | UR #2, #3, #4, #5 | zero behavior risk, do first alongside F1 |
+| N2 | **Remove dead code** — the `QDialog::Accepted` `// TODO` branches in `ContextPanel::editContext` and `ExecutionPanel::onExecutionDoubleClicked`; the mislabeled "Edit" context-menu entry for immutable contexts; duplicate includes in `mainWindow.cpp`; `modelpanel.cpp` case mismatch | UR #2, #3, #4, #5 | **Done** (`69ef10c`): dead branches replaced by bare `dlg.exec()` + explanatory comments (both dialogs open read-only), context menu entry relabelled "Show", duplicate includes removed, `modelpanel.{h,cpp}` renamed to `modelPanel.{h,cpp}` to match `src.pro` |
 | N3 | **Save feedback + confirmations** — "Saved" feedback on dialog save (and honest mode switching), delete confirmations | UR #33 | F1's delete confirmation is the first instance of this |
 | N4 | **Revision-selection clobber trap** — in Edit mode, clicking a revision overwrites the form; disable revision switching until Save/Cancel, or move browsing to a read-only dialog | UR #35 | `SkillDialog` and `ModelDialog` |
 | N5 | **Database-failure UX** — persistent visible offline state with "Retry", or a startup modal (create db / pick location / exit); DB path via `QStandardPaths::AppDataLocation` + first-run bootstrap | UR #9, #32 | also enables `dbAvailable()`-driven disabled panels (UR #10) |
@@ -106,9 +102,9 @@ stays queued below.
 ## Summary
 
 - **Done:** F1 and F2 (folders in both panels, incl. the
-  `…_folder_list_all_with_deleted` DB additions + tests for each).
-- **Now:** N2 (the zero-risk dead-code cleanups, still pending), then
-  N1 (the Run flow), then N3–N5, then H1–H5.
+  `…_folder_list_all_with_deleted` DB additions + tests for each),
+  plus N2 (the zero-risk dead-code cleanups).
+- **Now:** N1 (the Run flow), then N3–N5, then H1–H5.
 - **Polish last:** P1–P6.
 
 (Full original list lives in `ui_review.md`.)
