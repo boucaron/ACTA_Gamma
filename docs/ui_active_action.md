@@ -88,7 +88,7 @@ stays queued below.
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
 | H5 | **Execution tree columns** — skill / model / context names next to Date + Status | UR #23 | revision fetches already done in `ExecutionDialog`; reuse in the panel |
 | H6 | **Context menu in the Skill tree** — right-click menu on `SkillPanel` rows offering the same actions as the button rows (`New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and the folder row: `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder`), with enable/disable mirroring `updateButtonStates()` (folder actions on folder rows, `New`/`New Folder` target the selected folder or root) | UR #3 (pattern: `ContextPanel`'s right-click menu) | **Done** (`affcfcf`): menu wired via `customContextMenuRequested`; skill delete/restore logic moved into shared `onSkillDeleteClicked` / `onSkillRestoreClicked` slots used by both the buttons and the menu |
-| H7 | **Context menu in the Model tree** — same as H6 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, folder actions) | UR #3 (pattern: `ContextPanel`'s right-click menu) | active. Mirror H6 one-to-one; both panels stay in sync explicitly until the UR #7 base class lands |
+| H7 | **Context menu in the Model tree** — same as H6 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, folder actions) | UR #3 (pattern: `ContextPanel`'s right-click menu) | **Done**: menu wired via `customContextMenuRequested`; model delete/restore logic moved into shared `onModelDeleteClicked` / `onModelRestoreClicked` slots used by both the buttons and the menu, mirroring H6 one-to-one. Both panels stay in sync explicitly until the UR #7 base class lands |
 
 ### Polish
 
@@ -108,7 +108,7 @@ stays queued below.
   N2 (the zero-risk dead-code cleanups), and N1 (dead "Run One-Shot"
   button removed; the one-shot flow itself is deferred pending a
   backend protocol).
-- **Now:** N3–N5, then H1–H5 and H7 (the model-tree context menu; H6 is done).
+- **Now:** N3–N5, then H1–H5 (the model-tree context menu H7 is now done, mirroring H6).
 - **Polish last:** P1–P6.
 
 (Full original list lives in `ui_review.md`.)

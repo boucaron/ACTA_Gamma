@@ -77,10 +77,20 @@ private:
     // tree. Returns nullptr when not found.
     QTreeWidgetItem *findItemByRole(int role, int id) const;
 
+private:
+    // Right-click menu on a tree row: the same actions as the button
+    // rows (model actions + folder actions), enabled/disabled with the
+    // same rules as updateButtonStates().
+    void onListContextMenu(const QPoint &pos);
+
 private slots:
     void onNewBtnClicked();
     void onShowBtnClicked();
     void onEditBtnClicked();
+    // Model delete/restore handlers shared by the button row and the
+    // context menu.
+    void onModelDeleteClicked();
+    void onModelRestoreClicked();
     void onNewFolderBtnClicked();
     void onRenameFolderBtnClicked();
     void onDeleteFolderBtnClicked();

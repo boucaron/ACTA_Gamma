@@ -15,6 +15,7 @@
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <QHash>
+#include <QMenu>
 
 #include <functional>
 
@@ -79,18 +80,10 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     connect(newBtn, &QPushButton::clicked, this, &ModelPanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this, &ModelPanel::onShowBtnClicked);
     connect(editBtn, &QPushButton::clicked, this, &ModelPanel::onEditBtnClicked);
-    connect(deleteBtn, &QPushButton::clicked, this, [this]() {
-        const int modelId = selectedModelId();
-        if (m_db && modelId != 0 &&
-            acta_db_model_soft_delete(m_db, modelId) == ACTA_DB_OK)
-            reload();
-    });
-    connect(restoreBtn, &QPushButton::clicked, this, [this]() {
-        const int modelId = selectedModelId();
-        if (m_db && modelId != 0 &&
-            acta_db_model_restore(m_db, modelId) == ACTA_DB_OK)
-            reload();
-    });
+    connect(deleteBtn, &QPushButton::clicked, this,
+            &ModelPanel::onModelDeleteClicked);
+    connect(restoreBtn, &QPushButton::clicked, this,
+            &ModelPanel::onModelRestoreClicked);
     connect(newFolderBtn, &QPushButton::clicked, this,
             &ModelPanel::onNewFolderBtnClicked);
     connect(renameFolderBtn, &QPushButton::clicked, this,
@@ -103,6 +96,10 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
             [this](QTreeWidgetItem *, QTreeWidgetItem *) {
                 updateButtonStates();
             });
+    connect(tree, &QTreeWidget::customContextMenuRequested, this,
+            &ModelPanel::onListContextMenu);
+
+    tree->setContextMenuPolicy(Qt::CustomContextMenu);
 
     reload();
 }
@@ -325,6 +322,73 @@ void ModelPanel::onEditBtnClicked()
     dlg.editModel(m_db, modelId);
     dlg.exec();
     reload();
+}
+
+void ModelPanel::onModelDeleteClicked()
+{
+    const int modelId = selectedModelId();
+    if (!m_db || modelId == 0)
+        return;
+    if (acta_db_model_soft_delete(m_db, modelId) == ACTA_DB_OK)
+        reload();
+}
+
+void ModelPanel::onModelRestoreClicked()
+{
+    const int modelId = selectedModelId();
+    if (!m_db || modelId == 0)
+        return;
+    if (acta_db_model_restore(m_db, modelId) == ACTA_DB_OK)
+        reload();
+}
+
+void ModelPanel::onListContextMenu(const QPoint &pos)
+{
+    const auto *item = tree->itemAt(pos);
+    if (!item)
+        return;
+    // A right-click selects the row, so the handlers operate on it
+    // exactly as the button row does.
+    tree->setCurrentItem(const_cast<QTreeWidgetItem *>(item));
+
+    const bool hasModel = item->data(0, RoleModelId).toInt() != 0;
+    const bool isModelDeleted =
+        hasModel && item->data(0, RoleIsDeleted).toBool();
+    const bool hasFolder = item->data(0, RoleFolderId).toInt() != 0;
+    const bool isFolderDeleted =
+        hasFolder && item->data(0, RoleFolderIsDeleted).toBool();
+
+    QMenu menu(this);
+    auto *aNew = menu.addAction(tr("New"), this, &ModelPanel::onNewBtnClicked);
+    auto *aShow = menu.addAction(tr("Show"), this, &ModelPanel::onShowBtnClicked);
+    auto *aEdit = menu.addAction(tr("Edit Model"), this, &ModelPanel::onEditBtnClicked);
+    auto *aDelete = menu.addAction(tr("Delete"), this,
+                                  &ModelPanel::onModelDeleteClicked);
+    auto *aRestore = menu.addAction(tr("Restore"), this,
+                                   &ModelPanel::onModelRestoreClicked);
+    menu.addSeparator();
+    auto *aNewFolder = menu.addAction(tr("New Folder"), this,
+                                     &ModelPanel::onNewFolderBtnClicked);
+    auto *aRenameFolder = menu.addAction(tr("Rename Folder"), this,
+                                         &ModelPanel::onRenameFolderBtnClicked);
+    auto *aDeleteFolder = menu.addAction(tr("Delete Folder"), this,
+                                         &ModelPanel::onDeleteFolderBtnClicked);
+    auto *aRestoreFolder = menu.addAction(tr("Restore Folder"), this,
+                                          &ModelPanel::onRestoreFolderBtnClicked);
+
+    // Same rules as updateButtonStates(): "New" / "New Folder" are
+    // always usable, the rest depend on what the row is.
+    aNew->setEnabled(m_db != nullptr);
+    aShow->setEnabled(hasModel);
+    aEdit->setEnabled(hasModel && !isModelDeleted);
+    aDelete->setEnabled(hasModel && !isModelDeleted);
+    aRestore->setEnabled(hasModel && isModelDeleted);
+    aNewFolder->setEnabled(m_db != nullptr);
+    aRenameFolder->setEnabled(hasFolder && !isFolderDeleted);
+    aDeleteFolder->setEnabled(hasFolder && !isFolderDeleted);
+    aRestoreFolder->setEnabled(hasFolder && isFolderDeleted);
+
+    menu.exec(tree->viewport()->mapToGlobal(pos));
 }
 
 void ModelPanel::onNewFolderBtnClicked()
