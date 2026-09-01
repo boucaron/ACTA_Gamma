@@ -87,6 +87,8 @@ stays queued below.
 | H3 | **Date formatting + status colors** — locale-formatted dates in columns/dialogs (ISO in tooltips), color-coded execution status and log level | UR #24, #25 | all four panels + dialogs |
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
 | H5 | **Execution tree columns** — skill / model / context names next to Date + Status | UR #23 | revision fetches already done in `ExecutionDialog`; reuse in the panel |
+| H6 | **Context menu in the Skill tree** — right-click menu on `SkillPanel` rows offering the same actions as the button rows (`New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and the folder row: `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder`), with enable/disable mirroring `updateButtonStates()` (folder actions on folder rows, `New`/`New Folder` target the selected folder or root) | UR #3 (pattern: `ContextPanel`'s right-click menu) | new request. Reuses the existing slots/slots-per-action; only the menu wiring + separators is new work |
+| H7 | **Context menu in the Model tree** — same as H6 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, folder actions) | UR #3 (pattern: `ContextPanel`'s right-click menu) | new request. Land together with H6; both panels stay in sync explicitly until the UR #7 base class lands |
 
 ### Polish
 
@@ -106,7 +108,7 @@ stays queued below.
   N2 (the zero-risk dead-code cleanups), and N1 (dead "Run One-Shot"
   button removed; the one-shot flow itself is deferred pending a
   backend protocol).
-- **Now:** N3–N5, then H1–H5.
+- **Now:** N3–N5, then H1–H7 (H6/H7 are the new skill/model tree context menus).
 - **Polish last:** P1–P6.
 
 (Full original list lives in `ui_review.md`.)
