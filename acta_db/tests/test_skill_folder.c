@@ -718,7 +718,7 @@ static void test_sf_list_all_with_deleted_includes_deleted(void) {
             TEST_ASSERT_EQ_STR(items[i]->name, "Gone");
             TEST_ASSERT(items[i]->deleted_at != NULL);
         } else {
-            TEST_ASSERT(false); /* unexpected row */
+            TEST_ASSERT(0); /* unexpected row */
         }
     }
     acta_db_skill_folder_list_free(items, count);
@@ -843,7 +843,7 @@ static void test_sf_list_all_with_deleted_nested(void) {
             TEST_ASSERT_EQ_INT(items[i]->parent_id, 0);
             TEST_ASSERT(items[i]->deleted_at == NULL);
         } else {
-            TEST_ASSERT(false); /* unexpected row */
+            TEST_ASSERT(0); /* unexpected row */
         }
     }
     acta_db_skill_folder_list_free(items, count);
