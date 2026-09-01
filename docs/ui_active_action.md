@@ -11,7 +11,6 @@ lives in `ui_review.md`.
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| N3 | **Save feedback + confirmations** — "Saved" feedback on dialog save (and honest mode switching), delete confirmations | UR #33 | F1's delete confirmation is the first instance of this |
 | N4 | **Revision-selection clobber trap** — in Edit mode, clicking a revision overwrites the form; disable revision switching until Save/Cancel, or move browsing to a read-only dialog | UR #35 | `SkillDialog` and `ModelDialog` |
 | N5 | **Database-failure UX** — persistent visible offline state with "Retry", or a startup modal (create db / pick location / exit); DB path via `QStandardPaths::AppDataLocation` + first-run bootstrap | UR #9, #32 | also enables `dbAvailable()`-driven disabled panels (UR #10) |
 
@@ -40,7 +39,7 @@ lives in `ui_review.md`.
 
 ## Summary
 
-- **Now:** N3–N5, then H1–H5.
+- **Now:** N4–N5, then H1–H5.
 - **Polish last:** P1–P8.
 
 (Full original list lives in `ui_review.md`.)
