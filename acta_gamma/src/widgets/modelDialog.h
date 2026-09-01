@@ -39,6 +39,9 @@ private:
     Mode m_mode = Mode::ReadOnly;
     int m_modelId = 0;
     int m_folderId = 0;
+    // Revision number of the latest snapshot loaded by loadModel();
+    // used to report "Saved as revision N" after an Edit save.
+    int m_latestRevision = 0;
 
     // Apply mode: button bar (Close / Save|Close) and field
     // read-only flags.

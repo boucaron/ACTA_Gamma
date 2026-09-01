@@ -329,6 +329,17 @@ void SkillPanel::onSkillDeleteClicked()
     const int skillId = selectedSkillId();
     if (!m_db || skillId == 0)
         return;
+
+    const auto *cur = tree->currentItem();
+    const QString name = cur ? cur->text(0) : QString();
+    if (QMessageBox::question(
+            this, tr("Delete Skill"),
+            tr("Delete skill '%1'? It stays in the database and can be "
+               "restored.")
+                .arg(name))
+        != QMessageBox::Yes)
+        return;
+
     if (acta_db_skill_soft_delete(m_db, skillId) == ACTA_DB_OK)
         reload();
 }
@@ -338,8 +349,10 @@ void SkillPanel::onSkillRestoreClicked()
     const int skillId = selectedSkillId();
     if (!m_db || skillId == 0)
         return;
-    if (acta_db_skill_restore(m_db, skillId) == ACTA_DB_OK)
+    if (acta_db_skill_restore(m_db, skillId) == ACTA_DB_OK) {
+        QMessageBox::information(this, tr("Skill"), tr("Skill restored."));
         reload();
+    }
 }
 
 void SkillPanel::onListContextMenu(const QPoint &pos)
@@ -512,5 +525,6 @@ void SkillPanel::onRestoreFolderBtnClicked()
         return;
     }
 
+    QMessageBox::information(this, tr("Skill"), tr("Folder restored."));
     reload();
 }

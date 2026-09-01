@@ -329,6 +329,17 @@ void ModelPanel::onModelDeleteClicked()
     const int modelId = selectedModelId();
     if (!m_db || modelId == 0)
         return;
+
+    const auto *cur = tree->currentItem();
+    const QString name = cur ? cur->text(0) : QString();
+    if (QMessageBox::question(
+            this, tr("Delete Model"),
+            tr("Delete model '%1'? It stays in the database and can be "
+               "restored.")
+                .arg(name))
+        != QMessageBox::Yes)
+        return;
+
     if (acta_db_model_soft_delete(m_db, modelId) == ACTA_DB_OK)
         reload();
 }
@@ -338,8 +349,10 @@ void ModelPanel::onModelRestoreClicked()
     const int modelId = selectedModelId();
     if (!m_db || modelId == 0)
         return;
-    if (acta_db_model_restore(m_db, modelId) == ACTA_DB_OK)
+    if (acta_db_model_restore(m_db, modelId) == ACTA_DB_OK) {
+        QMessageBox::information(this, tr("Model"), tr("Model restored."));
         reload();
+    }
 }
 
 void ModelPanel::onListContextMenu(const QPoint &pos)
@@ -512,5 +525,6 @@ void ModelPanel::onRestoreFolderBtnClicked()
         return;
     }
 
+    QMessageBox::information(this, tr("Model"), tr("Folder restored."));
     reload();
 }

@@ -183,6 +183,7 @@ void ModelDialog::loadModel(int modelId)
                                    .arg(revs[i]->revision));
             item->setData(0, RoleRevisionId, revs[i]->id);
         }
+        m_latestRevision = (nRevs > 0) ? revs[nRevs - 1]->revision : 0;
         acta_db_model_revision_list_free(revs, nRevs);
         // Select the latest (last, list is ascending) to show it.
         if (nRevs > 0)
@@ -262,6 +263,7 @@ void ModelDialog::onSaveClicked()
         setMode(Mode::Edit);
         setWindowTitle(
             QStringLiteral("Edit Model: %1").arg(ui->nameLineEdit->text()));
+        QMessageBox::information(this, "Model", "Model saved.");
     } else if (m_mode == Mode::Edit && m_modelId != 0) {
         // Full-row update: fetch the live row, replace the editable
         // fields, write it back.
@@ -317,11 +319,15 @@ void ModelDialog::onSaveClicked()
         }
 
         // The update triggered a revision snapshot: reload and switch
-        // back to the read-only view.
+        // back to the read-only view. The "Saved as revision N" feedback
+        // explains why editing stopped (the dialog is now read-only).
         loadModel(m_modelId);
         setMode(Mode::ReadOnly);
         setWindowTitle(
             QStringLiteral("Model: %1").arg(ui->nameLineEdit->text()));
+        QMessageBox::information(
+            this, "Model",
+            QStringLiteral("Saved as revision %1.").arg(m_latestRevision));
     }
 }
 

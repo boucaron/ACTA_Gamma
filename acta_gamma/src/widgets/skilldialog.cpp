@@ -177,6 +177,7 @@ void SkillDialog::loadSkill(int skillId)
                                    .arg(revs[i]->revision));
             item->setData(0, RoleRevisionId, revs[i]->id);
         }
+        m_latestRevision = (nRevs > 0) ? revs[nRevs - 1]->revision : 0;
         acta_db_skill_revision_list_free(revs, nRevs);
         // Select the latest (last, list is ascending) to show it.
         if (nRevs > 0)
@@ -243,6 +244,7 @@ void SkillDialog::onSaveClicked()
         setMode(Mode::Edit);
         setWindowTitle(
             QStringLiteral("Edit Skill: %1").arg(ui->nameLineEdit->text()));
+        QMessageBox::information(this, "Skill", "Skill saved.");
     } else if (m_mode == Mode::Edit && m_skillId != 0) {
         // Full-row update: fetch the live row, replace the editable
         // fields, write it back.
@@ -287,11 +289,15 @@ void SkillDialog::onSaveClicked()
         }
 
         // The update triggered a revision snapshot: reload and switch
-        // back to the read-only view.
+        // back to the read-only view. The "Saved as revision N" feedback
+        // explains why editing stopped (the dialog is now read-only).
         loadSkill(m_skillId);
         setMode(Mode::ReadOnly);
         setWindowTitle(
             QStringLiteral("Skill: %1").arg(ui->nameLineEdit->text()));
+        QMessageBox::information(
+            this, "Skill",
+            QStringLiteral("Saved as revision %1.").arg(m_latestRevision));
     }
 }
 
