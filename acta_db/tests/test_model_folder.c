@@ -820,6 +820,147 @@ static void test_list_all_both_null(void)
     acta_db_model_folder_list_free(items, 1);
 }
 
+/* ── list_all_with_deleted ───────────────────────────────────────── */
+
+static void test_list_allwd_includes_deleted(void)
+{
+    int id_live, id_deleted;
+    T_ASSERT(make_folder("Keep", 0, &id_live) == ACTA_DB_OK, "live ok");
+    T_ASSERT(make_folder("Gone", 0, &id_deleted) == ACTA_DB_OK, "del ok");
+    T_ASSERT(acta_db_model_folder_soft_delete(g_db, id_deleted) ==
+               ACTA_DB_OK,
+             "soft_delete ok");
+
+    int count = -1, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, 0, -1, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(count == 2, "live + deleted");
+    for (int i = 0; i < count; i++) {
+        if (items[i]->id == id_live) {
+            T_ASSERT(strcmp(items[i]->name, "Keep") == 0, "name");
+            T_ASSERT(items[i]->deleted_at == NULL, "live row");
+        } else if (items[i]->id == id_deleted) {
+            T_ASSERT(strcmp(items[i]->name, "Gone") == 0, "name");
+            T_ASSERT(items[i]->deleted_at != NULL, "deleted row");
+        } else {
+            T_ASSERT(0, "unexpected row");
+        }
+    }
+    acta_db_model_folder_list_free(items, count);
+}
+
+static void test_list_allwd_empty(void)
+{
+    int count = -1, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, 0, -1, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(count == 0, "zero rows");
+    T_ASSERT(items == NULL, "NULL array for empty");
+    acta_db_model_folder_list_free(items, 0);
+}
+
+static void test_list_allwd_null_db(void)
+{
+    int count, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(NULL, 0, -1, &count, &err);
+    T_ASSERT(items == NULL, "NULL");
+    T_ASSERT(err == ACTA_DB_ERR_INVALID, "INVALID");
+}
+
+static void test_list_allwd_neg_offset(void)
+{
+    int count, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, -5, 10, &count, &err);
+    T_ASSERT(items == NULL, "NULL");
+    T_ASSERT(err == ACTA_DB_ERR_INVALID, "negative offset → INVALID");
+}
+
+static void test_list_allwd_paged(void)
+{
+    const char *names[] = {"F1", "F2", "F3", "F4"};
+    int ids[4] = {0};
+    for (int i = 0; i < 4; i++)
+        T_ASSERT(make_folder(names[i], 0, &ids[i]) == ACTA_DB_OK, "create");
+    T_ASSERT(acta_db_model_folder_soft_delete(g_db, ids[1]) == ACTA_DB_OK,
+             "delete F2");
+    T_ASSERT(acta_db_model_folder_soft_delete(g_db, ids[3]) == ACTA_DB_OK,
+             "delete F4");
+
+    int count = -1, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, 0, 2, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(count == 2, "page1: 2 items");
+    T_ASSERT(strcmp(items[0]->name, "F1") == 0, "F1");
+    T_ASSERT(items[0]->deleted_at == NULL, "F1 live");
+    T_ASSERT(strcmp(items[1]->name, "F2") == 0, "F2");
+    T_ASSERT(items[1]->deleted_at != NULL, "F2 deleted");
+    acta_db_model_folder_list_free(items, count);
+
+    count = -1; err = ERR_SENTINEL;
+    items = acta_db_model_folder_list_all_with_deleted(g_db, 2, 2, &count, &err);
+    T_ASSERT(count == 2, "page2: 2 items");
+    T_ASSERT(strcmp(items[0]->name, "F3") == 0, "F3");
+    T_ASSERT(items[0]->deleted_at == NULL, "F3 live");
+    T_ASSERT(strcmp(items[1]->name, "F4") == 0, "F4");
+    T_ASSERT(items[1]->deleted_at != NULL, "F4 deleted");
+    acta_db_model_folder_list_free(items, count);
+}
+
+static void test_list_allwd_nested(void)
+{
+    int parent_id, child_id;
+    T_ASSERT(make_folder("Parent", 0, &parent_id) == ACTA_DB_OK, "parent");
+    T_ASSERT(make_folder("Child", parent_id, &child_id) == ACTA_DB_OK,
+             "child");
+    T_ASSERT(acta_db_model_folder_soft_delete(g_db, child_id) == ACTA_DB_OK,
+             "delete child");
+
+    int count = -1, err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, 0, -1, &count, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(count == 2, "parent + child");
+    for (int i = 0; i < count; i++) {
+        if (items[i]->id == child_id) {
+            /* Soft-deleted child still reports its (live) parent. */
+            T_ASSERT(items[i]->parent_id == parent_id, "parent link kept");
+            T_ASSERT(items[i]->deleted_at != NULL, "child deleted");
+        } else if (items[i]->id == parent_id) {
+            T_ASSERT(items[i]->parent_id == 0, "root");
+            T_ASSERT(items[i]->deleted_at == NULL, "parent live");
+        } else {
+            T_ASSERT(0, "unexpected row");
+        }
+    }
+    acta_db_model_folder_list_free(items, count);
+}
+
+static void test_list_allwd_null_outcount(void)
+{
+    make_folder("X", 0, NULL);
+    int err = ERR_SENTINEL;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, 0, -1, NULL, &err);
+    T_ASSERT(err == ACTA_DB_OK, "ok");
+    T_ASSERT(items != NULL, "items non-null");
+    acta_db_model_folder_list_free(items, 1);
+}
+
+static void test_list_allwd_null_err(void)
+{
+    make_folder("X", 0, NULL);
+    int count = -1;
+    model_folder_t **items =
+        acta_db_model_folder_list_all_with_deleted(g_db, 0, -1, &count, NULL);
+    T_ASSERT(count == 1, "ok");
+    acta_db_model_folder_list_free(items, count);
+}
+
 /* ── count_all ───────────────────────────────────────────────────── */
 
 static void test_count_all_basic(void)
@@ -1093,6 +1234,16 @@ int run_model_folder_tests(void)
         {"list_all_null_outcount",      test_list_all_null_out_count},
         {"list_all_null_err",           test_list_all_null_err},
         {"list_all_both_null",          test_list_all_both_null},
+
+        /* list_all_with_deleted */
+        {"list_allwd_includes_deleted", test_list_allwd_includes_deleted},
+        {"list_allwd_empty",            test_list_allwd_empty},
+        {"list_allwd_null_db",          test_list_allwd_null_db},
+        {"list_allwd_neg_offset",       test_list_allwd_neg_offset},
+        {"list_allwd_paged",            test_list_allwd_paged},
+        {"list_allwd_nested",           test_list_allwd_nested},
+        {"list_allwd_null_outcount",    test_list_allwd_null_outcount},
+        {"list_allwd_null_err",         test_list_allwd_null_err},
 
         /* count_all */
         {"count_all_basic",             test_count_all_basic},
