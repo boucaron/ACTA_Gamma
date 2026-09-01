@@ -110,6 +110,17 @@ skill_folder_t **acta_db_skill_folder_list_all(db_t *db,
                                                int *out_count,
                                                int *err);
 
+/* Return a page of all folders (live and soft-deleted) ordered by id.
+ *
+ * Same contract as acta_db_skill_folder_list_all, except that soft-deleted
+ * rows are included (their deleted_at field is populated).
+ */
+skill_folder_t **acta_db_skill_folder_list_all_with_deleted(db_t *db,
+                                                            int offset,
+                                                            int limit,
+                                                            int *out_count,
+                                                            int *err);
+
 /* --- Counts ----------------------------------------------------------- */
 
 /* Return the total number of live child folders for the given parent.

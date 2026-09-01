@@ -93,7 +93,8 @@ static skill_folder_t **collect_rows(sqlite3_stmt *stmt,
  * ================================================================ */
 
 /*
- * Builds and prepares the SELECT for list_children / list_all.
+ * Builds and prepares the SELECT for the folder listers
+ * (list_children / list_all / list_all_with_deleted).
  *
  * The SQL is at most ~140 characters; a 256-byte buffer is sufficient
  * and the snprintf truncation check makes the bound explicit.
@@ -101,6 +102,7 @@ static skill_folder_t **collect_rows(sqlite3_stmt *stmt,
 static sqlite3_stmt *prepare_folder_query(db_t *db,
                                           int parent_id,
                                           int has_parent_filter,
+                                          int include_deleted,
                                           int offset,
                                           int limit,
                                           int *err)
@@ -110,11 +112,15 @@ static sqlite3_stmt *prepare_folder_query(db_t *db,
 
     const char *where;
     if (has_parent_filter && parent_id == 0)
-        where = " WHERE parent_id IS NULL AND deleted_at IS NULL";
+        where = include_deleted
+                    ? " WHERE parent_id IS NULL"
+                    : " WHERE parent_id IS NULL AND deleted_at IS NULL";
     else if (has_parent_filter)
-        where = " WHERE parent_id = ? AND deleted_at IS NULL";
+        where = include_deleted
+                    ? " WHERE parent_id = ?"
+                    : " WHERE parent_id = ? AND deleted_at IS NULL";
     else
-        where = " WHERE deleted_at IS NULL";
+        where = include_deleted ? "" : " WHERE deleted_at IS NULL";
 
     len = snprintf(sql, sizeof(sql),
                    "SELECT id, name, parent_id, created_at, updated_at, deleted_at"
@@ -436,7 +442,7 @@ skill_folder_t **acta_db_skill_folder_list_children(
     }
     if (out_count) *out_count = 0;
 
-    sqlite3_stmt *stmt = prepare_folder_query(db, parent_id, 1,
+    sqlite3_stmt *stmt = prepare_folder_query(db, parent_id, 1, 0,
                                               offset, limit, err);
     if (!stmt) return NULL;
 
@@ -460,7 +466,31 @@ skill_folder_t **acta_db_skill_folder_list_all(
     }
     if (out_count) *out_count = 0;
 
-    sqlite3_stmt *stmt = prepare_folder_query(db, 0, 0,
+    sqlite3_stmt *stmt = prepare_folder_query(db, 0, 0, 0,
+                                              offset, limit, err);
+    if (!stmt) return NULL;
+
+    return collect_rows(stmt, out_count, err);
+}
+
+skill_folder_t **acta_db_skill_folder_list_all_with_deleted(
+    db_t *db,
+    int offset, int limit,
+    int *out_count, int *err)
+{
+    if (!db) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    if (offset < 0) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    if (out_count) *out_count = 0;
+
+    sqlite3_stmt *stmt = prepare_folder_query(db, 0, 0, 1,
                                               offset, limit, err);
     if (!stmt) return NULL;
 
