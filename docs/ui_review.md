@@ -190,11 +190,17 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - The revision tree floats at the top with no caption; give it a label
      ("Revisions of this skill").
 28. **MainWindow chrome.** Add a minimal menu bar (File → Exit, Database →
-   Reconnect, Help → About) and give the window an icon. Cache the logo
-   `QPixmap` and scale for `devicePixelRatio`.
+   Reconnect, Database → Load Database…, Help → About) and give the window
+   an icon. Cache the logo `QPixmap` and scale for `devicePixelRatio`.
    *(Done: cached `logoPixmap()` used for `setWindowIcon` (QIcon scales it
    per platform DPI) and the header row; minimal menu bar File → Exit,
-   Database → Reconnect, Help → About with `&` accelerators.)*
+   Database → Reconnect, Database → Load Database…, Help → About with `&`
+   accelerators. "Load Database…" (c6b1404) opens a file dialog, re-opens
+   the chosen `.db` via `openDatabaseOnce()`, persists the path (H6), and
+   re-points all four panels at the fresh `db_t*` handle via
+   `setDb()`/`setDao()` — `applyDbToPanels()` is also called from
+   `retryDatabase()`, which previously left the panels with a dangling
+   handle after reconnect.)*
 29. **Splitter constraints.** The left widget has `setMaximumWidth(320)`
    *and* the splitter sizes are `{320, 880}` — the user can never widen the
    left pane. Pick one constraint (e.g. max width + `setCollapsible`) and
@@ -308,6 +314,14 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     constraint violations from the unique-name indexes) go into a generic
     `QMessageBox::warning` ("Could not save skill: …"). Map known errors to
     friendly hints ("A skill with this name already exists in this folder").
+    *(Done: `acta_db` maps `SQLITE_CONSTRAINT_*` to `ACTA_DB_ERR_DUPLICATE` /
+    `ACTA_DB_ERR_FK` in skill/model + folder code (fd5f9db), and the UI
+    shares `util.h::friendlyDbError(rc, noun, name, fallback, detail)` across
+    all user-facing `QMessageBox` sites — SkillDialog/ModelDialog
+    create+update, ContextDialog create, FolderTreePanel folder
+    create/rename/restore, `MainWindow` startup modal — with `detail` from
+    `acta_db_last_error` for `ACTA_DB_ERR_SQL`; log-only `qWarning` sites stay
+    raw (c6b1404).)*
 
 ---
 
@@ -345,3 +359,4 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      the only detail views; #42 pending: needs an `acta_db` delete API —
      contexts/executions/logs have none today)*
    - #44, #45 live execution UX, friendlier errors
+     *(#45 done: `friendlyDbError` helper, c6b1404; #44 pending)*
