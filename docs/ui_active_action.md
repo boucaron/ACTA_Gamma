@@ -18,12 +18,12 @@ lives in `ui_review.md`.
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | P1 | `.ui` file cleanup — placeholder text instead of "default name", real revision-tree header, drop hardcoded `readOnly`, sane min sizes, consistent window titles | UR #12, #27 | |
-| P5 | Redundant "Show" affordances, empty-state placeholders, data lifecycle (delete/prune executions + contexts) | UR #31, #41, #42 | |
+| P5 | Data lifecycle (delete/prune executions + contexts) | UR #42 | Partially shipped: UR #31 (empty-state placeholders) and UR #41 (redundant "Show" affordances) are done; what remains is delete/prune, which first needs an `acta_db` delete API — contexts/executions/logs have none today (ON DELETE RESTRICT FKs) |
 | P6 | Friendlier error mapping for all `acta_db_strerror` surfaces (unique-name constraint → "already exists in this folder") | UR #45 | |
 
 ## Summary
 
 - **Now:** H2 (to analyze).
-- **Polish last:** P1, P5–P6.
+- **Polish last:** P1, P5 (lifecycle only, `acta_db` work first), P6.
 
 (Full original list lives in `ui_review.md`.)

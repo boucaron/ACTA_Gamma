@@ -214,6 +214,11 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 31. **Empty states.** Every panel renders a blank tree with zero rows when
     the DB is empty or offline. Add a centered placeholder ("No skills yet —
     click **New**").
+    *(Done: `util.h::makeEmptyStateLabel` / `placeEmptyStateLabel` — a
+    centered, greyed `QLabel` over each tree viewport (Skill/Model via
+    `FolderTreePanel`, Context list, Execution list, and the Execution log
+    list), shown only when the list has no rows at all, kept centered on
+    viewport resize; `#emptyState` rule in `assets/style.qss`.)*
 
 ---
 
@@ -281,6 +286,12 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     log row opens a dialog duplicating the 4 columns already visible in
     the log list. Either make these the *only* detail view, or make the
     inline view richer and drop the button.
+    *(Done: inline views are now the only detail views — `ContextPanel`
+    dropped its "Show" button, context menu and Enter accelerator (the
+    read-only editor below the list remains); `ExecutionPanel` dropped the
+    "Show Log Details" button, log-row context menu and the now-dead
+    `ExecutionLogDialog`. The execution-level "Show" (dialog) is kept: the
+    dialog shows more than the 5 visible row columns.)*
 42. **No data lifecycle.** Contexts and executions are append-only with no
     delete/cleanup in the UI — the DB will grow unbounded. Add "Delete"
     (with confirmation) for executions/logs and contexts, or at least an
@@ -330,4 +341,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      panels; #40 done: QSettings geometry/splitter/"show deleted"
      persistence)*
    - #41, #42 redundant views, data lifecycle
+     *(#41 done: redundant "Show" affordances dropped, inline views are
+     the only detail views; #42 pending: needs an `acta_db` delete API —
+     contexts/executions/logs have none today)*
    - #44, #45 live execution UX, friendlier errors
