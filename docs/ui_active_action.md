@@ -16,7 +16,6 @@ lives in `ui_review.md`.
 | H3 | **Date formatting + status colors** — locale-formatted dates in columns/dialogs (ISO in tooltips), color-coded execution status and log level | UR #24, #25 | all four panels + dialogs |
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
 | H5 | **Execution tree columns** — skill / model / context names next to Date + Status | UR #23 | revision fetches already done in `ExecutionDialog`; reuse in the panel |
-| H6 | **Remember the chosen database path** — persist the DB path used at startup (Variant A: `QSettings`, key `database/path`; needs app identity per UR #11) and reopen it directly on next launch; fall back to the default path + bootstrap modal when the stored path is missing or cannot be opened | new (not in `ui_review.md`) | `MainWindow`; shares the `QSettings` mechanism planned for P3 (UR #40) |
 
 ### Polish
 
@@ -33,7 +32,7 @@ lives in `ui_review.md`.
 
 ## Summary
 
-- **Now:** H6, then H1–H5.
+- **Now:** H1–H5.
 - **Polish last:** P1–P8.
 
 (Full original list lives in `ui_review.md`.)
