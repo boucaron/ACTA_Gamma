@@ -91,6 +91,12 @@ bool ContextPanel::eventFilter(QObject *obj, QEvent *event)
     return QWidget::eventFilter(obj, event);
 }
 
+void ContextPanel::setDb(db_t *db)
+{
+    m_db = db;
+    reload();
+}
+
 void ContextPanel::reload()
 {
     list->clear();

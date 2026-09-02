@@ -180,8 +180,10 @@ int ModelDialog::createEntity(int *outId)
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, title(),
-            tr("Could not create %1: %2").arg(noun())
-                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+            friendlyDbError(rc, noun(),
+                            ui->nameLineEdit->text().trimmed(),
+                            tr("Could not create %1: %2"),
+                            acta_db_last_error(m_db)));
     }
     return rc;
 }
@@ -246,8 +248,10 @@ int ModelDialog::updateEntity()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, title(),
-            tr("Could not save %1: %2").arg(noun())
-                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+            friendlyDbError(rc, noun(),
+                            ui->nameLineEdit->text().trimmed(),
+                            tr("Could not save %1: %2"),
+                            acta_db_last_error(m_db)));
     }
     return rc;
 }

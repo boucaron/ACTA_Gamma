@@ -202,6 +202,12 @@ void FolderTreePanel::updateButtonStates()
     restoreFolderBtn->setEnabled(hasFolder && isFolderDeleted);
 }
 
+void FolderTreePanel::setDao(FolderTreeDao dao)
+{
+    m_dao = std::move(dao);
+    reload();
+}
+
 void FolderTreePanel::reload()
 {
     // Preserve the current selection across the rebuild.
@@ -497,8 +503,8 @@ void FolderTreePanel::onNewFolderBtnClicked()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, m_dao.entityTitle,
-            tr("Could not create folder: %1")
-                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+            friendlyDbError(rc, "folder", trimmed,
+                            tr("Could not create %1: %2")));
         return;
     }
 
@@ -529,8 +535,8 @@ void FolderTreePanel::onRenameFolderBtnClicked()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, m_dao.entityTitle,
-            tr("Could not rename folder: %1")
-                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+            friendlyDbError(rc, "folder", trimmed,
+                            tr("Could not rename %1: %2")));
         return;
     }
 
@@ -585,12 +591,15 @@ void FolderTreePanel::onRestoreFolderBtnClicked()
     if (!m_dao.restoreFolder || folderId == 0)
         return;
 
+    const auto *cur = tree->currentItem();
+    const QString name = cur ? cur->text(0) : QString();
+
     const int rc = m_dao.restoreFolder(folderId);
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, m_dao.entityTitle,
-            tr("Could not restore folder: %1")
-                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+            friendlyDbError(rc, "folder", name,
+                            tr("Could not restore %1: %2")));
         return;
     }
 

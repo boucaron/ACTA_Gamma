@@ -133,8 +133,9 @@ void ContextDialog::onSaveClicked()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, "Context",
-            QStringLiteral("Could not create context: %1")
-                .arg(acta_db_strerror(rc)));
+            friendlyDbError(rc, "context", type,
+                            tr("Could not create %1: %2"),
+                            acta_db_last_error(m_db)));
         return;
     }
 

@@ -78,11 +78,17 @@ bool MainWindow::openDatabaseOnce()
     // startup modal: create a fresh DB, or open an existing valid file
     // (e.g. the user's acta.db with the schema). We deliberately do NOT
     // auto-create here, or we would silently shadow an existing DB.
-    m_lastError =
-        tr("Could not open the database: [%1] %2\n%3")
-            .arg(code)
-            .arg(msg)
-            .arg(m_dbPath);
+    if (code == ACTA_DB_ERR_INVALID_DB)
+        m_lastError =
+            tr("The file %1 is not a valid database (it is missing, "
+               "empty, or not a SQLite file).")
+                .arg(m_dbPath);
+    else
+        m_lastError =
+            tr("Could not open the database: [%1] %2\n%3")
+                .arg(code)
+                .arg(msg)
+                .arg(m_dbPath);
     qWarning("acta_db_open(%s) failed: %s (code %d)", qPrintable(m_dbPath),
              qPrintable(msg), code);
     return false;
@@ -133,7 +139,44 @@ void MainWindow::syncPanels()
 void MainWindow::retryDatabase()
 {
     runDatabaseBootstrap();
+    applyDbToPanels();
     syncPanels();
+}
+
+void MainWindow::applyDbToPanels()
+{
+    if (!m_dbOk)
+        return;
+    db_t *db = m_db.handle();
+    if (m_skillPanel)
+        m_skillPanel->setDb(db);
+    if (m_modelPanel)
+        m_modelPanel->setDb(db);
+    if (m_contextPanel)
+        m_contextPanel->setDb(db);
+    if (m_executionPanel)
+        m_executionPanel->setDb(db);
+}
+
+void MainWindow::loadDatabase()
+{
+    const QString file = QFileDialog::getOpenFileName(
+        this, tr("Choose database file"),
+        QFileInfo(m_dbPath).absolutePath(),
+        tr("SQLite databases (*.db);;All files (*)"));
+    if (file.isEmpty())
+        return; // cancelled
+
+    m_dbPath = file;
+    if (openDatabaseOnce()) {
+        storeDbPath(m_dbPath);
+        applyDbToPanels();
+        statusBar()->showMessage(tr("Connected to %1").arg(m_dbPath), 3000);
+        syncPanels();
+    } else {
+        QMessageBox::warning(this, tr("Database"), m_lastError);
+        syncPanels();
+    }
 }
 
 void MainWindow::runDatabaseBootstrap()
@@ -286,6 +329,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto *dbMenu = menuBar()->addMenu(tr("&Database"));
     auto *aReconnect = dbMenu->addAction(tr("&Reconnect"));
     connect(aReconnect, &QAction::triggered, this, &MainWindow::retryDatabase);
+    auto *aLoadDb = dbMenu->addAction(tr("Load Database…"));
+    connect(aLoadDb, &QAction::triggered, this, &MainWindow::loadDatabase);
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     auto *aAbout = helpMenu->addAction(tr("&About"));
     connect(aAbout, &QAction::triggered, this, [this] {

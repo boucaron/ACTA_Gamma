@@ -10,4 +10,9 @@
 class ModelPanel : public FolderTreePanel {
 public:
     explicit ModelPanel(db_t *db = nullptr, QWidget *parent = nullptr);
+
+    // Re-point the panel at a new db handle (database switched):
+    // rebuilds the DAO (whose lambdas capture the old handle) and
+    // reloads the tree.
+    void setDb(db_t *db);
 };

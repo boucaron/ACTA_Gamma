@@ -112,3 +112,8 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent)
     : FolderTreePanel(db ? makeSkillDao(db) : FolderTreeDao(), parent)
 {
 }
+
+void SkillPanel::setDb(db_t *db)
+{
+    setDao(db ? makeSkillDao(db) : FolderTreeDao());
+}

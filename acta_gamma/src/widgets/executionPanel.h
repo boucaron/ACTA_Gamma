@@ -28,6 +28,10 @@ public:
     // e.g. the db failed to open at startup).
     void reload();
 
+    // Re-point the panel at a new db handle (database switched) and
+    // reload the list.
+    void setDb(db_t *db);
+
 private slots:
     // Open the read-only execution dialog for the given execution
     // (double-click on the execution list).

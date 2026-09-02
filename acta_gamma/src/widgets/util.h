@@ -1,5 +1,7 @@
 #pragma once
 
+#include "acta_db.h"
+
 #include <QColor>
 #include <QDateTime>
 #include <QLabel>
@@ -53,6 +55,46 @@ inline QDateTime toDateTime(const char *iso)
             return dt;
     }
     return QLocale::c().toDateTime(s, "yyyy-MM-dd HH:mm:ss");
+}
+
+// User-facing message for an acta_db error code (P6 / UR #45).
+//
+// `noun`     – lowercase entity word for the message ("skill", "model",
+//              "folder", "context").
+// `name`     – the affected entity's name (used for DUPLICATE and
+//              NOT_FOUND; may be empty).
+// `fallback` – generic message template with two placeholders, e.g.
+//              "Could not create %1: %2" (%1 = noun, %2 = error text).
+// `detail`   – optional extra detail appended to the error text for
+//              ACTA_DB_ERR_SQL (e.g. DbHandle::lastError()).
+//
+// Mapping:
+//   ACTA_DB_ERR_DUPLICATE – "A %1 named \"%2\" already exists in this folder"
+//   ACTA_DB_ERR_FK        – "The target folder no longer exists"
+//   ACTA_DB_ERR_NOT_FOUND – "\"%1\" could not be found (it may have been deleted)"
+//   otherwise             – fallback with noun + acta_db_strerror(rc)
+//                           (+ detail for ERR_SQL).
+inline QString friendlyDbError(int rc, const QString &noun,
+                              const QString &name,
+                              const QString &fallback,
+                              const char *detail = nullptr)
+{
+    switch (rc) {
+    case ACTA_DB_ERR_DUPLICATE:
+        return QStringLiteral("A %1 named \"%2\" already exists in this folder")
+            .arg(noun, name);
+    case ACTA_DB_ERR_FK:
+        return QStringLiteral("The target folder no longer exists");
+    case ACTA_DB_ERR_NOT_FOUND:
+        return QStringLiteral("\"%1\" could not be found (it may have been deleted)")
+            .arg(name);
+    default:
+        QString err = QString::fromUtf8(acta_db_strerror(rc));
+        if (rc == ACTA_DB_ERR_SQL && detail && *detail)
+            err = QStringLiteral("%1: %2")
+                .arg(err, QString::fromUtf8(detail));
+        return fallback.arg(noun, err);
+    }
 }
 
 // Locale-formatted display of a DB timestamp (UR #24). The numeric

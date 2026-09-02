@@ -123,6 +123,12 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     showExecutionLogs(nullptr);
 }
 
+void ExecutionPanel::setDb(db_t *db)
+{
+    m_db = db;
+    reload();
+}
+
 void ExecutionPanel::reload()
 {
     list->clear();

@@ -112,3 +112,8 @@ ModelPanel::ModelPanel(db_t *db, QWidget *parent)
     : FolderTreePanel(db ? makeModelDao(db) : FolderTreeDao(), parent)
 {
 }
+
+void ModelPanel::setDb(db_t *db)
+{
+    setDao(db ? makeModelDao(db) : FolderTreeDao());
+}

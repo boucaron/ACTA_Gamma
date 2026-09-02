@@ -24,6 +24,10 @@ public:
     // Re-attempt to open/create the database (the offline "Retry" action).
     void retryDatabase();
 
+    // Load a different database file (Database menu "Load Database…"):
+    // file dialog, open it, and re-point the panels at the new handle.
+    void loadDatabase();
+
 private:
     DbHandle m_db; // RAII: closed at shutdown (destructor)
     bool m_dbOk = false;
@@ -67,6 +71,11 @@ private:
     // Grey out / re-enable the four panels and show/hide the offline
     // banner according to dbAvailable() (UR #10).
     void syncPanels();
+
+    // Re-point all four panels at the currently open db handle. Needed
+    // after any successful (re)open: open() hands out a fresh db_t*,
+    // so the panels' captured handles would otherwise go stale.
+    void applyDbToPanels();
 
     // Bootstrap loop: open/create, and on failure offer the startup
     // modal (create / pick location / exit) (UR #32).

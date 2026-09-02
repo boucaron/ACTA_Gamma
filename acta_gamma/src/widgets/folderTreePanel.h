@@ -95,6 +95,11 @@ public:
     // e.g. the db failed to open at startup).
     void reload();
 
+    // Swap in a new DAO (e.g. after switching database files: the old
+    // db_t* captured by the DAO's lambdas is no longer valid) and
+    // reload the tree.
+    void setDao(FolderTreeDao dao);
+
     // Id of the currently selected entity, or 0 if nothing (or a
     // folder) is selected.
     int selectedEntityId() const;
