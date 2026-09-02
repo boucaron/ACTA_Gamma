@@ -77,6 +77,12 @@ void ContextDialog::setMode(Mode mode)
         connect(ui->buttonBox->button(QDialogButtonBox::StandardButton::Save),
                 &QPushButton::clicked, this, &ContextDialog::onSaveClicked);
     }
+    // A QDialogButtonBox added by the .ui file is not wired to
+    // accept/reject by QDialog (that only happens via QDialog::setButtons),
+    // so connect Close explicitly. setStandardButtons() recreates the
+    // button widgets on every call, hence the connect goes after it.
+    connect(ui->buttonBox->button(QDialogButtonBox::StandardButton::Close),
+            &QPushButton::clicked, this, &QDialog::reject);
 
     ui->typeLineEdit->setReadOnly(readOnly);
     ui->contentTextEdit->setReadOnly(readOnly);
