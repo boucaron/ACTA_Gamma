@@ -1,12 +1,15 @@
 # ACTA Gamma — Qt UI Review
 
-Comprehensive list of changes and improvements for the ACTA Gamma desktop app
+Open items from the original review of the ACTA Gamma desktop app
 (`acta_gamma/`), grouped by **Code**, **UI**, and **UX**, with a suggested
-priority order at the end.
+priority order at the end. **Completed items have been removed** (they are
+documented in the git history; the active work list lives in
+[`ui_active_action.md`](ui_active_action.md)). Item numbers are kept from
+the original list so cross-references stay valid — gaps are intentional.
 
 Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 `src/widgets/{skill,model,context,execution}Panel.*`,
-`src/widgets/{skill,model,context,execution,executionLog}Dialog.*`,
+`src/widgets/{skill,model,context,execution}Dialog.*`,
 `ui/*.ui`, `src/src.pro`, `ACTA_Gamma.pro`, `db/schema.sql`.
 
 ---
@@ -15,51 +18,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ### Bugs / dead code
 
-1. **`runBtn` ("Run One-Shot") is never connected.**
-   `executionPanel.cpp` creates the button but only `showBtn` has a `connect`.
-   The button does nothing. Either implement the one-shot execution flow
-   (create execution row → call backend → write logs → update status) or
-   hide/remove the button until it works.
-   *(Done: the button was removed; the one-shot flow has no backend
-   client yet.)*
-2. **Dead `QDialog::Accepted` branches:**
-   - `ContextPanel::editContext`: `if (dlg.exec() == QDialog::Accepted) { // TODO }`
-     — the read-only dialog only has a Close button (which rejects), so this
-     can never fire.
-   - `ExecutionPanel::onExecutionDoubleClicked`: same pattern with `// TODO`.
-   Clean these up; they signal unfinished logic.
-   *(Done: both dead `Accepted` branches removed.)*
-3. **Misleading action name.** `ContextPanel`'s right-click menu says
-   **"Edit"** for a context that is explicitly immutable (the DB has a
-   `contexts_immutable` trigger). It opens a read-only dialog. Rename to
-   "Show" and make it consistent with the "Show" button (or drop the
-   context menu entirely since single-click already shows the content in
-   the editor).
-   *(Done: the context-menu action is renamed to "Show".)*
-4. **Case-mismatched filename:** `widgets/modelpanel.cpp` vs `modelPanel.h`
-   (and the `.pro` entry says `modelpanel.cpp`). Works on Windows
-   (case-insensitive) but **breaks Linux/macOS builds**. Rename to
-   `modelPanel.cpp`. *(Done: file renamed, `src.pro` entry updated.)*
-5. **Duplicate includes** in `mainWindow.cpp`: the four
-   `#include "widgets/...Panel.h"` lines appear twice.
-6. **`dupString`, `utf8`, `toDateTime` copy-pasted in 5 dialogs.**
-   Factor into a small shared header (e.g. `widgets/util.h`) — single
-   implementation, one test target. Also simplify `toDateTime`: the
-   `Qt::ISODate` attempt can never match `"yyyy-MM-dd HH:mm:ss"` anyway;
-   just try `Qt::ISODateWithMs`, then `"yyyy-MM-dd HH:mm:ss"`.
-   *(Done: `widgets/util.h`; all five dialogs use it.)*
-7. **Massive duplication between `SkillPanel`/`ModelPanel` and
-   `SkillDialog`/`ModelDialog`:** identical tree building, folder nesting,
-   soft-delete/restore wiring, mode handling, save flow. Extract:
-   - a generic `FolderTreePanel` (or template) parameterized by DAO +
-     dialog, and
-   - a common `EntityDialog` base (mode handling, `setMode`, save
-     boilerplate, `dupString`/`toDateTime`).
-   This removes ~400 lines of copy-paste and halves the surface for
-   divergence bugs.
-   *(Done: `FolderTreePanel` + `FolderTreeDao` share the panel code;
-   `EntityDialog` shares mode handling, the revision tree and the save
-   flow; `SkillPanel`/`ModelPanel` are now thin DAO adapters.)*
 8. **Full-tree reload on every change.** `reload()` clears and rebuilds the
    whole tree, re-runs one query per folder, and loses the current
    selection/scroll position. For moderate data this is fine, but:
@@ -70,37 +28,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    *(Partly done: `FolderTreePanel::reload()` preserves the current
    selection across the rebuild (re-selected by id); the single
    `list_all`-style query and the skip-rebuild-on-cancel are not done.)*
-9. **DB path.** `QCoreApplication::applicationDirPath() + "/acta.db"` writes
-   the DB next to the exe — can fail on read-only install dirs. Use
-   `QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)` and
-   `mkdir` it. Also with `ACTA_DB_OPEN_EXISTING`, first launch with no file
-   fails with a cryptic status-bar error; add a **bootstrap/migration path**
-   (create + run `schema.sql` on first launch, or at least a
-   "Create database…" action).
-   *(Done: `MainWindow::defaultDbPath()` uses the writable AppData
-   location (created if needed); `runDatabaseBootstrap()` offers the
-   startup modal (create here / pick location / exit) and `createDatabase()`
-   applies the embedded schema on first run; the chosen path is remembered
-   via `QSettings` (H6).)*
-10. **`DbHandle` / offline state.** On open failure the panels silently show
-    empty trees. Keep `DbHandle` as-is, but have `MainWindow` expose a
-    `dbAvailable()` flag so panels can show an explicit disabled/offline
-    state instead of a silent empty tree.
-    *(Done: `MainWindow::dbAvailable()` + `syncPanels()` disable the four
-    panels and show the persistent offline banner with Retry; panels take
-    a null handle and render their empty state while offline.)*
-11. **Application identity.** Set `QCoreApplication::setApplicationName` /
-    organization (needed if `QSettings` is added later), and give the window
-    an icon (`setWindowIcon`) from the logo asset.
-    *(Done: `main.cpp` sets organization "boucaron" and application
-    "ACTA Gamma"; the window icon comes from the cached logo (see #28).)*
-12. **Stale `.ui` window titles.** The `.ui` files carry stale titles
-    ("Skill: default name", "Model: default name", "Context", "Execution")
-    while code overrides them via `setWindowTitle`. Clean them up so the
-    `.ui` and code don't disagree.
-    *(Done, c1ec1f2: `skillDialog.ui` title is now "Skill", `modelDialog.ui`
-    "Model"; `contextDialog.ui`/`executionDialog.ui` were already
-    consistent with the code.)*
 13. **"New" target-folder logic.** In `SkillPanel::onNewBtnClicked` (and
     Model), if the user has a *skill/model* selected (not a folder),
     `selectedFolderId()` returns 0 and the new item lands at root, not next
@@ -121,16 +48,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ### Architecture
 
-17. **No folder CRUD anywhere.** The schema has `skill_folders` /
-    `model_folders` with soft-delete columns and the trees render folders,
-    but there is no way to create, rename, or delete a folder from the UI.
-    "New" only targets whatever folder is selected. Add folder buttons
-    (New Folder / Delete Folder / Rename) — or remove folders from the
-    model.
-    *(Done: `FolderTreePanel` has New Folder / Rename / Soft-delete /
-    Restore Folder buttons plus a folder context menu, wired through the
-    skill/model DAOs to `acta_db_*_folder_*`; folder create/rename errors
-    use the friendly `friendlyDbError` messages (P6).)*
 18. **No execution-creation path.** Executions exist in the DB and are
     browsable, but nothing in the app creates one (see #1). There's no
     "pick context + skill + model → Run" flow. That is the app's core
@@ -138,24 +55,11 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 19. **Panels emit no signals.** No signal after mutation, so `MainWindow`
     can't react (e.g., selecting a skill could prefill an "execute" form).
     At minimum, emit `itemChanged(int id)` so future features can hook in.
-20. **Button-state safety.** After `reload()` the current item is gone and
-    buttons are re-enabled through the `currentItemChanged` flow — fine, but
-    add an explicit `updateButtonStates()` call after reload for safety.
-    *(Done: `FolderTreePanel::reload()` ends with an explicit
-    `updateButtonStates()` call.)*
 
 ---
 
 ## 2. UI (widgets & layout)
 
-21. **Panel headers look like raw controls.** Bare
-    `QLabel("Skill")` / `"Model"` / `"Context"` / `"Execution"`. Use
-    `QGroupBox` or styled section headers (bold, small caps) so the four
-    quadrants read clearly.
-    *(Done: all four panel titles carry `objectName("panelHeader")` and
-    the `#panelHeader` rule of `assets/style.qss` styles them bold with
-    the accent color; a `QGroupBox` framing variant is left as a follow-up
-    if wanted.)*
 22. **Button rows inconsistent.** Skill/Model have two rows (New/Show/Edit,
     then Delete/Restore) while Context has one (New/Show) and Execution has
     (Show Log Details, Show) stacked vertically. Standardize: one toolbar per panel with
@@ -185,20 +89,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - The log list is a `QTreeWidget` with 4 columns — a
      `QTableWidget`/`QTableView` is the right control; keep
      `setUniformRowHeights`.
-24. **Raw date strings everywhere.** Dates are shown as
-   `yyyy-MM-dd HH:mm:ss` in list columns and dialogs. Display them
-   locale-formatted (`QLocale::system().toString(dt, "yyyy-MM-dd HH:mm")`);
-   keep the exact ISO value in tooltips.
-   *(Done: `widgets/util.h::displayDateTime` used by the context/execution
-   panels, the execution dialog log table, and ISO tooltips on every
-   `QDateTimeEdit`.)*
-25. **No status colors.** Execution `status` (pending/running/completed/
-   failed/cancelled) and log `level` (debug/info/warn/error) should be
-   color-coded (green/yellow/red text or colored icons). Right now
-   everything is grey.
-   *(Done: `widgets/util.h::statusColor` / `logLevelColor` applied in the
-   execution panel, the execution dialog log table, the execution dialog
-   status field, and the log dialog level field.)*
 26. **JSON/prompt editors are plain `QTextEdit`.** `prompt`,
    `output_schema`, `configuration`, and context `content` should use a
    monospace font; optionally syntax-highlight JSON or at least show line
@@ -206,91 +96,14 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    *(Partly done: all `QTextEdit` editors are monospace via the
    `assets/style.qss` rule; syntax highlighting and line numbers are
    deliberately left out.)*
-27. **Dialog `.ui` cleanup:**
-   - `skillDialog.ui`: `nameLineEdit` has literal default text
-     `"default name"` — that's placeholder material, not data. Use
-     `setPlaceholderText("Name…")` and clear it in `newSkill`.
-   - `revisionTreeWidget` column header `"1"` in the `.ui` (overridden in
-     code) — set it properly in the `.ui`.
-   - `descriptionTextEdit` hard-coded `readOnly=true` in the `.ui` while
-     code toggles it — remove the `.ui` default so the `.ui` doesn't lie.
-   - Give dialogs sensible `minimumWidth`/`minimumHeight` instead of
-     relying on the 609×664 geometry snapshot.
-   - The revision tree floats at the top with no caption; give it a label
-     ("Revisions of this skill").
-   *(Done, c1ec1f2: `"default name"` text removed from `nameLineEdit`
-   (placeholder `"Name…"` in the dialog constructors; `newSkill` already
-   clears the field), `descriptionTextEdit` hardcoded `readOnly` + default
-   HTML content removed, both revision-tree headers `"1"` → `"Revision"`
-   (matching `configureRevisionTree`), "Revisions of this skill/model"
-   caption labels added, and all four dialogs got `minimumSize` plus a
-   smaller, sensible default geometry.)*
-28. **MainWindow chrome.** Add a minimal menu bar (File → Exit, Database →
-   Reconnect, Database → Load Database…, Help → About) and give the window
-   an icon. Cache the logo `QPixmap` and scale for `devicePixelRatio`.
-   *(Done: cached `logoPixmap()` used for `setWindowIcon` (QIcon scales it
-   per platform DPI) and the header row; minimal menu bar File → Exit,
-   Database → Reconnect, Database → Load Database…, Help → About with `&`
-   accelerators. "Load Database…" (c6b1404) opens a file dialog, re-opens
-   the chosen `.db` via `openDatabaseOnce()`, persists the path (H6), and
-   re-points all four panels at the fresh `db_t*` handle via
-   `setDb()`/`setDao()` — `applyDbToPanels()` is also called from
-   `retryDatabase()`, which previously left the panels with a dangling
-   handle after reconnect.)*
-29. **Splitter constraints.** The left widget has `setMaximumWidth(320)`
-   *and* the splitter sizes are `{320, 880}` — the user can never widen the
-   left pane. Pick one constraint (e.g. max width + `setCollapsible`) and
-   let the splitter do the rest.
-   *(Done: the hard max is gone; both panes have a `setMinimumWidth(160)`
-   instead, the initial sizes stay `{320, 880}`, and stretch factors give
-   window-resize space to the right pane.)*
-30. **No theming.** Everything is stock Qt grey. Add a light `QSS`
-    stylesheet (accent color, hover states, disabled states, group-box
-    headers) to give the product identity; a logo/branding already exists.
-    *(Done: color-only `assets/style.qss` (shipped via the qrc, loaded in
-    `main.cpp`): `#panelHeader` styling, selection accent, flat light
-    buttons with hover/pressed/disabled states, `QWidget:disabled` muted
-    text for offline panels, monospace `QTextEdit` editors. Deliberately no
-    geometry rules and no tree item text colors — `statusColor` /
-    `logLevelColor` item foregrounds stay intact.)*
-31. **Empty states.** Every panel renders a blank tree with zero rows when
-    the DB is empty or offline. Add a centered placeholder ("No skills yet —
-    click **New**").
-    *(Done: `util.h::makeEmptyStateLabel` / `placeEmptyStateLabel` — a
-    centered, greyed `QLabel` over each tree viewport (Skill/Model via
-    `FolderTreePanel`, Context list, Execution list, and the Execution log
-    list), shown only when the list has no rows at all, kept centered on
-    viewport resize; `#emptyState` rule in `assets/style.qss`.)*
 
 ---
 
 ## 3. UX
 
-32. **Database failure UX.** If the DB can't open, the user gets a 3-second
-    status-bar message and a silently useless app. Show a persistent,
-    visible state: a banner / disabled panels + a "Retry" action, or a
-    modal at startup offering "Create database here" / "Pick another
-    location" / "Exit".
-33. **No confirmations or feedback for mutations:**
-   - Soft-delete and restore fire immediately with no confirmation
-     (acceptable since reversible, but add a `QMessageBox::question` for
-     delete, and an "Restored" toast).
-   - After saving in the dialogs there is **no success feedback** — and
-     worse, the dialog silently switches mode (New→Edit, Edit→ReadOnly)
-     while staying open. Better: on successful save, show a brief "Saved"
-     message and close the dialog (or at least switch to ReadOnly with a
-     "Saved as revision N" label so the user understands why editing
-     stopped).
 34. **"New" target ambiguity.** Clicking **New** with a skill selected
     silently creates the item at root (see #13). Show the target folder in
     the dialog title or a label ("Creating in folder: X / root").
-35. **Revision interaction is a trap.** In Edit mode, clicking a row in the
-    revision tree overwrites Name/Description/Prompt/etc. with that old
-    revision's values — the user can unknowingly clobber in-progress
-    edits. Fix: in Edit mode either (a) disable revision switching until
-    Save/Cancel, (b) restore live values when leaving the tree, or
-    (c) move revision browsing to a separate read-only dialog ("View
-    revision history").
 36. **Modal-on-modal-on-modal.** Panel → dialog → nested dialog (e.g. the
     Execution dialog's "Show context" opens a dialog inside a dialog).
     Consider an inline detail pane or a non-modal browser; at minimum keep
@@ -305,39 +118,12 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      shot.
    *(Partly done: every panel button has an icon + tooltip (see #22),
    deleted rows carry a trash icon, and the Help → About dialog explains
-   the model (see #28). Status-meaning tooltips and a "Show trash" label
-   are still open.)*
-38. **Search & filter.** No way to find an item once trees grow. Add a
-   filter box above each tree (case-insensitive substring), and for
-   executions a status filter (All / failed / running…).
-   *(Done: `util.h::applyTreeFilter` (case-insensitive substring, folders
-   stay visible above matching children; optional extra-text role used by
-   the context panel to search row content, not just Type + Date) with a
-   filter box above every tree, plus an execution status combo
-   (All / pending / running / completed / failed / cancelled). Filters
-   are re-applied after every panel `reload()`.)*
+   the model. Status-meaning tooltips and a "Show trash" label are still
+   open.)*
 39. **Keyboard/accelerator support.** Add accelerators (`&New`,
-   `&Delete`), `Delete` key to soft-delete the selection, `F2` to rename,
-   `Enter` to open the detail dialog. Right now everything is mouse-only.
-40. **Window state persistence.** `resize(1200,700)` on every start; add
-   `QMainWindow::saveState`/`restoreState` via `QSettings` (window geometry,
-   splitter sizes, "show deleted" flags).
-   *(Done: `MainWindow::closeEvent` saves `window/geometry`,
-   `window/splitter` (`QSplitter::saveState`), and the two "Show deleted
-   items" flags to `QSettings`; the constructor restores all three,
-   falling back to `resize(1200,700)` on first run.)*
-41. **Redundant "Show" affordances.** In `ContextPanel`, single-click
-    already fills the editor below; the "Show" button opens a dialog
-    showing the same content. In `ExecutionPanel`, the "Show" button on a
-    log row opens a dialog duplicating the 4 columns already visible in
-    the log list. Either make these the *only* detail view, or make the
-    inline view richer and drop the button.
-    *(Done: inline views are now the only detail views — `ContextPanel`
-    dropped its "Show" button, context menu and Enter accelerator (the
-    read-only editor below the list remains); `ExecutionPanel` dropped the
-    "Show Log Details" button, log-row context menu and the now-dead
-    `ExecutionLogDialog`. The execution-level "Show" (dialog) is kept: the
-    dialog shows more than the 5 visible row columns.)*
+    `&Delete`), `Delete` key to soft-delete the selection, `F2` to rename,
+    `Enter` to open the detail dialog. Right now everything is mouse-only.
+    *(Partly done: Delete/F2/Enter + button accelerators in the panels.)*
 42. **No data lifecycle.** Contexts and executions are append-only with no
     delete/cleanup in the UI — the DB will grow unbounded. Add "Delete"
     (with confirmation) for executions/logs and contexts, or at least an
@@ -354,60 +140,30 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     should update live (polling or an in-app worker via `QThread` /
     `QtConcurrent`), with a progress indicator in the panel, and the log
     list should auto-scroll to the newest line.
-45. **Error messages are opaque.** `acta_db_strerror` messages (e.g.
-    constraint violations from the unique-name indexes) go into a generic
-    `QMessageBox::warning` ("Could not save skill: …"). Map known errors to
-    friendly hints ("A skill with this name already exists in this folder").
-    *(Done: `acta_db` maps `SQLITE_CONSTRAINT_*` to `ACTA_DB_ERR_DUPLICATE` /
-    `ACTA_DB_ERR_FK` in skill/model + folder code (fd5f9db), and the UI
-    shares `util.h::friendlyDbError(rc, noun, name, fallback, detail)` across
-    all user-facing `QMessageBox` sites — SkillDialog/ModelDialog
-    create+update, ContextDialog create, FolderTreePanel folder
-    create/rename/restore, `MainWindow` startup modal — with `detail` from
-    `acta_db_last_error` for `ACTA_DB_ERR_SQL`; log-only `qWarning` sites stay
-    raw (c6b1404).)*
 
 ---
 
 ## Priority order
 
-1. **Must-fix:**
-   - #1 dead "Run One-Shot" button (implement or remove) *(done: removed)*
-   - #2, #3 dead `QDialog::Accepted` branches / mislabeled "Edit" menu *(done)*
-   - #4 case-mismatched `modelpanel.cpp` filename *(done: `modelPanel.cpp`/`.h`, consistently referenced)*
-   - #5 duplicate includes *(done: no duplicate `#include`s remain)*
-   - #32 database-failure UX *(done: startup modal + persistent offline banner + Retry)*
-   - #33 save feedback + confirmations *(done: delete confirmation, "restored" toasts, save feedback with "Saved as revision N" and the Read-only switch)*
-   - #35 revision-selection clobber trap *(done: revision tree disabled outside Read-only mode)*
+1. **Must-fix:** *(none remaining)*
 2. **High:**
-   - #17 folder CRUD *(done: New/Rename/Soft-delete/Restore Folder buttons
-     + context menu in `FolderTreePanel`)*
    - #18 execution-creation flow (the app's core feature)
-   - #7 dedupe panels/dialogs into shared base classes (done)
    - #15 JSON validation
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
-   - #24, #25 date formatting + status colors *(done)*
-   - #37, #38 tooltips + search/filter
-     *(#38 done: filter boxes above every tree — context filter also
-     searches row content — plus an execution status combo)*
+   - #37 remaining: status-meaning tooltips, "Show trash" label
 3. **Polish:**
-   - #27 `.ui` cleanup
-     *(#27 done, c1ec1f2: neutral window titles, `"Name…"` placeholder
-     instead of literal `"default name"`, real `"Revision"` tree headers,
-     no hardcoded `readOnly` in the `.ui`, `minimumSize` + sensible default
-     geometry, revision-tree caption labels;
-     #29 done: hard max width removed, min widths + stretch factor;
-     #30 done: light QSS from `assets/style.qss`)*
-   - #39, #40 keyboard shortcuts + window-state persistence
-     *(#39 partly done: Delete/F2/Enter + button accelerators in the
-     panels; #40 done: QSettings geometry/splitter/"show deleted"
-     persistence)*
-   - #41, #42 redundant views, data lifecycle
-     *(#41 done: redundant "Show" affordances dropped, inline views are
-     the only detail views; #42 closed by owner decision 2026-07-10:
-     no delete for contexts/executions planned, no hard-delete API in
-     `acta_db`; a `deleted_at` soft delete is the only path if ever
-     wanted later)*
-   - #44, #45 live execution UX, friendlier errors
-     *(#45 done: `friendlyDbError` helper, c6b1404; #44 pending)*
+   - #8 reload optimizations (single `list_all` query, skip rebuild on
+     cancel)
+   - #13/#34 "New" target-folder fallback + target label
+   - #14 `editExecution` `err` handling
+   - #16 `main.cpp` log file
+   - #19 panel signals
+   - #22 one toolbar per panel
+   - #23 remaining: context auto-sort, panel log `QTableView`
+   - #26 remaining: JSON highlighting / line numbers
+   - #39 remaining keyboard support
+   - #43 i18n consistency
+   - #44 live execution UX
+
+(#42 data lifecycle is closed by owner decision, not an open action.)

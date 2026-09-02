@@ -1,9 +1,9 @@
 # Active Actions — from `ui_review.md`
 
 Action plan derived from [`ui_review.md`](ui_review.md). Item numbers
-(`UR #N`) reference that document. Completed items are removed from
-this list once they are shipped and documented; the full original list
-lives in `ui_review.md`.
+(`UR #N`) reference that document, which now lists only the open items
+(completed items were removed from it; item numbers keep the original
+numbering).
 
 ## Queued (from `ui_review.md`)
 
@@ -25,5 +25,3 @@ lives in `ui_review.md`.
 - **Now:** H2 (to analyze) — the only queued action; P1 shipped (c1ec1f2).
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).
-
-(Full original list lives in `ui_review.md`.)
