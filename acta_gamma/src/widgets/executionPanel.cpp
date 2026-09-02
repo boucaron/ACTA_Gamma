@@ -26,8 +26,10 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     lay->addWidget(new QLabel("Execution"));
 
     list = new QTreeWidget;
-    list->setColumnCount(2);
-    list->setHeaderLabels({"Date", "Status"});
+    // Skill / model / context names next to Date + Status (H5 / UR #23).
+    list->setColumnCount(5);
+    list->setHeaderLabels({"Date", "Status", "Skill", "Model",
+                           "Context"});
     list->setSortingEnabled(true);
     list->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(list, &QTreeWidget::customContextMenuRequested, this,
@@ -118,6 +120,37 @@ void ExecutionPanel::reload()
             : QString();
         item->setText(1, status);
         item->setForeground(1, statusColor(status)); // UR #25
+
+        // Skill / model / context names (H5 / UR #23): the same revision
+        // lookups that ExecutionDialog::editExecution() performs, reused
+        // here so the panel shows what each row ran without opening the
+        // dialog. Contexts have no name column; their type is the
+        // identifying label (as in the context panel).
+        skill_revision_t *srev = acta_db_skill_revision_get(
+            m_db, executions[i]->skill_revision_id, &err);
+        if (srev) {
+            item->setText(
+                2, QStringLiteral("%1 (rev %2)")
+                       .arg(QString::fromUtf8(srev->name))
+                       .arg(srev->revision));
+            acta_db_skill_revision_free(srev);
+        }
+        model_revision_t *mrev = acta_db_model_revision_get(
+            m_db, executions[i]->model_revision_id, &err);
+        if (mrev) {
+            item->setText(
+                3, QStringLiteral("%1 (rev %2)")
+                       .arg(QString::fromUtf8(mrev->name))
+                       .arg(mrev->revision));
+            acta_db_model_revision_free(mrev);
+        }
+        context_t *ctx =
+            acta_db_context_get(m_db, executions[i]->context_id, &err);
+        if (ctx) {
+            item->setText(4, ctx->type ? QString::fromUtf8(ctx->type)
+                                       : QString());
+            acta_db_context_free(ctx);
+        }
 
         item->setData(0, RoleExecutionId, executions[i]->id);
     }
