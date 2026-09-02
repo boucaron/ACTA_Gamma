@@ -9,6 +9,8 @@
 #include <QList>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QEvent>
+#include <QKeyEvent>
 #include <QSet>
 #include <QStyle>
 #include <QTreeWidget>
@@ -44,10 +46,11 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     showDeletedCheck = new QCheckBox("Show deleted items");
     lay->addWidget(showDeletedCheck);
 
+    // "&" marks each button's accelerator (Alt+letter) (UR #39).
     auto *actionRow = new QHBoxLayout;
-    newBtn = new QPushButton("New");
-    showBtn = new QPushButton("Show");
-    editBtn = new QPushButton("Edit Skill");
+    newBtn = new QPushButton("&New");
+    showBtn = new QPushButton("S&how");
+    editBtn = new QPushButton("&Edit Skill");
     actionRow->addWidget(newBtn);
     actionRow->addWidget(showBtn);
     actionRow->addWidget(editBtn);
@@ -55,18 +58,18 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     lay->addLayout(actionRow);
 
     auto *btnRow = new QHBoxLayout;
-    deleteBtn = new QPushButton("Delete");
-    restoreBtn = new QPushButton("Restore");
+    deleteBtn = new QPushButton("&Delete");
+    restoreBtn = new QPushButton("Res&tore");
     btnRow->addWidget(deleteBtn);
     btnRow->addWidget(restoreBtn);
     btnRow->addStretch();
     lay->addLayout(btnRow);
 
     auto *folderRow = new QHBoxLayout;
-    newFolderBtn = new QPushButton("New Folder");
-    renameFolderBtn = new QPushButton("Rename Folder");
-    deleteFolderBtn = new QPushButton("Delete Folder");
-    restoreFolderBtn = new QPushButton("Restore Folder");
+    newFolderBtn = new QPushButton("New F&older");
+    renameFolderBtn = new QPushButton("Rename &Folder");
+    deleteFolderBtn = new QPushButton("De&lete Folder");
+    restoreFolderBtn = new QPushButton("&Restore Folder");
     folderRow->addWidget(newFolderBtn);
     folderRow->addWidget(renameFolderBtn);
     folderRow->addWidget(deleteFolderBtn);
@@ -100,6 +103,13 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
             &SkillPanel::onListContextMenu);
 
     tree->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    // Keyboard accelerators (UR #39), handled in eventFilter() while the
+    // tree (or its viewport) has focus. Installed on both because either
+    // widget can be the focus target after a click; dialogs are separate
+    // widgets, so this never fires inside them.
+    tree->installEventFilter(this);
+    tree->viewport()->installEventFilter(this);
 
     reload();
 }
@@ -527,4 +537,55 @@ void SkillPanel::onRestoreFolderBtnClicked()
 
     QMessageBox::information(this, tr("Skill"), tr("Folder restored."));
     reload();
+}
+
+void SkillPanel::onDeleteKeyPressed()
+{
+    // Same gating as updateButtonStates(): only the enabled delete
+    // handler may fire, whichever row kind is selected.
+    if (deleteBtn->isEnabled())
+        onSkillDeleteClicked();
+    else if (deleteFolderBtn->isEnabled())
+        onDeleteFolderBtnClicked();
+}
+
+void SkillPanel::onRenameKeyPressed()
+{
+    if (renameFolderBtn->isEnabled())
+        onRenameFolderBtnClicked();
+}
+
+void SkillPanel::onReturnKeyPressed()
+{
+    if (showBtn->isEnabled())
+        onShowBtnClicked();
+}
+
+bool SkillPanel::eventFilter(QObject *obj, QEvent *event)
+{
+    // Delete soft-deletes the selection (skill or folder), F2 renames it
+    // (folders for now), Enter opens the detail dialog. Consuming the key
+    // here, before QTreeWidget's own handling, also prevents its
+    // built-in inline editing on F2/Return.
+    if ((obj == tree || obj == tree->viewport())
+            && event->type() == QEvent::KeyPress) {
+        const auto *key = static_cast<const QKeyEvent *>(event);
+        if (key->modifiers() == Qt::NoModifier) {
+            switch (key->key()) {
+            case Qt::Key_Delete:
+                onDeleteKeyPressed();
+                return true;
+            case Qt::Key_F2:
+                onRenameKeyPressed();
+                return true;
+            case Qt::Key_Return:
+            case Qt::Key_Enter:
+                onReturnKeyPressed();
+                return true;
+            default:
+                break;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }

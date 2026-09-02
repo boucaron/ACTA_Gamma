@@ -5,6 +5,8 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QMenu>
+#include <QEvent>
+#include <QKeyEvent>
 #include <QTextEdit>
 #include <QPushButton>
 
@@ -38,9 +40,10 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     editor->setPlaceholderText("Immutable input JSON...");
     lay->addWidget(editor);
 
+    // "&" marks each button's accelerator (Alt+letter) (UR #39).
     auto *btnRow = new QHBoxLayout;
-    newBtn = new QPushButton("New");
-    showBtn = new QPushButton("Show");
+    newBtn = new QPushButton("&New");
+    showBtn = new QPushButton("S&how");
     btnRow->addWidget(newBtn);
     btnRow->addWidget(showBtn);
     btnRow->addStretch();
@@ -49,6 +52,13 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     // callback
     connect(newBtn, &QPushButton::clicked, this, &ContextPanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this, &ContextPanel::onShowBtnClicked);
+
+    // Keyboard accelerator (UR #39), handled in eventFilter() while the
+    // list (or its viewport) has focus. Installed on both because either
+    // widget can be the focus target after a click; the dialog is a
+    // separate widget, so this never fires inside it.
+    list->installEventFilter(this);
+    list->viewport()->installEventFilter(this);
 
     reload();
 }
@@ -154,4 +164,28 @@ void ContextPanel::onShowBtnClicked()
     ContextDialog dlg(this);
     dlg.editContext(m_db, contextId);
     dlg.exec();
+}
+
+void ContextPanel::onReturnKeyPressed()
+{
+    // Enter opens the same read-only dialog as the Show button.
+    onShowBtnClicked();
+}
+
+bool ContextPanel::eventFilter(QObject *obj, QEvent *event)
+{
+    // Enter opens the detail dialog. Consuming the key here, before
+    // QTreeWidget's own handling, also prevents its built-in inline
+    // editing on Return.
+    if ((obj == list || obj == list->viewport())
+            && event->type() == QEvent::KeyPress) {
+        const auto *key = static_cast<const QKeyEvent *>(event);
+        if (key->modifiers() == Qt::NoModifier
+                && (key->key() == Qt::Key_Return
+                        || key->key() == Qt::Key_Enter)) {
+            onReturnKeyPressed();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }

@@ -32,4 +32,11 @@ private:
 
 private slots:
     void onShowBtnClicked();
+    // Keyboard accelerator (UR #39), active while the execution list has
+    // focus: Enter opens the same dialog as a double-click on the row.
+    // Intercepted in eventFilter() so it fires before the list's own key
+    // handling (which would start inline editing on Return).
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
+    void onReturnKeyPressed();
 };

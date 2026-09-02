@@ -2,6 +2,8 @@
 
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QEvent>
+#include <QKeyEvent>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -43,11 +45,19 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     logList->setUniformRowHeights(true);
     lay->addWidget(logList);
 
-    showBtn = new QPushButton("Show");
+    // "&" marks the button's accelerator (Alt+letter) (UR #39).
+    showBtn = new QPushButton("S&how");
     lay->addWidget(showBtn);
 
     // callback
     connect(showBtn, &QPushButton::clicked, this, &ExecutionPanel::onShowBtnClicked);
+
+    // Keyboard accelerator (UR #39), handled in eventFilter() while the
+    // execution list (or its viewport) has focus. Installed on both
+    // because either widget can be the focus target after a click; the
+    // dialogs are separate widgets, so this never fires inside them.
+    list->installEventFilter(this);
+    list->viewport()->installEventFilter(this);
 
     reload();
 }
@@ -146,4 +156,30 @@ void ExecutionPanel::onShowBtnClicked()
     ExecutionLogDialog dlg(this);
     dlg.showLog(m_db, logId);
     dlg.exec();
+}
+
+void ExecutionPanel::onReturnKeyPressed()
+{
+    // Enter opens the same dialog as a double-click on the currently
+    // selected execution row.
+    onExecutionDoubleClicked(
+        const_cast<QTreeWidgetItem *>(list->currentItem()), 0);
+}
+
+bool ExecutionPanel::eventFilter(QObject *obj, QEvent *event)
+{
+    // Enter opens the detail dialog. Consuming the key here, before
+    // QTreeWidget's own handling, also prevents its built-in inline
+    // editing on Return.
+    if ((obj == list || obj == list->viewport())
+            && event->type() == QEvent::KeyPress) {
+        const auto *key = static_cast<const QKeyEvent *>(event);
+        if (key->modifiers() == Qt::NoModifier
+                && (key->key() == Qt::Key_Return
+                        || key->key() == Qt::Key_Enter)) {
+            onReturnKeyPressed();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }

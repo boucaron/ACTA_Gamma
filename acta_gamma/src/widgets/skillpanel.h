@@ -95,4 +95,15 @@ private slots:
     void onRenameFolderBtnClicked();
     void onDeleteFolderBtnClicked();
     void onRestoreFolderBtnClicked();
+    // Keyboard accelerators (UR #39), active while the tree has focus:
+    // Delete soft-deletes the selection (skill or folder), F2 renames it
+    // (folders for now; skills have no rename action yet), Enter opens
+    // the detail dialog. Intercepted in eventFilter() so they fire
+    // before the tree's own key handling (which would start inline
+    // editing on F2/Return).
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
+    void onDeleteKeyPressed();
+    void onRenameKeyPressed();
+    void onReturnKeyPressed();
 };

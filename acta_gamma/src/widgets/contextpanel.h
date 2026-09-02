@@ -34,4 +34,11 @@ private slots:
     void onNewBtnClicked();
     void onShowBtnClicked();
     void onListContextMenu(const QPoint &pos);
+    // Keyboard accelerator (UR #39), active while the list has focus:
+    // Enter opens the read-only dialog, the same as the Show button.
+    // Intercepted in eventFilter() so it fires before the list's own key
+    // handling (which would start inline editing on Return).
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
+    void onReturnKeyPressed();
 };
