@@ -154,6 +154,30 @@ static void test_create_null_out_id(void)
     T_ASSERT(rc == ACTA_DB_OK, "NULL out_id still succeeds");
 }
 
+static void test_create_duplicate_root(void)
+{
+    int id1, id2;
+    T_ASSERT(make_folder("Dup", 0, &id1) == ACTA_DB_OK, "first create ok");
+    int rc = acta_db_model_folder_create(g_db, "Dup", 0, &id2);
+    T_ASSERT(rc == ACTA_DB_ERR_DUPLICATE, "duplicate root name → DUPLICATE");
+}
+
+static void test_create_duplicate_child(void)
+{
+    int parent, id1, id2;
+    T_ASSERT(make_folder("Parent", 0, &parent) == ACTA_DB_OK, "parent ok");
+    T_ASSERT(make_folder("Child", parent, &id1) == ACTA_DB_OK, "first child ok");
+    int rc = acta_db_model_folder_create(g_db, "Child", parent, &id2);
+    T_ASSERT(rc == ACTA_DB_ERR_DUPLICATE, "duplicate sibling name → DUPLICATE");
+}
+
+static void test_create_invalid_parent(void)
+{
+    int id;
+    int rc = acta_db_model_folder_create(g_db, "Orphan", 999999, &id);
+    T_ASSERT(rc == ACTA_DB_ERR_FK, "nonexistent parent → FK");
+}
+
 /* ── get ─────────────────────────────────────────────────────────── */
 
 static void test_get_found(void)
@@ -263,6 +287,35 @@ static void test_rename_invalid_id(void)
 {
     int rc = acta_db_model_folder_rename(g_db, 0, "x");
     T_ASSERT(rc == ACTA_DB_ERR_INVALID, "id=0 → INVALID");
+}
+
+static void test_rename_duplicate_child(void)
+{
+    int parent, id_a, id_b;
+    T_ASSERT(make_folder("Parent", 0, &parent) == ACTA_DB_OK, "parent ok");
+    T_ASSERT(make_folder("SiblingA", parent, &id_a) == ACTA_DB_OK, "A ok");
+    T_ASSERT(make_folder("SiblingB", parent, &id_b) == ACTA_DB_OK, "B ok");
+    int rc = acta_db_model_folder_rename(g_db, id_b, "SiblingA");
+    T_ASSERT(rc == ACTA_DB_ERR_DUPLICATE, "duplicate sibling name → DUPLICATE");
+}
+
+static void test_rename_duplicate_root(void)
+{
+    int id_a, id_b;
+    T_ASSERT(make_folder("RootA", 0, &id_a) == ACTA_DB_OK, "A ok");
+    T_ASSERT(make_folder("RootB", 0, &id_b) == ACTA_DB_OK, "B ok");
+    int rc = acta_db_model_folder_rename(g_db, id_b, "RootA");
+    T_ASSERT(rc == ACTA_DB_ERR_DUPLICATE, "duplicate root name → DUPLICATE");
+}
+
+static void test_rename_cross_scope_ok(void)
+{
+    int parent_a, parent_b, id_a;
+    T_ASSERT(make_folder("ParentA", 0, &parent_a) == ACTA_DB_OK, "A ok");
+    T_ASSERT(make_folder("ParentB", 0, &parent_b) == ACTA_DB_OK, "B ok");
+    T_ASSERT(make_folder("NameX", parent_a, &id_a) == ACTA_DB_OK, "child ok");
+    int rc = acta_db_model_folder_rename(g_db, id_a, "ParentB");
+    T_ASSERT(rc == ACTA_DB_OK, "different scope → OK");
 }
 
 /* ── soft_delete / restore ───────────────────────────────────────── */
@@ -1166,6 +1219,9 @@ int run_model_folder_tests(void)
         {"create_empty_name",            test_create_empty_name},
         {"create_null_db",               test_create_null_db},
         {"create_null_out_id",           test_create_null_out_id},
+        {"create_duplicate_root",        test_create_duplicate_root},
+        {"create_duplicate_child",       test_create_duplicate_child},
+        {"create_invalid_parent",        test_create_invalid_parent},
 
         /* get */
         {"get_found",                    test_get_found},
@@ -1182,6 +1238,9 @@ int run_model_folder_tests(void)
         {"rename_empty_name",            test_rename_empty_name},
         {"rename_null_db",               test_rename_null_db},
         {"rename_invalid_id",            test_rename_invalid_id},
+        {"rename_duplicate_child",       test_rename_duplicate_child},
+        {"rename_duplicate_root",        test_rename_duplicate_root},
+        {"rename_cross_scope_ok",        test_rename_cross_scope_ok},
 
         /* soft_delete / restore */
         {"soft_delete_null_db",          test_soft_delete_null_db},

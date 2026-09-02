@@ -62,7 +62,7 @@ static void test_sf_create_duplicate_root(void) {
 
     int id2 = 0;
     int rc = acta_db_skill_folder_create(db, "DupName", 0, &id2);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_DUPLICATE);
 
     test_db_teardown(db, path);
 }
@@ -84,7 +84,7 @@ static void test_sf_create_duplicate_child(void) {
 
     int child2 = 0;
     int rc = acta_db_skill_folder_create(db, "SameChild", parent_id, &child2);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_DUPLICATE);
 
     test_db_teardown(db, path);
 }
@@ -98,7 +98,7 @@ static void test_sf_create_invalid_parent(void) {
 
     int id = 0;
     int rc = acta_db_skill_folder_create(db, "Orphan", 999999, &id);
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_FK);
 
     test_db_teardown(db, path);
 }
@@ -263,7 +263,50 @@ static void test_sf_rename_duplicate(void) {
                        ACTA_DB_OK);
 
     int rc = acta_db_skill_folder_rename(db, id_b, "SiblingA");
-    TEST_ASSERT(rc < 0);
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_DUPLICATE);
+
+    test_db_teardown(db, path);
+}
+
+/* 6.15a – rename to a root-level sibling's name */
+static void test_sf_rename_duplicate_root(void) {
+    const char *path = "test/acta_test_sf_rename_dup_root.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int id_a = 0, id_b = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "RootA", 0, &id_a),
+                       ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "RootB", 0, &id_b),
+                       ACTA_DB_OK);
+
+    int rc = acta_db_skill_folder_rename(db, id_b, "RootA");
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_DUPLICATE);
+
+    test_db_teardown(db, path);
+}
+
+/* 6.15b – rename to a name used by a child of a *different* parent
+ *        must succeed (partial unique index is per-scope). */
+static void test_sf_rename_cross_scope_ok(void) {
+    const char *path = "test/acta_test_sf_rename_cross_scope.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int parent_a = 0, parent_b = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "ParentA", 0, &parent_a),
+                       ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "ParentB", 0, &parent_b),
+                       ACTA_DB_OK);
+
+    int id_a = 0;
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "NameX", parent_a, &id_a),
+                       ACTA_DB_OK);
+
+    int rc = acta_db_skill_folder_rename(db, id_a, "ParentB");
+    TEST_ASSERT_EQ_INT(rc, ACTA_DB_OK);
 
     test_db_teardown(db, path);
 }
@@ -1320,6 +1363,8 @@ void run_skill_folder_tests(void) {
     /* rename */
     test_sf_rename_happy();
     test_sf_rename_duplicate();
+    test_sf_rename_duplicate_root();
+    test_sf_rename_cross_scope_ok();
     test_sf_rename_nonexistent();
     test_sf_rename_null_db();
 

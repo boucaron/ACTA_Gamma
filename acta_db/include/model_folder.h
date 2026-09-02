@@ -33,7 +33,12 @@ typedef struct {
  * @param out_id     [out] receives the new row id; may be NULL.
  *
  * Returns ACTA_DB_OK on success, ACTA_DB_ERR_INVALID if db is NULL
- * or name is NULL/empty, ACTA_DB_ERR_SQL on prepare/step failure. */
+ * or name is NULL/empty,
+ * ACTA_DB_ERR_DUPLICATE if the name is already used in the same scope
+ * (root-level names are unique among root; child names are unique
+ * among siblings of the same parent),
+ * ACTA_DB_ERR_FK if parent_id does not reference a live folder,
+ * ACTA_DB_ERR_SQL on prepare/step failure. */
 int  acta_db_model_folder_create(db_t *db, const char *name, int parent_id,
                                  int *out_id);
 
@@ -41,6 +46,8 @@ int  acta_db_model_folder_create(db_t *db, const char *name, int parent_id,
  *
  * Returns ACTA_DB_OK on success,
  * ACTA_DB_ERR_INVALID if db is NULL, id is invalid, or new_name is NULL/empty,
+ * ACTA_DB_ERR_DUPLICATE if new_name is already used by another live folder
+ * in the same scope (see acta_db_model_folder_create),
  * ACTA_DB_ERR_NOT_FOUND if no live folder matches id,
  * ACTA_DB_ERR_SQL on failure. */
 int  acta_db_model_folder_rename(db_t *db, int id, const char *new_name);

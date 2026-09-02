@@ -180,7 +180,13 @@ int acta_db_skill_folder_create(db_t *db, const char *name,
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    if (rc != SQLITE_DONE) {
+        if (rc == SQLITE_CONSTRAINT_UNIQUE)
+            return ACTA_DB_ERR_DUPLICATE;
+        if (rc == SQLITE_CONSTRAINT_FOREIGNKEY)
+            return ACTA_DB_ERR_FK;
+        return ACTA_DB_ERR_SQL;
+    }
 
     if (out_id)
         *out_id = (int)sqlite3_last_insert_rowid(db->handle);
@@ -205,6 +211,10 @@ int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name)
     int rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE) {
         sqlite3_finalize(stmt);
+        if (rc == SQLITE_CONSTRAINT_UNIQUE)
+            return ACTA_DB_ERR_DUPLICATE;
+        if (rc == SQLITE_CONSTRAINT_FOREIGNKEY)
+            return ACTA_DB_ERR_FK;
         return ACTA_DB_ERR_SQL;
     }
     int changed = sqlite3_changes(db->handle);
