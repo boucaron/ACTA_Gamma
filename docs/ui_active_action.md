@@ -13,7 +13,6 @@ lives in `ui_review.md`.
 |---|--------|--------|----------------------|
 | H2 | **JSON validation** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | dialogs + context panel editor |
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
-| H5 | **Execution tree columns** — skill / model / context names next to Date + Status | UR #23 | revision fetches already done in `ExecutionDialog`; reuse in the panel |
 
 ### Polish
 
@@ -27,7 +26,7 @@ lives in `ui_review.md`.
 
 ## Summary
 
-- **Now:** H2, H4, H5.
+- **Now:** H2, H4.
 - **Polish last:** P1–P3, P5–P6.
 
 (Full original list lives in `ui_review.md`.)

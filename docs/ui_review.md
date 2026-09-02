@@ -148,6 +148,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - Execution tree shows only "Date" and "Status" — useless for
      identification. Add columns for skill name, model name, context type
      (fetch the revision names in the panel, as the dialog already does).
+     *(Done: the execution tree now has Skill / Model / Context columns,
+     filled in `ExecutionPanel::reload()` from the same revision lookups
+     the dialog uses.)*
    - The log list is a `QTreeWidget` with 4 columns — a
      `QTableWidget`/`QTableView` is the right control; keep
      `setUniformRowHeights`.
