@@ -7,12 +7,6 @@ lives in `ui_review.md`.
 
 ## Queued (from `ui_review.md`)
 
-### Must-fix
-
-| # | Action | Source | Notes / dependencies |
-|---|--------|--------|----------------------|
-| N4 | **Revision-selection clobber trap** — in Edit mode, clicking a revision overwrites the form; disable revision switching until Save/Cancel, or move browsing to a read-only dialog | UR #35 | `SkillDialog` and `ModelDialog` |
-
 ### High
 
 | # | Action | Source | Notes / dependencies |
@@ -38,7 +32,7 @@ lives in `ui_review.md`.
 
 ## Summary
 
-- **Now:** N4, then H1–H5.
+- **Now:** H1–H5.
 - **Polish last:** P1–P8.
 
 (Full original list lives in `ui_review.md`.)
