@@ -67,6 +67,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - consider `list_all`-style single queries for skills/models instead of
      N per-folder queries,
    - skip the rebuild when a dialog was cancelled with no changes.
+   *(Partly done: `FolderTreePanel::reload()` preserves the current
+   selection across the rebuild (re-selected by id); the single
+   `list_all`-style query and the skip-rebuild-on-cancel are not done.)*
 9. **DB path.** `QCoreApplication::applicationDirPath() + "/acta.db"` writes
    the DB next to the exe — can fail on read-only install dirs. Use
    `QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)` and
@@ -74,13 +77,23 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    fails with a cryptic status-bar error; add a **bootstrap/migration path**
    (create + run `schema.sql` on first launch, or at least a
    "Create database…" action).
+   *(Done: `MainWindow::defaultDbPath()` uses the writable AppData
+   location (created if needed); `runDatabaseBootstrap()` offers the
+   startup modal (create here / pick location / exit) and `createDatabase()`
+   applies the embedded schema on first run; the chosen path is remembered
+   via `QSettings` (H6).)*
 10. **`DbHandle` / offline state.** On open failure the panels silently show
     empty trees. Keep `DbHandle` as-is, but have `MainWindow` expose a
     `dbAvailable()` flag so panels can show an explicit disabled/offline
     state instead of a silent empty tree.
+    *(Done: `MainWindow::dbAvailable()` + `syncPanels()` disable the four
+    panels and show the persistent offline banner with Retry; panels take
+    a null handle and render their empty state while offline.)*
 11. **Application identity.** Set `QCoreApplication::setApplicationName` /
     organization (needed if `QSettings` is added later), and give the window
     an icon (`setWindowIcon`) from the logo asset.
+    *(Done: `main.cpp` sets organization "boucaron" and application
+    "ACTA Gamma"; the window icon comes from the cached logo (see #28).)*
 12. **Stale `.ui` window titles.** The `.ui` files carry stale titles
     ("Skill: default name", "Model: default name", "Context", "Execution")
     while code overrides them via `setWindowTitle`. Clean them up so the
@@ -114,6 +127,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     "New" only targets whatever folder is selected. Add folder buttons
     (New Folder / Delete Folder / Rename) — or remove folders from the
     model.
+    *(Done: `FolderTreePanel` has New Folder / Rename / Soft-delete /
+    Restore Folder buttons plus a folder context menu, wired through the
+    skill/model DAOs to `acta_db_*_folder_*`; folder create/rename errors
+    use the friendly `friendlyDbError` messages (P6).)*
 18. **No execution-creation path.** Executions exist in the DB and are
     browsable, but nothing in the app creates one (see #1). There's no
     "pick context + skill + model → Run" flow. That is the app's core
@@ -124,6 +141,8 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 20. **Button-state safety.** After `reload()` the current item is gone and
     buttons are re-enabled through the `currentItemChanged` flow — fine, but
     add an explicit `updateButtonStates()` call after reload for safety.
+    *(Done: `FolderTreePanel::reload()` ends with an explicit
+    `updateButtonStates()` call.)*
 
 ---
 
@@ -158,7 +177,11 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      (fetch the revision names in the panel, as the dialog already does).
      *(Done: the execution tree now has Skill / Model / Context columns,
      filled in `ExecutionPanel::reload()` from the same revision lookups
-     the dialog uses.)*
+     the dialog uses; the skill/model trees use folder icons
+     (`SP_DirIcon`) vs trash icons for deleted rows. Still open: the
+     context tree has no auto-sort applied after reload (`sortItems`), and
+     the `ExecutionPanel` log list is still a `QTreeWidget` (the execution
+     *dialog* log table is a `QTableView`).)*
    - The log list is a `QTreeWidget` with 4 columns — a
      `QTableWidget`/`QTableView` is the right control; keep
      `setUniformRowHeights`.
@@ -180,6 +203,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    `output_schema`, `configuration`, and context `content` should use a
    monospace font; optionally syntax-highlight JSON or at least show line
    numbers — prompts and schemas are the core content of this app.
+   *(Partly done: all `QTextEdit` editors are monospace via the
+   `assets/style.qss` rule; syntax highlighting and line numbers are
+   deliberately left out.)*
 27. **Dialog `.ui` cleanup:**
    - `skillDialog.ui`: `nameLineEdit` has literal default text
      `"default name"` — that's placeholder material, not data. Use
@@ -277,6 +303,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - No help/about dialog explaining the model: Skill = prompt + schema,
      Model = backend config, Context = immutable input, Execution = one
      shot.
+   *(Partly done: every panel button has an icon + tooltip (see #22),
+   deleted rows carry a trash icon, and the Help → About dialog explains
+   the model (see #28). Status-meaning tooltips and a "Show trash" label
+   are still open.)*
 38. **Search & filter.** No way to find an item once trees grow. Add a
    filter box above each tree (case-insensitive substring), and for
    executions a status filter (All / failed / running…).
@@ -350,7 +380,8 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #33 save feedback + confirmations *(done: delete confirmation, "restored" toasts, save feedback with "Saved as revision N" and the Read-only switch)*
    - #35 revision-selection clobber trap *(done: revision tree disabled outside Read-only mode)*
 2. **High:**
-   - #17 folder CRUD
+   - #17 folder CRUD *(done: New/Rename/Soft-delete/Restore Folder buttons
+     + context menu in `FolderTreePanel`)*
    - #18 execution-creation flow (the app's core feature)
    - #7 dedupe panels/dialogs into shared base classes (done)
    - #15 JSON validation
