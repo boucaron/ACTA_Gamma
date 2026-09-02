@@ -148,10 +148,16 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    `yyyy-MM-dd HH:mm:ss` in list columns and dialogs. Display them
    locale-formatted (`QLocale::system().toString(dt, "yyyy-MM-dd HH:mm")`);
    keep the exact ISO value in tooltips.
+   *(Done: `widgets/util.h::displayDateTime` used by the context/execution
+   panels, the execution dialog log table, and ISO tooltips on every
+   `QDateTimeEdit`.)*
 25. **No status colors.** Execution `status` (pending/running/completed/
    failed/cancelled) and log `level` (debug/info/warn/error) should be
    color-coded (green/yellow/red text or colored icons). Right now
    everything is grey.
+   *(Done: `widgets/util.h::statusColor` / `logLevelColor` applied in the
+   execution panel, the execution dialog log table, the execution dialog
+   status field, and the log dialog level field.)*
 26. **JSON/prompt editors are plain `QTextEdit`.** `prompt`,
    `output_schema`, `configuration`, and context `content` should use a
    monospace font; optionally syntax-highlight JSON or at least show line
