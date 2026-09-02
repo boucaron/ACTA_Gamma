@@ -130,13 +130,18 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     `QLabel("Skill")` / `"Model"` / `"Context"` / `"Execution"`. Use
     `QGroupBox` or styled section headers (bold, small caps) so the four
     quadrants read clearly.
+    *(Done: all four panel titles carry `objectName("panelHeader")` and
+    the `#panelHeader` rule of `assets/style.qss` styles them bold with
+    the accent color; a `QGroupBox` framing variant is left as a follow-up
+    if wanted.)*
 22. **Button rows inconsistent.** Skill/Model have two rows (New/Show/Edit,
     then Delete/Restore) while Context has one (New/Show) and Execution has
     (Show Log Details, Show) stacked vertically. Standardize: one toolbar per panel with
     all actions, sensible order, and **icons + tooltips** on every button.
-    *(Partly done: execution panel now has "Show" and "Show Log Details"
-    buttons with icons + tooltips and right-click "Show" context menus on
-    both lists.)*
+    *(Partly done: every button in all four panels now has an icon +
+    tooltip — execution panel ("Show" / "Show Log Details" with right-click
+    context menus) and context panel ("New" / "Show") added with P2; the
+    "one toolbar per panel" layout standardization is still open.)*
 23. **Trees:**
    - Skill/Model trees: `setHeaderHidden(true)` and no folder icon →
      folders and items are visually indistinguishable. Add a folder icon
@@ -187,6 +192,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 28. **MainWindow chrome.** Add a minimal menu bar (File → Exit, Database →
    Reconnect, Help → About) and give the window an icon. Cache the logo
    `QPixmap` and scale for `devicePixelRatio`.
+   *(Done: cached `logoPixmap()` used for `setWindowIcon` (QIcon scales it
+   per platform DPI) and the header row; minimal menu bar File → Exit,
+   Database → Reconnect, Help → About with `&` accelerators.)*
 29. **Splitter constraints.** The left widget has `setMaximumWidth(320)`
    *and* the splitter sizes are `{320, 880}` — the user can never widen the
    left pane. Pick one constraint (e.g. max width + `setCollapsible`) and
@@ -197,6 +205,12 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 30. **No theming.** Everything is stock Qt grey. Add a light `QSS`
     stylesheet (accent color, hover states, disabled states, group-box
     headers) to give the product identity; a logo/branding already exists.
+    *(Done: color-only `assets/style.qss` (shipped via the qrc, loaded in
+    `main.cpp`): `#panelHeader` styling, selection accent, flat light
+    buttons with hover/pressed/disabled states, `QWidget:disabled` muted
+    text for offline panels, monospace `QTextEdit` editors. Deliberately no
+    geometry rules and no tree item text colors — `statusColor` /
+    `logLevelColor` item foregrounds stay intact.)*
 31. **Empty states.** Every panel renders a blank tree with zero rows when
     the DB is empty or offline. Add a centered placeholder ("No skills yet —
     click **New**").
@@ -308,8 +322,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      *(#38 done: filter boxes above every tree — context filter also
      searches row content — plus an execution status combo)*
 3. **Polish:**
-   - #27, #30 `.ui` cleanup, theming
-     *(#29 done: hard max width removed, min widths + stretch factor)*
+   - #27 `.ui` cleanup
+     *(#29 done: hard max width removed, min widths + stretch factor;
+     #30 done: light QSS from `assets/style.qss`)*
    - #39, #40 keyboard shortcuts + window-state persistence
      *(#39 partly done: Delete/F2/Enter + button accelerators in the
      panels; #40 done: QSettings geometry/splitter/"show deleted"
