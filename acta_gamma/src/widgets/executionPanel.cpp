@@ -10,6 +10,7 @@
 
 #include "executionDialog.h"
 #include "executionLogDialog.h"
+#include "util.h"
 
 namespace {
 const int RoleExecutionId = Qt::UserRole;
@@ -81,13 +82,22 @@ void ExecutionPanel::reload()
 
     for (int i = 0; i < n; ++i) {
         auto *item = new QTreeWidgetItem(list);
-        item->setText(0, executions[i]->created_at
-                             ? QString::fromUtf8(executions[i]->created_at)
-                             : QString());
-        item->setText(1, executions[i]->status
-                             ? QString::fromUtf8(executions[i]->status)
-                             : QString());
-        // ISO "yyyy-MM-dd HH:mm:ss" sorts correctly as plain text.
+        // Locale-formatted date (UR #24); the display stays "yyyy-MM-dd
+        // HH:mm" in every locale, so the column still sorts
+        // chronologically as plain text. The exact ISO value (with
+        // seconds) lives in the tooltip.
+        const QString createdIso = executions[i]->created_at
+            ? QString::fromUtf8(executions[i]->created_at)
+            : QString();
+        item->setText(0, displayDateTime(executions[i]->created_at));
+        item->setToolTip(0, createdIso);
+
+        const QString status = executions[i]->status
+            ? QString::fromUtf8(executions[i]->status)
+            : QString();
+        item->setText(1, status);
+        item->setForeground(1, statusColor(status)); // UR #25
+
         item->setData(0, RoleExecutionId, executions[i]->id);
     }
 
@@ -116,16 +126,21 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
     }
 
     for (int i = 0; i < n; ++i) {
+        const QString level =
+            lines[i]->level ? QString::fromUtf8(lines[i]->level)
+                            : QString();
         auto *logItem = new QTreeWidgetItem(logList, {
-            lines[i]->created_at
-                ? QString::fromUtf8(lines[i]->created_at)
-                : QString(),
-            lines[i]->level ? QString::fromUtf8(lines[i]->level) : QString(),
+            displayDateTime(lines[i]->created_at), // UR #24
+            level,
             lines[i]->event ? QString::fromUtf8(lines[i]->event) : QString(),
             lines[i]->message
                 ? QString::fromUtf8(lines[i]->message)
                 : QString(),
         });
+        logItem->setToolTip(
+            0, lines[i]->created_at ? QString::fromUtf8(lines[i]->created_at)
+                                    : QString());
+        logItem->setForeground(1, logLevelColor(level)); // UR #25
         logItem->setData(0, RoleLogId, lines[i]->id);
     }
     acta_db_execution_log_list_free(lines, n);

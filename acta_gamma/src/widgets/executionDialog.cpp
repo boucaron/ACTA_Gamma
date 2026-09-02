@@ -94,15 +94,21 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     // Output
     ui->resultTextEdit->setPlainText(utf8(e->result));
 
-    // Execution state
-    ui->statusLineEdit->setText(utf8(e->status));
+    // Execution state (colored, UR #25)
+    const QString status = utf8(e->status);
+    ui->statusLineEdit->setText(status);
+    applyTextColor(ui->statusLineEdit, statusColor(status));
     ui->errorTextEdit->setPlainText(utf8(e->error));
     ui->rawResponseTextEdit->setPlainText(utf8(e->raw_response));
 
-    // Metadata
+    // Metadata (locale-formatted by QDateTimeEdit; the exact ISO value
+    // with seconds lives in the tooltips, UR #24)
     ui->creationDateTimeEdit->setDateTime(toDateTime(e->created_at));
+    ui->creationDateTimeEdit->setToolTip(utf8(e->created_at));
     ui->startDateTimeEdit->setDateTime(toDateTime(e->started_at));
+    ui->startDateTimeEdit->setToolTip(utf8(e->started_at));
     ui->completedAtTimeEdit->setDateTime(toDateTime(e->completed_at));
+    ui->completedAtTimeEdit->setToolTip(utf8(e->completed_at));
 
     // Logs: one row per log line (all levels, id order).
     int n = 0;
@@ -116,9 +122,14 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
          QStringLiteral("Event"), QStringLiteral("Message")});
     if (logs) {
         for (int i = 0; i < n; ++i) {
+            auto *dateItem = new QStandardItem(
+                displayDateTime(logs[i]->created_at)); // UR #24
+            dateItem->setToolTip(utf8(logs[i]->created_at));
+            auto *levelItem = new QStandardItem(utf8(logs[i]->level));
+            levelItem->setForeground(logLevelColor(utf8(logs[i]->level)));
             model->appendRow({
-                new QStandardItem(utf8(logs[i]->created_at)),
-                new QStandardItem(utf8(logs[i]->level)),
+                dateItem,
+                levelItem,
                 new QStandardItem(utf8(logs[i]->event)),
                 new QStandardItem(utf8(logs[i]->message)),
             });

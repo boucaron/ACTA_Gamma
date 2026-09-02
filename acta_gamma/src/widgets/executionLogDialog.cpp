@@ -34,14 +34,18 @@ void ExecutionLogDialog::showLog(db_t *db, int logId)
         return;
     }
 
-    // Log tab: level, event, message.
-    ui->levelLineEdit->setText(utf8(log->level));
+    // Log tab: level (colored, UR #25), event, message.
+    const QString level = utf8(log->level);
+    ui->levelLineEdit->setText(level);
+    applyTextColor(ui->levelLineEdit, logLevelColor(level));
     ui->eventLineEdit->setText(utf8(log->event));
     ui->messageTextEdit->setPlainText(utf8(log->message));
 
-    // Metadata tab: raw metadata payload, created at.
+    // Metadata tab: raw metadata payload, created at (locale-formatted
+    // by QDateTimeEdit; the exact ISO value in the tooltip, UR #24).
     ui->metadataTextEdit->setPlainText(utf8(log->metadata));
     ui->createAtDateTimeEdit->setDateTime(toDateTime(log->created_at));
+    ui->createAtDateTimeEdit->setToolTip(utf8(log->created_at));
 
     acta_db_execution_log_free(log);
 }

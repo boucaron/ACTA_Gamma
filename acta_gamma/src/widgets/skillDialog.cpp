@@ -96,10 +96,14 @@ void SkillDialog::loadEntity(int skillId)
     ui->promptTextEdit->setPlainText(utf8(s->prompt_template));
     ui->outputSchemaTextEdit->setPlainText(utf8(s->output_schema));
 
-    // Metadata
+    // Metadata (locale-formatted by QDateTimeEdit; the exact ISO value
+    // with seconds lives in the tooltips, UR #24).
     ui->creationDateTimeEdit->setDateTime(toDateTime(s->created_at));
+    ui->creationDateTimeEdit->setToolTip(utf8(s->created_at));
     ui->updateDateTimeEdit->setDateTime(toDateTime(s->updated_at));
+    ui->updateDateTimeEdit->setToolTip(utf8(s->updated_at));
     ui->deleteDateTimeEdit->setDateTime(toDateTime(s->deleted_at));
+    ui->deleteDateTimeEdit->setToolTip(utf8(s->deleted_at));
 
     // Revisions: one row per snapshot, ascending (oldest first).
     loadRevisionTree([this](int id, int &e) {
@@ -247,8 +251,11 @@ void SkillDialog::showRevision(QTreeWidgetItem *item)
 
     // Metadata
     ui->creationDateTimeEdit->setDateTime(toDateTime(rev->created_at));
+    ui->creationDateTimeEdit->setToolTip(utf8(rev->created_at));
     ui->updateDateTimeEdit->setDateTime(toDateTime(rev->updated_at));
+    ui->updateDateTimeEdit->setToolTip(utf8(rev->updated_at));
     ui->deleteDateTimeEdit->setDateTime(toDateTime(rev->deleted_at));
+    ui->deleteDateTimeEdit->setToolTip(utf8(rev->deleted_at));
 
     acta_db_skill_revision_free(rev);
 }

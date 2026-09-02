@@ -71,6 +71,7 @@ void ContextDialog::editContext(db_t *db, int contextId)
     // Metadata
     ui->contextHashLineEdit->setText(utf8(c->content_hash));
     ui->dateTimeEdit->setDateTime(toDateTime(c->created_at));
+    ui->dateTimeEdit->setToolTip(utf8(c->created_at));
     ui->metaDataTextEdit->setPlainText(utf8(c->metadata));
 
     acta_db_context_free(c);

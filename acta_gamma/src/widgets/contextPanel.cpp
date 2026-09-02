@@ -11,6 +11,7 @@
 #include <QPushButton>
 
 #include "contextDialog.h"
+#include "util.h"
 
 namespace {
 const int RoleContextId = Qt::UserRole;
@@ -84,10 +85,15 @@ void ContextPanel::reload()
         item->setText(0, contexts[i]->type && contexts[i]->type[0]
                              ? QString::fromUtf8(contexts[i]->type)
                              : QStringLiteral("context"));
-        // ISO "yyyy-MM-dd HH:mm:ss" sorts correctly as plain text.
-        item->setText(1, contexts[i]->created_at
-                             ? QString::fromUtf8(contexts[i]->created_at)
-                             : QString());
+        // Locale-formatted date (UR #24); the display stays
+        // "yyyy-MM-dd HH:mm" in every locale, so the column still
+        // sorts chronologically as plain text. The exact ISO value
+        // (with seconds) lives in the tooltip.
+        const QString createdIso = contexts[i]->created_at
+            ? QString::fromUtf8(contexts[i]->created_at)
+            : QString();
+        item->setText(1, displayDateTime(contexts[i]->created_at));
+        item->setToolTip(1, createdIso);
         item->setData(0, RoleContextId, contexts[i]->id);
     }
 

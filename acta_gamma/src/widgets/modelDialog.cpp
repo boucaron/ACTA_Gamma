@@ -102,10 +102,14 @@ void ModelDialog::loadEntity(int modelId)
     ui->backendTextEdit->setPlainText(utf8(m->backend));
     ui->configurationTextEdit->setPlainText(utf8(m->configuration));
 
-    // Metadata
+    // Metadata (locale-formatted by QDateTimeEdit; the exact ISO value
+    // with seconds lives in the tooltips, UR #24).
     ui->creationDateTimeEdit->setDateTime(toDateTime(m->created_at));
+    ui->creationDateTimeEdit->setToolTip(utf8(m->created_at));
     ui->updateDateTimeEdit->setDateTime(toDateTime(m->updated_at));
+    ui->updateDateTimeEdit->setToolTip(utf8(m->updated_at));
     ui->deleteDateTimeEdit->setDateTime(toDateTime(m->deleted_at));
+    ui->deleteDateTimeEdit->setToolTip(utf8(m->deleted_at));
 
     // Revisions: one row per snapshot, ascending (oldest first).
     loadRevisionTree([this](int id, int &e) {
@@ -280,8 +284,11 @@ void ModelDialog::showRevision(QTreeWidgetItem *item)
 
     // Metadata
     ui->creationDateTimeEdit->setDateTime(toDateTime(rev->created_at));
+    ui->creationDateTimeEdit->setToolTip(utf8(rev->created_at));
     ui->updateDateTimeEdit->setDateTime(toDateTime(rev->updated_at));
+    ui->updateDateTimeEdit->setToolTip(utf8(rev->updated_at));
     ui->deleteDateTimeEdit->setDateTime(toDateTime(rev->deleted_at));
+    ui->deleteDateTimeEdit->setToolTip(utf8(rev->deleted_at));
 
     acta_db_model_revision_free(rev);
 }
