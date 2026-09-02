@@ -302,6 +302,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     delete/cleanup in the UI — the DB will grow unbounded. Add "Delete"
     (with confirmation) for executions/logs and contexts, or at least an
     "older than N days" prune action.
+    *(Scope decision, 2026-07-10: **no hard-delete API in `acta_db`** —
+    lifecycle operations are soft-delete only. Deletion for contexts/
+    executions, if implemented, must be a `deleted_at` soft delete
+    mirroring the skill/model/folder pattern.)*
 43. **i18n is half-done.** `MainWindow` uses `tr(...)` in two places,
     everything else is raw English literals, and no `qs_`/translation files
     exist. Either commit to `tr()` everywhere + a `translations/` target, or
@@ -356,7 +360,8 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      persistence)*
    - #41, #42 redundant views, data lifecycle
      *(#41 done: redundant "Show" affordances dropped, inline views are
-     the only detail views; #42 pending: needs an `acta_db` delete API —
-     contexts/executions/logs have none today)*
+     the only detail views; #42 pending: soft-delete only — no hard-delete
+     API by design; contexts/executions need a `deleted_at` soft delete,
+     none exists yet)*
    - #44, #45 live execution UX, friendlier errors
      *(#45 done: `friendlyDbError` helper, c6b1404; #44 pending)*

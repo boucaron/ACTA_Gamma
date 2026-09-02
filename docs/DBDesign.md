@@ -569,6 +569,10 @@ I would **not** add these yet:
 * vector databases
 * conversation/session tables
 * queues
+* **hard delete** — lifecycle operations are **soft delete only**
+  (`deleted_at`). If deletion of contexts/executions is ever needed it
+  must be a `deleted_at` soft delete mirroring the skill/model/folder
+  pattern; a hard-delete API is out of scope (owner decision, 2026-07-10)
 
 Those can all be built later if the POC demonstrates that they are actually needed.
 

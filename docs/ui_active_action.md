@@ -18,12 +18,14 @@ lives in `ui_review.md`.
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | P1 | `.ui` file cleanup — placeholder text instead of "default name", real revision-tree header, drop hardcoded `readOnly`, sane min sizes, consistent window titles | UR #12, #27 | |
-| P5 | Data lifecycle (delete/prune executions + contexts) | UR #42 | Partially shipped: UR #31 (empty-state placeholders) and UR #41 (redundant "Show" affordances) are done; what remains is delete/prune, which first needs an `acta_db` delete API — contexts/executions/logs have none today (ON DELETE RESTRICT FKs) |
+| P5 | Data lifecycle (delete/prune executions + contexts) | UR #42 | Partially shipped: UR #31 (empty-state placeholders) and UR #41 (redundant "Show" affordances) are done; what remains is prune. **Owner decision (2026-07-10): no hard-delete API in `acta_db` — lifecycle operations are soft-delete only.** If contexts/executions deletion is wanted, it must be a `deleted_at` soft delete mirroring the skill/model/folder pattern (none exist today); hard delete (and the ON DELETE RESTRICT FK question it raises) is out of scope |
 | P6 | Friendlier error mapping for all `acta_db_strerror` surfaces (unique-name constraint → "already exists in this folder") | UR #45 | **Gap A (acta_db) shipped** (fd5f9db): `skill_folder.c`/`model_folder.c` create+rename now map `SQLITE_CONSTRAINT_UNIQUE`→`ACTA_DB_ERR_DUPLICATE`, `..._FOREIGNKEY`→`ACTA_DB_ERR_FK` (mirroring `skill.c`), with header docs and tests (duplicate root/child create, dangling-parent FK, rename duplicates, cross-scope rename OK) in `test_skill_folder.c`/`test_model_folder.c`. **Gap B (UI) shipped** (c6b1404): `util.h::friendlyDbError(rc, noun, name, fallback, detail=nullptr)` maps DUPLICATE → "A %1 named \"%2\" already exists in this folder", FK → "The target folder no longer exists", NOT_FOUND → "\"%1\" could not be found (it may have been deleted)", default → fallback + `acta_db_strerror(rc)` (+ `acta_db_last_error(m_db)` detail for `ACTA_DB_ERR_SQL`). Rewired user-facing `QMessageBox` sites: SkillDialog/ModelDialog create+update, ContextDialog create, FolderTreePanel folder create/rename/restore, `MainWindow` startup modal (`ACTA_DB_ERR_INVALID_DB` → "The file %1 is not a valid database"); log-only `qWarning` sites left raw; `MainWindow` schema-apply failure stays a startup-modal message. Same commit also adds **Database > Load Database…** (`MainWindow::loadDatabase`): file dialog → `openDatabaseOnce` → `storeDbPath` + `applyDbToPanels()`; new `setDb()`/`setDao()` on Skill/Model/Context/Execution panels re-point panels at the fresh `db_t*` handle (also called from `retryDatabase()`, fixing the previously dangling handle after Reconnect). No schema/API-signature changes; pure polish |
 
 ## Summary
 
 - **Now:** H2 (to analyze).
-- **Polish last:** P1, P5 (lifecycle only, `acta_db` work first); P6 shipped (Gap A fd5f9db, Gap B c6b1404).
+- **Polish last:** P1, P5 (lifecycle only; `acta_db` work first = soft-delete for
+  contexts/executions, **no hard-delete API by design**); P6 shipped (Gap A
+  fd5f9db, Gap B c6b1404).
 
 (Full original list lives in `ui_review.md`.)
