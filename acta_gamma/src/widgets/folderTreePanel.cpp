@@ -413,6 +413,19 @@ void FolderTreePanel::onListContextMenu(const QPoint &pos)
     auto *aRestoreFolder = menu.addAction(tr("Restore Folder"), this,
                                           &FolderTreePanel::onRestoreFolderBtnClicked);
 
+    // Same icons as the button rows (P7/P8): the context menu mirrors
+    // them, so the two affordances stay aligned.
+    auto *mStyle = style();
+    aNew->setIcon(mStyle->standardIcon(QStyle::SP_DialogYesButton));
+    aShow->setIcon(mStyle->standardIcon(QStyle::SP_DialogOpenButton));
+    aEdit->setIcon(mStyle->standardIcon(QStyle::SP_DialogResetButton));
+    aDelete->setIcon(mStyle->standardIcon(QStyle::SP_TrashIcon));
+    aRestore->setIcon(mStyle->standardIcon(QStyle::SP_ArrowBack));
+    aNewFolder->setIcon(mStyle->standardIcon(QStyle::SP_DirIcon));
+    aRenameFolder->setIcon(mStyle->standardIcon(QStyle::SP_DialogResetButton));
+    aDeleteFolder->setIcon(mStyle->standardIcon(QStyle::SP_TrashIcon));
+    aRestoreFolder->setIcon(mStyle->standardIcon(QStyle::SP_ArrowBack));
+
     // Same rules as updateButtonStates(): "New" / "New Folder" are
     // always usable, the rest depend on what the row is.
     aNew->setEnabled(m_dao.openNew != nullptr);
