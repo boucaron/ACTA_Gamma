@@ -85,6 +85,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     ("Skill: default name", "Model: default name", "Context", "Execution")
     while code overrides them via `setWindowTitle`. Clean them up so the
     `.ui` and code don't disagree.
+    *(Done, c1ec1f2: `skillDialog.ui` title is now "Skill", `modelDialog.ui`
+    "Model"; `contextDialog.ui`/`executionDialog.ui` were already
+    consistent with the code.)*
 13. **"New" target-folder logic.** In `SkillPanel::onNewBtnClicked` (and
     Model), if the user has a *skill/model* selected (not a folder),
     `selectedFolderId()` returns 0 and the new item lands at root, not next
@@ -189,6 +192,13 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      relying on the 609×664 geometry snapshot.
    - The revision tree floats at the top with no caption; give it a label
      ("Revisions of this skill").
+   *(Done, c1ec1f2: `"default name"` text removed from `nameLineEdit`
+   (placeholder `"Name…"` in the dialog constructors; `newSkill` already
+   clears the field), `descriptionTextEdit` hardcoded `readOnly` + default
+   HTML content removed, both revision-tree headers `"1"` → `"Revision"`
+   (matching `configureRevisionTree`), "Revisions of this skill/model"
+   caption labels added, and all four dialogs got `minimumSize` plus a
+   smaller, sensible default geometry.)*
 28. **MainWindow chrome.** Add a minimal menu bar (File → Exit, Database →
    Reconnect, Database → Load Database…, Help → About) and give the window
    an icon. Cache the logo `QPixmap` and scale for `devicePixelRatio`.
@@ -352,7 +362,11 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      searches row content — plus an execution status combo)*
 3. **Polish:**
    - #27 `.ui` cleanup
-     *(#29 done: hard max width removed, min widths + stretch factor;
+     *(#27 done, c1ec1f2: neutral window titles, `"Name…"` placeholder
+     instead of literal `"default name"`, real `"Revision"` tree headers,
+     no hardcoded `readOnly` in the `.ui`, `minimumSize` + sensible default
+     geometry, revision-tree caption labels;
+     #29 done: hard max width removed, min widths + stretch factor;
      #30 done: light QSS from `assets/style.qss`)*
    - #39, #40 keyboard shortcuts + window-state persistence
      *(#39 partly done: Delete/F2/Enter + button accelerators in the

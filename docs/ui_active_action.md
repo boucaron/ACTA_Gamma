@@ -17,14 +17,13 @@ lives in `ui_review.md`.
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| P1 | `.ui` file cleanup — placeholder text instead of "default name", real revision-tree header, drop hardcoded `readOnly`, sane min sizes, consistent window titles | UR #12, #27 | |
 | P5 | Data lifecycle (delete/prune executions + contexts) | UR #42 | **Closed by owner decision (2026-07-10): no delete for contexts/executions planned — soft-delete only.** UR #31 (empty-state placeholders) and UR #41 (redundant "Show" affordances) shipped; the delete/prune remainder is deliberately not implemented: `acta_db` gets no hard-delete API, and no `deleted_at` soft delete for contexts/executions is added. If ever wanted later, it must be a `deleted_at` soft delete mirroring the skill/model/folder pattern |
 
 
 ## Summary
 
-- **Now:** H2 (to analyze).
-- **Polish last:** P1 (`.ui` cleanup). P5 closed by decision (no delete for
-  contexts/executions; soft-delete only if ever wanted).
+- **Now:** H2 (to analyze) — the only queued action; P1 shipped (c1ec1f2).
+- P5 closed by decision (no delete for contexts/executions; soft-delete only
+  if ever wanted).
 
 (Full original list lives in `ui_review.md`.)
