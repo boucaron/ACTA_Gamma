@@ -22,6 +22,7 @@ numbering).
 
 ## Summary
 
-- **Now:** H2 (to analyze) — the only queued action; P1 shipped (c1ec1f2).
+- **Now:** H2 (to analyze) — the only queued action; P1 shipped
+  (c1ec1f2), P8 shipped (05c68bc).
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).

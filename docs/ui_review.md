@@ -18,16 +18,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ### Bugs / dead code
 
-8. **Full-tree reload on every change.** `reload()` clears and rebuilds the
-   whole tree, re-runs one query per folder, and loses the current
-   selection/scroll position. For moderate data this is fine, but:
-   - preserve the selected item (re-select by id after rebuild),
-   - consider `list_all`-style single queries for skills/models instead of
-     N per-folder queries,
-   - skip the rebuild when a dialog was cancelled with no changes.
-   *(Partly done: `FolderTreePanel::reload()` preserves the current
-   selection across the rebuild (re-selected by id); the single
-   `list_all`-style query and the skip-rebuild-on-cancel are not done.)*
 13. **"New" target-folder logic.** In `SkillPanel::onNewBtnClicked` (and
     Model), if the user has a *skill/model* selected (not a folder),
     `selectedFolderId()` returns 0 and the new item lands at root, not next
@@ -153,8 +143,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      `content` may be plain text; decide scope before implementing)*
    - #37 remaining: status-meaning tooltips, "Show trash" label
 3. **Polish:**
-   - #8 reload optimizations (single `list_all` query, skip rebuild on
-     cancel)
    - #13/#34 "New" target-folder fallback + target label
    - #14 `editExecution` `err` handling
    - #16 `main.cpp` log file
