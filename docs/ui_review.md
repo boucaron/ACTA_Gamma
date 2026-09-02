@@ -301,12 +301,18 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #18 execution-creation flow (the app's core feature)
    - #7 dedupe panels/dialogs into shared base classes (done)
    - #15 JSON validation
+     *(to analyze: not all three fields are necessarily JSON — context
+     `content` may be plain text; decide scope before implementing)*
    - #24, #25 date formatting + status colors *(done)*
    - #37, #38 tooltips + search/filter
+     *(#38 done: filter boxes above every tree — context filter also
+     searches row content — plus an execution status combo)*
 3. **Polish:**
-   - #27, #29, #30 `.ui` cleanup, splitter constraints, theming
+   - #27, #30 `.ui` cleanup, theming
+     *(#29 done: hard max width removed, min widths + stretch factor)*
    - #39, #40 keyboard shortcuts + window-state persistence
      *(#39 partly done: Delete/F2/Enter + button accelerators in the
-     panels)*
+     panels; #40 done: QSettings geometry/splitter/"show deleted"
+     persistence)*
    - #41, #42 redundant views, data lifecycle
    - #44, #45 live execution UX, friendlier errors
