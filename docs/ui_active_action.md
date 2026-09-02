@@ -11,7 +11,7 @@ lives in `ui_review.md`.
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| H2 | **JSON validation** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | dialogs + context panel editor |
+| H2 | **JSON validation (to analyze)** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | analyze first: not all three fields are necessarily JSON — `configuration` is backend-specific JSON (`DBDesign.md`), `output_schema` is a JSON schema, but context `content` may be plain text; decide scope before implementing (dialogs + context panel editor) |
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
 
 ### Polish
