@@ -9,6 +9,7 @@ class ExecutionPanel;
 class QWidget;
 class QLabel;
 class QPushButton;
+class QSplitter;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -34,6 +35,10 @@ private:
     ModelPanel *m_modelPanel = nullptr;
     ContextPanel *m_contextPanel = nullptr;
     ExecutionPanel *m_executionPanel = nullptr;
+
+    // Held for window-state persistence (UR #40): the splitter state is
+    // saved in closeEvent().
+    QSplitter *m_splitter = nullptr;
 
     // Persistent offline indicator + Retry button (shown only when offline).
     QWidget *m_offlineWidget = nullptr;
@@ -66,4 +71,10 @@ private:
     // Bootstrap loop: open/create, and on failure offer the startup
     // modal (create / pick location / exit) (UR #32).
     void runDatabaseBootstrap();
+
+protected:
+    // Window-state persistence (UR #40): save the window geometry, the
+    // splitter sizes, and the "Show deleted items" flags to QSettings on
+    // close; the constructor restores them on the next launch.
+    void closeEvent(QCloseEvent *event) override;
 };
