@@ -35,7 +35,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 4. **Case-mismatched filename:** `widgets/modelpanel.cpp` vs `modelPanel.h`
    (and the `.pro` entry says `modelpanel.cpp`). Works on Windows
    (case-insensitive) but **breaks Linux/macOS builds**. Rename to
-   `modelPanel.cpp`.
+   `modelPanel.cpp`. *(Done: file renamed, `src.pro` entry updated.)*
 5. **Duplicate includes** in `mainWindow.cpp`: the four
    `#include "widgets/...Panel.h"` lines appear twice.
 6. **`dupString`, `utf8`, `toDateTime` copy-pasted in 5 dialogs.**
@@ -43,6 +43,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    implementation, one test target. Also simplify `toDateTime`: the
    `Qt::ISODate` attempt can never match `"yyyy-MM-dd HH:mm:ss"` anyway;
    just try `Qt::ISODateWithMs`, then `"yyyy-MM-dd HH:mm:ss"`.
+   *(Done: `widgets/util.h`; all five dialogs use it.)*
 7. **Massive duplication between `SkillPanel`/`ModelPanel` and
    `SkillDialog`/`ModelDialog`:** identical tree building, folder nesting,
    soft-delete/restore wiring, mode handling, save flow. Extract:
@@ -52,6 +53,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      boilerplate, `dupString`/`toDateTime`).
    This removes ~400 lines of copy-paste and halves the surface for
    divergence bugs.
+   *(Done: `FolderTreePanel` + `FolderTreeDao` share the panel code;
+   `EntityDialog` shares mode handling, the revision tree and the save
+   flow; `SkillPanel`/`ModelPanel` are now thin DAO adapters.)*
 8. **Full-tree reload on every change.** `reload()` clears and rebuilds the
    whole tree, re-runs one query per folder, and loses the current
    selection/scroll position. For moderate data this is fine, but:
@@ -266,7 +270,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 2. **High:**
    - #17 folder CRUD
    - #18 execution-creation flow (the app's core feature)
-   - #7 dedupe panels/dialogs into shared base classes
+   - #7 dedupe panels/dialogs into shared base classes (done)
    - #15 JSON validation
    - #24, #25 date formatting + status colors
    - #37, #38 tooltips + search/filter

@@ -11,7 +11,6 @@ lives in `ui_review.md`.
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| H1 | **Dedupe `SkillPanel`/`ModelPanel` and `SkillDialog`/`ModelDialog`** into a shared `FolderTreePanel` / `EntityDialog` base | UR #7 | F1/F2 make the divergence window smaller; land after both panels have folders |
 | H2 | **JSON validation** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | dialogs + context panel editor |
 | H3 | **Date formatting + status colors** — locale-formatted dates in columns/dialogs (ISO in tooltips), color-coded execution status and log level | UR #24, #25 | all four panels + dialogs |
 | H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
@@ -31,7 +30,7 @@ lives in `ui_review.md`.
 
 ## Summary
 
-- **Now:** H1–H5.
+- **Now:** H2–H5.
 - **Polish last:** P1–P3, P5–P8.
 
 (Full original list lives in `ui_review.md`.)

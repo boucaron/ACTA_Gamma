@@ -7,38 +7,12 @@
 #include "modelDialog.h"
 #include "skillDialog.h"
 
-#include <QLocale>
 #include <QStandardItem>
 #include <QStandardItemModel>
 
 #include <QtGlobal>
 
-namespace {
-
-QString utf8(const char *s)
-{
-    return s ? QString::fromUtf8(s) : QString();
-}
-
-// created_at / started_at / completed_at come back from SQLite as
-// "yyyy-MM-dd HH:mm:ss".
-QDateTime toDateTime(const char *iso)
-{
-    if (!iso || !*iso)
-        return {};
-    const QString s = QString::fromUtf8(iso);
-    static const QList<Qt::DateFormat> formats = {
-        Qt::ISODateWithMs, Qt::ISODate,
-    };
-    for (auto f : formats) {
-        const QDateTime dt = QDateTime::fromString(s, f);
-        if (dt.isValid())
-            return dt;
-    }
-    return QLocale::c().toDateTime(s, "yyyy-MM-dd HH:mm:ss");
-}
-
-} // namespace
+#include "util.h"
 
 ExecutionDialog::ExecutionDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui_executionDialog)

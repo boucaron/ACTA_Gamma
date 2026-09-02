@@ -1,109 +1,13 @@
 #pragma once
-#include <QWidget>
 
-#include "acta_db.h"
-
-class QTreeWidget;
-class QTreeWidgetItem;
-class QPushButton;
-class QCheckBox;
-class QIcon;
+#include "folderTreePanel.h"
 
 // Models browser backed by acta_db.
 //
-// Tree layout:
-//   <root folder>            (from model_folder rows, nested by parent_id)
-//     <model>                (from acta_db_model_list_in_folder)
-//     <child folder>
-//   <root-level model>       (folder_id = 0)
-//
-// Data sources (one page each; limit 0 is clamped to ACTA_DB_MAX_PAGE):
-//   acta_db_model_folder_list_all            – full live folder skeleton
-//                                              (parent_id links)
-//   acta_db_model_folder_list_all_with_deleted
-//                                             – same, including soft-deleted
-//                                              folders ("Show deleted items"
-//                                              checked)
-//   acta_db_model_list_in_folder             – models per folder, 0 = root
-//   acta_db_model_list_in_folder_with_deleted
-//                                             – same, including soft-deleted
-//                                              models ("Show deleted items"
-//                                              checked)
-class ModelPanel : public QWidget {
-    Q_OBJECT
+// All tree/folder/action behaviour lives in FolderTreePanel (UR #7);
+// this class only wires the model DAO (acta_db_model_* calls and
+// ModelDialog construction) into it.
+class ModelPanel : public FolderTreePanel {
 public:
     explicit ModelPanel(db_t *db = nullptr, QWidget *parent = nullptr);
-
-    QTreeWidget *tree = nullptr;
-    QCheckBox *showDeletedCheck = nullptr;
-    QPushButton *newBtn = nullptr;
-    QPushButton *showBtn = nullptr;
-    QPushButton *editBtn = nullptr;
-    QPushButton *deleteBtn = nullptr;
-    QPushButton *restoreBtn = nullptr;
-    QPushButton *newFolderBtn = nullptr;
-    QPushButton *renameFolderBtn = nullptr;
-    QPushButton *deleteFolderBtn = nullptr;
-    QPushButton *restoreFolderBtn = nullptr;
-
-    // Rebuild the tree from the database (no-op if the handle is null,
-    // e.g. the db failed to open at startup).
-    void reload();
-
-    // Id of the currently selected model, or 0 if nothing (or a folder)
-    // is selected.
-    int selectedModelId() const;
-
-private:
-    db_t *m_db;
-    QIcon m_deletedIcon;
-    QIcon m_folderIcon;
-
-    // Append one model row per model of `folderId` (0 = root level)
-    // under `parent` (nullptr = top level).  Soft-deleted models are
-    // included – and marked with m_deletedIcon – when the
-    // "Show deleted items" checkbox is checked.
-    void addModels(QTreeWidgetItem *parent, int folderId);
-
-    // Id of the currently selected folder, or 0 if the selection is not
-    // a folder (used as the target folder by the New button).
-    int selectedFolderId() const;
-
-    // Enable/disable all action buttons according to the current
-    // selection (model / live folder / deleted folder / nothing).
-    void updateButtonStates();
-
-    // Find the tree item storing `id` under `role`, searching the whole
-    // tree. Returns nullptr when not found.
-    QTreeWidgetItem *findItemByRole(int role, int id) const;
-
-private:
-    // Right-click menu on a tree row: the same actions as the button
-    // rows (model actions + folder actions), enabled/disabled with the
-    // same rules as updateButtonStates().
-    void onListContextMenu(const QPoint &pos);
-
-private slots:
-    void onNewBtnClicked();
-    void onShowBtnClicked();
-    void onEditBtnClicked();
-    // Model delete/restore handlers shared by the button row and the
-    // context menu.
-    void onModelDeleteClicked();
-    void onModelRestoreClicked();
-    void onNewFolderBtnClicked();
-    void onRenameFolderBtnClicked();
-    void onDeleteFolderBtnClicked();
-    void onRestoreFolderBtnClicked();
-    // Keyboard accelerators (UR #39), active while the tree has focus:
-    // Delete soft-deletes the selection (model or folder), F2 renames it
-    // (folders for now; models have no rename action yet), Enter opens
-    // the detail dialog. Intercepted in eventFilter() so they fire
-    // before the tree's own key handling (which would start inline
-    // editing on F2/Return).
-    bool eventFilter(QObject *obj, QEvent *event) override;
-
-    void onDeleteKeyPressed();
-    void onRenameKeyPressed();
-    void onReturnKeyPressed();
 };

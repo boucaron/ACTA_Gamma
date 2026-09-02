@@ -11,6 +11,8 @@ SOURCES += \
     main.cpp \
     dbhandle.cpp \
     mainWindow.cpp \
+    widgets/folderTreePanel.cpp \
+    widgets/entityDialog.cpp \
     widgets/skillPanel.cpp \
     widgets/modelPanel.cpp \
     widgets/contextPanel.cpp \
@@ -24,6 +26,9 @@ SOURCES += \
 HEADERS += \
     dbhandle.h \
     mainWindow.h \
+    widgets/folderTreePanel.h \
+    widgets/entityDialog.h \
+    widgets/util.h \
     widgets/skillPanel.h \
     widgets/modelPanel.h \
     widgets/contextPanel.h \

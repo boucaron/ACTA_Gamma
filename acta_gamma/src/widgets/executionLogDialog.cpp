@@ -1,34 +1,7 @@
 #include "executionLogDialog.h"
 #include "ui_executionLogDialog.h"
 
-#include <QDateTime>
-#include <QLocale>
-
-namespace {
-
-QString utf8(const char *s)
-{
-    return s ? QString::fromUtf8(s) : QString();
-}
-
-// created_at comes back from SQLite as "yyyy-MM-dd HH:mm:ss".
-QDateTime toDateTime(const char *iso)
-{
-    if (!iso || !*iso)
-        return {};
-    const QString s = QString::fromUtf8(iso);
-    static const QList<Qt::DateFormat> formats = {
-        Qt::ISODateWithMs, Qt::ISODate,
-    };
-    for (auto f : formats) {
-        const QDateTime dt = QDateTime::fromString(s, f);
-        if (dt.isValid())
-            return dt;
-    }
-    return QLocale::c().toDateTime(s, "yyyy-MM-dd HH:mm:ss");
-}
-
-} // namespace
+#include "util.h"
 
 ExecutionLogDialog::ExecutionLogDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui_executionLogDialog)

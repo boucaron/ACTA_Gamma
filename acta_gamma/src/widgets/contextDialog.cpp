@@ -2,54 +2,14 @@
 #include "ui_contextDialog.h"
 
 #include <QCryptographicHash>
-#include <QDateTime>
-#include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
 
 #include <QtGlobal>
 
 #include <cstdlib>
-#include <cstring>
 
-// strdup is not part of the C standard; duplicate into a malloc block
-// freed by free().
-static char *dupString(const char *s)
-{
-    if (!s)
-        return nullptr;
-    const size_t n = std::strlen(s) + 1;
-    char *copy = static_cast<char *>(std::malloc(n));
-    if (copy)
-        std::memcpy(copy, s, n);
-    return copy;
-}
-
-namespace {
-
-QString utf8(const char *s)
-{
-    return s ? QString::fromUtf8(s) : QString();
-}
-
-// created_at comes back from SQLite's now() as "yyyy-MM-dd HH:mm:ss".
-QDateTime toDateTime(const char *iso)
-{
-    if (!iso || !*iso)
-        return {};
-    const QString s = QString::fromUtf8(iso);
-    static const QList<Qt::DateFormat> formats = {
-        Qt::ISODateWithMs, Qt::ISODate,
-    };
-    for (auto f : formats) {
-        const QDateTime dt = QDateTime::fromString(s, f);
-        if (dt.isValid())
-            return dt;
-    }
-    return QLocale::c().toDateTime(s, "yyyy-MM-dd HH:mm:ss");
-}
-
-} // namespace
+#include "util.h"
 
 ContextDialog::ContextDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui_contextDialog)

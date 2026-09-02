@@ -1,4 +1,4 @@
-#include "skillPanel.h"
+#include "folderTreePanel.h"
 
 #include <QCheckBox>
 #include <QColor>
@@ -21,19 +21,18 @@
 
 #include <functional>
 
-#include "skillDialog.h"
-
 namespace {
 const int RoleFolderId        = Qt::UserRole;
-const int RoleSkillId         = Qt::UserRole + 1;
-const int RoleIsDeleted       = Qt::UserRole + 2; // skills only
+const int RoleEntityId        = Qt::UserRole + 1;
+const int RoleIsDeleted       = Qt::UserRole + 2; // entities only
 const int RoleFolderIsDeleted = Qt::UserRole + 3; // folders only
 } // namespace
 
-SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
+FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
+    : QWidget(parent), m_dao(std::move(dao))
 {
     auto *lay = new QVBoxLayout(this);
-    lay->addWidget(new QLabel("Skill"));
+    lay->addWidget(new QLabel(m_dao.entityTitle));
 
     tree = new QTreeWidget;
     tree->setColumnCount(1);
@@ -50,7 +49,7 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     auto *actionRow = new QHBoxLayout;
     newBtn = new QPushButton("&New");
     showBtn = new QPushButton("S&how");
-    editBtn = new QPushButton("&Edit Skill");
+    editBtn = new QPushButton(QString("E&dit ") + m_dao.entityTitle);
     actionRow->addWidget(newBtn);
     actionRow->addWidget(showBtn);
     actionRow->addWidget(editBtn);
@@ -80,27 +79,27 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
     });
-    connect(newBtn, &QPushButton::clicked, this, &SkillPanel::onNewBtnClicked);
-    connect(showBtn, &QPushButton::clicked, this, &SkillPanel::onShowBtnClicked);
-    connect(editBtn, &QPushButton::clicked, this, &SkillPanel::onEditBtnClicked);
+    connect(newBtn, &QPushButton::clicked, this, &FolderTreePanel::onNewBtnClicked);
+    connect(showBtn, &QPushButton::clicked, this, &FolderTreePanel::onShowBtnClicked);
+    connect(editBtn, &QPushButton::clicked, this, &FolderTreePanel::onEditBtnClicked);
     connect(deleteBtn, &QPushButton::clicked, this,
-            &SkillPanel::onSkillDeleteClicked);
+            &FolderTreePanel::onEntityDeleteClicked);
     connect(restoreBtn, &QPushButton::clicked, this,
-            &SkillPanel::onSkillRestoreClicked);
+            &FolderTreePanel::onEntityRestoreClicked);
     connect(newFolderBtn, &QPushButton::clicked, this,
-            &SkillPanel::onNewFolderBtnClicked);
+            &FolderTreePanel::onNewFolderBtnClicked);
     connect(renameFolderBtn, &QPushButton::clicked, this,
-            &SkillPanel::onRenameFolderBtnClicked);
+            &FolderTreePanel::onRenameFolderBtnClicked);
     connect(deleteFolderBtn, &QPushButton::clicked, this,
-            &SkillPanel::onDeleteFolderBtnClicked);
+            &FolderTreePanel::onDeleteFolderBtnClicked);
     connect(restoreFolderBtn, &QPushButton::clicked, this,
-            &SkillPanel::onRestoreFolderBtnClicked);
+            &FolderTreePanel::onRestoreFolderBtnClicked);
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *, QTreeWidgetItem *) {
                 updateButtonStates();
             });
     connect(tree, &QTreeWidget::customContextMenuRequested, this,
-            &SkillPanel::onListContextMenu);
+            &FolderTreePanel::onListContextMenu);
 
     tree->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -114,75 +113,63 @@ SkillPanel::SkillPanel(db_t *db, QWidget *parent) : QWidget(parent), m_db(db)
     reload();
 }
 
-void SkillPanel::updateButtonStates()
+void FolderTreePanel::updateButtonStates()
 {
     const auto *cur = tree->currentItem();
-    const bool hasSkill =
-        cur != nullptr && cur->data(0, RoleSkillId).toInt() != 0;
-    const bool isSkillDeleted =
-        hasSkill && cur->data(0, RoleIsDeleted).toBool();
+    const bool hasEntity =
+        cur != nullptr && cur->data(0, RoleEntityId).toInt() != 0;
+    const bool isEntityDeleted =
+        hasEntity && cur->data(0, RoleIsDeleted).toBool();
     const bool hasFolder =
         cur != nullptr && cur->data(0, RoleFolderId).toInt() != 0;
     const bool isFolderDeleted =
         hasFolder && cur->data(0, RoleFolderIsDeleted).toBool();
 
-    showBtn->setEnabled(hasSkill);
-    editBtn->setEnabled(hasSkill && !isSkillDeleted);
-    deleteBtn->setEnabled(hasSkill && !isSkillDeleted);
-    restoreBtn->setEnabled(hasSkill && isSkillDeleted);
+    showBtn->setEnabled(hasEntity);
+    editBtn->setEnabled(hasEntity && !isEntityDeleted);
+    deleteBtn->setEnabled(hasEntity && !isEntityDeleted);
+    restoreBtn->setEnabled(hasEntity && isEntityDeleted);
 
     // "New Folder" is always usable: it targets the selected folder,
-    // or root when a skill (or nothing) is selected.
+    // or root when an entity (or nothing) is selected.
     renameFolderBtn->setEnabled(hasFolder && !isFolderDeleted);
     deleteFolderBtn->setEnabled(hasFolder && !isFolderDeleted);
     restoreFolderBtn->setEnabled(hasFolder && isFolderDeleted);
 }
 
-void SkillPanel::reload()
+void FolderTreePanel::reload()
 {
     // Preserve the current selection across the rebuild.
     const auto *cur = tree->currentItem();
     const int keepFolder = cur ? cur->data(0, RoleFolderId).toInt() : 0;
-    const int keepSkill  = cur ? cur->data(0, RoleSkillId).toInt() : 0;
+    const int keepEntity  = cur ? cur->data(0, RoleEntityId).toInt() : 0;
 
     tree->clear();
-    if (!m_db)
+    if (!m_dao.listFolders)
         return; // db open failed at startup; MainWindow surfaces the reason.
 
     // Folder skeleton: all folders in one call, nested via parent_id
-    // (0 = root). list_all is ordered by id, which is not guaranteed to be
-    // parent-before-child, so build the child->parent map first and create
-    // each item directly under its parent (QTreeWidgetItem cannot be
-    // re-parented once created).
+    // (0 = root). list_all is ordered by id, which is not guaranteed to
+    // be parent-before-child, so build the child->parent map first and
+    // create each item directly under its parent (QTreeWidgetItem
+    // cannot be re-parented once created).
     // Folders whose parent is not in the set stay at the top level.
-    // With "Show deleted items" checked, soft-deleted folders are included
-    // (and marked) so they can be restored.
+    // With "Show deleted items" checked, soft-deleted folders are
+    // included (and marked) so they can be restored.
     const bool showDeleted =
         showDeletedCheck != nullptr && showDeletedCheck->isChecked();
-    int nFolders = 0;
-    int err = ACTA_DB_OK;
-    skill_folder_t **folders = showDeleted
-        ? acta_db_skill_folder_list_all_with_deleted(m_db, 0, 0, &nFolders,
-                                                      &err)
-        : acta_db_skill_folder_list_all(m_db, 0, 0, &nFolders, &err);
-    if (!folders) {
-        if (err != ACTA_DB_OK)
-            qWarning("skill folder lister failed: %s",
-                     acta_db_strerror(err));
-        return;
-    }
+    const QList<FolderRow> folders = m_dao.listFolders(showDeleted);
 
     QHash<int, QString> names;
     QHash<int, bool> deleted;
     QHash<int, QList<int>> children;
     QSet<int> ids;
-    for (int i = 0; i < nFolders; ++i) {
-        names.insert(folders[i]->id, QString::fromUtf8(folders[i]->name));
-        deleted.insert(folders[i]->id,
-                       folders[i]->deleted_at && folders[i]->deleted_at[0]);
-        ids.insert(folders[i]->id);
-        if (folders[i]->parent_id != 0)
-            children[folders[i]->parent_id].append(folders[i]->id);
+    for (const FolderRow &f : folders) {
+        names.insert(f.id, f.name);
+        deleted.insert(f.id, !f.deletedAt.isEmpty());
+        ids.insert(f.id);
+        if (f.parent_id != 0)
+            children[f.parent_id].append(f.id);
     }
 
     QHash<int, QTreeWidgetItem *> folderItems;
@@ -204,17 +191,15 @@ void SkillPanel::reload()
         for (int kid : kids)
             addFolder(kid, item);
     };
-    for (int i = 0; i < nFolders; ++i) {
-        if (folders[i]->parent_id == 0 || !ids.contains(folders[i]->parent_id))
-            addFolder(folders[i]->id, nullptr);
+    for (const FolderRow &f : folders) {
+        if (f.parent_id == 0 || !ids.contains(f.parent_id))
+            addFolder(f.id, nullptr);
     }
 
-    // Skills: root level (folder_id 0), then one row per folder.
-    addSkills(nullptr, 0);
+    // Entities: root level (folder_id 0), then one row per folder.
+    addEntities(nullptr, 0);
     for (auto it = folderItems.cbegin(); it != folderItems.cend(); ++it)
-        addSkills(it.value(), it.key());
-
-    acta_db_skill_folder_list_free(folders, nFolders);
+        addEntities(it.value(), it.key());
 
     for (int i = 0; i < tree->topLevelItemCount(); ++i)
         tree->topLevelItem(i)->setExpanded(true);
@@ -224,60 +209,48 @@ void SkillPanel::reload()
     QTreeWidgetItem *keep = nullptr;
     if (keepFolder != 0)
         keep = findItemByRole(RoleFolderId, keepFolder);
-    else if (keepSkill != 0)
-        keep = findItemByRole(RoleSkillId, keepSkill);
+    else if (keepEntity != 0)
+        keep = findItemByRole(RoleEntityId, keepEntity);
     if (keep)
         tree->setCurrentItem(keep);
 
     updateButtonStates();
 }
 
-void SkillPanel::addSkills(QTreeWidgetItem *parent, int folderId)
+void FolderTreePanel::addEntities(QTreeWidgetItem *parent, int folderId)
 {
-    int n = 0;
-    int err = ACTA_DB_OK;
-    const bool showDeleted =
-        showDeletedCheck != nullptr && showDeletedCheck->isChecked();
-    skill_t **skills = showDeleted
-        ? acta_db_skill_list_in_folder_with_deleted(m_db, folderId, 0, 0, &n,
-                                                    &err)
-        : acta_db_skill_list_in_folder(m_db, folderId, 0, 0, &n, &err);
-    if (!skills) {
-        if (err != ACTA_DB_OK)
-            qWarning("acta_db_skill_list_in_folder(%d) failed: %s", folderId,
-                     acta_db_strerror(err));
-        return;
-    }
+    const QList<FolderRow> entities =
+        m_dao.listEntities(folderId,
+                            showDeletedCheck != nullptr &&
+                                showDeletedCheck->isChecked());
 
-    for (int i = 0; i < n; ++i) {
+    for (const FolderRow &e : entities) {
         auto *item = parent
-            ? new QTreeWidgetItem(parent, {QString::fromUtf8(skills[i]->name)})
-            : new QTreeWidgetItem(tree, {QString::fromUtf8(skills[i]->name)});
-        item->setData(0, RoleSkillId, skills[i]->id);
-        const bool isDeleted =
-            skills[i]->deleted_at && skills[i]->deleted_at[0];
+            ? new QTreeWidgetItem(parent, {e.name})
+            : new QTreeWidgetItem(tree, {e.name});
+        item->setData(0, RoleEntityId, e.id);
+        const bool isDeleted = !e.deletedAt.isEmpty();
         item->setData(0, RoleIsDeleted, isDeleted);
         if (isDeleted) {
             item->setIcon(0, m_deletedIcon);
             item->setForeground(0, QColor(Qt::gray));
         }
     }
-    acta_db_skill_list_free(skills, n);
 }
 
-int SkillPanel::selectedSkillId() const
+int FolderTreePanel::selectedEntityId() const
 {
     const auto *cur = tree->currentItem();
-    return cur ? cur->data(0, RoleSkillId).toInt() : 0;
+    return cur ? cur->data(0, RoleEntityId).toInt() : 0;
 }
 
-int SkillPanel::selectedFolderId() const
+int FolderTreePanel::selectedFolderId() const
 {
     const auto *cur = tree->currentItem();
     return cur ? cur->data(0, RoleFolderId).toInt() : 0;
 }
 
-QTreeWidgetItem *SkillPanel::findItemByRole(int role, int id) const
+QTreeWidgetItem *FolderTreePanel::findItemByRole(int role, int id) const
 {
     std::function<QTreeWidgetItem *(QTreeWidgetItem *)> search =
         [&](QTreeWidgetItem *item) -> QTreeWidgetItem * {
@@ -298,74 +271,70 @@ QTreeWidgetItem *SkillPanel::findItemByRole(int role, int id) const
     return nullptr;
 }
 
-void SkillPanel::onNewBtnClicked()
+void FolderTreePanel::onNewBtnClicked()
 {
-    if (!m_db)
+    if (!m_dao.openNew)
         return;
 
-    // New skill goes into the selected folder when one is selected,
+    // New entity goes into the selected folder when one is selected,
     // otherwise at the root level.
-    SkillDialog dlg(this);
-    dlg.newSkill(m_db, selectedFolderId());
-    dlg.exec();
+    m_dao.openNew(this, selectedFolderId());
     reload();
 }
 
-void SkillPanel::onShowBtnClicked()
+void FolderTreePanel::onShowBtnClicked()
 {
-    const int skillId = selectedSkillId();
-    if (skillId == 0 || !m_db)
+    const int entityId = selectedEntityId();
+    if (entityId == 0 || !m_dao.openShow)
         return;
 
-    SkillDialog dlg(this);
-    dlg.showSkill(m_db, skillId);
-    dlg.exec();
+    m_dao.openShow(this, entityId);
 }
 
-void SkillPanel::onEditBtnClicked()
+void FolderTreePanel::onEditBtnClicked()
 {
-    const int skillId = selectedSkillId();
-    if (skillId == 0 || !m_db)
+    const int entityId = selectedEntityId();
+    if (entityId == 0 || !m_dao.openEdit)
         return;
 
-    SkillDialog dlg(this);
-    dlg.editSkill(m_db, skillId);
-    dlg.exec();
+    m_dao.openEdit(this, entityId);
     reload();
 }
 
-void SkillPanel::onSkillDeleteClicked()
+void FolderTreePanel::onEntityDeleteClicked()
 {
-    const int skillId = selectedSkillId();
-    if (!m_db || skillId == 0)
+    const int entityId = selectedEntityId();
+    if (!m_dao.softDeleteEntity || entityId == 0)
         return;
 
     const auto *cur = tree->currentItem();
     const QString name = cur ? cur->text(0) : QString();
     if (QMessageBox::question(
-            this, tr("Delete Skill"),
-            tr("Delete skill '%1'? It stays in the database and can be "
+            this, tr("Delete %1").arg(m_dao.entityTitle),
+            tr("Delete %1 '%2'? It stays in the database and can be "
                "restored.")
+                .arg(m_dao.entityTitle.toLower())
                 .arg(name))
         != QMessageBox::Yes)
         return;
 
-    if (acta_db_skill_soft_delete(m_db, skillId) == ACTA_DB_OK)
+    if (m_dao.softDeleteEntity(entityId) == ACTA_DB_OK)
         reload();
 }
 
-void SkillPanel::onSkillRestoreClicked()
+void FolderTreePanel::onEntityRestoreClicked()
 {
-    const int skillId = selectedSkillId();
-    if (!m_db || skillId == 0)
+    const int entityId = selectedEntityId();
+    if (!m_dao.restoreEntity || entityId == 0)
         return;
-    if (acta_db_skill_restore(m_db, skillId) == ACTA_DB_OK) {
-        QMessageBox::information(this, tr("Skill"), tr("Skill restored."));
+    if (m_dao.restoreEntity(entityId) == ACTA_DB_OK) {
+        QMessageBox::information(this, m_dao.entityTitle,
+                                tr("%1 restored.").arg(m_dao.entityTitle));
         reload();
     }
 }
 
-void SkillPanel::onListContextMenu(const QPoint &pos)
+void FolderTreePanel::onListContextMenu(const QPoint &pos)
 {
     const auto *item = tree->itemAt(pos);
     if (!item)
@@ -374,39 +343,42 @@ void SkillPanel::onListContextMenu(const QPoint &pos)
     // exactly as the button row does.
     tree->setCurrentItem(const_cast<QTreeWidgetItem *>(item));
 
-    const bool hasSkill = item->data(0, RoleSkillId).toInt() != 0;
-    const bool isSkillDeleted =
-        hasSkill && item->data(0, RoleIsDeleted).toBool();
+    const bool hasEntity = item->data(0, RoleEntityId).toInt() != 0;
+    const bool isEntityDeleted =
+        hasEntity && item->data(0, RoleIsDeleted).toBool();
     const bool hasFolder = item->data(0, RoleFolderId).toInt() != 0;
     const bool isFolderDeleted =
         hasFolder && item->data(0, RoleFolderIsDeleted).toBool();
 
     QMenu menu(this);
-    auto *aNew = menu.addAction(tr("New"), this, &SkillPanel::onNewBtnClicked);
-    auto *aShow = menu.addAction(tr("Show"), this, &SkillPanel::onShowBtnClicked);
-    auto *aEdit = menu.addAction(tr("Edit Skill"), this, &SkillPanel::onEditBtnClicked);
+    auto *aNew = menu.addAction(tr("New"), this,
+                               &FolderTreePanel::onNewBtnClicked);
+    auto *aShow = menu.addAction(tr("Show"), this,
+                                &FolderTreePanel::onShowBtnClicked);
+    auto *aEdit = menu.addAction(tr("Edit %1").arg(m_dao.entityTitle), this,
+                                &FolderTreePanel::onEditBtnClicked);
     auto *aDelete = menu.addAction(tr("Delete"), this,
-                                  &SkillPanel::onSkillDeleteClicked);
+                                  &FolderTreePanel::onEntityDeleteClicked);
     auto *aRestore = menu.addAction(tr("Restore"), this,
-                                   &SkillPanel::onSkillRestoreClicked);
+                                   &FolderTreePanel::onEntityRestoreClicked);
     menu.addSeparator();
     auto *aNewFolder = menu.addAction(tr("New Folder"), this,
-                                     &SkillPanel::onNewFolderBtnClicked);
+                                     &FolderTreePanel::onNewFolderBtnClicked);
     auto *aRenameFolder = menu.addAction(tr("Rename Folder"), this,
-                                         &SkillPanel::onRenameFolderBtnClicked);
+                                         &FolderTreePanel::onRenameFolderBtnClicked);
     auto *aDeleteFolder = menu.addAction(tr("Delete Folder"), this,
-                                         &SkillPanel::onDeleteFolderBtnClicked);
+                                         &FolderTreePanel::onDeleteFolderBtnClicked);
     auto *aRestoreFolder = menu.addAction(tr("Restore Folder"), this,
-                                          &SkillPanel::onRestoreFolderBtnClicked);
+                                          &FolderTreePanel::onRestoreFolderBtnClicked);
 
     // Same rules as updateButtonStates(): "New" / "New Folder" are
     // always usable, the rest depend on what the row is.
-    aNew->setEnabled(m_db != nullptr);
-    aShow->setEnabled(hasSkill);
-    aEdit->setEnabled(hasSkill && !isSkillDeleted);
-    aDelete->setEnabled(hasSkill && !isSkillDeleted);
-    aRestore->setEnabled(hasSkill && isSkillDeleted);
-    aNewFolder->setEnabled(m_db != nullptr);
+    aNew->setEnabled(m_dao.openNew != nullptr);
+    aShow->setEnabled(hasEntity);
+    aEdit->setEnabled(hasEntity && !isEntityDeleted);
+    aDelete->setEnabled(hasEntity && !isEntityDeleted);
+    aRestore->setEnabled(hasEntity && isEntityDeleted);
+    aNewFolder->setEnabled(m_dao.createFolder != nullptr);
     aRenameFolder->setEnabled(hasFolder && !isFolderDeleted);
     aDeleteFolder->setEnabled(hasFolder && !isFolderDeleted);
     aRestoreFolder->setEnabled(hasFolder && isFolderDeleted);
@@ -414,9 +386,9 @@ void SkillPanel::onListContextMenu(const QPoint &pos)
     menu.exec(tree->viewport()->mapToGlobal(pos));
 }
 
-void SkillPanel::onNewFolderBtnClicked()
+void FolderTreePanel::onNewFolderBtnClicked()
 {
-    if (!m_db)
+    if (!m_dao.createFolder)
         return;
 
     // New folder goes into the selected folder when one is selected,
@@ -433,12 +405,10 @@ void SkillPanel::onNewFolderBtnClicked()
         return;
 
     int newId = 0;
-    const int rc =
-        acta_db_skill_folder_create(m_db, trimmed.toUtf8().constData(),
-                                    parentId, &newId);
+    const int rc = m_dao.createFolder(parentId, trimmed, &newId);
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
-            this, tr("Skill"),
+            this, m_dao.entityTitle,
             tr("Could not create folder: %1")
                 .arg(QString::fromUtf8(acta_db_strerror(rc))));
         return;
@@ -449,10 +419,10 @@ void SkillPanel::onNewFolderBtnClicked()
         tree->setCurrentItem(item);
 }
 
-void SkillPanel::onRenameFolderBtnClicked()
+void FolderTreePanel::onRenameFolderBtnClicked()
 {
     const int folderId = selectedFolderId();
-    if (!m_db || folderId == 0)
+    if (!m_dao.renameFolder || folderId == 0)
         return;
 
     const auto *cur = tree->currentItem();
@@ -467,11 +437,10 @@ void SkillPanel::onRenameFolderBtnClicked()
     if (trimmed.isEmpty())
         return;
 
-    const int rc = acta_db_skill_folder_rename(
-        m_db, folderId, trimmed.toUtf8().constData());
+    const int rc = m_dao.renameFolder(folderId, trimmed);
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
-            this, tr("Skill"),
+            this, m_dao.entityTitle,
             tr("Could not rename folder: %1")
                 .arg(QString::fromUtf8(acta_db_strerror(rc))));
         return;
@@ -480,30 +449,32 @@ void SkillPanel::onRenameFolderBtnClicked()
     reload(); // reload() restores the selection to the renamed folder
 }
 
-void SkillPanel::onDeleteFolderBtnClicked()
+void FolderTreePanel::onDeleteFolderBtnClicked()
 {
     const int folderId = selectedFolderId();
-    if (!m_db || folderId == 0)
+    if (!m_dao.softDeleteFolder || folderId == 0)
         return;
 
     const auto *cur = tree->currentItem();
     const QString name = cur ? cur->text(0) : QString();
     if (QMessageBox::question(
             this, tr("Delete Folder"),
-            tr("Delete folder '%1'? Its skills stay in the database but "
+            tr("Delete folder '%1'? Its %2s stay in the database but "
                "are hidden until the folder is restored.")
-                .arg(name))
+                .arg(name)
+                .arg(m_dao.entityTitle.toLower()))
         != QMessageBox::Yes)
         return;
 
-    const int rc = acta_db_skill_folder_soft_delete(m_db, folderId);
+    const int rc = m_dao.softDeleteFolder(folderId);
     if (rc != ACTA_DB_OK) {
         QString msg;
         switch (rc) {
         case ACTA_DB_ERR_INVALID:
-            // The folder still has live child folders or live skills.
-            msg = tr("Folder still has live child folders or skills. "
-                      "Delete or move them first.");
+            // The folder still has live child folders or live entities.
+            msg = tr("Folder still has live child folders or %1s. "
+                      "Delete or move them first.")
+                    .arg(m_dao.entityTitle.toLower());
             break;
         case ACTA_DB_ERR_NOT_FOUND:
             msg = tr("Folder not found.");
@@ -513,59 +484,60 @@ void SkillPanel::onDeleteFolderBtnClicked()
                     .arg(QString::fromUtf8(acta_db_strerror(rc)));
             break;
         }
-        QMessageBox::warning(this, tr("Skill"), msg);
+        QMessageBox::warning(this, m_dao.entityTitle, msg);
         return;
     }
 
     reload();
 }
 
-void SkillPanel::onRestoreFolderBtnClicked()
+void FolderTreePanel::onRestoreFolderBtnClicked()
 {
     const int folderId = selectedFolderId();
-    if (!m_db || folderId == 0)
+    if (!m_dao.restoreFolder || folderId == 0)
         return;
 
-    const int rc = acta_db_skill_folder_restore(m_db, folderId);
+    const int rc = m_dao.restoreFolder(folderId);
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
-            this, tr("Skill"),
+            this, m_dao.entityTitle,
             tr("Could not restore folder: %1")
                 .arg(QString::fromUtf8(acta_db_strerror(rc))));
         return;
     }
 
-    QMessageBox::information(this, tr("Skill"), tr("Folder restored."));
+    QMessageBox::information(this, m_dao.entityTitle,
+                            tr("Folder restored."));
     reload();
 }
 
-void SkillPanel::onDeleteKeyPressed()
+void FolderTreePanel::onDeleteKeyPressed()
 {
     // Same gating as updateButtonStates(): only the enabled delete
     // handler may fire, whichever row kind is selected.
     if (deleteBtn->isEnabled())
-        onSkillDeleteClicked();
+        onEntityDeleteClicked();
     else if (deleteFolderBtn->isEnabled())
         onDeleteFolderBtnClicked();
 }
 
-void SkillPanel::onRenameKeyPressed()
+void FolderTreePanel::onRenameKeyPressed()
 {
     if (renameFolderBtn->isEnabled())
         onRenameFolderBtnClicked();
 }
 
-void SkillPanel::onReturnKeyPressed()
+void FolderTreePanel::onReturnKeyPressed()
 {
     if (showBtn->isEnabled())
         onShowBtnClicked();
 }
 
-bool SkillPanel::eventFilter(QObject *obj, QEvent *event)
+bool FolderTreePanel::eventFilter(QObject *obj, QEvent *event)
 {
-    // Delete soft-deletes the selection (skill or folder), F2 renames it
-    // (folders for now), Enter opens the detail dialog. Consuming the key
-    // here, before QTreeWidget's own handling, also prevents its
+    // Delete soft-deletes the selection (entity or folder), F2 renames
+    // it (folders for now), Enter opens the detail dialog. Consuming the
+    // key here, before QTreeWidget's own handling, also prevents its
     // built-in inline editing on F2/Return.
     if ((obj == tree || obj == tree->viewport())
             && event->type() == QEvent::KeyPress) {
