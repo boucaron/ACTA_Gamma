@@ -20,18 +20,22 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    The button does nothing. Either implement the one-shot execution flow
    (create execution row → call backend → write logs → update status) or
    hide/remove the button until it works.
+   *(Done: the button was removed; the one-shot flow has no backend
+   client yet.)*
 2. **Dead `QDialog::Accepted` branches:**
    - `ContextPanel::editContext`: `if (dlg.exec() == QDialog::Accepted) { // TODO }`
      — the read-only dialog only has a Close button (which rejects), so this
      can never fire.
    - `ExecutionPanel::onExecutionDoubleClicked`: same pattern with `// TODO`.
    Clean these up; they signal unfinished logic.
+   *(Done: both dead `Accepted` branches removed.)*
 3. **Misleading action name.** `ContextPanel`'s right-click menu says
    **"Edit"** for a context that is explicitly immutable (the DB has a
    `contexts_immutable` trigger). It opens a read-only dialog. Rename to
    "Show" and make it consistent with the "Show" button (or drop the
    context menu entirely since single-click already shows the content in
    the editor).
+   *(Done: the context-menu action is renamed to "Show".)*
 4. **Case-mismatched filename:** `widgets/modelpanel.cpp` vs `modelPanel.h`
    (and the `.pro` entry says `modelpanel.cpp`). Works on Windows
    (case-insensitive) but **breaks Linux/macOS builds**. Rename to
@@ -128,7 +132,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     quadrants read clearly.
 22. **Button rows inconsistent.** Skill/Model have two rows (New/Show/Edit,
     then Delete/Restore) while Context has one (New/Show) and Execution has
-    (Run, Show) stacked vertically. Standardize: one toolbar per panel with
+    (Show Log Details, Show) stacked vertically. Standardize: one toolbar per panel with
     all actions, sensible order, and **icons + tooltips** on every button.
     *(Partly done: execution panel now has "Show" and "Show Log Details"
     buttons with icons + tooltips and right-click "Show" context menus on
@@ -269,8 +273,8 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 ## Priority order
 
 1. **Must-fix:**
-   - #1 dead "Run One-Shot" button (implement or remove)
-   - #2, #3 dead `QDialog::Accepted` branches / mislabeled "Edit" menu
+   - #1 dead "Run One-Shot" button (implement or remove) *(done: removed)*
+   - #2, #3 dead `QDialog::Accepted` branches / mislabeled "Edit" menu *(done)*
    - #4 case-mismatched `modelpanel.cpp` filename
    - #5 duplicate includes
    - #32 database-failure UX
@@ -281,10 +285,12 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #18 execution-creation flow (the app's core feature)
    - #7 dedupe panels/dialogs into shared base classes (done)
    - #15 JSON validation
-   - #24, #25 date formatting + status colors
+   - #24, #25 date formatting + status colors *(done)*
    - #37, #38 tooltips + search/filter
 3. **Polish:**
    - #27, #29, #30 `.ui` cleanup, splitter constraints, theming
    - #39, #40 keyboard shortcuts + window-state persistence
+     *(#39 partly done: Delete/F2/Enter + button accelerators in the
+     panels)*
    - #41, #42 redundant views, data lifecycle
    - #44, #45 live execution UX, friendlier errors
