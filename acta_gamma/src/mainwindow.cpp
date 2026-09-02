@@ -14,6 +14,7 @@
 #include <QPixMap>
 #include <QPushButton>
 #include <QSplitter>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -27,6 +28,21 @@ QString MainWindow::defaultDbPath()
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(baseDir);
     return baseDir + QStringLiteral("/acta.db");
+}
+
+QString MainWindow::storedDbPath()
+{
+    QSettings s;
+    return s.value(QStringLiteral("database/path")).toString();
+}
+
+void MainWindow::storeDbPath(const QString &path)
+{
+    QSettings s;
+    s.setValue(QStringLiteral("database/path"), path);
+    // Flush now: the value must survive to the next process, not just
+    // to this one's exit-time sync.
+    s.sync();
 }
 
 bool MainWindow::openDatabaseOnce()
@@ -112,8 +128,12 @@ void MainWindow::runDatabaseBootstrap()
     // Loop so "Create database here" / "Choose another location" retries
     // are handled without unbounded recursion.
     for (;;) {
-        if (openDatabaseOnce())
+        if (openDatabaseOnce()) {
+            // Remember whatever worked so the next launch opens it
+            // directly (H6).
+            storeDbPath(m_dbPath);
             return;
+        }
 
         // Real failure: offer the startup modal (UR #32).
         QMessageBox box(this);
@@ -138,6 +158,7 @@ void MainWindow::runDatabaseBootstrap()
             QFile::remove(m_dbPath);
             if (createDatabase()) {
                 m_dbOk = true;
+                storeDbPath(m_dbPath);
                 statusBar()->showMessage(
                     tr("Created database %1").arg(m_dbPath), 3000);
                 return;
@@ -166,6 +187,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // startup modal (create / pick location / exit) and leaves m_dbOk
     // false; the offline banner + Retry then keep the state visible.
     m_dbPath = defaultDbPath();
+    // Prefer the database path remembered from a previous session (H6);
+    // fall back to the default location when it is stale, in which case
+    // the bootstrap modal above handles it as before.
+    const QString stored = storedDbPath();
+    if (!stored.isEmpty() && QFile::exists(stored))
+        m_dbPath = stored;
     runDatabaseBootstrap();
 
     auto central = new QWidget(this);

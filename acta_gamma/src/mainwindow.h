@@ -43,6 +43,14 @@ private:
     // Default DB location: writable AppData dir, created if needed (UR #9).
     static QString defaultDbPath();
 
+    // Preferences (H6): the database path remembered from a previous
+    // session; empty when nothing is stored yet.
+    static QString storedDbPath();
+
+    // Preferences (H6): persist the database path so the next launch
+    // opens it directly instead of asking the user again.
+    static void storeDbPath(const QString &path);
+
     // Open an existing DB, or (first run, no file) create it and apply
     // the embedded schema.sql. Returns true on success; on failure sets
     // m_dbOk=false and fills m_lastError.
