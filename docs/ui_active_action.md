@@ -25,7 +25,7 @@ lives in `ui_review.md`.
 | P3 | Splitter constraint fix (`setMaximumWidth(320)` vs splitter sizes) and window-state persistence via `QSettings` | UR #29, #40 | |
 | P5 | Redundant "Show" affordances, empty-state placeholders, data lifecycle (delete/prune executions + contexts) | UR #31, #41, #42 | |
 | P6 | Friendlier error mapping for all `acta_db_strerror` surfaces (unique-name constraint → "already exists in this folder") | UR #45 | F1 establishes the pattern |
-| P7 | **Icons + tooltips on the `SkillPanel` buttons** — give each action button an icon and a tooltip (including the folder row): `New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder` (standard style icons, e.g. `SP_DialogYesButton`/`SP_DialogNoButton`/`SP_DialogResetButton`/`SP_TrashIcon`/`SP_DialogRestoreButton`/`SP_DirIcon`) | UR #28 | tooltips clarify the text-only buttons and match the menu entries from H6 |
+| P7 | **Icons + tooltips on the `SkillPanel` buttons** — give each action button an icon and a tooltip (including the folder row): `New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder` (standard style icons, e.g. `SP_DialogYesButton`/`SP_DialogOpenButton`/`SP_DialogResetButton`/`SP_TrashIcon`/`SP_ArrowBack`/`SP_DirIcon`) | UR #28 | tooltips clarify the text-only buttons and match the menu entries from H6 |
 | P8 | **Icons + tooltips on the `ModelPanel` buttons** — same as P7 mirrored in `ModelPanel` (`New`, `Show`, `Edit Model`, `Delete`, `Restore`, and the folder row) | UR #28 | keep the two panels in sync explicitly until the UR #7 base class lands |
 
 ## Summary

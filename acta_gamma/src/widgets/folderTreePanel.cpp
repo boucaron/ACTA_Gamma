@@ -46,10 +46,32 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
     lay->addWidget(showDeletedCheck);
 
     // "&" marks each button's accelerator (Alt+letter) (UR #39).
+    // Standard icons + tooltips on the text-only buttons (P7/P8). Qt
+    // has no pencil or restore icons, so Edit / Rename Folder use the
+    // closest standard icon (SP_DialogResetButton) and Restore uses
+    // SP_ArrowBack (undo) — the tooltips carry the meaning.
+    const QString noun = m_dao.entityTitle.toLower();
+    auto *btnStyle = style();
+    auto mkIcon = [btnStyle](QStyle::StandardPixmap sp) {
+        return btnStyle->standardIcon(sp);
+    };
+
     auto *actionRow = new QHBoxLayout;
     newBtn = new QPushButton("&New");
+    newBtn->setIcon(mkIcon(QStyle::SP_DialogYesButton));
+    newBtn->setToolTip(tr("Create a new %1 in the selected folder "
+                           "(or at the root level)")
+                           .arg(noun));
     showBtn = new QPushButton("S&how");
+    showBtn->setIcon(mkIcon(QStyle::SP_DialogOpenButton));
+    showBtn->setToolTip(tr("Show the details of the selected %1 "
+                            "(read-only)")
+                           .arg(noun));
     editBtn = new QPushButton(QString("E&dit ") + m_dao.entityTitle);
+    editBtn->setIcon(mkIcon(QStyle::SP_DialogResetButton));
+    editBtn->setToolTip(tr("Edit the selected %1 (saving creates a new "
+                            "revision)")
+                           .arg(noun));
     actionRow->addWidget(newBtn);
     actionRow->addWidget(showBtn);
     actionRow->addWidget(editBtn);
@@ -58,7 +80,14 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
 
     auto *btnRow = new QHBoxLayout;
     deleteBtn = new QPushButton("&Delete");
+    deleteBtn->setIcon(mkIcon(QStyle::SP_TrashIcon));
+    deleteBtn->setToolTip(tr("Soft-delete the selected %1 (it stays in "
+                              "the database and can be restored)")
+                             .arg(noun));
     restoreBtn = new QPushButton("Res&tore");
+    restoreBtn->setIcon(mkIcon(QStyle::SP_ArrowBack));
+    restoreBtn->setToolTip(tr("Restore the selected soft-deleted %1")
+                               .arg(noun));
     btnRow->addWidget(deleteBtn);
     btnRow->addWidget(restoreBtn);
     btnRow->addStretch();
@@ -66,9 +95,22 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
 
     auto *folderRow = new QHBoxLayout;
     newFolderBtn = new QPushButton("New F&older");
+    newFolderBtn->setIcon(mkIcon(QStyle::SP_DirIcon));
+    newFolderBtn->setToolTip(tr("Create a new folder in the selected "
+                                 "folder (or at the root level)"));
     renameFolderBtn = new QPushButton("Rename &Folder");
+    renameFolderBtn->setIcon(mkIcon(QStyle::SP_DialogResetButton));
+    renameFolderBtn->setToolTip(tr("Rename the selected folder"));
     deleteFolderBtn = new QPushButton("De&lete Folder");
+    deleteFolderBtn->setIcon(mkIcon(QStyle::SP_TrashIcon));
+    deleteFolderBtn->setToolTip(tr("Soft-delete the selected folder (its "
+                                    "%1s are hidden until the folder is "
+                                    "restored)")
+                                   .arg(noun));
     restoreFolderBtn = new QPushButton("&Restore Folder");
+    restoreFolderBtn->setIcon(mkIcon(QStyle::SP_ArrowBack));
+    restoreFolderBtn->setToolTip(tr("Restore the selected soft-deleted "
+                                     "folder"));
     folderRow->addWidget(newFolderBtn);
     folderRow->addWidget(renameFolderBtn);
     folderRow->addWidget(deleteFolderBtn);
