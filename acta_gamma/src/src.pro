@@ -20,7 +20,6 @@ SOURCES += \
     widgets/skillDialog.cpp \
     widgets/modelDialog.cpp \
     widgets/executionDialog.cpp \
-    widgets/executionLogDialog.cpp \
     widgets/contextDialog.cpp
 
 HEADERS += \
@@ -36,14 +35,12 @@ HEADERS += \
     widgets/skillDialog.h \
     widgets/modelDialog.h \
     widgets/executionDialog.h \
-    widgets/executionLogDialog.h \
     widgets/contextDialog.h
 
 FORMS += \
     ../ui/skillDialog.ui \
     ../ui/modelDialog.ui \
     ../ui/executionDialog.ui \
-    ../ui/executionLogDialog.ui \
     ../ui/contextDialog.ui
 
 DISTFILES +=

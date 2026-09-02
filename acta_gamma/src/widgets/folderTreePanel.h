@@ -12,6 +12,7 @@ class QTreeWidgetItem;
 class QPushButton;
 class QCheckBox;
 class QIcon;
+class QLabel;
 class QLineEdit;
 
 // One tree row (a folder or an entity such as a skill/model).
@@ -77,6 +78,7 @@ public:
     explicit FolderTreePanel(FolderTreeDao dao, QWidget *parent = nullptr);
 
     QTreeWidget *tree = nullptr;
+    QLabel *emptyLabel = nullptr; // centered placeholder when the tree is empty (P5 / UR #31)
     QLineEdit *filterEdit = nullptr; // case-insensitive substring filter (H4 / UR #38)
     QCheckBox *showDeletedCheck = nullptr;
     QPushButton *newBtn = nullptr;

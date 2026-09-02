@@ -1,13 +1,11 @@
 #include "contextPanel.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
-#include <QMenu>
-#include <QEvent>
-#include <QKeyEvent>
 #include <QTextEdit>
 #include <QPushButton>
 #include <QStyle>
@@ -43,58 +41,63 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     list->setColumnCount(2);
     list->setHeaderLabels({"Type", "Date"});
     list->setSortingEnabled(true);
-    list->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(list, &QTreeWidget::customContextMenuRequested,
-            this, &ContextPanel::onListContextMenu);
     connect(list, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 showContext(cur);
             });
     lay->addWidget(list);
 
+    // Centered placeholder over the blank list when the db is empty
+    // (P5 / UR #31); shown/hidden in reload().
+    emptyLabel = makeEmptyStateLabel(list, tr("No contexts yet — click New"));
+
     editor = new QTextEdit;
     editor->setReadOnly(true); // contexts are immutable; this is display-only
     editor->setPlaceholderText("Immutable input JSON...");
     lay->addWidget(editor);
 
-    // "&" marks each button's accelerator (Alt+letter) (UR #39).
-    // Icons + tooltips to match the other panels (P2 / UR #22).
+    // "&" marks the button's accelerator (Alt+letter) (UR #39).
+    // Icon + tooltip to match the other panels (P2 / UR #22).
+    // Single-clicking a row already fills the inline editor below, so
+    // the redundant "Show" button, context menu and Enter accelerator
+    // were dropped (P5 / UR #41).
     auto *btnStyle = style();
     auto *btnRow = new QHBoxLayout;
     newBtn = new QPushButton("&New");
     newBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogYesButton));
     newBtn->setToolTip(tr("Create a new context"));
-    showBtn = new QPushButton("S&how");
-    showBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogOpenButton));
-    showBtn->setToolTip(
-        tr("Show the details of the selected context (read-only)"));
     btnRow->addWidget(newBtn);
-    btnRow->addWidget(showBtn);
     btnRow->addStretch();
     lay->addLayout(btnRow);
 
     // callback
     connect(newBtn, &QPushButton::clicked, this, &ContextPanel::onNewBtnClicked);
-    connect(showBtn, &QPushButton::clicked, this, &ContextPanel::onShowBtnClicked);
     connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
         applyTreeFilter(list, t, RoleContextContent);
     });
 
-    // Keyboard accelerator (UR #39), handled in eventFilter() while the
-    // list (or its viewport) has focus. Installed on both because either
-    // widget can be the focus target after a click; the dialog is a
-    // separate widget, so this never fires inside it.
-    list->installEventFilter(this);
+    // Keeps emptyLabel centered as the viewport resizes (P5 / UR #31).
     list->viewport()->installEventFilter(this);
 
     reload();
 }
 
+bool ContextPanel::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == list->viewport() && event->type() == QEvent::Resize) {
+        placeEmptyStateLabel(emptyLabel, list);
+        return QWidget::eventFilter(obj, event);
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
 void ContextPanel::reload()
 {
     list->clear();
-    if (!m_db)
+    if (!m_db) {
+        emptyLabel->setVisible(true);
         return; // db open failed at startup; MainWindow surfaces the reason.
+    }
 
     int n = 0;
     int err = ACTA_DB_OK;
@@ -103,6 +106,7 @@ void ContextPanel::reload()
         if (err != ACTA_DB_OK)
             qWarning("acta_db_context_query failed: %s",
                      acta_db_strerror(err));
+        emptyLabel->setVisible(true);
         return;
     }
 
@@ -132,6 +136,10 @@ void ContextPanel::reload()
     // Re-apply the filter to the freshly built list (H4 / UR #38).
     applyTreeFilter(list, filterEdit ? filterEdit->text() : QString(),
                     RoleContextContent);
+
+    // Empty-state placeholder: only when there are no rows at all
+    // (P5 / UR #31).
+    emptyLabel->setVisible(list->topLevelItemCount() == 0);
 }
 
 void ContextPanel::showContext(QTreeWidgetItem *item)
@@ -155,33 +163,6 @@ void ContextPanel::showContext(QTreeWidgetItem *item)
     acta_db_context_free(c);
 }
 
-void ContextPanel::onListContextMenu(const QPoint &pos)
-{
-    auto *item = list->itemAt(pos);
-    if (!item)
-        return;
-    const int contextId = item->data(0, RoleContextId).toInt();
-    QMenu menu(this);
-    // Contexts are immutable; the dialog opens read-only, so the
-    // entry is labelled "Show", not "Edit".
-    menu.addAction(tr("Show"), this,
-                   [this, contextId] { editContext(contextId); });
-    menu.exec(list->viewport()->mapToGlobal(pos));
-}
-
-void ContextPanel::editContext(int contextId)
-{
-    if (!m_db)
-        return;
-
-    ContextDialog dlg(this);
-    dlg.editContext(m_db, contextId);
-    // Contexts are immutable: the dialog opens read-only and changes
-    // nothing, so there is nothing to do (and no reload needed) after
-    // it closes.
-    dlg.exec();
-}
-
 void ContextPanel::onNewBtnClicked()
 {
     if (!m_db)
@@ -192,40 +173,4 @@ void ContextPanel::onNewBtnClicked()
     dlg.exec();
     // The save happened inside the dialog; refresh the list either way.
     reload();
-}
-
-void ContextPanel::onShowBtnClicked()
-{
-    const QTreeWidgetItem *cur = list->currentItem();
-    const int contextId = cur ? cur->data(0, RoleContextId).toInt() : 0;
-    if (contextId == 0 || !m_db)
-        return;
-
-    ContextDialog dlg(this);
-    dlg.editContext(m_db, contextId);
-    dlg.exec();
-}
-
-void ContextPanel::onReturnKeyPressed()
-{
-    // Enter opens the same read-only dialog as the Show button.
-    onShowBtnClicked();
-}
-
-bool ContextPanel::eventFilter(QObject *obj, QEvent *event)
-{
-    // Enter opens the detail dialog. Consuming the key here, before
-    // QTreeWidget's own handling, also prevents its built-in inline
-    // editing on Return.
-    if ((obj == list || obj == list->viewport())
-            && event->type() == QEvent::KeyPress) {
-        const auto *key = static_cast<const QKeyEvent *>(event);
-        if (key->modifiers() == Qt::NoModifier
-                && (key->key() == Qt::Key_Return
-                        || key->key() == Qt::Key_Enter)) {
-            onReturnKeyPressed();
-            return true;
-        }
-    }
-    return QWidget::eventFilter(obj, event);
 }

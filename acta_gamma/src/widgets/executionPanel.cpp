@@ -13,7 +13,6 @@
 #include <QTreeWidgetItem>
 
 #include "executionDialog.h"
-#include "executionLogDialog.h"
 #include "util.h"
 
 namespace {
@@ -64,14 +63,17 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
             });
     connect(list, &QTreeWidget::itemDoubleClicked, this,
             &ExecutionPanel::onExecutionDoubleClicked);
+    lay->addWidget(list);
+
+    // Centered placeholder over the blank list when the db is empty
+    // (P5 / UR #31); shown/hidden in reload().
+    emptyLabel = makeEmptyStateLabel(list, tr("No executions yet"));
     connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &) {
         applyFilters();
     });
     connect(statusFilter, &QComboBox::currentIndexChanged, this, [this](int) {
         applyFilters();
     });
-    lay->addWidget(list);
-
     // The one-shot execution flow (create execution row, call the model
     // backend, write logs, update status) has no backend client yet,
     // so the "Run One-Shot" button was removed instead of left dead.
@@ -81,16 +83,16 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     logList->setHeaderLabels({"Date", "Level", "Event", "Message"});
     logList->setRootIsDecorated(false);
     logList->setUniformRowHeights(true);
-    logList->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(logList, &QTreeWidget::customContextMenuRequested, this,
-            &ExecutionPanel::onLogListContextMenu);
     lay->addWidget(logList);
 
-    // "&" marks the button's accelerator (Alt+letter) (UR #39).
-    showBtn = new QPushButton("Show Lo&g Details");
-    showBtn->setToolTip("Show the details of the selected log line");
-    showBtn->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
-    lay->addWidget(showBtn);
+    // Centered placeholder over the blank log list (P5 / UR #31);
+    // shown/hidden in showExecutionLogs().
+    emptyLogLabel = makeEmptyStateLabel(
+        logList, tr("No log lines for this execution"));
+
+    // The log list already shows all four log columns inline, so the
+    // redundant "Show Log Details" button and log context menu were
+    // dropped (P5 / UR #41).
 
     // "Show" opens the execution dialog for the selected execution row;
     // the context menu and double-click / Enter do the same (UR #33:
@@ -101,7 +103,6 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     lay->addWidget(showDetailsBtn);
 
     // callback
-    connect(showBtn, &QPushButton::clicked, this, &ExecutionPanel::onShowBtnClicked);
     connect(showDetailsBtn, &QPushButton::clicked, this, [this] {
         onExecutionDoubleClicked(list->currentItem(), 0);
     });
@@ -112,15 +113,23 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // dialogs are separate widgets, so this never fires inside them.
     list->installEventFilter(this);
     list->viewport()->installEventFilter(this);
+    // The log viewport filter only keeps emptyLogLabel centered on
+    // resize; it handles no keys.
+    logList->viewport()->installEventFilter(this);
 
     reload();
+    // Initial state: no execution selected, so show the empty log
+    // placeholder (showExecutionLogs only re-runs on selection change).
+    showExecutionLogs(nullptr);
 }
 
 void ExecutionPanel::reload()
 {
     list->clear();
-    if (!m_db)
+    if (!m_db) {
+        emptyLabel->setVisible(true);
         return; // db open failed at startup; MainWindow surfaces the reason.
+    }
 
     int n = 0;
     int err = ACTA_DB_OK;
@@ -130,6 +139,7 @@ void ExecutionPanel::reload()
         if (err != ACTA_DB_OK)
             qWarning("acta_db_execution_query failed: %s",
                      acta_db_strerror(err));
+        emptyLabel->setVisible(true);
         return;
     }
 
@@ -189,6 +199,10 @@ void ExecutionPanel::reload()
 
     // Re-apply the filters to the freshly built list (H4 / UR #38).
     applyFilters();
+
+    // Empty-state placeholder: only when there are no rows at all
+    // (P5 / UR #31).
+    emptyLabel->setVisible(list->topLevelItemCount() == 0);
 }
 
 void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
@@ -196,6 +210,7 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
     const int executionId = item ? item->data(0, RoleExecutionId).toInt() : 0;
     if (executionId == 0 || !m_db) {
         logList->clear();
+        emptyLogLabel->setVisible(true);
         return;
     }
 
@@ -205,6 +220,7 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
         acta_db_execution_log_list_by_execution(m_db, executionId, nullptr,
                                                 0, 0, &n, &err);
     logList->clear();
+    emptyLogLabel->setVisible(true);
     if (!lines) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_execution_log_list_by_execution(%d) failed: %s",
@@ -231,6 +247,9 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
         logItem->setData(0, RoleLogId, lines[i]->id);
     }
     acta_db_execution_log_list_free(lines, n);
+
+    // Empty-state placeholder for the log list (P5 / UR #31).
+    emptyLogLabel->setVisible(logList->topLevelItemCount() == 0);
 }
 
 void ExecutionPanel::applyFilters()
@@ -270,23 +289,6 @@ void ExecutionPanel::onExecutionDoubleClicked(QTreeWidgetItem *item, int)
     dlg.exec();
 }
 
-void ExecutionPanel::onShowBtnClicked()
-{
-    const QTreeWidgetItem *cur = logList->currentItem();
-    const int logId = cur ? cur->data(0, RoleLogId).toInt() : 0;
-    showLogDialog(logId);
-}
-
-void ExecutionPanel::showLogDialog(int logId)
-{
-    if (logId == 0 || !m_db)
-        return;
-
-    ExecutionLogDialog dlg(this);
-    dlg.showLog(m_db, logId);
-    dlg.exec();
-}
-
 void ExecutionPanel::onListContextMenu(const QPoint &pos)
 {
     auto *item = list->itemAt(pos);
@@ -302,21 +304,6 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
     menu.exec(list->viewport()->mapToGlobal(pos));
 }
 
-void ExecutionPanel::onLogListContextMenu(const QPoint &pos)
-{
-    auto *item = logList->itemAt(pos);
-    if (!item)
-        return;
-    QMenu menu(this);
-    auto *aShow = menu.addAction("Show");
-    aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
-    aShow->setToolTip("Show the details of this log line");
-    connect(aShow, &QAction::triggered, this, [this, item] {
-        showLogDialog(item->data(0, RoleLogId).toInt());
-    });
-    menu.exec(logList->viewport()->mapToGlobal(pos));
-}
-
 void ExecutionPanel::onReturnKeyPressed()
 {
     // Enter opens the same dialog as a double-click on the currently
@@ -327,6 +314,16 @@ void ExecutionPanel::onReturnKeyPressed()
 
 bool ExecutionPanel::eventFilter(QObject *obj, QEvent *event)
 {
+    // Keep the empty-state labels centered when a viewport resizes
+    // (P5 / UR #31); the event passes through.
+    if ((obj == list->viewport() || obj == logList->viewport())
+            && event->type() == QEvent::Resize) {
+        if (obj == list->viewport())
+            placeEmptyStateLabel(emptyLabel, list);
+        else
+            placeEmptyStateLabel(emptyLogLabel, logList);
+        return QWidget::eventFilter(obj, event);
+    }
     // Enter opens the detail dialog. Consuming the key here, before
     // QTreeWidget's own handling, also prevents its built-in inline
     // editing on Return.

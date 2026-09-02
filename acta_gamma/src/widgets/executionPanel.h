@@ -7,6 +7,7 @@ class QTreeWidgetItem;
 class QPushButton;
 class QLineEdit;
 class QComboBox;
+class QLabel;
 
 #include "acta_db.h"
 
@@ -14,12 +15,13 @@ class ExecutionPanel : public QWidget {
 public:
     explicit ExecutionPanel(db_t *db = nullptr, QWidget *parent = nullptr);
     QTreeWidget *list;
+    QLabel *emptyLabel; // centered placeholder when the list is empty (P5 / UR #31)
     QLineEdit *filterEdit; // case-insensitive substring filter (H4 / UR #38)
     QComboBox *statusFilter; // "All" + one entry per execution status (H4 / UR #38)
     QTreeWidget *logList;
-    QPushButton *showBtn;
-    // Opens the execution dialog for the selected execution row (the
-    // "Show Log Details" button below works on the log list instead).
+    QLabel *emptyLogLabel; // centered placeholder when the log list is empty (P5 / UR #31)
+    // Opens the execution dialog for the selected execution row; the
+    // inline log list below is the only log detail view (P5 / UR #41).
     QPushButton *showDetailsBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
@@ -43,11 +45,6 @@ private:
     // check suffices (H4 / UR #38).
     void applyFilters();
 
-    // Open the read-only log dialog for the given log id.
-    void showLogDialog(int logId);
-
-private slots:
-    void onShowBtnClicked();
     // Keyboard accelerator (UR #39), active while the execution list has
     // focus: Enter opens the same dialog as a double-click on the row.
     // Intercepted in eventFilter() so it fires before the list's own key
@@ -59,8 +56,4 @@ private slots:
     // Right-click context menu on the execution list: "Show" opens the
     // same dialog as double-click / Enter / Show.
     void onListContextMenu(const QPoint &pos);
-
-    // Right-click context menu on the log list: "Show" opens the same
-    // dialog as the "Show Log Details" button.
-    void onLogListContextMenu(const QPoint &pos);
 };

@@ -53,6 +53,12 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
     tree->setHeaderHidden(true);
     lay->addWidget(tree);
 
+    // Centered placeholder over the blank tree when the db is empty
+    // (P5 / UR #31); shown/hidden in reload(), kept centered on resize
+    // in eventFilter().
+    emptyLabel = makeEmptyStateLabel(
+        tree, tr("No %1s yet — click New").arg(m_dao.entityTitle.toLower()));
+
     m_deletedIcon = tree->style()->standardIcon(QStyle::SP_TrashIcon);
     m_folderIcon  = tree->style()->standardIcon(QStyle::SP_DirIcon);
 
@@ -204,8 +210,10 @@ void FolderTreePanel::reload()
     const int keepEntity  = cur ? cur->data(0, RoleEntityId).toInt() : 0;
 
     tree->clear();
-    if (!m_dao.listFolders)
+    if (!m_dao.listFolders) {
+        emptyLabel->setVisible(true);
         return; // db open failed at startup; MainWindow surfaces the reason.
+    }
 
     // Folder skeleton: all folders in one call, nested via parent_id
     // (0 = root). list_all is ordered by id, which is not guaranteed to
@@ -275,6 +283,11 @@ void FolderTreePanel::reload()
 
     // Re-apply the filter to the freshly built tree (H4 / UR #38).
     applyTreeFilter(tree, filterEdit ? filterEdit->text() : QString());
+
+    // Empty-state placeholder: only when the tree has no rows at all
+    // (a filter that hides every row leaves the tree blank, but that
+    // is not the "no data yet" case).
+    emptyLabel->setVisible(tree->topLevelItemCount() == 0);
 
     updateButtonStates();
 }
@@ -610,6 +623,12 @@ void FolderTreePanel::onReturnKeyPressed()
 
 bool FolderTreePanel::eventFilter(QObject *obj, QEvent *event)
 {
+    // Keep the empty-state label centered when the viewport resizes
+    // (P5 / UR #31); the event passes through to the viewport.
+    if (obj == tree->viewport() && event->type() == QEvent::Resize) {
+        placeEmptyStateLabel(emptyLabel, tree);
+        return QWidget::eventFilter(obj, event);
+    }
     // Delete soft-deletes the selection (entity or folder), F2 renames
     // it (folders for now), Enter opens the detail dialog. Consuming the
     // key here, before QTreeWidget's own handling, also prevents its

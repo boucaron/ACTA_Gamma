@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QDateTime>
+#include <QLabel>
 #include <QLocale>
 #include <QList>
 #include <QString>
@@ -140,4 +141,25 @@ inline void applyTreeFilter(QTreeWidget *tree, const QString &needle,
     };
     for (int i = 0; i < tree->topLevelItemCount(); ++i)
         visit(tree->topLevelItem(i));
+}
+
+// Centered placeholder over an empty tree viewport (P5 / UR #31).
+// Owned by the viewport, so it dies with the tree. Shown/hidden by the
+// caller in reload(); kept centered on resize via the panel's existing
+// viewport eventFilter (QEvent::Resize -> placeEmptyStateLabel).
+inline QLabel *makeEmptyStateLabel(QTreeWidget *tree, const QString &text)
+{
+    auto *label = new QLabel(text, tree->viewport());
+    label->setObjectName(QStringLiteral("emptyState"));
+    label->setAlignment(Qt::AlignCenter);
+    label->setEnabled(false); // greyed via the stylesheet; no focus
+    label->setGeometry(tree->viewport()->rect());
+    label->hide();
+    return label;
+}
+
+inline void placeEmptyStateLabel(QLabel *label, QTreeWidget *tree)
+{
+    if (label)
+        label->setGeometry(tree->viewport()->rect());
 }

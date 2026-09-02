@@ -13,6 +13,13 @@ QLabel#panelHeader {
     padding-bottom: 2px;
 }
 
+/* Empty-state placeholders over blank trees (P5 / UR #31). The labels
+ * are also disabled, so this mostly pins the grey color explicitly. */
+QLabel#emptyState {
+    color: #888888;
+    font-style: italic;
+}
+
 /* Accent color on tree/list selection.
 QTreeWidget::item:selected,
 QListView::item:selected {
