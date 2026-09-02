@@ -98,6 +98,10 @@ void ModelDialog::setMode(Mode mode)
     ui->baseUrlLineEdit->setReadOnly(readOnly);
     ui->backendTextEdit->setReadOnly(readOnly);
     ui->configurationTextEdit->setReadOnly(readOnly);
+    // Disable revision switching outside Read-only mode: clicking a
+    // revision overwrites the form fields, which would clobber unsaved
+    // edits in New/Edit mode.
+    ui->revisionTreeWidget->setEnabled(readOnly);
 }
 
 void ModelDialog::newModel(db_t *db, int folderId)
@@ -333,6 +337,9 @@ void ModelDialog::onSaveClicked()
 
 void ModelDialog::showRevision(QTreeWidgetItem *item)
 {
+    if (m_mode != Mode::ReadOnly)
+        return;
+
     const int revisionId =
         item ? item->data(0, RoleRevisionId).toInt() : 0;
     if (revisionId == 0 || !m_db)

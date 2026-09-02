@@ -56,7 +56,8 @@ private:
     void onSaveClicked();
 
     // Fill the dialog fields from the revision row referenced by the
-    // selected tree item (no-op if the selection leaves a revision row).
+    // selected tree item (no-op if the selection leaves a revision row,
+    // or if the dialog is not in Read-only mode).
     void showRevision(QTreeWidgetItem *item);
 };
 

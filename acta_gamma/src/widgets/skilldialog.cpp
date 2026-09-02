@@ -96,6 +96,10 @@ void SkillDialog::setMode(Mode mode)
     ui->descriptionTextEdit->setReadOnly(readOnly);
     ui->promptTextEdit->setReadOnly(readOnly);
     ui->outputSchemaTextEdit->setReadOnly(readOnly);
+    // Disable revision switching outside Read-only mode: clicking a
+    // revision overwrites the form fields, which would clobber unsaved
+    // edits in New/Edit mode.
+    ui->revisionTreeWidget->setEnabled(readOnly);
 }
 
 void SkillDialog::newSkill(db_t *db, int folderId)
@@ -303,6 +307,9 @@ void SkillDialog::onSaveClicked()
 
 void SkillDialog::showRevision(QTreeWidgetItem *item)
 {
+    if (m_mode != Mode::ReadOnly)
+        return;
+
     const int revisionId =
         item ? item->data(0, RoleRevisionId).toInt() : 0;
     if (revisionId == 0 || !m_db)
