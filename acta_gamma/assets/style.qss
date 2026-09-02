@@ -1,0 +1,52 @@
+/* ACTA Gamma light stylesheet (P2 / UR #30).
+ *
+ * Color-only rules: accent/hover/disabled states and the panel section
+ * headers. Deliberately no geometry rules, and no QTreeWidget/QListView
+ * item *text* colors — the status/level foregrounds are set per item in
+ * the panels (statusColor / logLevelColor in util.h).
+
+/* Panel section headers ("Skill", "Model", "Context", "Execution").
+QLabel#panelHeader {
+    font-weight: bold;
+    color: #35577d;
+    padding-top: 4px;
+    padding-bottom: 2px;
+}
+
+/* Accent color on tree/list selection.
+QTreeWidget::item:selected,
+QListView::item:selected {
+    background: #d9e7f6;
+    color: #000000;
+}
+
+/* Buttons: flat light style with hover/pressed accents (P2 / UR #22, #30).
+QPushButton {
+    padding: 4px 10px;
+    border: 1px solid #a8b8cc;
+    border-radius: 4px;
+    background: #f3f5f8;
+}
+QPushButton:hover {
+    background: #e6edf5;
+    border-color: #5a8fcf;
+}
+QPushButton:pressed {
+    background: #d5e2f0;
+}
+QPushButton:disabled {
+    color: #888888;
+    background: #eef0f2;
+    border-color: #c8cfd6;
+}
+
+/* Offline state: greyed-out panels (set via setEnabled(false)).
+QWidget:disabled {
+    color: #888888;
+}
+
+/* Editors (prompt, output_schema, configuration, context content):
+ * monospace, toward UR #26.
+QTextEdit {
+    font-family: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace;
+}

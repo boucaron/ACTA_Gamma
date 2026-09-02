@@ -25,7 +25,11 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     : QWidget(parent), m_db(db)
 {
     auto *lay = new QVBoxLayout(this);
-    lay->addWidget(new QLabel("Execution"));
+    // Panel section header (P2 / UR #21): the objectName targets the
+    // #panelHeader rule of the app stylesheet.
+    auto *titleLabel = new QLabel("Execution");
+    titleLabel->setObjectName(QStringLiteral("panelHeader"));
+    lay->addWidget(titleLabel);
 
     // Substring filter + status filter above the list (H4 / UR #38).
     auto *filterRow = new QHBoxLayout;

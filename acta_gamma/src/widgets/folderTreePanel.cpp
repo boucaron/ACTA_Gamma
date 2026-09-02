@@ -35,7 +35,11 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
     : QWidget(parent), m_dao(std::move(dao))
 {
     auto *lay = new QVBoxLayout(this);
-    lay->addWidget(new QLabel(m_dao.entityTitle));
+    // Panel section header (P2 / UR #21): the objectName targets the
+    // #panelHeader rule of the app stylesheet.
+    auto *titleLabel = new QLabel(m_dao.entityTitle);
+    titleLabel->setObjectName(QStringLiteral("panelHeader"));
+    lay->addWidget(titleLabel);
 
     // Case-insensitive substring filter above the tree (H4 / UR #38);
     // folders stay visible when one of their descendants matches.

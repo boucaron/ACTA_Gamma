@@ -4,6 +4,7 @@
 #include "widgets/contextpanel.h"
 #include "widgets/executionpanel.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QCoreApplication>
@@ -12,6 +13,7 @@
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QLabel>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QPixMap>
 #include <QPushButton>
@@ -21,6 +23,15 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+
+// Cached app logo (UR #28): the resource is loaded only once and
+// reused for both the window icon and the header row. QIcon scales
+// it to the platform icon size (devicePixelRatio aware).
+static QPixmap logoPixmap()
+{
+    static QPixmap pm(":/assets/logo.jpg");
+    return pm;
+}
 
 QString MainWindow::defaultDbPath()
 {
@@ -200,13 +211,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto central = new QWidget(this);
     auto root = new QVBoxLayout(central);
 
+    // Window icon from the cached logo (UR #28).
+    const QPixmap logoBase = logoPixmap();
+    if (!logoBase.isNull())
+        setWindowIcon(QIcon(logoBase));
+
     // Logo header
     auto header = new QWidget;
     auto h = new QHBoxLayout(header);
     QLabel *logo = new QLabel;
-    QPixmap pm(":/assets/logo.jpg");
-    if (!pm.isNull())
-        logo->setPixmap(pm.scaledToHeight(32));
+    if (!logoBase.isNull())
+        logo->setPixmap(logoBase.scaledToHeight(32));
     QLabel *title = new QLabel("ACTA Gamma — LLMs as actions, not agents");
     h->addWidget(logo);
     h->addWidget(title);
@@ -261,6 +276,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_retryButton, &QPushButton::clicked, this,
             &MainWindow::retryDatabase);
     syncPanels();
+
+    // Minimal menu bar (UR #28): File -> Exit, Database -> Reconnect,
+    // Help -> About. The "&" marks the accelerators, matching the
+    // buttons' convention (UR #39).
+    auto *fileMenu = menuBar()->addMenu(tr("&File"));
+    auto *aExit = fileMenu->addAction(tr("E&xit"));
+    connect(aExit, &QAction::triggered, qApp, &QApplication::quit);
+    auto *dbMenu = menuBar()->addMenu(tr("&Database"));
+    auto *aReconnect = dbMenu->addAction(tr("&Reconnect"));
+    connect(aReconnect, &QAction::triggered, this, &MainWindow::retryDatabase);
+    auto *helpMenu = menuBar()->addMenu(tr("&Help"));
+    auto *aAbout = helpMenu->addAction(tr("&About"));
+    connect(aAbout, &QAction::triggered, this, [this] {
+        QMessageBox::about(
+            this, tr("About ACTA Gamma"),
+            tr("ACTA Gamma — LLMs as actions, not agents.\n\n"
+               "Manage skills, models, contexts, and one-shot "
+               "executions against OpenAI-compatible model backends."));
+    });
 
     // Window-state persistence (UR #40): restore the window geometry,
     // the splitter sizes, and the "Show deleted items" flags from a

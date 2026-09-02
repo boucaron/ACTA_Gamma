@@ -10,6 +10,7 @@
 #include <QKeyEvent>
 #include <QTextEdit>
 #include <QPushButton>
+#include <QStyle>
 
 #include "contextDialog.h"
 #include "util.h"
@@ -27,7 +28,11 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     : QWidget(parent), m_db(db)
 {
     auto *lay = new QVBoxLayout(this);
-    lay->addWidget(new QLabel("Context"));
+    // Panel section header (P2 / UR #21): the objectName targets the
+    // #panelHeader rule of the app stylesheet.
+    auto *titleLabel = new QLabel("Context");
+    titleLabel->setObjectName(QStringLiteral("panelHeader"));
+    lay->addWidget(titleLabel);
 
     // Case-insensitive substring filter above the list (H4 / UR #38).
     filterEdit = new QLineEdit;
@@ -53,9 +58,16 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     lay->addWidget(editor);
 
     // "&" marks each button's accelerator (Alt+letter) (UR #39).
+    // Icons + tooltips to match the other panels (P2 / UR #22).
+    auto *btnStyle = style();
     auto *btnRow = new QHBoxLayout;
     newBtn = new QPushButton("&New");
+    newBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogYesButton));
+    newBtn->setToolTip(tr("Create a new context"));
     showBtn = new QPushButton("S&how");
+    showBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogOpenButton));
+    showBtn->setToolTip(
+        tr("Show the details of the selected context (read-only)"));
     btnRow->addWidget(newBtn);
     btnRow->addWidget(showBtn);
     btnRow->addStretch();
