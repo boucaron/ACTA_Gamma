@@ -360,8 +360,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      persistence)*
    - #41, #42 redundant views, data lifecycle
      *(#41 done: redundant "Show" affordances dropped, inline views are
-     the only detail views; #42 pending: soft-delete only — no hard-delete
-     API by design; contexts/executions need a `deleted_at` soft delete,
-     none exists yet)*
+     the only detail views; #42 closed by owner decision 2026-07-10:
+     no delete for contexts/executions planned, no hard-delete API in
+     `acta_db`; a `deleted_at` soft delete is the only path if ever
+     wanted later)*
    - #44, #45 live execution UX, friendlier errors
      *(#45 done: `friendlyDbError` helper, c6b1404; #44 pending)*
