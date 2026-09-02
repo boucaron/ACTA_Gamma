@@ -1,7 +1,9 @@
 #include "executionPanel.h"
 
 #include <QVBoxLayout>
+#include <QComboBox>
 #include <QLabel>
+#include <QLineEdit>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMenu>
@@ -25,6 +27,24 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     auto *lay = new QVBoxLayout(this);
     lay->addWidget(new QLabel("Execution"));
 
+    // Substring filter + status filter above the list (H4 / UR #38).
+    auto *filterRow = new QHBoxLayout;
+    filterEdit = new QLineEdit;
+    filterEdit->setPlaceholderText(tr("Filter executions…"));
+    filterRow->addWidget(filterEdit);
+    statusFilter = new QComboBox;
+    // "All" is the no-filter entry; the rest is the DB's status
+    // vocabulary (acta_db/include/execution.h).
+    statusFilter->addItems({"All",
+                            ACTA_EXEC_STATUS_PENDING,
+                            ACTA_EXEC_STATUS_RUNNING,
+                            ACTA_EXEC_STATUS_COMPLETED,
+                            ACTA_EXEC_STATUS_FAILED,
+                            ACTA_EXEC_STATUS_CANCELLED});
+    statusFilter->setToolTip("Show only executions with this status");
+    filterRow->addWidget(statusFilter);
+    lay->addLayout(filterRow);
+
     list = new QTreeWidget;
     // Skill / model / context names next to Date + Status (H5 / UR #23).
     list->setColumnCount(5);
@@ -40,6 +60,12 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
             });
     connect(list, &QTreeWidget::itemDoubleClicked, this,
             &ExecutionPanel::onExecutionDoubleClicked);
+    connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &) {
+        applyFilters();
+    });
+    connect(statusFilter, &QComboBox::currentIndexChanged, this, [this](int) {
+        applyFilters();
+    });
     lay->addWidget(list);
 
     // The one-shot execution flow (create execution row, call the model
@@ -156,6 +182,9 @@ void ExecutionPanel::reload()
     }
 
     acta_db_execution_list_free(executions, n);
+
+    // Re-apply the filters to the freshly built list (H4 / UR #38).
+    applyFilters();
 }
 
 void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
@@ -198,6 +227,28 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
         logItem->setData(0, RoleLogId, lines[i]->id);
     }
     acta_db_execution_log_list_free(lines, n);
+}
+
+void ExecutionPanel::applyFilters()
+{
+    const QString needle = filterEdit ? filterEdit->text().trimmed() : QString();
+    const QString status =
+        statusFilter ? statusFilter->currentText() : QString();
+    for (int i = 0; i < list->topLevelItemCount(); ++i) {
+        auto *item = list->topLevelItem(i);
+        bool ok = status.isEmpty() || status == QLatin1String("All")
+                   || item->text(1) == status;
+        if (ok && !needle.isEmpty()) {
+            ok = false;
+            for (int c = 0; c < item->columnCount(); ++c) {
+                if (item->text(c).contains(needle, Qt::CaseInsensitive)) {
+                    ok = true;
+                    break;
+                }
+            }
+        }
+        item->setHidden(!ok);
+    }
 }
 
 void ExecutionPanel::onExecutionDoubleClicked(QTreeWidgetItem *item, int)

@@ -5,6 +5,8 @@
 class QTreeWidget;
 class QTreeWidgetItem;
 class QPushButton;
+class QLineEdit;
+class QComboBox;
 
 #include "acta_db.h"
 
@@ -12,6 +14,8 @@ class ExecutionPanel : public QWidget {
 public:
     explicit ExecutionPanel(db_t *db = nullptr, QWidget *parent = nullptr);
     QTreeWidget *list;
+    QLineEdit *filterEdit; // case-insensitive substring filter (H4 / UR #38)
+    QComboBox *statusFilter; // "All" + one entry per execution status (H4 / UR #38)
     QTreeWidget *logList;
     QPushButton *showBtn;
     // Opens the execution dialog for the selected execution row (the
@@ -33,6 +37,11 @@ private:
     // Fill the log list with the log lines of the selected execution
     // (or clear it when the selection leaves an execution row).
     void showExecutionLogs(QTreeWidgetItem *item);
+
+    // Hide execution rows that fail either the substring filter, the
+    // status filter (or both). The list is flat, so a plain per-row
+    // check suffices (H4 / UR #38).
+    void applyFilters();
 
     // Open the read-only log dialog for the given log id.
     void showLogDialog(int logId);

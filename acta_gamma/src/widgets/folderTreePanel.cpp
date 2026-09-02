@@ -6,6 +6,7 @@
 #include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QList>
 #include <QMessageBox>
 #include <QPushButton>
@@ -21,6 +22,8 @@
 
 #include <functional>
 
+#include "util.h"
+
 namespace {
 const int RoleFolderId        = Qt::UserRole;
 const int RoleEntityId        = Qt::UserRole + 1;
@@ -33,6 +36,13 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
 {
     auto *lay = new QVBoxLayout(this);
     lay->addWidget(new QLabel(m_dao.entityTitle));
+
+    // Case-insensitive substring filter above the tree (H4 / UR #38);
+    // folders stay visible when one of their descendants matches.
+    filterEdit = new QLineEdit;
+    filterEdit->setPlaceholderText(
+        tr("Filter %1s or folders…").arg(m_dao.entityTitle.toLower()));
+    lay->addWidget(filterEdit);
 
     tree = new QTreeWidget;
     tree->setColumnCount(1);
@@ -120,6 +130,9 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
 
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
+    });
+    connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
+        applyTreeFilter(tree, t);
     });
     connect(newBtn, &QPushButton::clicked, this, &FolderTreePanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this, &FolderTreePanel::onShowBtnClicked);
@@ -255,6 +268,9 @@ void FolderTreePanel::reload()
         keep = findItemByRole(RoleEntityId, keepEntity);
     if (keep)
         tree->setCurrentItem(keep);
+
+    // Re-apply the filter to the freshly built tree (H4 / UR #38).
+    applyTreeFilter(tree, filterEdit ? filterEdit->text() : QString());
 
     updateButtonStates();
 }

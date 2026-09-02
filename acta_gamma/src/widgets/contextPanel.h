@@ -4,6 +4,7 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QTextEdit;
 class QPushButton;
+class QLineEdit;
 
 #include "acta_db.h"
 
@@ -11,6 +12,7 @@ class ContextPanel : public QWidget {
 public:
     explicit ContextPanel(db_t *db = nullptr, QWidget *parent = nullptr);
     QTreeWidget *list;
+    QLineEdit *filterEdit; // case-insensitive substring filter (H4 / UR #38)
     QTextEdit *editor;
 
     QPushButton *newBtn;

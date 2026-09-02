@@ -2,6 +2,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QMenu>
@@ -15,6 +16,11 @@
 
 namespace {
 const int RoleContextId = Qt::UserRole;
+// Row payload for the search filter: the content is not a visible
+// column (the list shows Type + Date only) but is the main identifying
+// data, so it is stored per row and searched by applyTreeFilter
+// (H4 / UR #38).
+const int RoleContextContent = Qt::UserRole + 1;
 } // namespace
 
 ContextPanel::ContextPanel(db_t *db, QWidget *parent)
@@ -22,6 +28,11 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
 {
     auto *lay = new QVBoxLayout(this);
     lay->addWidget(new QLabel("Context"));
+
+    // Case-insensitive substring filter above the list (H4 / UR #38).
+    filterEdit = new QLineEdit;
+    filterEdit->setPlaceholderText(tr("Filter contexts…"));
+    lay->addWidget(filterEdit);
 
     list = new QTreeWidget;
     list->setColumnCount(2);
@@ -53,6 +64,9 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     // callback
     connect(newBtn, &QPushButton::clicked, this, &ContextPanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this, &ContextPanel::onShowBtnClicked);
+    connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
+        applyTreeFilter(list, t, RoleContextContent);
+    });
 
     // Keyboard accelerator (UR #39), handled in eventFilter() while the
     // list (or its viewport) has focus. Installed on both because either
@@ -95,9 +109,17 @@ void ContextPanel::reload()
         item->setText(1, displayDateTime(contexts[i]->created_at));
         item->setToolTip(1, createdIso);
         item->setData(0, RoleContextId, contexts[i]->id);
+        item->setData(0, RoleContextContent,
+                      contexts[i]->content
+                          ? QString::fromUtf8(contexts[i]->content)
+                          : QString());
     }
 
     acta_db_context_list_free(contexts, n);
+
+    // Re-apply the filter to the freshly built list (H4 / UR #38).
+    applyTreeFilter(list, filterEdit ? filterEdit->text() : QString(),
+                    RoleContextContent);
 }
 
 void ContextPanel::showContext(QTreeWidgetItem *item)

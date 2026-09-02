@@ -5,10 +5,13 @@
 #include <QLocale>
 #include <QList>
 #include <QString>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QWidget>
 
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 
 // Shared helpers for the widget dialogs (previously copy-pasted into
 // each .cpp, UR #6) and for date/status display (UR #24, #25).
@@ -98,4 +101,43 @@ inline void applyTextColor(QWidget *w, const QColor &c)
     if (!c.isValid())
         return;
     w->setStyleSheet(QStringLiteral("color: ") + c.name());
+}
+
+// Case-insensitive substring filter for a QTreeWidget (H4 / UR #38).
+// A row is visible if it matches any column itself, or if any of its
+// descendants matches, so folder rows stay visible above their
+// matching children. An empty needle shows everything.
+//
+// `extraTextRole` (-1 = off) adds one more searchable payload stored in
+// item data: the context panel stores each row's content there, since
+// the list only shows Type + Date.
+inline void applyTreeFilter(QTreeWidget *tree, const QString &needle,
+                            int extraTextRole = -1)
+{
+    const QString hay = needle.trimmed();
+    std::function<bool(QTreeWidgetItem *)> visit =
+        [&](QTreeWidgetItem *item) -> bool {
+        bool match = hay.isEmpty();
+        if (!hay.isEmpty()) {
+            for (int c = 0; c < item->columnCount(); ++c) {
+                if (item->text(c).contains(hay, Qt::CaseInsensitive)) {
+                    match = true;
+                    break;
+                }
+            }
+            if (!match && extraTextRole != -1) {
+                const QString extra =
+                    item->data(0, extraTextRole).toString();
+                match = extra.contains(hay, Qt::CaseInsensitive);
+            }
+        }
+        bool childMatch = false;
+        for (int i = 0; i < item->childCount(); ++i)
+            childMatch = visit(item->child(i)) || childMatch;
+        const bool show = match || childMatch;
+        item->setHidden(!show);
+        return show;
+    };
+    for (int i = 0; i < tree->topLevelItemCount(); ++i)
+        visit(tree->topLevelItem(i));
 }
