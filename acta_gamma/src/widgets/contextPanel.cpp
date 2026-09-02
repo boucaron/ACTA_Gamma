@@ -99,6 +99,10 @@ void ContextPanel::setDb(db_t *db)
 
 void ContextPanel::reload()
 {
+    // Preserve the current selection across the rebuild (UR #8).
+    const auto *cur = list->currentItem();
+    const int keepContext = cur ? cur->data(0, RoleContextId).toInt() : 0;
+
     list->clear();
     if (!m_db) {
         emptyLabel->setVisible(true);
@@ -139,6 +143,18 @@ void ContextPanel::reload()
 
     acta_db_context_list_free(contexts, n);
 
+    // Re-select the previously current row (flat list: linear scan by
+    // id); this also refills the inline content editor via
+    // currentItemChanged.
+    if (keepContext != 0)
+        for (int i = 0; i < list->topLevelItemCount(); ++i) {
+            auto *item = list->topLevelItem(i);
+            if (item->data(0, RoleContextId).toInt() == keepContext) {
+                list->setCurrentItem(item);
+                break;
+            }
+        }
+
     // Re-apply the filter to the freshly built list (H4 / UR #38).
     applyTreeFilter(list, filterEdit ? filterEdit->text() : QString(),
                     RoleContextContent);
@@ -177,6 +193,8 @@ void ContextPanel::onNewBtnClicked()
     ContextDialog dlg(this);
     dlg.newContext(m_db);
     dlg.exec();
-    // The save happened inside the dialog; refresh the list either way.
-    reload();
+    // Reload only when the dialog actually created a context; a
+    // cancelled dialog changed nothing (UR #8).
+    if (dlg.saved())
+        reload();
 }

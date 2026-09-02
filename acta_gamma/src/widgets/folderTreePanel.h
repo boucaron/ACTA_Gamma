@@ -19,6 +19,7 @@ class QLineEdit;
 struct FolderRow {
     int id = 0;
     int parent_id = 0; // 0 = root level (folders only)
+    int folderId = 0;  // entity's folder (0 = root level)
     QString name;
     QString deletedAt; // non-empty if the row is soft-deleted
 };
@@ -38,23 +39,27 @@ struct FolderTreeDao {
     std::function<int(int id)> softDeleteFolder;
     std::function<int(int id)> restoreFolder;
 
-    std::function<QList<FolderRow>(int folderId, bool withDeleted)>
-        listEntities;
+    // All entities in one query (list_all style, UR #8); the panel
+    // groups the rows by FolderRow::folderId.
+    std::function<QList<FolderRow>(bool withDeleted)> listAllEntities;
     std::function<int(int id)> softDeleteEntity;
     std::function<int(int id)> restoreEntity;
 
     // Open the entity dialogs (parent is the panel's window; each
-    // implementation creates and exec()'s the dialog).
-    std::function<void(QWidget *, int folderId)> openNew;
+    // implementation creates and exec()'s the dialog). openNew / openEdit
+    // return whether the dialog persisted a change, so the panel can skip
+    // the rebuild when the dialog was cancelled (UR #8).
+    std::function<bool(QWidget *, int folderId)> openNew;
     std::function<void(QWidget *, int id)> openShow;
-    std::function<void(QWidget *, int id)> openEdit;
+    std::function<bool(QWidget *, int id)> openEdit;
 };
 
 // Shared entity browser for skills and models.
 //
 // Tree layout:
 //   <root folder>            (from *_folder rows, nested by parent_id)
-//     <entity>               (from acta_db_*_list_in_folder)
+//     <entity>               (from acta_db_*_list_all, grouped by
+//                                  folder_id in the panel)
 //     <child folder>
 //   <root-level entity>      (folder_id = 0)
 //
@@ -65,8 +70,10 @@ struct FolderTreeDao {
 //                                         – same, including soft-deleted
 //                                         folders ("Show deleted items"
 //                                         checked)
-//   acta_db_*_list_in_folder             – entities per folder, 0 = root
-//   acta_db_*_list_in_folder_with_deleted
+//   acta_db_*_list_all                   – all entities in one query
+//                                         (grouped by folder_id in the
+//                                         panel; 0 = root)
+//   acta_db_*_list_all_with_deleted
 //                                         – same, including soft-deleted
 //                                         entities
 //
@@ -109,11 +116,10 @@ private:
     QIcon m_deletedIcon;
     QIcon m_folderIcon;
 
-    // Append one entity row per entity of `folderId` (0 = root level)
-    // under `parent` (nullptr = top level).  Soft-deleted entities are
-    // included – and marked with m_deletedIcon – when the
-    // "Show deleted items" checkbox is checked.
-    void addEntities(QTreeWidgetItem *parent, int folderId);
+    // Append one tree row per entity in `rows` under `parent`
+    // (nullptr = top level). Soft-deleted entities are marked with
+    // m_deletedIcon.
+    void addEntities(QTreeWidgetItem *parent, const QList<FolderRow> &rows);
 
     // Id of the currently selected folder, or 0 if the selection is not
     // a folder (used as the target folder by the New button).

@@ -54,6 +54,10 @@ public:
     QString showTitle() const;
     QString editTitle() const;
 
+    // True once a save was persisted to the db; the panel reloads only
+    // when the dialog reports a change (UR #8).
+    bool saved() const { return m_saved; }
+
 protected:
     void setDb(db_t *db) { m_db = db; }
     db_t *db() const { return m_db; }
@@ -61,6 +65,11 @@ protected:
     void setEntityId(int id) { m_id = id; }
     int folderId() const { return m_folderId; }
     void setFolderId(int id) { m_folderId = id; }
+
+    // Set once a save persists a row (create or update); the panel
+    // reads it via saved() to decide whether to reload (UR #8). Reset
+    // by each new*/edit* setup; set by onSaveClicked on success.
+    void setSaved(bool saved) { m_saved = saved; }
 
     // Widgets that live in the concrete dialog's .ui file (stable
     // object names), looked up by name so the base does not depend on
@@ -117,6 +126,9 @@ protected:
     // Revision number of the latest snapshot loaded by loadEntity();
     // used to report "Saved as revision N" after an Edit save.
     int m_latestRevision = 0;
+    // Set when a save persists a row (create or update), so the panel
+    // can reload only if the dialog actually changed the db.
+    bool m_saved = false;
 
 private:
     QString m_title;

@@ -10,6 +10,7 @@
 #include <QList>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QSet>
@@ -210,10 +211,12 @@ void FolderTreePanel::setDao(FolderTreeDao dao)
 
 void FolderTreePanel::reload()
 {
-    // Preserve the current selection across the rebuild.
+    // Preserve the current selection (and, when nothing stays
+    // selected, the scroll position) across the rebuild.
     const auto *cur = tree->currentItem();
     const int keepFolder = cur ? cur->data(0, RoleFolderId).toInt() : 0;
     const int keepEntity  = cur ? cur->data(0, RoleEntityId).toInt() : 0;
+    const int keepScroll = tree->verticalScrollBar()->value();
 
     tree->clear();
     if (!m_dao.listFolders) {
@@ -269,16 +272,26 @@ void FolderTreePanel::reload()
             addFolder(f.id, nullptr);
     }
 
-    // Entities: root level (folder_id 0), then one row per folder.
-    addEntities(nullptr, 0);
+    // Entities: one list_all-style query, grouped by folder in C++
+    // (UR #8 / P8a) — 2 queries per reload instead of N + 1. Both
+    // listers are ordered by id, so grouping a global id-ordered stream
+    // keeps each folder's rows in ascending id order, exactly as the
+    // old per-folder queries produced.
+    const QList<FolderRow> entities = m_dao.listAllEntities(showDeleted);
+    QHash<int, QList<FolderRow>> byFolder;
+    for (const FolderRow &e : entities)
+        byFolder[e.folderId].append(e);
+    addEntities(nullptr, byFolder.value(0));
     for (auto it = folderItems.cbegin(); it != folderItems.cend(); ++it)
-        addEntities(it.value(), it.key());
+        addEntities(it.value(), byFolder.value(it.key()));
 
     for (int i = 0; i < tree->topLevelItemCount(); ++i)
         tree->topLevelItem(i)->setExpanded(true);
 
     // Re-select the previously current item (folder first: a deleted
-    // folder can vanish from a live-only rebuild).
+    // folder can vanish from a live-only rebuild). When nothing stays
+    // selected, restore the previous scroll position instead (the
+    // selection's own scroll from setCurrentItem is kept otherwise).
     QTreeWidgetItem *keep = nullptr;
     if (keepFolder != 0)
         keep = findItemByRole(RoleFolderId, keepFolder);
@@ -286,6 +299,8 @@ void FolderTreePanel::reload()
         keep = findItemByRole(RoleEntityId, keepEntity);
     if (keep)
         tree->setCurrentItem(keep);
+    else
+        tree->verticalScrollBar()->setValue(keepScroll);
 
     // Re-apply the filter to the freshly built tree (H4 / UR #38).
     applyTreeFilter(tree, filterEdit ? filterEdit->text() : QString());
@@ -298,14 +313,10 @@ void FolderTreePanel::reload()
     updateButtonStates();
 }
 
-void FolderTreePanel::addEntities(QTreeWidgetItem *parent, int folderId)
+void FolderTreePanel::addEntities(QTreeWidgetItem *parent,
+                                 const QList<FolderRow> &rows)
 {
-    const QList<FolderRow> entities =
-        m_dao.listEntities(folderId,
-                            showDeletedCheck != nullptr &&
-                                showDeletedCheck->isChecked());
-
-    for (const FolderRow &e : entities) {
+    for (const FolderRow &e : rows) {
         auto *item = parent
             ? new QTreeWidgetItem(parent, {e.name})
             : new QTreeWidgetItem(tree, {e.name});
@@ -358,9 +369,11 @@ void FolderTreePanel::onNewBtnClicked()
         return;
 
     // New entity goes into the selected folder when one is selected,
-    // otherwise at the root level.
-    m_dao.openNew(this, selectedFolderId());
-    reload();
+    // otherwise at the root level. The dialog reports whether it
+    // persisted the new entity; a cancelled dialog changed nothing, so
+    // no rebuild is needed (UR #8).
+    if (m_dao.openNew(this, selectedFolderId()))
+        reload();
 }
 
 void FolderTreePanel::onShowBtnClicked()
@@ -378,8 +391,9 @@ void FolderTreePanel::onEditBtnClicked()
     if (entityId == 0 || !m_dao.openEdit)
         return;
 
-    m_dao.openEdit(this, entityId);
-    reload();
+    // Same as New: reload only when the dialog actually saved (UR #8).
+    if (m_dao.openEdit(this, entityId))
+        reload();
 }
 
 void FolderTreePanel::onEntityDeleteClicked()

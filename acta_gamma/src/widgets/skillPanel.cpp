@@ -38,23 +38,25 @@ FolderTreeDao makeSkillDao(db_t *db)
         return out;
     };
 
-    dao.listEntities = [db](int folderId, bool withDeleted) {
+    // One list_all query for all skills; the panel groups the rows by
+    // folderId (UR #8 / P8a).
+    dao.listAllEntities = [db](bool withDeleted) {
         QList<FolderRow> out;
         int n = 0;
         int err = ACTA_DB_OK;
         skill_t **skills = withDeleted
-            ? acta_db_skill_list_in_folder_with_deleted(db, folderId, 0, 0, &n,
-                                                        &err)
-            : acta_db_skill_list_in_folder(db, folderId, 0, 0, &n, &err);
+            ? acta_db_skill_list_all_with_deleted(db, 0, 0, &n, &err)
+            : acta_db_skill_list_all(db, 0, 0, &n, &err);
         if (!skills) {
             if (err != ACTA_DB_OK)
-                qWarning("acta_db_skill_list_in_folder(%d) failed: %s", folderId,
+                qWarning("acta_db_skill_list_all failed: %s",
                          acta_db_strerror(err));
             return out;
         }
         for (int i = 0; i < n; ++i) {
             FolderRow e;
             e.id = skills[i]->id;
+            e.folderId = skills[i]->folder_id;
             e.name = QString::fromUtf8(skills[i]->name);
             e.deletedAt =
                 skills[i]->deleted_at ? QString::fromUtf8(skills[i]->deleted_at)
@@ -87,10 +89,13 @@ FolderTreeDao makeSkillDao(db_t *db)
         return acta_db_skill_restore(db, skillId);
     };
 
+    // Returns whether the dialog persisted a change, so the panel can
+    // skip the rebuild when the dialog was cancelled (UR #8).
     dao.openNew = [db](QWidget *parent, int folderId) {
         SkillDialog dlg(parent);
         dlg.newSkill(db, folderId);
         dlg.exec();
+        return dlg.saved();
     };
     dao.openShow = [db](QWidget *parent, int skillId) {
         SkillDialog dlg(parent);
@@ -101,6 +106,7 @@ FolderTreeDao makeSkillDao(db_t *db)
         SkillDialog dlg(parent);
         dlg.editSkill(db, skillId);
         dlg.exec();
+        return dlg.saved();
     };
 
     return dao;

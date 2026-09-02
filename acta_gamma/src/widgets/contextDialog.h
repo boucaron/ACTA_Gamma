@@ -27,10 +27,17 @@ public:
     // (content_hash is computed from the content, SHA-256 hex).
     void newContext(db_t *db);
 
+    // True once the created context was persisted; the panel reloads
+    // only when this is set (UR #8).
+    bool saved() const { return m_saved; }
+
 private:
     Ui_contextDialog *ui;
     db_t *m_db = nullptr;
     Mode m_mode = Mode::ReadOnly;
+    // Set when the create succeeds, so the panel can reload only if
+    // the dialog actually changed the db.
+    bool m_saved = false;
 
     // Apply mode: button bar (Close / Save|Close) and field
     // read-only flags.

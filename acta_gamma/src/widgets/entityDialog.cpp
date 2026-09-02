@@ -117,6 +117,9 @@ void EntityDialog::onSaveClicked()
         if (rc != ACTA_DB_OK)
             return;
 
+        // The row was persisted; the panel will reload on close.
+        setSaved(true);
+
         // Keep the dialog open on the created row, now editable.
         m_id = newId;
         loadEntity(newId);
@@ -131,6 +134,9 @@ void EntityDialog::onSaveClicked()
         const int rc = updateEntity();
         if (rc != ACTA_DB_OK)
             return;
+
+        // The update was persisted; the panel will reload on close.
+        setSaved(true);
 
         // The update triggered a revision snapshot: reload and switch
         // back to the read-only view. The "Saved as revision N" feedback

@@ -44,6 +44,7 @@ void SkillDialog::newSkill(db_t *db, int folderId)
     setDb(db);
     setEntityId(0);
     setFolderId(folderId);
+    setSaved(false);
 
     ui->nameLineEdit->clear();
     ui->descriptionTextEdit->clear();
@@ -70,6 +71,7 @@ void SkillDialog::showSkill(db_t *db, int skillId)
 void SkillDialog::editSkill(db_t *db, int skillId)
 {
     setDb(db);
+    setSaved(false);
     loadEntity(skillId);
     setMode(Mode::Edit);
     setWindowTitle(editTitle());

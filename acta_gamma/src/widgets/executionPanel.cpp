@@ -131,6 +131,10 @@ void ExecutionPanel::setDb(db_t *db)
 
 void ExecutionPanel::reload()
 {
+    // Preserve the current selection across the rebuild (UR #8).
+    const auto *cur = list->currentItem();
+    const int keepExecution = cur ? cur->data(0, RoleExecutionId).toInt() : 0;
+
     list->clear();
     if (!m_db) {
         emptyLabel->setVisible(true);
@@ -202,6 +206,17 @@ void ExecutionPanel::reload()
     }
 
     acta_db_execution_list_free(executions, n);
+
+    // Re-select the previously current row (flat list: linear scan by
+    // id); this also refills the log list via currentItemChanged.
+    if (keepExecution != 0)
+        for (int i = 0; i < list->topLevelItemCount(); ++i) {
+            auto *item = list->topLevelItem(i);
+            if (item->data(0, RoleExecutionId).toInt() == keepExecution) {
+                list->setCurrentItem(item);
+                break;
+            }
+        }
 
     // Re-apply the filters to the freshly built list (H4 / UR #38).
     applyFilters();

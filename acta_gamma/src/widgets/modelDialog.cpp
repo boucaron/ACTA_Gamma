@@ -46,6 +46,7 @@ void ModelDialog::newModel(db_t *db, int folderId)
     setDb(db);
     setEntityId(0);
     setFolderId(folderId);
+    setSaved(false);
 
     ui->nameLineEdit->clear();
     ui->descriptionTextEdit->clear();
@@ -74,6 +75,7 @@ void ModelDialog::showModel(db_t *db, int modelId)
 void ModelDialog::editModel(db_t *db, int modelId)
 {
     setDb(db);
+    setSaved(false);
     loadEntity(modelId);
     setMode(Mode::Edit);
     setWindowTitle(editTitle());
