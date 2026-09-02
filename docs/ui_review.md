@@ -242,6 +242,12 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 38. **Search & filter.** No way to find an item once trees grow. Add a
    filter box above each tree (case-insensitive substring), and for
    executions a status filter (All / failed / running…).
+   *(Done: `util.h::applyTreeFilter` (case-insensitive substring, folders
+   stay visible above matching children; optional extra-text role used by
+   the context panel to search row content, not just Type + Date) with a
+   filter box above every tree, plus an execution status combo
+   (All / pending / running / completed / failed / cancelled). Filters
+   are re-applied after every panel `reload()`.)*
 39. **Keyboard/accelerator support.** Add accelerators (`&New`,
    `&Delete`), `Delete` key to soft-delete the selection, `F2` to rename,
    `Enter` to open the detail dialog. Right now everything is mouse-only.

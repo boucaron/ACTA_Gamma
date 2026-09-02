@@ -12,7 +12,6 @@ lives in `ui_review.md`.
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | H2 | **JSON validation (to analyze)** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | analyze first: not all three fields are necessarily JSON — `configuration` is backend-specific JSON (`DBDesign.md`), `output_schema` is a JSON schema, but context `content` may be plain text; decide scope before implementing (dialogs + context panel editor) |
-| H4 | **Search & filter** — substring filter box per tree; execution status filter | UR #38 | |
 
 ### Polish
 
@@ -26,7 +25,7 @@ lives in `ui_review.md`.
 
 ## Summary
 
-- **Now:** H2, H4.
+- **Now:** H2 (to analyze).
 - **Polish last:** P1–P3, P5–P6.
 
 (Full original list lives in `ui_review.md`.)
