@@ -16,6 +16,7 @@ ModelDialog::ModelDialog(QWidget *parent)
 {
     ui->setupUi(this);
     configureRevisionTree();
+    ui->nameLineEdit->setPlaceholderText(tr("Name…"));
 
     setMode(Mode::ReadOnly);
 }
