@@ -130,6 +130,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     then Delete/Restore) while Context has one (New/Show) and Execution has
     (Run, Show) stacked vertically. Standardize: one toolbar per panel with
     all actions, sensible order, and **icons + tooltips** on every button.
+    *(Partly done: execution panel now has "Show" and "Show Log Details"
+    buttons with icons + tooltips and right-click "Show" context menus on
+    both lists.)*
 23. **Trees:**
    - Skill/Model trees: `setHeaderHidden(true)` and no folder icon →
      folders and items are visually indistinguishable. Add a folder icon

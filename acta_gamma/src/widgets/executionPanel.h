@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QPoint>
 #include <QWidget>
 class QTreeWidget;
 class QTreeWidgetItem;
@@ -13,6 +14,9 @@ public:
     QTreeWidget *list;
     QTreeWidget *logList;
     QPushButton *showBtn;
+    // Opens the execution dialog for the selected execution row (the
+    // "Show Log Details" button below works on the log list instead).
+    QPushButton *showDetailsBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
@@ -30,6 +34,9 @@ private:
     // (or clear it when the selection leaves an execution row).
     void showExecutionLogs(QTreeWidgetItem *item);
 
+    // Open the read-only log dialog for the given log id.
+    void showLogDialog(int logId);
+
 private slots:
     void onShowBtnClicked();
     // Keyboard accelerator (UR #39), active while the execution list has
@@ -39,4 +46,12 @@ private slots:
     bool eventFilter(QObject *obj, QEvent *event) override;
 
     void onReturnKeyPressed();
+
+    // Right-click context menu on the execution list: "Show" opens the
+    // same dialog as double-click / Enter / Show.
+    void onListContextMenu(const QPoint &pos);
+
+    // Right-click context menu on the log list: "Show" opens the same
+    // dialog as the "Show Log Details" button.
+    void onLogListContextMenu(const QPoint &pos);
 };

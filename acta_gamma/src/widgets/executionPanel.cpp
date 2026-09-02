@@ -4,7 +4,9 @@
 #include <QLabel>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QPushButton>
+#include <QStyle>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -27,6 +29,9 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     list->setColumnCount(2);
     list->setHeaderLabels({"Date", "Status"});
     list->setSortingEnabled(true);
+    list->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(list, &QTreeWidget::customContextMenuRequested, this,
+            &ExecutionPanel::onListContextMenu);
     connect(list, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 showExecutionLogs(cur);
@@ -44,14 +49,30 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     logList->setHeaderLabels({"Date", "Level", "Event", "Message"});
     logList->setRootIsDecorated(false);
     logList->setUniformRowHeights(true);
+    logList->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(logList, &QTreeWidget::customContextMenuRequested, this,
+            &ExecutionPanel::onLogListContextMenu);
     lay->addWidget(logList);
 
     // "&" marks the button's accelerator (Alt+letter) (UR #39).
-    showBtn = new QPushButton("S&how");
+    showBtn = new QPushButton("Show Lo&g Details");
+    showBtn->setToolTip("Show the details of the selected log line");
+    showBtn->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     lay->addWidget(showBtn);
+
+    // "Show" opens the execution dialog for the selected execution row;
+    // the context menu and double-click / Enter do the same (UR #33:
+    // give the Show action a real target).
+    showDetailsBtn = new QPushButton("S&how");
+    showDetailsBtn->setToolTip("Show the details of the selected execution");
+    showDetailsBtn->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    lay->addWidget(showDetailsBtn);
 
     // callback
     connect(showBtn, &QPushButton::clicked, this, &ExecutionPanel::onShowBtnClicked);
+    connect(showDetailsBtn, &QPushButton::clicked, this, [this] {
+        onExecutionDoubleClicked(list->currentItem(), 0);
+    });
 
     // Keyboard accelerator (UR #39), handled in eventFilter() while the
     // execution list (or its viewport) has focus. Installed on both
@@ -165,12 +186,47 @@ void ExecutionPanel::onShowBtnClicked()
 {
     const QTreeWidgetItem *cur = logList->currentItem();
     const int logId = cur ? cur->data(0, RoleLogId).toInt() : 0;
+    showLogDialog(logId);
+}
+
+void ExecutionPanel::showLogDialog(int logId)
+{
     if (logId == 0 || !m_db)
         return;
 
     ExecutionLogDialog dlg(this);
     dlg.showLog(m_db, logId);
     dlg.exec();
+}
+
+void ExecutionPanel::onListContextMenu(const QPoint &pos)
+{
+    auto *item = list->itemAt(pos);
+    if (!item)
+        return;
+    QMenu menu(this);
+    auto *aShow = menu.addAction("Show");
+    aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    aShow->setToolTip("Show the details of this execution");
+    connect(aShow, &QAction::triggered, this, [this, item] {
+        onExecutionDoubleClicked(item, 0);
+    });
+    menu.exec(list->viewport()->mapToGlobal(pos));
+}
+
+void ExecutionPanel::onLogListContextMenu(const QPoint &pos)
+{
+    auto *item = logList->itemAt(pos);
+    if (!item)
+        return;
+    QMenu menu(this);
+    auto *aShow = menu.addAction("Show");
+    aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    aShow->setToolTip("Show the details of this log line");
+    connect(aShow, &QAction::triggered, this, [this, item] {
+        showLogDialog(item->data(0, RoleLogId).toInt());
+    });
+    menu.exec(logList->viewport()->mapToGlobal(pos));
 }
 
 void ExecutionPanel::onReturnKeyPressed()
