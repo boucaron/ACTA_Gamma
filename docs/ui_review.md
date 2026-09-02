@@ -305,11 +305,11 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 1. **Must-fix:**
    - #1 dead "Run One-Shot" button (implement or remove) *(done: removed)*
    - #2, #3 dead `QDialog::Accepted` branches / mislabeled "Edit" menu *(done)*
-   - #4 case-mismatched `modelpanel.cpp` filename
-   - #5 duplicate includes
-   - #32 database-failure UX
-   - #33 save feedback + confirmations
-   - #35 revision-selection clobber trap
+   - #4 case-mismatched `modelpanel.cpp` filename *(done: `modelPanel.cpp`/`.h`, consistently referenced)*
+   - #5 duplicate includes *(done: no duplicate `#include`s remain)*
+   - #32 database-failure UX *(done: startup modal + persistent offline banner + Retry)*
+   - #33 save feedback + confirmations *(done: delete confirmation, "restored" toasts, save feedback with "Saved as revision N" and the Read-only switch)*
+   - #35 revision-selection clobber trap *(done: revision tree disabled outside Read-only mode)*
 2. **High:**
    - #17 folder CRUD
    - #18 execution-creation flow (the app's core feature)
