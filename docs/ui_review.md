@@ -191,6 +191,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    *and* the splitter sizes are `{320, 880}` — the user can never widen the
    left pane. Pick one constraint (e.g. max width + `setCollapsible`) and
    let the splitter do the rest.
+   *(Done: the hard max is gone; both panes have a `setMinimumWidth(160)`
+   instead, the initial sizes stay `{320, 880}`, and stretch factors give
+   window-resize space to the right pane.)*
 30. **No theming.** Everything is stock Qt grey. Add a light `QSS`
     stylesheet (accent color, hover states, disabled states, group-box
     headers) to give the product identity; a logo/branding already exists.
@@ -254,6 +257,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 40. **Window state persistence.** `resize(1200,700)` on every start; add
    `QMainWindow::saveState`/`restoreState` via `QSettings` (window geometry,
    splitter sizes, "show deleted" flags).
+   *(Done: `MainWindow::closeEvent` saves `window/geometry`,
+   `window/splitter` (`QSplitter::saveState`), and the two "Show deleted
+   items" flags to `QSettings`; the constructor restores all three,
+   falling back to `resize(1200,700)` on first run.)*
 41. **Redundant "Show" affordances.** In `ContextPanel`, single-click
     already fills the editor below; the "Show" button opens a dialog
     showing the same content. In `ExecutionPanel`, the "Show" button on a

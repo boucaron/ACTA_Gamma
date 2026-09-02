@@ -19,13 +19,12 @@ lives in `ui_review.md`.
 |---|--------|--------|----------------------|
 | P1 | `.ui` file cleanup — placeholder text instead of "default name", real revision-tree header, drop hardcoded `readOnly`, sane min sizes, consistent window titles | UR #12, #27 | |
 | P2 | Theming + chrome — light QSS stylesheet, panel group headers, button icons/tooltips, window icon, minimal menu bar | UR #21, #22, #28, #30 | |
-| P3 | Splitter constraint fix (`setMaximumWidth(320)` vs splitter sizes) and window-state persistence via `QSettings` | UR #29, #40 | |
 | P5 | Redundant "Show" affordances, empty-state placeholders, data lifecycle (delete/prune executions + contexts) | UR #31, #41, #42 | |
 | P6 | Friendlier error mapping for all `acta_db_strerror` surfaces (unique-name constraint → "already exists in this folder") | UR #45 | |
 
 ## Summary
 
 - **Now:** H2 (to analyze).
-- **Polish last:** P1–P3, P5–P6.
+- **Polish last:** P1–P2, P5–P6.
 
 (Full original list lives in `ui_review.md`.)
