@@ -24,7 +24,6 @@ lives in `ui_review.md`.
 | P1 | `.ui` file cleanup — placeholder text instead of "default name", real revision-tree header, drop hardcoded `readOnly`, sane min sizes, consistent window titles | UR #12, #27 | |
 | P2 | Theming + chrome — light QSS stylesheet, panel group headers, button icons/tooltips, window icon, minimal menu bar | UR #21, #22, #28, #30 | |
 | P3 | Splitter constraint fix (`setMaximumWidth(320)` vs splitter sizes) and window-state persistence via `QSettings` | UR #29, #40 | |
-| P4 | Keyboard/accelerator support — `F2` rename (natural fit once F1 lands), `Delete` key, accelerators | UR #39 | F1 supplies the first rename target |
 | P5 | Redundant "Show" affordances, empty-state placeholders, data lifecycle (delete/prune executions + contexts) | UR #31, #41, #42 | |
 | P6 | Friendlier error mapping for all `acta_db_strerror` surfaces (unique-name constraint → "already exists in this folder") | UR #45 | F1 establishes the pattern |
 | P7 | **Icons + tooltips on the `SkillPanel` buttons** — give each action button an icon and a tooltip (including the folder row): `New`, `Show`, `Edit Skill`, `Delete`, `Restore`, and `New Folder` / `Rename Folder` / `Delete Folder` / `Restore Folder` (standard style icons, e.g. `SP_DialogYesButton`/`SP_DialogNoButton`/`SP_DialogResetButton`/`SP_TrashIcon`/`SP_DialogRestoreButton`/`SP_DirIcon`) | UR #28 | tooltips clarify the text-only buttons and match the menu entries from H6 |
@@ -33,6 +32,6 @@ lives in `ui_review.md`.
 ## Summary
 
 - **Now:** H1–H5.
-- **Polish last:** P1–P8.
+- **Polish last:** P1–P3, P5–P8.
 
 (Full original list lives in `ui_review.md`.)
