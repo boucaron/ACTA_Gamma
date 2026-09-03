@@ -12,6 +12,7 @@ numbering).
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | H2 | **JSON validation (to analyze)** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | analyze first: not all three fields are necessarily JSON — `configuration` is backend-specific JSON (`DBDesign.md`), `output_schema` is a JSON schema, but context `content` may be plain text; decide scope before implementing (dialogs + context panel editor) |
+| H3 | **Execution creation flow.** "New" button in ExecutionPanel + new `ExecutionCreateDialog` (context / skill + revision / model + revision combos, prompt editor, optional parent execution) → `acta_db_execution_create`; row lands `pending`, panel reloads only if saved, new row auto-selected | UR #18 | analysis in [`execution_creation_analysis.md`](execution_creation_analysis.md); pure UI on the existing DB API — no runner involved; phase 2: pre-filled "Run" from SkillPanel once the runner exists |
 
 ### Polish
 
@@ -22,7 +23,9 @@ numbering).
 
 ## Summary
 
-- **Now:** H2 (to analyze) — the only queued action; P1 shipped
-  (c1ec1f2), P8 shipped (05c68bc).
+- **Now:** H3 (execution creation flow, analyzed in
+  [`execution_creation_analysis.md`](execution_creation_analysis.md))
+  and H2 (to analyze) — the queued actions; P1 shipped (c1ec1f2), P8
+  shipped (05c68bc).
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).

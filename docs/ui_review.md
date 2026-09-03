@@ -42,6 +42,12 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     browsable, but nothing in the app creates one (see #1). There's no
     "pick context + skill + model → Run" flow. That is the app's core
     value ("LLMs as actions") and it is missing.
+    *(Analyzed 2026-09: the first step — a UI path to create `pending`
+    executions, no runner — is covered in
+    [`execution_creation_analysis.md`](execution_creation_analysis.md)
+    and queued as H3 in
+    [`ui_active_action.md`](ui_active_action.md). Full Run flow follows
+    once the runner backend exists.)*
 19. **Panels emit no signals.** No signal after mutation, so `MainWindow`
     can't react (e.g., selecting a skill could prefill an "execute" form).
     At minimum, emit `itemChanged(int id)` so future features can hook in.
@@ -137,7 +143,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 1. **Must-fix:** *(none remaining)*
 2. **High:**
-   - #18 execution-creation flow (the app's core feature)
+   - #18 execution-creation flow (the app's core feature; analyzed in
+     [`execution_creation_analysis.md`](execution_creation_analysis.md),
+     queued as H3 in [`ui_active_action.md`](ui_active_action.md))
    - #15 JSON validation
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
