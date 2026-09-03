@@ -37,10 +37,12 @@ The creation flow is therefore **pure UI** on top of an existing C API.
 
 | Form field | Source call | Notes |
 |---|---|---|
-| Context | `acta_db_context_query(db, NULL, 0, 0, &n, &err)` | NULL filter = all contexts; display = `type` (contexts have no name column, as in the context panel) |
-| Skill (entity) | `acta_db_skill_list_all(db, 0, 0, &n, &err)` | id + name |
+| Context | `acta_db_context_query(db, NULL, 0, 0, &n, &err)` | NULL filter = all contexts; display = `type` + creation date, content (truncated) in the tooltip (contexts have no name column, as in the context panel) |
+| Skill folder | `acta_db_skill_folder_list_all(db, 0, 0, &n, &err)` | nested via `parent_id`, same skeleton as `FolderTreePanel` |
+| Skill (entity) | `acta_db_skill_list_all(db, 0, 0, &n, &err)` | id + name, grouped by `folder_id` |
 | Skill revision | `acta_db_skill_revision_list_by_skill(db, skill_id, 0, 0, &n, &err)` | ascending; **select the latest** by default |
-| Model (entity) | `acta_db_model_list_all(db, 0, 0, &n, &err)` | id + name |
+| Model folder | `acta_db_model_folder_list_all(db, 0, 0, &n, &err)` | nested via `parent_id` |
+| Model (entity) | `acta_db_model_list_all(db, 0, 0, &n, &err)` | id + name, grouped by `folder_id` |
 | Model revision | `acta_db_model_revision_list_by_model(db, model_id, 0, 0, &n, &err)` | ascending; latest by default |
 | Parent execution (optional) | `acta_db_execution_query(db, NULL, 0, 0, &n, &err)` | "— none —" entry maps to `parent_execution_id = 0` |
 
@@ -64,18 +66,41 @@ have), so the shared base brings little, and mixing a create form into
 the 6-tab viewer bloats the .ui. The create dialog is small and
 standalone; `ExecutionDialog` stays exactly as is.
 
-### 4.2 Two-stage skill/model selection (recommended)
+### 4.2 Skill/model selection as folder trees (implemented)
 
-One combo per *entity* + one combo per *revision*:
+The original recommendation was one combo per *entity* + one combo per
+*revision* ("name" → "rev n", latest preselected). On review that was
+rejected: **each of skill and model is a `QTreeWidget` picker** with
+the same layout as `FolderTreePanel`:
 
-- "Skill: [name]" → populates "Skill revision: [rev n]" (latest
-  preselected). Same for Model.
+```
+<folder>                  (nested via parent_id, folder icon)
+  <entity>
+    rev 1
+    rev 2   (listers ascending; last = latest)
+<root-level entity>       (folder_id = 0)
+```
 
-Why not a single "skill revision" combo with all revisions of all
-skills ("name (rev n)" entries)? It works but mixes entities in one
-list and grows without bound; two-stage keeps each list small and makes
-the revision semantics visible. The DB only needs `skill_revision_id` /
-`model_revision_id`, which the revision combos carry.
+- Entities come from `*_list_all` grouped by `folder_id` in C++
+  (UR #8 / P8a, same as the panels); revisions are child rows of their
+  entity. The trees are fully expanded — they are pickers, not
+  browsers.
+- Selection semantics: a **revision row** selects its id (the DB only
+  needs `skill_revision_id` / `model_revision_id`); an **entity row**
+  auto-selects its latest revision (last child, via
+  `currentItemChanged` re-entry); a **folder row** deselects (Save
+  stays disabled). Default after load: the first entity's latest
+  revision, mirroring the old "latest preselected" behavior.
+
+Why a tree instead of combos: the folder hierarchy is part of the
+identity of a skill/model (the same hierarchy the Skill/Model panels
+show), a single widget replaces the two-stage cascade, and it scales
+to any number of entities and revisions without two parallel lists.
+
+The context combo likewise shows more than `type`: `type (yyyy-MM-dd)`
+(the same two columns as the context panel list), with the content
+(truncated to 400 chars) in the tooltip — the content is the main
+identifying data of a context.
 
 ### 4.3 Status is not user-selectable
 
@@ -108,9 +133,10 @@ No status widget in the form — the state machine owns it.
 
 ## 5. Files touched
 
-- `acta_gamma/ui/executionCreateDialog.ui` (new): 5 rows (context,
-  skill, skill revision, model, model revision) + optional parent combo,
-  monospace `QTextEdit` for the prompt (per #26 style rule), button box.
+- `acta_gamma/ui/executionCreateDialog.ui` (new): context combo, skill
+  and model folder trees (`QTreeWidget`, hidden header), optional
+  parent combo, monospace `QTextEdit` for the prompt (per #26 style
+  rule), button box.
 - `acta_gamma/src/widgets/executionCreateDialog.{h,cpp}` (new).
 - `acta_gamma/src/widgets/executionPanel.{h,cpp}`: add `newExecutionBtn`
   + slot → dialog → conditional `reload()`.
