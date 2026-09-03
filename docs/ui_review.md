@@ -30,13 +30,19 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     and the creation path is now in the UI: "New" in the Execution
     panel opens `ExecutionCreateDialog` (context / skill / model pickers,
     prompt editor, optional parent execution) and the row lands
-    `pending`. What is missing is the "→ Run" part: no runner backend
-    yet (model load → LLM call → status transitions, `execution_log`
-    phase rows). That is the app's core value ("LLMs as actions").
+    `pending`. The runner backend now exists: standalone
+    `acta_runner` (phase 2, d142a8e — claim → resolve → preflight →
+    `POST /v1/chat/completions` → `set_raw_response` → optional
+    post-hoc validation → `complete`/`fail`, with `execution_log` phase
+    rows; see [`runner_analysis.md`](runner_analysis.md)). What remains
+    is the in-app "→ Run" button: spawn `acta_runner run <id>` via
+    `QProcess` from the Execution panel (Plan D) and poll the DB for
+    status/log rows.
     *(The first step — UI creation of `pending` executions — shipped as
     H3 (8b4c16d, design details in the git history; the analysis doc
-    was removed once everything was implemented). Full Run flow follows
-    once the runner backend exists.)*
+    was removed once everything was implemented). The runner backend
+    shipped as `acta_runner` phase 2 (d142a8e); the GUI Run button is the
+    remaining piece.)*
 
 ---
 
@@ -73,8 +79,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 1. **Must-fix:** *(none remaining)*
 2. **High:**
-   - #18 remaining: the Run flow (runner backend) — the UI creation
-     flow shipped as H3 (8b4c16d)
+   - #18 remaining: the in-app "Run" button — spawn
+     `acta_runner run <id>` via `QProcess` (Plan D); the runner backend
+     shipped as `acta_runner` phase 2 (d142a8e), the UI creation flow as
+     H3 (8b4c16d)
    - #15 JSON validation
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*

@@ -11,6 +11,7 @@ numbering).
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
+| H1 | **In-app "Run" button (Plan D):** "Run" action on the selected execution row spawns `acta_runner run <id>` via `QProcess`; the execution panel polls `acta_db_execution_query` + `execution_log` rows for live status and phase log | UR #18 (runner backend shipped, d142a8e) | runner exists standalone (`acta_runner/`, `docs/runner_analysis.md`); the DB is the message bus (no IPC); also enables UR #44 live-status UX |
 | H2 | **JSON validation (to analyze)** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | analyze first: not all three fields are necessarily JSON — `configuration` is backend-specific JSON (`DBDesign.md`), `output_schema` is a JSON schema, but context `content` may be plain text; decide scope before implementing (dialogs + context panel editor) |
 
 ### Polish
@@ -22,7 +23,9 @@ numbering).
 
 ## Summary
 
-- **Now:** H2 (JSON validation, to analyze) — the only queued action.
+- **Now:** H1 (in-app "Run" button / Plan D — runner backend already shipped
+  as `acta_runner` phase 2, d142a8e) and H2 (JSON validation, to analyze) —
+  the only queued actions.
 - Shipped: H3 (execution creation flow, 8b4c16d, incl. picker trees,
   Show buttons and inline previews; the analysis doc was removed once
   everything was implemented), P1 (c1ec1f2), P8 (05c68bc),

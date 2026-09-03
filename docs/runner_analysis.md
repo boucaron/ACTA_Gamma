@@ -5,6 +5,58 @@ database, resolves a pending execution's skill + model + context, calls the
 OpenAI-compatible backend, and records the outcome (raw response, result,
 error, phase logs) back into the database.
 
+## Status: phase 2 shipped
+
+Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
+
+- `src/backend.{h,c}` — curl wrapper exactly as specced: one GET/POST JSON
+  request with timeout, optional `Authorization: Bearer`, result codes
+  `BACKEND_OK / ERR_TRANSPORT / ERR_TIMEOUT / ERR_ALLOC` (the timeout
+  `CURLcode` is selected by `LIBCURL_VERSION_NUM` — curl ≥ 8.8 renamed
+  `CURLE_OPERATION_TIMED` to `CURLE_OPERATION_TIMEDOUT`).
+- `src/run.c` — the full `run_execution` pipeline: claim (`start()`),
+  resolve (context / skill revision / model revision), preflight
+  (`/health`, `/v1/models` id check), `POST /v1/chat/completions`,
+  `set_raw_response`, optional post-hoc validation, `complete()`/`fail()`,
+  with one `execution_log` row per phase and JSON metadata
+  (http status, latency, token usage, …). Every post-claim failure
+  funnels through `fail_execution()` so a row never stays stuck in
+  `running`.
+- `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
+  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 9
+  scenarios (success, health 503, model mismatch, chat 500, timeout,
+  non-pending, not-found, post-hoc validation fail/pass) on a scratch
+  `:memory:` DB. Run with `make test` in `acta_runner/`.
+
+Implementation notes (where the spec left room):
+
+- The model `configuration` JSON keys the runner understands:
+  `api_key` (fallback for `--api-key` / `$OPENAI_API_KEY`),
+  `temperature`, `max_tokens`, `top_k`, and `supports_response_format`
+  (bool, default `true`). `false` means the backend has no json_schema
+  `response_format`: the field is not sent and the raw response is
+  validated post-hoc instead. This is the concrete resolution of
+  decision 3's "when the backend supports it".
+- Post-hoc validation is a schema SUBSET validator (recursive `type`,
+  `required`, `properties`, `items`; `pattern`/`enum`/`format`/… are out of
+  scope). Violation → `fail()` + `EXIT_INVALID`.
+- Non-DB failures emit a runner-layer JSON error line
+  `{"error":"ACTA_RUNNER_ERROR","code":<exit code>,"message":...}`
+  (code always equals the process exit code); DB failures keep the
+  `ACTA_DB_ERR_*` contract. Exit codes: 12 for HTTP/preflight failures,
+  13 for timeout, 4 for validation/claim failures.
+- User message = `context.content + "\n\n" + execution.prompt` (either
+  half may be empty; both empty → fail).
+
+Remaining work (deliberately not in phase 2):
+
+- Plan D end state: the GUI "Run" button spawning `acta_runner run <id>`
+  via `QProcess` with panel polling (covers UI review #18 remainder and
+  #44).
+- Test suites for `argparse` pass-1/pass-2 and `--pending` batch looping
+  / `--max` clamping.
+- Stale-`running` cleanup sweep (`--stale-seconds`), per decision 6.
+
 ## Codebase analysis
 
 ### acta_db (C11, libacta_db)

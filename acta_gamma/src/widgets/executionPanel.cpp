@@ -103,7 +103,8 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // Icon-only toolbar row (P2 / UR #22), matching the other panels:
     // tooltips carry the meaning, accelerators are Alt+letter (UR #39).
     // "New" opens the create dialog (a new row lands in "pending"; the
-    // runner that moves it through start/complete/fail is phase 2).
+    // runner that moves it through start/complete/fail lives in
+    // acta_runner — the in-app "Run" button is Plan D, not yet shipped).
     // "Show" opens the execution dialog for the selected execution row;
     // the context menu and double-click / Enter do the same (UR #33).
     auto *btnRow = new QHBoxLayout;
