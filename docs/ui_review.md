@@ -18,10 +18,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ### Bugs / dead code
 
-13. **"New" target-folder logic.** In `SkillPanel::onNewBtnClicked` (and
-    Model), if the user has a *skill/model* selected (not a folder),
-    `selectedFolderId()` returns 0 and the new item lands at root, not next
-    to its sibling. Better: fall back to the selected item's own folder.
 15. **No input validation beyond emptiness.** `output_schema`,
     `configuration`, and context `content` are JSON-ish payloads
     ("Immutable input JSON…", "constraint the Output Schema… JSON").
