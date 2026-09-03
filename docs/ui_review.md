@@ -58,9 +58,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ## 3. UX
 
-34. **"New" target ambiguity.** Clicking **New** with a skill selected
-    silently creates the item at root (see #13). Show the target folder in
-    the dialog title or a label ("Creating in folder: X / root").
 36. **Modal-on-modal-on-modal.** Panel → dialog → nested dialog (e.g. the
     Execution dialog's "Show context" opens a dialog inside a dialog).
     Consider an inline detail pane or a non-modal browser; at minimum keep
@@ -94,7 +91,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
 3. **Polish:**
-   - #13/#34 "New" target-folder fallback + target label
+   - #13 "New" target-folder fallback
    - #26 remaining: JSON highlighting / line numbers
    - #43 i18n consistency
    - #44 live execution UX
