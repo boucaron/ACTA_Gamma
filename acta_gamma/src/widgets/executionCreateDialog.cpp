@@ -175,6 +175,7 @@ ExecutionCreateDialog::ExecutionCreateDialog(QWidget *parent)
                 updateSaveEnabled();
                 ui->showContextButton->setEnabled(
                     ui->contextComboBox->currentData().toInt() != 0);
+                loadContextDataPreview();
             });
     connect(ui->showContextButton, &QPushButton::clicked, this,
             &ExecutionCreateDialog::onShowContextClicked);
@@ -406,6 +407,52 @@ void ExecutionCreateDialog::loadParentExecutions()
     acta_db_execution_list_free(executions, n);
 }
 
+void ExecutionCreateDialog::loadContextDataPreview()
+{
+    const int contextId = ui->contextComboBox->currentData().toInt();
+    if (contextId == 0 || !m_db) {
+        ui->contextDataPreviewTextEdit->clear();
+        return;
+    }
+
+    // Full content (the combo tooltip shows it truncated to 400 chars).
+    int err = ACTA_DB_OK;
+    context_t *c = acta_db_context_get(m_db, contextId, &err);
+    if (!c) {
+        if (err != ACTA_DB_OK)
+            qWarning("acta_db_context_get(%d) failed: %s",
+                     contextId, acta_db_strerror(err));
+        ui->contextDataPreviewTextEdit->clear();
+        return;
+    }
+    ui->contextDataPreviewTextEdit->setPlainText(
+        QString::fromUtf8(c->content));
+    acta_db_context_free(c);
+}
+
+void ExecutionCreateDialog::loadSkillPromptPreview()
+{
+    if (m_skillRevisionId == 0 || !m_db) {
+        ui->skillPromptPreviewTextEdit->clear();
+        return;
+    }
+
+    // Prompt of the currently selected skill revision.
+    int err = ACTA_DB_OK;
+    skill_revision_t *r = acta_db_skill_revision_get(m_db, m_skillRevisionId,
+                                                     &err);
+    if (!r) {
+        if (err != ACTA_DB_OK)
+            qWarning("acta_db_skill_revision_get(%d) failed: %s",
+                     m_skillRevisionId, acta_db_strerror(err));
+        ui->skillPromptPreviewTextEdit->clear();
+        return;
+    }
+    ui->skillPromptPreviewTextEdit->setPlainText(
+        QString::fromUtf8(r->prompt_template));
+    acta_db_skill_revision_free(r);
+}
+
 void ExecutionCreateDialog::updateSaveEnabled()
 {
     const bool ready =
@@ -442,6 +489,7 @@ void ExecutionCreateDialog::onSkillTreeSelectionChanged(QTreeWidgetItem *cur,
         }
     }
     ui->showSkillButton->setEnabled(m_skillEntityId != 0);
+    loadSkillPromptPreview();
     updateSaveEnabled();
 }
 

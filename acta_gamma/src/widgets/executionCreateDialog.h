@@ -55,6 +55,12 @@ private:
     void loadModelTree();
     void loadParentExecutions();
 
+    // Read-only previews above the Show buttons: the content of the
+    // selected context, and the prompt of the selected skill revision
+    // (cleared when nothing is selected).
+    void loadContextDataPreview();
+    void loadSkillPromptPreview();
+
     // Keep Save enabled only while context, a skill revision, a model
     // revision and a non-empty (trimmed) prompt are all set.
     void updateSaveEnabled();
