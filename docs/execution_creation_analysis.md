@@ -131,13 +131,38 @@ No status widget in the form — the state machine owns it.
   revision. That pre-fill needs panel signals (#19) or a direct
   call-site — deferred until the runner exists.
 
+### 4.6 Context combo affordances (implemented)
+
+The context entry in the form is a combo; it needed the same
+affordances the other pickers have:
+
+- **"Show" button** beside the combo: opens the selected context in
+  the read-only `ContextDialog` (all data: type, content, hash,
+  metadata, dates) — the same convention as the Show buttons of the
+  `ExecutionDialog` Input tab. Enabled only while a context is
+  selected.
+- **Right-click context menu** on the combo: **"New…"** (creates a
+  context via `ContextDialog` in New mode; on save the combo is
+  rebuilt and the new row is selected — needs the small
+  `ContextDialog::createdId()` accessor, same pattern as this
+  dialog's) and **"Show"** (the read-only dialog for the selected
+  entry).
+- **No "Edit" entry**: context rows are immutable — `acta_db` has no
+  update / soft-delete API for contexts, and the schema installs a
+  BEFORE UPDATE trigger that aborts out-of-band updates. So there is
+  nothing to edit; the context menu deliberately omits it.
+
 ## 5. Files touched
 
-- `acta_gamma/ui/executionCreateDialog.ui` (new): context combo, skill
-  and model folder trees (`QTreeWidget`, hidden header), optional
-  parent combo, monospace `QTextEdit` for the prompt (per #26 style
-  rule), button box.
-- `acta_gamma/src/widgets/executionCreateDialog.{h,cpp}` (new).
+- `acta_gamma/ui/executionCreateDialog.ui` (new): context combo +
+  "Show" button, skill and model folder trees (`QTreeWidget`, hidden
+  header), optional parent combo, monospace `QTextEdit` for the prompt
+  (per #26 style rule), button box.
+- `acta_gamma/src/widgets/executionCreateDialog.{h,cpp}` (new): combo
+  context menu (New… / Show; no Edit — contexts are immutable).
+- `acta_gamma/src/widgets/contextDialog.{h,cpp}`: small addition —
+  `createdId()` accessor (id of the created row, valid once
+  `saved()`), so the combo can select the new row after a create.
 - `acta_gamma/src/widgets/executionPanel.{h,cpp}`: add `newExecutionBtn`
   + slot → dialog → conditional `reload()`.
 - `acta_gamma/src/src.pro`: add the new sources + ui file.
