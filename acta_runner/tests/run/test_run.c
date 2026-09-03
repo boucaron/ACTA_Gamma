@@ -226,6 +226,10 @@ static const char *EVT_FULL_SUCCESS[] = {
     "llm_request", "llm_response", "execution_completed",
 };
 
+/* main.c owns runner_gopts in the real binary; the test binary links
+ * run.c without main.c, so the definition lives here. */
+const global_opts_t *runner_gopts;
+
 int main(void)
 {
     /* Verbose level 1 so VLOG action summaries go to stderr. */

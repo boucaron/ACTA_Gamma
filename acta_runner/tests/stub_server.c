@@ -22,6 +22,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #define sock_close(s) closesocket(s)
+/* winsock has no POSIX read(); recv() is the equivalent here. */
+#define sock_read(s, buf, n) ((int)recv((s), (buf), (n), 0))
 static int ws2_inited;
 #else
 #include <sys/socket.h>
@@ -29,6 +31,7 @@ static int ws2_inited;
 #include <arpa/inet.h>
 #include <unistd.h>
 #define sock_close(s) close(s)
+#define sock_read(s, buf, n) read((s), (buf), (n))
 #endif
 
 static pthread_t g_thread;
@@ -115,6 +118,18 @@ static void send_response(int c, int status, const char *status_text,
     sock_close(c);
 }
 
+/* Case-insensitive search for an HTTP header field; returns the first
+ * byte after the field name (i.e. the start of its value), or NULL.
+ * (strcasestr is a POSIX extension, not in the mingw C library.) */
+static const char *hdr_value(const char *hay, const char *field)
+{
+    size_t flen = strlen(field);
+    for (const char *p = hay; *p; p++)
+        if (strncasecmp(p, field, flen) == 0)
+            return p + flen;
+    return NULL;
+}
+
 /* Read the request (header + body) and serve one response. */
 static void handle_connection(int c, const stub_config_t *cfg)
 {
@@ -125,7 +140,7 @@ static void handle_connection(int c, const stub_config_t *cfg)
     for (;;) {
         if (total + 1 >= sizeof req)
             break;
-        int n = read(c, req + total, 1);
+        int n = sock_read(c, req + total, 1);
         if (n <= 0)
             break;
         req[total++] = (char)n;
@@ -144,8 +159,8 @@ static void handle_connection(int c, const stub_config_t *cfg)
 
     /* POST body per Content-Length. */
     if (strcmp(method, "POST") == 0) {
-        const char *cl = strcasestr(req, "Content-Length:");
-        long body_len = cl ? atol(cl + 15) : 0;
+        const char *cl = hdr_value(req, "Content-Length:");
+        long body_len = cl ? atol(cl) : 0;
         if (body_len < 0)
             body_len = 0;
         /* The runner sends small JSON bodies; we do not inspect them,
@@ -155,7 +170,7 @@ static void handle_connection(int c, const stub_config_t *cfg)
         while (drained < body_len) {
             int chunk = (int)(body_len - drained > 1024 ? 1024
                                                         : body_len - drained);
-            int n = read(c, drain, chunk);
+            int n = sock_read(c, drain, chunk);
             if (n <= 0)
                 break;
             drained += n;
