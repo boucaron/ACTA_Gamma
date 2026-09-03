@@ -15,11 +15,12 @@
  */
 
 /*
- * Returns 0 on success, or EXIT_CLI if --version/--help was set
- * (caller should handle and exit).
+ * Returns 0 on success — including when --version/--help was set
+ * (check g->show_version / g->show_help and exit accordingly) — and
+ * EXIT_CLI when a flag is missing its value or no action remains.
  *
- * After the call, g->argv[0] = action, g->argv[1..] = positionals
- * + action flags.
+ * After a successful call, g->argv[0] = action, g->argv[1..] =
+ * positionals + action flags; the caller frees g->argv.
  */
 int parse_globals(int argc, char **argv, global_opts_t *g);
 

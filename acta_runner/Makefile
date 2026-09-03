@@ -1,7 +1,8 @@
 # acta_runner — LLM execution runner (Plan A)
 #
 #   make          → builds ./acta_runner
-#   make test     → builds + runs the phase-2 pipeline tests (tests/run)
+#   make test     → builds + runs the test suites: argparse
+#                   (tests/argparse) and the phase-2 pipeline (tests/run)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
@@ -65,6 +66,11 @@ TEST_SRCS  := tests/run/test_run.c tests/stub_server.c \
 TEST_OBJS  := $(patsubst %.c, %.o, $(TEST_SRCS))
 TEST_TARGET := tests/run/test_run$(EXEEXT)
 
+# ---- argparse test suite (R2): pass-1/pass-2 parsing, no DB/HTTP ----
+AP_SRCS   := tests/argparse/test_argparse.c src/argparse.c
+AP_OBJS   := $(patsubst %.c, %.o, $(AP_SRCS))
+AP_TARGET := tests/argparse/test_argparse$(EXEEXT)
+
 # ---- smoke test: manual check against a LIVE OpenAI-compatible server ----
 # Reuses src/backend.c; no DB needed.
 SMOKE_SRCS  := tests/llama_smoke.c src/backend.c
@@ -95,7 +101,11 @@ $(TARGET): $(OBJS) $(ACTA_DB_LIB)
 $(TEST_TARGET): $(TEST_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(TEST_LDFLAGS)
 
-test: $(TEST_TARGET)
+$(AP_TARGET): $(AP_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(AP_OBJS)
+
+test: $(TEST_TARGET) $(AP_TARGET)
+	$(AP_TARGET)
 	$(TEST_TARGET)
 
 $(SMOKE_TARGET): $(SMOKE_OBJS)
@@ -111,5 +121,10 @@ smoke: $(SMOKE_TARGET)
 tests/llama_smoke.o: tests/llama_smoke.c src/backend.h
 	$(CC) $(CFLAGS) -Isrc -c $< -o $@
 
+# The pipeline test includes stub_server.h from tests/ (not in -I paths).
+tests/run/test_run.o: tests/run/test_run.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
 clean:
-	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)
+	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
+        $(AP_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)

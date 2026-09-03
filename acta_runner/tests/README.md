@@ -31,11 +31,14 @@ Build & run from `acta_runner/`:
 
 Exit code 0 = all checks pass, 1 = at least one failure.
 
+- `tests/argparse/test_argparse.c` — pass-1/pass-2 parsing tests
+  (global flag extraction, `--db`/`--verbose` forms, `--version`/`-h`
+  early flags, positional skipping, boolean vs value flags,
+  `--name=value` inline form, unknown-flag rejection). Run with
+  `make test` (runs before the pipeline suite).
+
 Still planned (not yet implemented):
 
-- `tests/argparse/` — pass-1/pass-2 parsing smoke tests (global flag
-  extraction, positional skipping, boolean vs value flags,
-  `--name=value` inline form, unknown-flag rejection).
-- Manual/CI coverage of `--pending` batch looping and `--max` clamping
+- Coverage of `--pending` batch looping and `--max` clamping
   (the batch loop itself is exercised by hand until a dedicated suite
   lands).
