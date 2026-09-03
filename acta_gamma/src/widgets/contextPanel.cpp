@@ -185,6 +185,13 @@ void ContextPanel::reload()
             }
         }
 
+    // Stable newest-first order after the rebuild (UR #23): the DB
+    // returns rows by id (insertion order); the Date column is
+    // "yyyy-MM-dd HH:mm" in every locale, so a plain-text sort is
+    // chronological. Rows created in the same minute sort in
+    // unspecified order (the seconds live only in the tooltip).
+    list->sortItems(1, Qt::DescendingOrder);
+
     // Re-apply the filter to the freshly built list (H4 / UR #38).
     applyTreeFilter(list, filterEdit ? filterEdit->text() : QString(),
                     RoleContextContent);

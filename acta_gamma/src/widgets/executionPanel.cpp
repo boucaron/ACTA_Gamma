@@ -11,6 +11,9 @@
 #include <QKeySequence>
 #include <QPushButton>
 #include <QStyle>
+#include <QStandardItem>
+#include <QStandardItemModel>
+#include <QTableView>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -20,7 +23,6 @@
 
 namespace {
 const int RoleExecutionId = Qt::UserRole;
-const int RoleLogId = Qt::UserRole + 1;
 } // namespace
 
 ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
@@ -79,11 +81,14 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
         applyFilters();
     });
 
-    logList = new QTreeWidget;
-    logList->setColumnCount(4);
-    logList->setHeaderLabels({"Date", "Level", "Event", "Message"});
-    logList->setRootIsDecorated(false);
-    logList->setUniformRowHeights(true);
+    // Flat log table (UR #23): a plain QTableView — the same control as
+    // the execution dialog's log table. The 4-column model is rebuilt per
+    // selection in showExecutionLogs(). (A QTableWidget was not used:
+    // its setModel is private, and setUniformRowHeights, set on the old
+    // QTreeWidget, doesn't exist on QTableView in Qt 6.11; each row now
+    // auto-sizes to its own content, so one tall message only grows its
+    // own row.)
+    logList = new QTableView;
     lay->addWidget(logList);
 
     // Centered placeholder over the blank log list (P5 / UR #31);
@@ -259,7 +264,13 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
 {
     const int executionId = item ? item->data(0, RoleExecutionId).toInt() : 0;
     if (executionId == 0 || !m_db) {
-        logList->clear();
+        // QTableView has no clear(); a fresh empty model (with the
+        // column headers, like the dialog builds) is the equivalent.
+        auto *emptyModel = new QStandardItemModel(0, 4);
+        emptyModel->setHorizontalHeaderLabels(
+            {QStringLiteral("Date"), QStringLiteral("Level"),
+             QStringLiteral("Event"), QStringLiteral("Message")});
+        logList->setModel(emptyModel);
         emptyLogLabel->setVisible(true);
         return;
     }
@@ -269,37 +280,46 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
     execution_log_t **lines =
         acta_db_execution_log_list_by_execution(m_db, executionId, nullptr,
                                                 0, 0, &n, &err);
-    logList->clear();
-    emptyLogLabel->setVisible(true);
-    if (!lines) {
-        if (err != ACTA_DB_OK)
-            qWarning("acta_db_execution_log_list_by_execution(%d) failed: %s",
-                     executionId, acta_db_strerror(err));
-        return;
+    // One model per load, exactly as ExecutionDialog::editExecution()
+    // builds its log table (same columns, same tooltips, same level
+    // colors), so panel and dialog stay visually in lockstep.
+    auto *model = new QStandardItemModel(0, 4);
+    model->setHorizontalHeaderLabels(
+        {QStringLiteral("Date"), QStringLiteral("Level"),
+         QStringLiteral("Event"), QStringLiteral("Message")});
+    if (lines) {
+        for (int i = 0; i < n; ++i) {
+            const QString level =
+                lines[i]->level ? QString::fromUtf8(lines[i]->level)
+                                : QString();
+            auto *dateItem = new QStandardItem(
+                displayDateTime(lines[i]->created_at)); // UR #24
+            dateItem->setToolTip(
+                lines[i]->created_at
+                    ? QString::fromUtf8(lines[i]->created_at)
+                    : QString());
+            auto *levelItem = new QStandardItem(level);
+            levelItem->setForeground(logLevelColor(level)); // UR #25
+            model->appendRow({
+                dateItem,
+                levelItem,
+                new QStandardItem(lines[i]->event
+                                    ? QString::fromUtf8(lines[i]->event)
+                                    : QString()),
+                new QStandardItem(lines[i]->message
+                                    ? QString::fromUtf8(lines[i]->message)
+                                    : QString()),
+            });
+        }
+        acta_db_execution_log_list_free(lines, n);
+    } else if (err != ACTA_DB_OK) {
+        qWarning("acta_db_execution_log_list_by_execution(%d) failed: %s",
+                 executionId, acta_db_strerror(err));
     }
-
-    for (int i = 0; i < n; ++i) {
-        const QString level =
-            lines[i]->level ? QString::fromUtf8(lines[i]->level)
-                            : QString();
-        auto *logItem = new QTreeWidgetItem(logList, {
-            displayDateTime(lines[i]->created_at), // UR #24
-            level,
-            lines[i]->event ? QString::fromUtf8(lines[i]->event) : QString(),
-            lines[i]->message
-                ? QString::fromUtf8(lines[i]->message)
-                : QString(),
-        });
-        logItem->setToolTip(
-            0, lines[i]->created_at ? QString::fromUtf8(lines[i]->created_at)
-                                    : QString());
-        logItem->setForeground(1, logLevelColor(level)); // UR #25
-        logItem->setData(0, RoleLogId, lines[i]->id);
-    }
-    acta_db_execution_log_list_free(lines, n);
+    logList->setModel(model);
 
     // Empty-state placeholder for the log list (P5 / UR #31).
-    emptyLogLabel->setVisible(logList->topLevelItemCount() == 0);
+    emptyLogLabel->setVisible(model->rowCount() == 0);
 }
 
 void ExecutionPanel::applyFilters()

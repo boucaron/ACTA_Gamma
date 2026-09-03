@@ -4,6 +4,7 @@
 #include <QWidget>
 class QTreeWidget;
 class QTreeWidgetItem;
+class QTableView;
 class QPushButton;
 class QLineEdit;
 class QComboBox;
@@ -19,7 +20,8 @@ public:
     QLabel *emptyLabel; // centered placeholder when the list is empty (P5 / UR #31)
     QLineEdit *filterEdit; // case-insensitive substring filter (H4 / UR #38)
     QComboBox *statusFilter; // "All" + one entry per execution status (H4 / UR #38)
-    QTreeWidget *logList;
+    QTableView *logList; // flat log table (UR #23; setModel is public, unlike
+                         // QTableWidget's)
     QLabel *emptyLogLabel; // centered placeholder when the log list is empty (P5 / UR #31)
     // Opens the execution dialog for the selected execution row; the
     // inline log list below is the only log detail view (P5 / UR #41).

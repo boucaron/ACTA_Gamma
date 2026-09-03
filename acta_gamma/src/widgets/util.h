@@ -2,6 +2,7 @@
 
 #include "acta_db.h"
 
+#include <QAbstractScrollArea>
 #include <QColor>
 #include <QDateTime>
 #include <QIcon>
@@ -187,25 +188,27 @@ inline void applyTreeFilter(QTreeWidget *tree, const QString &needle,
         visit(tree->topLevelItem(i));
 }
 
-// Centered placeholder over an empty tree viewport (P5 / UR #31).
-// Owned by the viewport, so it dies with the tree. Shown/hidden by the
+// Centered placeholder over an empty tree/view viewport (P5 / UR #31).
+// Owned by the viewport, so it dies with the view. Shown/hidden by the
 // caller in reload(); kept centered on resize via the panel's existing
 // viewport eventFilter (QEvent::Resize -> placeEmptyStateLabel).
-inline QLabel *makeEmptyStateLabel(QTreeWidget *tree, const QString &text)
+// Works for QTreeWidget and QTableView alike (both derive from
+// QAbstractScrollArea, which is where viewport() lives).
+inline QLabel *makeEmptyStateLabel(QAbstractScrollArea *view, const QString &text)
 {
-    auto *label = new QLabel(text, tree->viewport());
+    auto *label = new QLabel(text, view->viewport());
     label->setObjectName(QStringLiteral("emptyState"));
     label->setAlignment(Qt::AlignCenter);
     label->setEnabled(false); // greyed via the stylesheet; no focus
-    label->setGeometry(tree->viewport()->rect());
+    label->setGeometry(view->viewport()->rect());
     label->hide();
     return label;
 }
 
-inline void placeEmptyStateLabel(QLabel *label, QTreeWidget *tree)
+inline void placeEmptyStateLabel(QLabel *label, QAbstractScrollArea *view)
 {
     if (label)
-        label->setGeometry(tree->viewport()->rect());
+        label->setGeometry(view->viewport()->rect());
 }
 
 // Icon-only toolbar button for the panel toolbars (P2 / UR #22): the
