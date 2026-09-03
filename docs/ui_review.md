@@ -38,16 +38,17 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ### Architecture
 
-18. **No execution-creation path.** Executions exist in the DB and are
-    browsable, but nothing in the app creates one (see #1). There's no
-    "pick context + skill + model → Run" flow. That is the app's core
-    value ("LLMs as actions") and it is missing.
-    *(Analyzed 2026-09: the first step — a UI path to create `pending`
-    executions, no runner — is covered in
-    [`execution_creation_analysis.md`](execution_creation_analysis.md)
-    and queued as H3 in
-    [`ui_active_action.md`](ui_active_action.md). Full Run flow follows
-    once the runner backend exists.)*
+18. **Run flow missing.** Executions exist in the DB and are browsable,
+    and the creation path is now in the UI: "New" in the Execution
+    panel opens `ExecutionCreateDialog` (context / skill / model pickers,
+    prompt editor, optional parent execution) and the row lands
+    `pending`. What is missing is the "→ Run" part: no runner backend
+    yet (model load → LLM call → status transitions, `execution_log`
+    phase rows). That is the app's core value ("LLMs as actions").
+    *(The first step — UI creation of `pending` executions — shipped as
+    H3 (8b4c16d); the analysis is in
+    [`execution_creation_analysis.md`](execution_creation_analysis.md).
+    Full Run flow follows once the runner backend exists.)*
 19. **Panels emit no signals.** No signal after mutation, so `MainWindow`
     can't react (e.g., selecting a skill could prefill an "execute" form).
     At minimum, emit `itemChanged(int id)` so future features can hook in.
@@ -146,9 +147,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 1. **Must-fix:** *(none remaining)*
 2. **High:**
-   - #18 execution-creation flow (the app's core feature; analyzed in
-     [`execution_creation_analysis.md`](execution_creation_analysis.md),
-     queued as H3 in [`ui_active_action.md`](ui_active_action.md))
+   - #18 remaining: the Run flow (runner backend) — the UI creation
+     flow shipped as H3 (8b4c16d, analyzed in
+     [`execution_creation_analysis.md`](execution_creation_analysis.md))
    - #15 JSON validation
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
