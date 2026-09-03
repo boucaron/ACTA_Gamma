@@ -111,10 +111,20 @@ public:
     // folder) is selected.
     int selectedEntityId() const;
 
+signals:
+    // The selected entity changed (id; 0 when nothing or a folder is
+    // selected). Emitted only on actual change, from the selection
+    // handler and after a reload (UR #19). No consumers yet — future
+    // features (e.g. the Run-flow prefill) hook in here.
+    void itemChanged(int id);
+
 private:
     FolderTreeDao m_dao;
     QIcon m_deletedIcon;
     QIcon m_folderIcon;
+    // Last id passed to itemChanged; emitItemChanged() suppresses
+    // duplicate emissions (UR #19).
+    int m_lastEmittedId = 0;
 
     // Append one tree row per entity in `rows` under `parent`
     // (nullptr = top level). Soft-deleted entities are marked with
@@ -128,6 +138,10 @@ private:
     // Enable/disable all action buttons according to the current
     // selection (entity / live folder / deleted folder / nothing).
     void updateButtonStates();
+
+    // Emit itemChanged only when the selected entity id actually
+    // changed (UR #19).
+    void emitItemChanged();
 
     // Find the tree item storing `id` under `role`, searching the whole
     // tree. Returns nullptr when not found.

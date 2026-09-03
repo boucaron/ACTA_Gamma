@@ -160,6 +160,7 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
     connect(tree, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *, QTreeWidgetItem *) {
                 updateButtonStates();
+                emitItemChanged();
             });
     connect(tree, &QTreeWidget::customContextMenuRequested, this,
             &FolderTreePanel::onListContextMenu);
@@ -308,6 +309,19 @@ void FolderTreePanel::reload()
     emptyLabel->setVisible(tree->topLevelItemCount() == 0);
 
     updateButtonStates();
+    // Notify about the (possibly changed) selection after the rebuild
+    // (UR #19); the last-emitted id guard suppresses duplicates when
+    // the selection was preserved across the reload.
+    emitItemChanged();
+}
+
+void FolderTreePanel::emitItemChanged()
+{
+    const int id = selectedEntityId();
+    if (id == m_lastEmittedId)
+        return;
+    m_lastEmittedId = id;
+    Q_EMIT itemChanged(id);
 }
 
 void FolderTreePanel::addEntities(QTreeWidgetItem *parent,

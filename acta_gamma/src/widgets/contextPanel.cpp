@@ -48,6 +48,7 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
                 showContext(cur);
                 showBtn->setEnabled(
                     cur && cur->data(0, RoleContextId).toInt() != 0);
+                emitItemChanged();
             });
     lay->addWidget(list);
 
@@ -116,6 +117,16 @@ void ContextPanel::setDb(db_t *db)
     reload();
 }
 
+void ContextPanel::emitItemChanged()
+{
+    const auto *cur = list->currentItem();
+    const int id = cur ? cur->data(0, RoleContextId).toInt() : 0;
+    if (id == m_lastEmittedId)
+        return;
+    m_lastEmittedId = id;
+    Q_EMIT itemChanged(id);
+}
+
 void ContextPanel::reload()
 {
     // Preserve the current selection across the rebuild (UR #8).
@@ -181,6 +192,11 @@ void ContextPanel::reload()
     // Empty-state placeholder: only when there are no rows at all
     // (P5 / UR #31).
     emptyLabel->setVisible(list->topLevelItemCount() == 0);
+
+    // Notify about the (possibly changed) selection after the rebuild
+    // (UR #19); the last-emitted id guard suppresses duplicates when
+    // the selection was preserved across the reload.
+    emitItemChanged();
 }
 
 void ContextPanel::showContext(QTreeWidgetItem *item)

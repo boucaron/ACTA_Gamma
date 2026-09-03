@@ -12,6 +12,7 @@ class QLabel;
 #include "acta_db.h"
 
 class ExecutionPanel : public QWidget {
+    Q_OBJECT
 public:
     explicit ExecutionPanel(db_t *db = nullptr, QWidget *parent = nullptr);
     QTreeWidget *list;
@@ -35,6 +36,13 @@ public:
     // reload the list.
     void setDb(db_t *db);
 
+signals:
+    // The selected execution changed (id; 0 when no row is selected).
+    // Emitted only on actual change, from the selection handler and
+    // after a reload (UR #19). No consumers yet — future features hook
+    // in here.
+    void itemChanged(int id);
+
 private slots:
     // Open the read-only execution dialog for the given execution
     // (double-click on the execution list).
@@ -46,6 +54,9 @@ private slots:
 
 private:
     db_t *m_db;
+    // Last id passed to itemChanged; emitItemChanged() suppresses
+    // duplicate emissions (UR #19).
+    int m_lastEmittedId = 0;
 
     // Fill the log list with the log lines of the selected execution
     // (or clear it when the selection leaves an execution row).
@@ -55,6 +66,10 @@ private:
     // status filter (or both). The list is flat, so a plain per-row
     // check suffices (H4 / UR #38).
     void applyFilters();
+
+    // Emit itemChanged only when the selected execution id actually
+    // changed (UR #19).
+    void emitItemChanged();
 
     // Keyboard accelerator (UR #39), active while the execution list has
     // focus: Enter opens the same dialog as a double-click on the row.

@@ -11,6 +11,7 @@ class QPoint;
 #include "acta_db.h"
 
 class ContextPanel : public QWidget {
+    Q_OBJECT
 public:
     explicit ContextPanel(db_t *db = nullptr, QWidget *parent = nullptr);
     QTreeWidget *list;
@@ -29,8 +30,18 @@ public:
     // reload the list.
     void setDb(db_t *db);
 
+signals:
+    // The selected context changed (id; 0 when no row is selected).
+    // Emitted only on actual change, from the selection handler and
+    // after a reload (UR #19). No consumers yet — future features hook
+    // in here.
+    void itemChanged(int id);
+
 private:
     db_t *m_db;
+    // Last id passed to itemChanged; emitItemChanged() suppresses
+    // duplicate emissions (UR #19).
+    int m_lastEmittedId = 0;
 
     // Fill the textarea below the list with the content of the selected
     // context (or clear it when the selection leaves a context row).
@@ -39,6 +50,10 @@ private:
     void showContext(QTreeWidgetItem *item);
 
 private:
+    // Emit itemChanged only when the selected context id actually
+    // changed (UR #19).
+    void emitItemChanged();
+
     // Keep emptyLabel centered when the viewport resizes (P5 / UR #31);
     // the event passes through to the viewport.
     bool eventFilter(QObject *obj, QEvent *event) override;

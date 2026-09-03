@@ -63,6 +63,7 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     connect(list, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 showExecutionLogs(cur);
+                emitItemChanged();
             });
     connect(list, &QTreeWidget::itemDoubleClicked, this,
             &ExecutionPanel::onExecutionDoubleClicked);
@@ -140,6 +141,16 @@ void ExecutionPanel::setDb(db_t *db)
 {
     m_db = db;
     reload();
+}
+
+void ExecutionPanel::emitItemChanged()
+{
+    const auto *cur = list->currentItem();
+    const int id = cur ? cur->data(0, RoleExecutionId).toInt() : 0;
+    if (id == m_lastEmittedId)
+        return;
+    m_lastEmittedId = id;
+    Q_EMIT itemChanged(id);
 }
 
 void ExecutionPanel::reload()
@@ -237,6 +248,11 @@ void ExecutionPanel::reload()
     // Empty-state placeholder: only when there are no rows at all
     // (P5 / UR #31).
     emptyLabel->setVisible(list->topLevelItemCount() == 0);
+
+    // Notify about the (possibly changed) selection after the rebuild
+    // (UR #19); the last-emitted id guard suppresses duplicates when
+    // the selection was preserved across the reload.
+    emitItemChanged();
 }
 
 void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
