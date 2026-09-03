@@ -1,0 +1,234 @@
+# Runner — implementation plan
+
+Concrete, file-level plan for the queued runner work. Scope and status per
+[`runner_active_action.md`](runner_active_action.md); specs and decisions per
+[`runner_analysis.md`](runner_analysis.md). Order: R1 → R2 → R3 → R4 → R5.
+
+---
+
+## R1 — In-app "Run" button (Plan D) in `acta_gamma`
+
+Goal: selected execution row → **Run** action → spawns
+`acta_runner run <id>` via `QProcess` → execution panel polls the DB for
+live status + phase log → closes UR #18 remainder and #44.
+
+### 1. Where the code lives
+
+- All of R1 belongs in `acta_gamma/src/widgets/executionPanel.{h,cpp}`:
+  the panel already owns `m_db` (`ExecutionPanel(db_t *db, QWidget *parent)`),
+  the execution tree (`list`), the log table (`logList`) and the
+  `showExecutionLogs(QTreeWidgetItem*)` / `reload()` refresh paths.
+- `QProcess` + `QTimer` become private members of `ExecutionPanel`.
+  No new top-level class; `MainWindow` only owns `DbHandle m_db` and hands
+  the handle to the panel.
+
+### 2. Locating and launching the runner
+
+- **Exe lookup order** (at spawn time):
+  1. `QApplication::applicationDirPath() + "/acta_runner"` — the dev layout
+     is expected to put `acta_runner.exe` next to `acta_gamma.exe`;
+     `acta_runner.exe` is currently built in `acta_runner/` and the GUI
+     exe is not built yet, so the copy step happens once the GUI build
+     lands;
+  2. `QStandardPaths::findExecutable("acta_runner")` (PATH fallback);
+  3. neither found → message box
+     ("acta_runner not found — build it in `acta_runner/` and place it next
+     to the app") and do not spawn.
+- **DB path:** pass `--db <path>` with the path the GUI is actually using:
+  `MainWindow::storedDbPath()` (`QSettings "database/path"`) or, when unset,
+  `defaultDbPath()` (`QStandardPaths::writableLocation(AppDataLocation) +
+  "/acta.db"`). The runner's own fallback (`$ACTA_DB`, `./acta.db`) must not
+  be relied on — its CWD is not the app dir.
+- **Arguments:** `run <id>` `--db <path>` (`--timeout` optional passthrough,
+  default is fine). Do **not** pass `--api-key` from the GUI: the runner
+  already resolves `--api-key` → `$OPENAI_API_KEY` → per-model
+  `configuration.api_key`.
+- Launch with `QProcess::start()`, not `execute()` (we need
+  `finished(int, QProcess::ExitStatus)`).
+- **Re-entrancy:** while the process is running, disable the Run button;
+  a non-`pending` row is refused by the runner itself (atomic `start()`
+  claim, exit 4) — the GUI only needs to enable Run for `pending` rows.
+
+### 3. Polling while the runner is active
+
+- `QTimer` at 1–2 s, started with the process, stopped on `finished`.
+- Each tick:
+  1. `acta_db_execution_get(m_db, id, &err)` → update that row's status
+     column (`pending` → `running` → `completed`/`failed`) in place. A full
+     `reload()` is heavier (rebuilds the whole tree); a targeted row update
+     preserves selection and scroll position — use the existing
+     `acta_db_execution_query`/list pattern in `reload()` but touch only
+     the running row, or just call `reload()` at 1–2 s (acceptable at this
+     scale; prefer the targeted update).
+  2. `acta_db_execution_log_list_by_execution(m_db, id, …)` → refresh
+     `logList` (the same call `showExecutionLogs()` already makes), phase
+     rows: `execution_started`, `context_loaded`, `prompt_resolved`,
+     `llm_request`, `llm_response`, `validation_*`,
+     `execution_completed/failed`.
+  3. Auto-scroll the log table to the newest row (UR #44): after refresh,
+     select the last log row and `logList->scrollTo(lastRowIndex)` (Qt has
+     no `scrollToBottom` on `QTableView`).
+  4. Progress indicator while `status == running`: simplest is a "…"
+     suffix on the status column or a small busy `QLabel` in the panel
+     header; decide against the existing widgets at implementation time.
+- WAL already supports concurrent GUI reader + runner writer — no extra
+  sync. If the DB is locked (`SQLITE_BUSY`), the poll just skips the tick
+  (log via `qWarning`, retry next tick).
+
+### 4. Finishing
+
+- On `QProcess::finished`: stop the timer, final row + log refresh.
+  - exit 0 → `completed`; nothing more to do.
+  - non-zero → surface the failure. The runner prints a single-line JSON
+    error on stderr: `{"error":"ACTA_RUNNER_ERROR","code":<n>,"message":...}`
+    for non-DB failures (`ACTA_DB_ERR_*` contract for DB failures). Parse
+    the last stderr line with `QJsonDocument`; if it parses, show
+    `message`; otherwise show raw stderr. The execution row is already
+    `failed` with the error in the DB, so the UI display is purely
+    informational (status bar line or small non-modal dialog, matching
+    P4/UR #36 conventions).
+
+### 5. UI wiring
+
+- Run affordance: third button in the Execution panel's existing icon-only
+  toolbar row (`newExecutionBtn`, `showDetailsBtn` — P2 convention of one
+  icon-only row per panel), e.g.
+  `style()->standardIcon(QStyle::SP_DialogOpenButton)` variant or
+  `SP_MediaPlay`, tooltip `tr("Run the selected execution")`.
+- Enable state: selection exists && row status is `pending` && no active
+  `QProcess`. Re-evaluated in the selection handler and on each poll tick.
+- All new literals wrapped in `tr()` (UR #43); new strings land in
+  `translations/acta_gamma.ts`.
+
+### 6. Files touched (expected)
+
+- `acta_gamma/src/widgets/executionPanel.h/.cpp` — `QProcess* m_runner`,
+  `QTimer* m_pollTimer`, slots `onRunBtnClicked()`,
+  `onRunnerFinished()`, `onPollTick()`, Run button + enable logic,
+  targeted status/log refresh.
+- No runner-side changes.
+- Docs: drop #18 remainder + #44 from `ui_review.md`; update
+  `ui_active_action.md` Summary; update `runner_analysis.md`
+  "Remaining work" (mark Plan D shipped).
+
+### 7. Testing
+
+- Manual E2E: GUI against a live local `llama-server` — create execution,
+  Run, watch `running` + phase log rows appear and auto-scroll,
+  `completed` on success; failure paths (503, wrong model id) show the
+  JSON error message; Run disabled while running; re-run refused.
+- Headless check: run `acta_runner run <id>` manually while the GUI polls
+  the same DB (concurrent reader/writer sanity, WAL).
+
+---
+
+## R2 — `argparse` pass-1/pass-2 test suite
+
+Goal: pin the two-pass option parsing in `acta_runner/src/argparse.c`.
+
+Verified vocabulary (from `argparse.c`):
+- **Pass 1 (globals):** `--db`, `--version`, `--help`, `--verbose`;
+  remainder goes to pass 2; ≥ 1 positional required (the action).
+- **Pass 2 (action flags):** `--pending` (bool), `--max <n>`,
+  `--timeout <n>`, `--api-key <key>`; `cmd_args_next_positional` skips flags
+  and their values per the `flag_spec_t` table; unknown flags assume
+  value-taking (legacy behaviour).
+
+- New `tests/argparse/test_argparse.c` (plain asserts, no DB, no stub
+  server):
+  - pass 1: `--db x`, `--db=x`, `--verbose`, missing `--db` value,
+    no positionals → `EXIT_CLI`, unknown global flag.
+  - pass 2: `run <id>`; `--pending`; `--max 3`; `--timeout 30`;
+    `--api-key k`; flags before/after positionals; `--max` with missing
+    value; unknown flag; bool flag not eating the following positional
+    (`run --pending <id>`).
+- Wire into `acta_runner/Makefile` `test` target (build + run both suites).
+
+---
+
+## R3 — `--pending` batch and `--max` clamping tests
+
+Goal: cover the `run --pending` loop (claim next `pending` via the atomic
+`start()`, run, record) and `--max`.
+
+- Extend `tests/run/test_run.c` (or a new `tests/run/test_pending.c`,
+  same harness: scratch `:memory:` DB + stub server):
+  - N pending rows → all run, all `completed`, one log sequence per row.
+  - `--max M < N` → exactly M run, the rest stay `pending`.
+  - `--max 0` → no limit, all run.
+  - mixed outcomes (one health 503, one success) → batch continues and
+    exits with the worst exit code (12 HTTP/preflight, 13 timeout, 4
+    claim/validation); document that later rows are still processed.
+  - no pending rows → clean exit 0.
+
+---
+
+## R4 — Stale-`running` cleanup sweep (`--stale-seconds`)
+
+Goal: per decision 6, recover rows stuck in `running` after a dead runner.
+
+- New action: `acta_runner sweep --stale-seconds N` (separate action keeps
+  the `run` path pure; dispatched next to `run` in `main.c`).
+- Algorithm:
+  1. `acta_db_execution_query` for `status = running`.
+  2. For each row, take the latest `execution_log` timestamp
+     (`acta_db_execution_log_list_by_execution`); a row that died before
+     logging anything is unreachable, but that cannot happen —
+     `execution_started` is logged immediately after `start()`.
+  3. If now − last log timestamp > N seconds →
+     `acta_db_execution_fail(db, id, "stale running: no runner activity
+     for N s")` + `execution_failed` log row.
+- Semantics to pick and document: `--stale-seconds 0` (all `running` are
+  stale) vs. required `> 0`.
+- Exit codes: 0 when nothing swept or all swept; use the runner's existing
+  `runner_error`/`map_rc_to_exit` contract for DB failures.
+- Tests (scratch `:memory:` DB, no HTTP): insert `running` rows with old
+  log timestamps → swept to `failed`; fresh `running` row left alone;
+  `N = 0` case per the chosen semantics.
+
+---
+
+## R5 — JSON validation (analysis first, then UI)
+
+Goal (H2 / UR #15): validate `output_schema` and model `configuration`
+with clear "invalid JSON" feedback.
+
+### Analysis (decision, then implement)
+
+- `model.configuration`: JSON object (keys `api_key`, `temperature`,
+  `max_tokens`, `top_k`, `supports_response_format` per phase 2) →
+  **validate**, must be a JSON *object*.
+- `skill.output_schema`: JSON Schema → **validate**, must be a JSON
+  *object*.
+- `context.content`: may be plain text → **do not validate as JSON**.
+
+### Implementation
+
+- `QJsonDocument::fromJson` on the field text; on parse error show
+  `QJsonParseError` message with line/column — inline warning label, plus a
+  "Validate JSON" affordance.
+- Exact widgets (verified):
+  - `ModelDialog::ui->configurationTextEdit` (`modelDialog.cpp`, save path
+    at the `m.configuration = dupString(...)` sites, both create and edit);
+  - `SkillDialog::ui->outputSchemaTextEdit` (`skillDialog.cpp`, save path at
+    the `s.output_schema = ...` site).
+- Block save on invalid JSON in both dialogs (creation + edit paths),
+  matching the existing error-handling style (P4). Empty fields stay
+  allowed (both fields are optional today — `dupString` gets `nullptr`
+  on empty text).
+- `tr()`-wrap all new strings; add to `translations/acta_gamma.ts`.
+
+---
+
+## Sequencing and documentation hygiene
+
+1. **R1** (High; unblocks the full user story) → commit; drop UR #18
+   remainder + #44 from `ui_review.md`, fold into `ui_active_action.md`
+   Summary, mark Plan D shipped in `runner_analysis.md`.
+2. **R2 + R3** (can be one commit) → update `runner_analysis.md`
+   "Remaining work".
+3. **R4** → decision 6 marked implemented in `runner_analysis.md`.
+4. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
+5. **R6** (JSON highlighting / line numbers, UR #26) and **R7**
+   (housekeeping: fate of untracked `docs/llamacpp_server_README.md`,
+   `.gitignore` for build outputs) whenever convenient.
