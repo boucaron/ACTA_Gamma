@@ -68,6 +68,9 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     if (ctx) {
         ui->contextTextEdit->setPlainText(utf8(ctx->content));
         acta_db_context_free(ctx);
+    } else if (err != ACTA_DB_OK) {
+        qWarning("acta_db_context_get(%d) failed: %s", e->context_id,
+                 acta_db_strerror(err));
     }
     skill_revision_t *srev =
         acta_db_skill_revision_get(db, e->skill_revision_id, &err);
@@ -77,6 +80,9 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
             QStringLiteral("%1 (rev %2)")
                 .arg(utf8(srev->name)).arg(srev->revision));
         acta_db_skill_revision_free(srev);
+    } else if (err != ACTA_DB_OK) {
+        qWarning("acta_db_skill_revision_get(%d) failed: %s",
+                 e->skill_revision_id, acta_db_strerror(err));
     }
     model_revision_t *mrev =
         acta_db_model_revision_get(db, e->model_revision_id, &err);
@@ -86,6 +92,9 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
             QStringLiteral("%1 (rev %2)")
                 .arg(utf8(mrev->name)).arg(mrev->revision));
         acta_db_model_revision_free(mrev);
+    } else if (err != ACTA_DB_OK) {
+        qWarning("acta_db_model_revision_get(%d) failed: %s",
+                 e->model_revision_id, acta_db_strerror(err));
     }
 
     // Prompt
