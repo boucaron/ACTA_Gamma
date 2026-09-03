@@ -131,16 +131,22 @@ No status widget in the form — the state machine owns it.
   revision. That pre-fill needs panel signals (#19) or a direct
   call-site — deferred until the runner exists.
 
-### 4.6 Context combo affordances (implemented)
+### 4.6 Show buttons under the pickers (implemented)
 
-The context entry in the form is a combo; it needed the same
-affordances the other pickers have:
+Every picker in the form has a **"Show" button directly under it**
+(same convention as the Show buttons of the panels and of the
+`ExecutionDialog` Input tab); the form grid is a `QGridLayout` with
+the button in its own row under the picker widget:
 
-- **"Show" button** beside the combo: opens the selected context in
-  the read-only `ContextDialog` (all data: type, content, hash,
-  metadata, dates) — the same convention as the Show buttons of the
-  `ExecutionDialog` Input tab. Enabled only while a context is
-  selected.
+- **Context** (combo): the button opens the selected context in the
+  read-only `ContextDialog` (all data: type, content, hash, metadata,
+  dates). Enabled only while a context is selected.
+- **Skill / model** (folder trees): a button under each tree opens
+  the selected entity in the read-only `SkillDialog` / `ModelDialog`
+  (`EntityDialog` ReadOnly mode). The selection handlers track the
+  entity id behind the current row (an entity row is its own id; a
+  revision row takes it from its parent entity row) and enable the
+  button only while an entity (or its revision) is selected.
 - **Right-click context menu** on the combo: **"New…"** (creates a
   context via `ContextDialog` in New mode; on save the combo is
   rebuilt and the new row is selected — needs the small
@@ -154,10 +160,12 @@ affordances the other pickers have:
 
 ## 5. Files touched
 
-- `acta_gamma/ui/executionCreateDialog.ui` (new): context combo +
-  "Show" button, skill and model folder trees (`QTreeWidget`, hidden
+- `acta_gamma/ui/executionCreateDialog.ui` (new): `QGridLayout` form —
+  context combo, skill and model folder trees (`QTreeWidget`, hidden
   header), optional parent combo, monospace `QTextEdit` for the prompt
-  (per #26 style rule), button box.
+  (per #26 style rule), button box — with a "Show" button in its own
+  row directly under each of the context combo, skill tree and model
+  tree.
 - `acta_gamma/src/widgets/executionCreateDialog.{h,cpp}` (new): combo
   context menu (New… / Show; no Edit — contexts are immutable).
 - `acta_gamma/src/widgets/contextDialog.{h,cpp}`: small addition —
