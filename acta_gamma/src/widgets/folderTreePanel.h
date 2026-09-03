@@ -131,8 +131,13 @@ private:
     void addEntities(QTreeWidgetItem *parent, const QList<FolderRow> &rows);
 
     // Id of the currently selected folder, or 0 if the selection is not
-    // a folder (used as the target folder by the New button).
+    // a folder (used by the folder actions).
     int selectedFolderId() const;
+
+    // Target folder for the New button (UR #13): the selected folder when
+    // a folder is selected, otherwise the selected entity's own folder
+    // (0 = root level when the entity is at the root).
+    int newTargetFolderId() const;
 
     // Enable/disable all action buttons according to the current
     // selection (entity / live folder / deleted folder / nothing).

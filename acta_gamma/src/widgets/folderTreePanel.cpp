@@ -32,6 +32,7 @@ const int RoleFolderId        = Qt::UserRole;
 const int RoleEntityId        = Qt::UserRole + 1;
 const int RoleIsDeleted       = Qt::UserRole + 2; // entities only
 const int RoleFolderIsDeleted = Qt::UserRole + 3; // folders only
+const int RoleEntityFolderId  = Qt::UserRole + 4; // entity's folder (0 = root)
 } // namespace
 
 FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
@@ -338,6 +339,9 @@ void FolderTreePanel::addEntities(QTreeWidgetItem *parent,
             ? new QTreeWidgetItem(parent, {e.name})
             : new QTreeWidgetItem(tree, {e.name});
         item->setData(0, RoleEntityId, e.id);
+        // Remember the entity's own folder so the New button can fall
+        // back to it when this entity (not a folder) is selected (UR #13).
+        item->setData(0, RoleEntityFolderId, e.folderId);
         const bool isDeleted = !e.deletedAt.isEmpty();
         item->setData(0, RoleIsDeleted, isDeleted);
         if (isDeleted) {
@@ -357,6 +361,19 @@ int FolderTreePanel::selectedFolderId() const
 {
     const auto *cur = tree->currentItem();
     return cur ? cur->data(0, RoleFolderId).toInt() : 0;
+}
+
+int FolderTreePanel::newTargetFolderId() const
+{
+    // Target folder for the New button (UR #13): the selected folder when
+    // a folder is selected, otherwise the selected entity's own folder
+    // (falls back to 0 = root level when the entity is at the root).
+    const auto *cur = tree->currentItem();
+    if (!cur)
+        return 0;
+    if (cur->data(0, RoleEntityId).toInt() != 0)
+        return cur->data(0, RoleEntityFolderId).toInt();
+    return cur->data(0, RoleFolderId).toInt();
 }
 
 QTreeWidgetItem *FolderTreePanel::findItemByRole(int role, int id) const
@@ -385,11 +402,12 @@ void FolderTreePanel::onNewBtnClicked()
     if (!m_dao.openNew)
         return;
 
-    // New entity goes into the selected folder when one is selected,
-    // otherwise at the root level. The dialog reports whether it
-    // persisted the new entity; a cancelled dialog changed nothing, so
+    // New entity goes into the selected folder when a folder is selected,
+    // or into the selected entity's own folder when that is selected,
+    // falling back to the root level (UR #13). The dialog reports whether
+    // it persisted the new entity; a cancelled dialog changed nothing, so
     // no rebuild is needed (UR #8).
-    if (m_dao.openNew(this, selectedFolderId()))
+    if (m_dao.openNew(this, newTargetFolderId()))
         reload();
 }
 
