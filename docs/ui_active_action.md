@@ -17,18 +17,17 @@ numbering).
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| P6 | Panel `itemChanged(int)` signals — all four panels emit the selected entity id (0 = nothing/folder), only on actual change, from the selection handler and after `reload()`; last-emitted-id guard against reload noise; `Q_OBJECT` added to ContextPanel/ExecutionPanel; no consumers yet (Run-flow features hook in) | UR #19 | **Shipped (9968571)**; note: a `qmake` re-run is required after the change so moc regenerates the signal code |
-| P4 | `editExecution` err handling — `qWarning` on failed `context_get` / `skill_revision_get` / `model_revision_get` lookups in `ExecutionDialog::editExecution` (failures previously left fields silently blank) | UR #14 | **Shipped (a400386)** following the codebase pattern already used in the log list and panels; unit-test coverage to be added transversally |
-| P2 | One toolbar per panel | UR #22 | **Shipped (105eed5), Option B: all actions icon-only on one row per panel (tooltips carry the meaning). `makeActionButton` helper in `util.h` (icon + tooltip + Alt+letter shortcut, NoFocus); FolderTreePanel's three rows merged into one row — entity group (New/Show/Edit/Delete/Restore), separator, folder group; context/execution switched to the same icon-only style. Shortcut letters all unique per panel (also fixed a pre-existing Alt+R conflict between Rename Folder and Restore Folder). Context menus and enable/disable logic otherwise unchanged; the execution context menu's missing "New…" entry was added as a follow-up (4d0a315).** |
 | P5 | Data lifecycle (delete/prune executions + contexts) | UR #42 | **Closed by owner decision (2026-07-10): no delete for contexts/executions planned — soft-delete only.** UR #31 (empty-state placeholders) shipped. UR #41 (redundant "Show" affordances) was shipped as a removal, then reverted on owner decision: the ContextPanel got its Show button back (read-only ContextDialog with all fields) plus a right-click context menu on the list ("New…" / "Show"; no "Edit" — contexts are immutable). The delete/prune remainder is deliberately not implemented: `acta_db` gets no hard-delete API, and no `deleted_at` soft delete for contexts/executions is added. If ever wanted later, it must be a `deleted_at` soft delete mirroring the skill/model/folder pattern |
 
 
 ## Summary
 
 - **Now:** H2 (JSON validation, to analyze) — the only queued action.
-- H3 (execution creation flow) shipped (8b4c16d, incl. picker trees,
+- Shipped: H3 (execution creation flow, 8b4c16d, incl. picker trees,
   Show buttons and inline previews; the analysis doc was removed once
-  everything was implemented); P1 shipped (c1ec1f2), P8 shipped
-  (05c68bc), P2 shipped (105eed5).
+  everything was implemented), P1 (c1ec1f2), P8 (05c68bc),
+  P2 (105eed5 + 4d0a315, one icon-only toolbar row per panel),
+  P4 (a400386, editExecution err handling; unit tests transversal),
+  P6 (9968571, panel itemChanged(int) signals).
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).
