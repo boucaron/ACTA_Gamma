@@ -46,6 +46,17 @@ void SkillDialog::newSkill(db_t *db, int folderId)
     setFolderId(folderId);
     setSaved(false);
 
+    // Resolve the target folder name for the window title (UR #34);
+    // 0 means the root level, in which case the title says so.
+    if (folderId > 0) {
+        int err = ACTA_DB_OK;
+        skill_folder_t *f = acta_db_skill_folder_get(db, folderId, &err);
+        if (f) {
+            setTargetFolder(QString::fromUtf8(f->name));
+            acta_db_skill_folder_free(f);
+        }
+    }
+
     ui->nameLineEdit->clear();
     ui->descriptionTextEdit->clear();
     ui->revisionLineEdit->clear();

@@ -48,8 +48,9 @@ public:
     QString title() const { return m_title; }
     QString noun() const { return m_noun; }
 
-    // Window titles: "New %1", "%1: %2", "Edit %1: %2" (where %2 is
-    // the loaded entity name).
+    // Window titles: "New %1 in %2", "%1: %2", "Edit %1: %2" (where the
+    // %2 in newTitle() is the target folder name, or the root level;
+    // the %2 in show/edit is the loaded entity name).
     QString newTitle() const;
     QString showTitle() const;
     QString editTitle() const;
@@ -65,6 +66,10 @@ protected:
     void setEntityId(int id) { m_id = id; }
     int folderId() const { return m_folderId; }
     void setFolderId(int id) { m_folderId = id; }
+    // Name of the target folder for a New entity (empty = root level);
+    // surfaced in the New window title so the user sees where the item
+    // will be created (UR #34).
+    void setTargetFolder(const QString &name) { m_targetFolder = name; }
 
     // Set once a save persists a row (create or update); the panel
     // reads it via saved() to decide whether to reload (UR #8). Reset
@@ -123,6 +128,9 @@ protected:
     db_t *m_db = nullptr;
     int m_id = 0;
     int m_folderId = 0;
+    // Target folder name for a New entity (empty = root level); set in
+    // new*() and shown in the New window title (UR #34).
+    QString m_targetFolder;
     // Revision number of the latest snapshot loaded by loadEntity();
     // used to report "Saved as revision N" after an Edit save.
     int m_latestRevision = 0;

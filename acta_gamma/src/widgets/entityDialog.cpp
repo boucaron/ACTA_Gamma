@@ -11,7 +11,12 @@ EntityDialog::EntityDialog(const QString &title, const QString &noun,
 
 QString EntityDialog::newTitle() const
 {
-    return tr("New %1").arg(m_title);
+    // Show the target folder so the user sees where the new entity will
+    // be created (UR #34).
+    const QString where = m_targetFolder.isEmpty()
+        ? tr("the root level")
+        : tr("folder '%1'").arg(m_targetFolder);
+    return tr("New %1 in %2").arg(m_title, where);
 }
 
 QString EntityDialog::showTitle() const
