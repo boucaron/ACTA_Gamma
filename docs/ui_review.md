@@ -99,29 +99,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     Execution dialog's "Show context" opens a dialog inside a dialog).
     Consider an inline detail pane or a non-modal browser; at minimum keep
     nesting depth ≤ 2.
-37. **Discovery gaps:**
-   - No tooltip explaining what "One-Shot" means or what the statuses
-     mean.
-   - "Show deleted items" — consider "Show trash" and visually distinct
-     deleted rows (see #23).
-   - No help/about dialog explaining the model: Skill = prompt + schema,
-     Model = backend config, Context = immutable input, Execution = one
-     shot.
-   *(Done: every panel button has an icon + tooltip (see #22), deleted
-   rows carry a trash icon, and the Help → About dialog explains the
-   model. Status cells in the execution panel and the status line of the
-   execution dialog carry meaning tooltips via `statusMeaning()` in
-   `util.h`; the checkbox is now "Show trash" (with a tooltip); the About
-   text now states explicitly that an execution is one-shot: "one prompt
-   in, one result out — there is no conversation state".)*
-39. **Keyboard/accelerator support.** Add accelerators (`&New`,
-    `&Delete`), `Delete` key to soft-delete the selection, `F2` to rename,
-    `Enter` to open the detail dialog. Right now everything is mouse-only.
-    *(Done: Delete/F2/Enter + button accelerators in the panels. F2 now
-   also opens the Edit dialog on a selected entity (skill/model), and the
-   Context list handles Enter to open the read-only Show dialog — the
-   context panel's only meaningful key, since contexts are immutable and
-   carry no delete (see #42).)*
 42. **No data lifecycle.** Contexts and executions are append-only with no
     delete/cleanup in the UI — the DB will grow unbounded. Add "Delete"
     (with confirmation) for executions/logs and contexts, or at least an
