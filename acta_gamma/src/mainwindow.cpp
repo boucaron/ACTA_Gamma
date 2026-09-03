@@ -338,11 +338,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             this, tr("About ACTA Gamma"),
             tr("ACTA Gamma — LLMs as actions, not agents.\n\n"
                "Manage skills, models, contexts, and one-shot "
-               "executions against OpenAI-compatible model backends."));
+               "executions against OpenAI-compatible model backends. "
+               "An execution is one-shot: one prompt in, one result "
+               "out — there is no conversation state."));
     });
 
     // Window-state persistence (UR #40): restore the window geometry,
-    // the splitter sizes, and the "Show deleted items" flags from a
+    // the splitter sizes, and the "Show trash" flags from a
     // previous session; fall back to the default geometry on first run.
     {
         QSettings s;

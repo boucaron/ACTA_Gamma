@@ -83,7 +83,7 @@ private:
 
 protected:
     // Window-state persistence (UR #40): save the window geometry, the
-    // splitter sizes, and the "Show deleted items" flags to QSettings on
+    // splitter sizes, and the "Show trash" flags to QSettings on
     // close; the constructor restores them on the next launch.
     void closeEvent(QCloseEvent *event) override;
 };

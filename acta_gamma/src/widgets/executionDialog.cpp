@@ -107,6 +107,7 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     const QString status = utf8(e->status);
     ui->statusLineEdit->setText(status);
     applyTextColor(ui->statusLineEdit, statusColor(status));
+    ui->statusLineEdit->setToolTip(statusMeaning(status)); // UR #37
     ui->errorTextEdit->setPlainText(utf8(e->error));
     ui->rawResponseTextEdit->setPlainText(utf8(e->raw_response));
 

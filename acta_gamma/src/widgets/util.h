@@ -128,6 +128,25 @@ inline QColor statusColor(const QString &status)
     return QColor(Qt::gray); // pending, cancelled, unknown
 }
 
+// Meaning of an execution status, for tooltips (UR #37). The status
+// vocabulary is the DB's (acta_db/include/execution.h); unknown values
+// fall back to echoing the raw status.
+inline QString statusMeaning(const QString &status)
+{
+    const QString s = status.toLower();
+    if (s == QLatin1String("pending"))
+        return QObject::tr("Pending: created, but not started yet.");
+    if (s == QLatin1String("running"))
+        return QObject::tr("Running: the execution is currently in progress.");
+    if (s == QLatin1String("completed"))
+        return QObject::tr("Completed: the execution finished successfully.");
+    if (s == QLatin1String("failed"))
+        return QObject::tr("Failed: the execution ended with an error.");
+    if (s == QLatin1String("cancelled"))
+        return QObject::tr("Cancelled: the execution was stopped before completion.");
+    return QObject::tr("Unknown status: %1").arg(status);
+}
+
 inline QColor logLevelColor(const QString &level)
 {
     const QString l = level.toLower();

@@ -199,6 +199,7 @@ void ExecutionPanel::reload()
             : QString();
         item->setText(1, status);
         item->setForeground(1, statusColor(status)); // UR #25
+        item->setToolTip(1, statusMeaning(status)); // UR #37
 
         // Skill / model / context names (H5 / UR #23): the same revision
         // lookups that ExecutionDialog::editExecution() performs, reused

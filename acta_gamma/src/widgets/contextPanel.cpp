@@ -2,6 +2,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QEvent>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -96,7 +97,11 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     connect(list, &QTreeWidget::customContextMenuRequested, this,
             &ContextPanel::onListContextMenu);
 
-    // Keeps emptyLabel centered as the viewport resizes (P5 / UR #31).
+    // Keeps emptyLabel centered as the viewport resizes (P5 / UR #31),
+    // and (UR #39) handles Enter on the list: opens the read-only Show
+    // dialog. Installed on both the tree and its viewport because either
+    // widget can be the focus target after a click.
+    list->installEventFilter(this);
     list->viewport()->installEventFilter(this);
 
     reload();
@@ -107,6 +112,21 @@ bool ContextPanel::eventFilter(QObject *obj, QEvent *event)
     if (obj == list->viewport() && event->type() == QEvent::Resize) {
         placeEmptyStateLabel(emptyLabel, list);
         return QWidget::eventFilter(obj, event);
+    }
+    // Enter opens the same dialog as the Show button (UR #39), enabled
+    // only while a context row is selected — the same gating as the
+    // button. Consuming the key here, before QTreeWidget's own handling,
+    // also prevents its built-in inline editing on Return.
+    if ((obj == list || obj == list->viewport())
+            && event->type() == QEvent::KeyPress) {
+        const auto *key = static_cast<const QKeyEvent *>(event);
+        if (key->modifiers() == Qt::NoModifier
+                && (key->key() == Qt::Key_Return
+                        || key->key() == Qt::Key_Enter)) {
+            if (showBtn->isEnabled())
+                onShowBtnClicked();
+            return true;
+        }
     }
     return QWidget::eventFilter(obj, event);
 }

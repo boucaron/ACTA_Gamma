@@ -68,8 +68,7 @@ struct FolderTreeDao {
 //                                           (parent_id links)
 //   acta_db_*_folder_list_all_with_deleted
 //                                         – same, including soft-deleted
-//                                         folders ("Show deleted items"
-//                                         checked)
+//                                         folders ("Show trash" checked)
 //   acta_db_*_list_all                   – all entities in one query
 //                                         (grouped by folder_id in the
 //                                         panel; 0 = root)

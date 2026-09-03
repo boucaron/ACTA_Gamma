@@ -65,7 +65,13 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
     m_deletedIcon = tree->style()->standardIcon(QStyle::SP_TrashIcon);
     m_folderIcon  = tree->style()->standardIcon(QStyle::SP_DirIcon);
 
-    showDeletedCheck = new QCheckBox("Show deleted items");
+    // "Show trash" (UR #37): the deleted rows stay in the database and
+    // can be restored, so "trash" is the accurate (and shorter) label.
+    showDeletedCheck = new QCheckBox(tr("Show trash"));
+    showDeletedCheck->setToolTip(
+        tr("Show soft-deleted %1s and folders (the trash); they stay in "
+           "the database and can be restored.")
+            .arg(m_dao.entityTitle.toLower()));
     lay->addWidget(showDeletedCheck);
 
     // One icon-only toolbar row per panel (P2 / UR #22): entity
@@ -228,7 +234,7 @@ void FolderTreePanel::reload()
     // create each item directly under its parent (QTreeWidgetItem
     // cannot be re-parented once created).
     // Folders whose parent is not in the set stay at the top level.
-    // With "Show deleted items" checked, soft-deleted folders are
+    // With "Show trash" checked, soft-deleted folders are
     // included (and marked) so they can be restored.
     const bool showDeleted =
         showDeletedCheck != nullptr && showDeletedCheck->isChecked();
@@ -645,7 +651,11 @@ void FolderTreePanel::onDeleteKeyPressed()
 
 void FolderTreePanel::onRenameKeyPressed()
 {
-    if (renameFolderBtn->isEnabled())
+    // F2 renames the selection (UR #39): an entity opens the Edit dialog
+    // (saving creates a new revision); a folder is renamed in place.
+    if (editBtn->isEnabled())
+        onEditBtnClicked();
+    else if (renameFolderBtn->isEnabled())
         onRenameFolderBtnClicked();
 }
 
