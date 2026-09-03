@@ -23,6 +23,9 @@ public:
     // Opens the execution dialog for the selected execution row; the
     // inline log list below is the only log detail view (P5 / UR #41).
     QPushButton *showDetailsBtn;
+    // Opens the create dialog (new pending execution row); pairs with
+    // Show the way the Context panel's New/Show pair does (UR #22).
+    QPushButton *newExecutionBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
@@ -36,6 +39,10 @@ private slots:
     // Open the read-only execution dialog for the given execution
     // (double-click on the execution list).
     void onExecutionDoubleClicked(QTreeWidgetItem *item, int column);
+
+    // New button: open the create dialog; reload + select the new row
+    // only when a row was actually created (UR #8).
+    void onNewBtnClicked();
 
 private:
     db_t *m_db;

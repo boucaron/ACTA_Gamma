@@ -1,6 +1,7 @@
 #include "executionPanel.h"
 
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -13,6 +14,7 @@
 #include <QTreeWidgetItem>
 
 #include "executionDialog.h"
+#include "executionCreateDialog.h"
 #include "util.h"
 
 namespace {
@@ -74,9 +76,6 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     connect(statusFilter, &QComboBox::currentIndexChanged, this, [this](int) {
         applyFilters();
     });
-    // The one-shot execution flow (create execution row, call the model
-    // backend, write logs, update status) has no backend client yet,
-    // so the "Run One-Shot" button was removed instead of left dead.
 
     logList = new QTreeWidget;
     logList->setColumnCount(4);
@@ -94,15 +93,25 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // redundant "Show Log Details" button and log context menu were
     // dropped (P5 / UR #41).
 
-    // "Show" opens the execution dialog for the selected execution row;
-    // the context menu and double-click / Enter do the same (UR #33:
-    // give the Show action a real target).
+    // New / Show button row (UR #22): "New" opens the create dialog
+    // (a new row lands in "pending"; the runner that moves it through
+    // start/complete/fail is phase 2). "Show" opens the execution
+    // dialog for the selected execution row; the context menu and
+    // double-click / Enter do the same (UR #33).
+    auto *btnRow = new QHBoxLayout;
+    newExecutionBtn = new QPushButton("&New");
+    newExecutionBtn->setToolTip(tr("Create a new execution"));
+    newExecutionBtn->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
+    btnRow->addWidget(newExecutionBtn);
     showDetailsBtn = new QPushButton("S&how");
     showDetailsBtn->setToolTip("Show the details of the selected execution");
     showDetailsBtn->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
-    lay->addWidget(showDetailsBtn);
+    btnRow->addWidget(showDetailsBtn);
+    lay->addLayout(btnRow);
 
-    // callback
+    // callbacks
+    connect(newExecutionBtn, &QPushButton::clicked, this,
+            &ExecutionPanel::onNewBtnClicked);
     connect(showDetailsBtn, &QPushButton::clicked, this, [this] {
         onExecutionDoubleClicked(list->currentItem(), 0);
     });
@@ -292,6 +301,32 @@ void ExecutionPanel::applyFilters()
             }
         }
         item->setHidden(!ok);
+    }
+}
+
+void ExecutionPanel::onNewBtnClicked()
+{
+    if (!m_db)
+        return;
+
+    ExecutionCreateDialog dlg(this);
+    dlg.newExecution(m_db);
+    dlg.exec();
+    // Reload only when the dialog actually created an execution
+    // (UR #8), then select the new row so the inline log list shows
+    // its empty-state placeholder (currentItemChanged refills it).
+    if (dlg.saved()) {
+        reload();
+        const int newId = dlg.createdId();
+        // Linear scan by id (the same pattern reload() uses to
+        // re-select the previously current row).
+        for (int i = 0; i < list->topLevelItemCount(); ++i) {
+            auto *item = list->topLevelItem(i);
+            if (item->data(0, RoleExecutionId).toInt() == newId) {
+                list->setCurrentItem(item);
+                break;
+            }
+        }
     }
 }
 
