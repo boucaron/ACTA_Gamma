@@ -19,12 +19,16 @@
 #include <functional>
 
 #include "contextDialog.h"
+#include "modelDialog.h"
+#include "skillDialog.h"
 #include "util.h"
 
 namespace {
-const int RoleFolderId = Qt::UserRole;
-const int RoleEntityId = Qt::UserRole + 1;
-const int RoleRevisionId = Qt::UserRole + 2;
+// Tree roles; prefixed "Tree" to avoid colliding with the global
+// RoleRevisionId of entityDialog.h (pulled in by skillDialog.h).
+const int TreeRoleFolderId = Qt::UserRole;
+const int TreeRoleEntityId = Qt::UserRole + 1;
+const int TreeRoleRevisionId = Qt::UserRole + 2;
 
 // One row of an entity folder tree (folder: parentId = parent_id;
 // entity: parentId = folder_id; revision: sub = revision number).
@@ -71,7 +75,7 @@ void buildEntityTree(QTreeWidget *tree, const QList<Row> &folders,
         auto *item = parent ? new QTreeWidgetItem(parent, {names.value(id)})
                             : new QTreeWidgetItem(tree, {names.value(id)});
         item->setIcon(0, folderIcon);
-        item->setData(0, RoleFolderId, id);
+        item->setData(0, TreeRoleFolderId, id);
         folderItems.insert(id, item);
         for (int kid : children.value(id))
             addFolder(kid, item);
@@ -88,12 +92,12 @@ void buildEntityTree(QTreeWidget *tree, const QList<Row> &folders,
     auto addEntity = [&](QTreeWidgetItem *parent, const Row &e) {
         auto *item = parent ? new QTreeWidgetItem(parent, {e.name})
                             : new QTreeWidgetItem(tree, {e.name});
-        item->setData(0, RoleEntityId, e.id);
+        item->setData(0, TreeRoleEntityId, e.id);
         const QList<Row> revs = listRevisions(e.id);
         for (const Row &r : revs) {
             auto *rItem = new QTreeWidgetItem(
                 item, {QStringLiteral("rev %1").arg(r.sub)});
-            rItem->setData(0, RoleRevisionId, r.id);
+            rItem->setData(0, TreeRoleRevisionId, r.id);
         }
     };
     for (const Row &e : byFolder.value(0))
@@ -119,7 +123,7 @@ void selectFirstEntity(QTreeWidget *tree)
 {
     std::function<QTreeWidgetItem *(QTreeWidgetItem *)> find;
     find = [&](QTreeWidgetItem *item) -> QTreeWidgetItem * {
-        if (item->data(0, RoleEntityId).toInt() != 0)
+        if (item->data(0, TreeRoleEntityId).toInt() != 0)
             return item;
         for (int i = 0; i < item->childCount(); ++i)
             if (QTreeWidgetItem *hit = find(item->child(i)))
@@ -174,6 +178,12 @@ ExecutionCreateDialog::ExecutionCreateDialog(QWidget *parent)
             });
     connect(ui->showContextButton, &QPushButton::clicked, this,
             &ExecutionCreateDialog::onShowContextClicked);
+    // Show buttons for the skill / model trees, enabled only while an
+    // entity (or its revision) is selected.
+    connect(ui->showSkillButton, &QPushButton::clicked, this,
+            &ExecutionCreateDialog::onShowSkillClicked);
+    connect(ui->showModelButton, &QPushButton::clicked, this,
+            &ExecutionCreateDialog::onShowModelClicked);
     connect(ui->promptTextEdit, &QTextEdit::textChanged, this,
             [this] { updateSaveEnabled(); });
 
@@ -197,6 +207,8 @@ void ExecutionCreateDialog::newExecution(db_t *db)
     m_newId = 0;
     m_skillRevisionId = 0;
     m_modelRevisionId = 0;
+    m_skillEntityId = 0;
+    m_modelEntityId = 0;
 
     ui->promptTextEdit->clear();
     loadContexts();
@@ -410,10 +422,17 @@ void ExecutionCreateDialog::onSkillTreeSelectionChanged(QTreeWidgetItem *cur,
                                                         QTreeWidgetItem *)
 {
     m_skillRevisionId = 0;
+    m_skillEntityId = 0;
     if (cur) {
-        if (cur->data(0, RoleRevisionId).toInt() != 0) {
-            m_skillRevisionId = cur->data(0, RoleRevisionId).toInt();
-        } else if (cur->data(0, RoleEntityId).toInt() != 0) {
+        if (cur->data(0, TreeRoleRevisionId).toInt() != 0) {
+            m_skillRevisionId = cur->data(0, TreeRoleRevisionId).toInt();
+            // Revision rows are direct children of the entity row.
+            m_skillEntityId =
+                cur->parent() ? cur->parent()->data(0, TreeRoleEntityId)
+                                   .toInt()
+                              : 0;
+        } else if (cur->data(0, TreeRoleEntityId).toInt() != 0) {
+            m_skillEntityId = cur->data(0, TreeRoleEntityId).toInt();
             // Entity row: auto-select its latest revision (last child;
             // the lister is ascending). The signal fires again and
             // lands in the branch above.
@@ -422,6 +441,7 @@ void ExecutionCreateDialog::onSkillTreeSelectionChanged(QTreeWidgetItem *cur,
                     cur->child(cur->childCount() - 1));
         }
     }
+    ui->showSkillButton->setEnabled(m_skillEntityId != 0);
     updateSaveEnabled();
 }
 
@@ -429,10 +449,17 @@ void ExecutionCreateDialog::onModelTreeSelectionChanged(QTreeWidgetItem *cur,
                                                         QTreeWidgetItem *)
 {
     m_modelRevisionId = 0;
+    m_modelEntityId = 0;
     if (cur) {
-        if (cur->data(0, RoleRevisionId).toInt() != 0) {
-            m_modelRevisionId = cur->data(0, RoleRevisionId).toInt();
-        } else if (cur->data(0, RoleEntityId).toInt() != 0) {
+        if (cur->data(0, TreeRoleRevisionId).toInt() != 0) {
+            m_modelRevisionId = cur->data(0, TreeRoleRevisionId).toInt();
+            // Revision rows are direct children of the entity row.
+            m_modelEntityId =
+                cur->parent() ? cur->parent()->data(0, TreeRoleEntityId)
+                                   .toInt()
+                              : 0;
+        } else if (cur->data(0, TreeRoleEntityId).toInt() != 0) {
+            m_modelEntityId = cur->data(0, TreeRoleEntityId).toInt();
             // Entity row: auto-select its latest revision (last child;
             // the lister is ascending). The signal fires again and
             // lands in the branch above.
@@ -441,6 +468,7 @@ void ExecutionCreateDialog::onModelTreeSelectionChanged(QTreeWidgetItem *cur,
                     cur->child(cur->childCount() - 1));
         }
     }
+    ui->showModelButton->setEnabled(m_modelEntityId != 0);
     updateSaveEnabled();
 }
 
@@ -454,6 +482,28 @@ void ExecutionCreateDialog::onShowContextClicked()
     // immutable, so nothing changes when the dialog closes.
     ContextDialog dlg(this);
     dlg.editContext(m_db, contextId);
+    dlg.exec();
+}
+
+void ExecutionCreateDialog::onShowSkillClicked()
+{
+    if (m_skillEntityId == 0 || !m_db)
+        return;
+
+    // Read-only view of the selected skill (EntityDialog ReadOnly mode).
+    SkillDialog dlg(this);
+    dlg.showSkill(m_db, m_skillEntityId);
+    dlg.exec();
+}
+
+void ExecutionCreateDialog::onShowModelClicked()
+{
+    if (m_modelEntityId == 0 || !m_db)
+        return;
+
+    // Read-only view of the selected model (EntityDialog ReadOnly mode).
+    ModelDialog dlg(this);
+    dlg.showModel(m_db, m_modelEntityId);
     dlg.exec();
 }
 

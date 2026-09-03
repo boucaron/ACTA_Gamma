@@ -42,6 +42,10 @@ private:
     // (0 = no revision selected, e.g. a folder or entity row).
     int m_skillRevisionId = 0;
     int m_modelRevisionId = 0;
+    // Entity (skill / model) id behind the current tree selection
+    // (0 = folder row or no selection); targets of the Show buttons.
+    int m_skillEntityId = 0;
+    int m_modelEntityId = 0;
 
     // Fill the context combo / the skill and model folder trees /
     // the parent execution combo from live DB listers (empty widgets
@@ -58,10 +62,13 @@ private:
     // Save button slot: create the execution from the dialog fields.
     void onSaveClicked();
 
-    // "Show" button beside the context combo: the selected context in
-    // the read-only ContextDialog (same convention as the Show buttons
-    // of the ExecutionDialog Input tab).
+    // "Show" buttons: the selected context / skill / model in their
+    // read-only dialogs (ContextDialog / SkillDialog / ModelDialog),
+    // the same convention as the Show buttons of the panels and of the
+    // ExecutionDialog Input tab.
     void onShowContextClicked();
+    void onShowSkillClicked();
+    void onShowModelClicked();
 
     // Create a new context (ContextDialog, New mode); on save the
     // combo is rebuilt and the new row selected.
