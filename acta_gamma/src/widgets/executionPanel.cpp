@@ -355,6 +355,12 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
     if (!item)
         return;
     QMenu menu(this);
+    // Mirrors the other panels' context menus (UR #22): "New…" first,
+    // then the row action.
+    auto *aNew = menu.addAction("New…");
+    aNew->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
+    aNew->setToolTip(tr("Create a new execution"));
+    connect(aNew, &QAction::triggered, this, [this] { onNewBtnClicked(); });
     auto *aShow = menu.addAction("Show");
     aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     aShow->setToolTip("Show the details of this execution");
