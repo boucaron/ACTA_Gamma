@@ -62,10 +62,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     lifecycle operations are soft-delete only. Deletion for contexts/
     executions, if implemented, must be a `deleted_at` soft delete
     mirroring the skill/model/folder pattern.)*
-43. **i18n is half-done.** `MainWindow` uses `tr(...)` in several places,
-    everything else is raw English literals, and no `qs_`/translation files
-    exist. Either commit to `tr()` everywhere + a `translations/` target, or
-    drop it consistently.
 44. **Running-execution UX (when Run is implemented).** Status `running`
     should update live (polling or an in-app worker via `QThread` /
     `QtConcurrent`), with a progress indicator in the panel, and the log
@@ -84,7 +80,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      `content` may be plain text; decide scope before implementing)*
 3. **Polish:**
    - #26 remaining: JSON highlighting / line numbers
-   - #43 i18n consistency
    - #44 live execution UX
 
 (#42 data lifecycle is closed by owner decision, not an open action.)
