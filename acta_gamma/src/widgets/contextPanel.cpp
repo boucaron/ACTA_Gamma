@@ -4,6 +4,7 @@
 #include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QTextEdit>
@@ -44,6 +45,8 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     connect(list, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
                 showContext(cur);
+                showBtn->setEnabled(
+                    cur && cur->data(0, RoleContextId).toInt() != 0);
             });
     lay->addWidget(list);
 
@@ -58,23 +61,37 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
 
     // "&" marks the button's accelerator (Alt+letter) (UR #39).
     // Icon + tooltip to match the other panels (P2 / UR #22).
-    // Single-clicking a row already fills the inline editor below, so
-    // the redundant "Show" button, context menu and Enter accelerator
-    // were dropped (P5 / UR #41).
+    // The inline editor below is the quick content view; the Show
+    // button opens the full read-only details dialog (type, hash,
+    // metadata, dates), enabled only while a context row is selected.
     auto *btnStyle = style();
     auto *btnRow = new QHBoxLayout;
     newBtn = new QPushButton("&New");
     newBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogYesButton));
     newBtn->setToolTip(tr("Create a new context"));
     btnRow->addWidget(newBtn);
+    showBtn = new QPushButton("&Show");
+    showBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogOpenButton));
+    showBtn->setToolTip(
+        tr("Show the selected context (all data, read-only)"));
+    showBtn->setEnabled(false);
+    btnRow->addWidget(showBtn);
     btnRow->addStretch();
     lay->addLayout(btnRow);
 
     // callback
     connect(newBtn, &QPushButton::clicked, this, &ContextPanel::onNewBtnClicked);
+    connect(showBtn, &QPushButton::clicked, this,
+            &ContextPanel::onShowBtnClicked);
     connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
         applyTreeFilter(list, t, RoleContextContent);
     });
+
+    // Right-click context menu on the list: "New…" and "Show" (no
+    // "Edit": contexts are immutable — see onListContextMenu()).
+    list->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(list, &QTreeWidget::customContextMenuRequested, this,
+            &ContextPanel::onListContextMenu);
 
     // Keeps emptyLabel centered as the viewport resizes (P5 / UR #31).
     list->viewport()->installEventFilter(this);
@@ -197,4 +214,40 @@ void ContextPanel::onNewBtnClicked()
     // cancelled dialog changed nothing (UR #8).
     if (dlg.saved())
         reload();
+}
+
+void ContextPanel::onShowBtnClicked()
+{
+    const auto *cur = list->currentItem();
+    const int contextId = cur ? cur->data(0, RoleContextId).toInt() : 0;
+    if (contextId == 0 || !m_db)
+        return;
+
+    // Read-only view of the selected context (Mode ReadOnly, Close
+    // only): every field of the row. Contexts are immutable, so
+    // nothing changes when the dialog closes.
+    ContextDialog dlg(this);
+    dlg.editContext(m_db, contextId);
+    dlg.exec();
+}
+
+void ContextPanel::onListContextMenu(const QPoint &pos)
+{
+    QMenu menu(this);
+    auto *aNew = menu.addAction(tr("New…"));
+    aNew->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
+    aNew->setToolTip(tr("Create a new context"));
+    connect(aNew, &QAction::triggered, this, [this] { onNewBtnClicked(); });
+    // "Show" operates on the currently selected row, like the Show
+    // button of the panel.
+    auto *aShow = menu.addAction(tr("Show"));
+    aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    aShow->setToolTip(tr("Show the selected context (all data, read-only)"));
+    aShow->setEnabled(showBtn->isEnabled());
+    connect(aShow, &QAction::triggered, this,
+            [this] { onShowBtnClicked(); });
+    // Note: no "Edit" entry — context rows are immutable (acta_db has
+    // no update API and the schema trigger aborts out-of-band
+    // updates), so there is nothing to edit.
+    menu.exec(list->viewport()->mapToGlobal(pos));
 }

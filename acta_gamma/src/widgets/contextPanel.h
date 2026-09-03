@@ -6,6 +6,7 @@ class QTextEdit;
 class QPushButton;
 class QLineEdit;
 class QLabel;
+class QPoint;
 
 #include "acta_db.h"
 
@@ -18,6 +19,7 @@ public:
     QTextEdit *editor;
 
     QPushButton *newBtn;
+    QPushButton *showBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
@@ -32,8 +34,8 @@ private:
 
     // Fill the textarea below the list with the content of the selected
     // context (or clear it when the selection leaves a context row).
-    // The inline editor is the only detail view: contexts are immutable,
-    // so the read-only dialog was dropped (P5 / UR #41).
+    // It is the quick content view; the full read-only details (type,
+    // hash, metadata, dates) are opened with showBtn.
     void showContext(QTreeWidgetItem *item);
 
 private:
@@ -43,4 +45,14 @@ private:
 
 private slots:
     void onNewBtnClicked();
+
+    // Show button: the selected context in the read-only ContextDialog
+    // (all fields: type, content, hash, metadata, dates). Contexts are
+    // immutable, so nothing changes when the dialog closes.
+    void onShowBtnClicked();
+
+    // Right-click context menu on the list: "New…" and "Show". No
+    // "Edit": contexts are immutable (acta_db has no update API; the
+    // schema trigger aborts out-of-band updates).
+    void onListContextMenu(const QPoint &pos);
 };
