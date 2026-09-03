@@ -67,10 +67,14 @@ UX is a follow-on).
 5. Dependencies available on the current stack: cURL (MSYS2
    mingw-w64-x86_64-curl), cJSON already used by the CLI. No HTTP code
    exists yet, so this is the one genuinely new piece.
+6. Backend reference: `llamacpp_server_README.md` is the full
+   auto-generated llama.cpp server reference (long); the
+   runner-relevant subset is distilled in `llamacpp_server_contract.md`
+   (startup, /health, /v1/models, /v1/chat/completions, errors).
 
 ## Plans
 
-### Plan A — standalone C runner binary acta_runner (recommended)
+### Plan A — standalone C runner binary acta_runner (selected)
 
 A new top-level acta_runner/ in C, linking libacta_db.a + curl + cJSON,
 run as acta_runner run <execution-id> or acta_runner run --pending. It
@@ -112,16 +116,80 @@ satisfies UI review #18 and #44 with the least coupling, keeps the
 runner independently testable, and leaves the door open for a
 headless/CLI-driven mode later.
 
-## Suggested decision points (regardless of plan)
+## Decisions (finalized)
 
-1. Prompt resolution rule (system vs user message; what output_schema
-   means: response_format: json_schema if the backend supports it,
-   else post-hoc validation).
-2. API keys / auth: env var (OPENAI_API_KEY) and/or per-model
-   configuration JSON ({"api_key": ..., "temperature": ...}).
-3. Timeouts / retries: single request, configurable timeout, no retries
-   initially (failures are first-class artifacts here).
-4. Claim semantics: runner only acts on pending; start() doubles as the
-   lock; define stale-running cleanup.
-5. Logging granularity: follow the DBDesign event list exactly, so the
-   UI timeline shows meaningful phases.
+1. **Plan A is the plan.** Standalone C runner in `acta_runner/`.
+   Plan D (GUI spawns it) remains the target end state; nothing in
+   phase 2 blocks it.
+2. **Server lifecycle is user-managed.** The user launches
+   `llama-server` (or any OpenAI-compatible backend) manually with
+   whatever model they want. The runner is a pure HTTP client: it never
+   spawns, loads, unloads, or terminates a server. The DB model record
+   (`base_url`, `model_identifier`, `configuration`) is the only link to
+   the server instance.
+3. **Prompt resolution:** `system = skill.prompt_template`,
+   `user = context.content + execution.prompt`. If a skill has an
+   `output_schema`, use `response_format: {"type":"json_schema",
+   "schema": ...}` when the backend supports it, otherwise validate the
+   raw response post-hoc.
+4. **Auth:** `--api-key` flag → `$OPENAI_API_KEY` → per-model
+   `configuration` JSON (`{"api_key": ...}`). Sent as
+   `Authorization: Bearer <key>`; optional when the server has no
+   `--api-key` set.
+5. **Timeouts / retries:** single request, configurable `--timeout` (s),
+   no retries — failures are first-class artifacts here.
+6. **Claim semantics:** the runner only acts on `pending`; `start()` is
+   the atomic lock. Stale-`running` cleanup (dead runner) is deferred:
+   revisit as an explicit `--stale-seconds` sweep later.
+7. **Logging granularity:** follow the DBDesign event list exactly
+   (execution_started, context_loaded, prompt_resolved, llm_request,
+   llm_response, validation_*, execution_completed/failed) so the UI
+   timeline shows meaningful phases.
+
+## Phase 2 pipeline (spec for `run_execution`)
+
+1. **Claim** — fetch execution; must be `pending`; `start()` →
+   `running`; log `execution_started`.
+2. **Resolve** — fetch context (`content`), skill revision
+   (`prompt_template`, `output_schema`), model revision (`base_url`,
+   `model_identifier`, `configuration`); log `context_loaded`,
+   `prompt_resolved`.
+3. **Preflight** (cheap, makes failures readable) — `GET /health`:
+   `503` → fail "model still loading". `GET /v1/models`: mismatched
+   `model_identifier` → fail "server is running a different model".
+4. **Call** — `POST /v1/chat/completions` with `messages = [system:
+   prompt_template, user: context.content + prompt]`, `model =
+   model_identifier`, params from `configuration`, and
+   `response_format = json_schema(output_schema)` when a skill has one;
+   log `llm_request` (url, model id, params).
+5. **Record** — `set_raw_response(choices[0].message.content)`; log
+   `llm_response` (HTTP status, latency, `usage` tokens, `timings`).
+6. **Validate** — if `output_schema` is set and `response_format` was
+   not used (non-llama backend), parse/validate post-hoc; log
+   `validation_started` / `validation_failed`.
+7. **Close** — `complete(result)` or `fail(error)`; log
+   `execution_completed` / `execution_failed`. Exit codes per execution;
+   `--pending` batch returns the worst.
+
+## Code shape in `acta_runner/`
+
+- `src/backend.c/h` — small curl wrapper: GET/POST JSON with timeout →
+  (http status, body); optional `Authorization: Bearer` from
+  `configuration` / `--api-key`. Contract: `llamacpp_server_contract.md`.
+- `src/run.c` — the pipeline above, logging every phase to
+  `execution_log`.
+- `tests/` — tiny local stub server (fixed port, echoing `/health`,
+  `/v1/models`, `/v1/chat/completions`) covering: success →
+  `completed`, 503 → `fail`, model mismatch → `fail`, HTTP error →
+  `fail` + `EXIT_HTTP`, timeout.
+
+## Explicitly out of scope
+
+- Server manager mode (`--start-server`, process spawn/termination,
+  model load/unload, load-timeout handling, vendored llama.cpp build).
+- Streaming (SSE) responses.
+- Retries.
+- Stale-`running` cleanup (deferred, see decision 6).
+- Multimodal, tool calling, embeddings, LoRA, slot caching — anything
+  beyond `chat/completions` from the backend (see
+  `llamacpp_server_contract.md` §6).
