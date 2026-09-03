@@ -35,9 +35,9 @@ numbering).
   About dialog) and UR #39 (F2 on entities opens Edit, Enter opens the
   Context Show dialog; both in 25906b2). UR #16 (global
   `qInstallMessageHandler` writing Qt records to an app-dir log file,
-  25166c9) and UR #34 (target folder shown in the New skill/model dialog
-  window title, 555e942) were each shipped as standalone fixes from the
-  review's Priority list. (The #34 companion #13 — falling back to the
-  selected entity's own folder — is still open.)
+  25166c9), UR #34 (target folder shown in the New skill/model dialog
+  window title, 555e942) and UR #13 (New falls back to the selected
+  entity's own folder, 437c20a) were each shipped as standalone fixes
+  from the review's Priority list.
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).

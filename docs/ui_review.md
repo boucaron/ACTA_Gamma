@@ -91,7 +91,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
 3. **Polish:**
-   - #13 "New" target-folder fallback
    - #26 remaining: JSON highlighting / line numbers
    - #43 i18n consistency
    - #44 live execution UX
