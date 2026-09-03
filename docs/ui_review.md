@@ -63,6 +63,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     *(Partly done: every button in all four panels now has an icon +
     tooltip — execution panel ("Show" / "Show Log Details" with right-click
     context menus) and context panel ("New" / "Show") added with P2; the
+    context panel "Show" was later removed as redundant (UR #41), then
+    re-added on owner decision together with a right-click context menu
+    on the list ("New…" / "Show"; no "Edit" — contexts are immutable); the
     "one toolbar per panel" layout standardization is still open.)*
 23. **Trees:**
    - Skill/Model trees: `setHeaderHidden(true)` and no folder icon →
