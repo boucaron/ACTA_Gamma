@@ -4,17 +4,24 @@ Analysis of what it takes to let the ACTA Gamma Qt UI **create execution
 entries** (the first step of the future "run" flow; no backend/runner
 involved yet — the created row simply lands in `pending`).
 
-## 1. Current state (verified in code)
+**Status: implemented.** H3 shipped (8b4c16d, with follow-ups for the Show
+buttons, inline previews and the `RoleRevisionId` clash); the design
+decisions in §4 are reflected in the code. §1 describes the state at
+analysis time.
 
-- **No creation path exists anywhere in the app.** Executions are only ever
-  *read*: `ExecutionPanel` lists them (`acta_db_execution_query`),
-  `ExecutionDialog` opens them read-only (`editExecution`), and the
-  context menu / Enter / Show all funnel into that read-only dialog.
+## 1. State at analysis time (superseded by the shipped implementation)
+
+- **No creation path existed anywhere in the app.** Executions were only
+  ever *read*: `ExecutionPanel` listed them (`acta_db_execution_query`),
+  `ExecutionDialog` opened them read-only (`editExecution`), and the
+  context menu / Enter / Show all funnelled into that read-only dialog.
 - The gap is documented in the code itself: in `executionPanel.cpp`,
   "The one-shot execution flow (create execution row, call the model
   backend, write logs, update status) has no backend client yet, so the
   'Run One-Shot' button was removed instead of left dead."
-- `ui_review.md` #18 flags this as the app's core missing feature.
+- `ui_review.md` #18 flagged this as the app's core missing feature;
+  after H3 shipped, #18 was narrowed to the remaining Run flow
+  (runner backend).
 
 ## 2. DB layer — already complete, nothing to build
 
