@@ -21,26 +21,35 @@ ExecutionDialog::ExecutionDialog(QWidget *parent)
     setWindowTitle("Execution");
 
     // Input tab: open the read-only dialog of the associated row.
+    // Non-modal (UR #36) so both this dialog and the detail dialog stay
+    // interactive instead of a modal stacked on a modal. Parented to this
+    // with WA_DeleteOnClose so it is freed when the user closes it.
     connect(ui->showContextPushButton, &QPushButton::clicked, this, [this]() {
         if (m_contextId == 0 || !m_db)
             return;
-        ContextDialog dlg(this);
-        dlg.editContext(m_db, m_contextId);
-        dlg.exec();
+        auto *d = new ContextDialog(this);
+        d->setAttribute(Qt::WA_DeleteOnClose);
+        d->setWindowModality(Qt::NonModal);
+        d->editContext(m_db, m_contextId);
+        d->show();
     });
     connect(ui->showSkillPushButton, &QPushButton::clicked, this, [this]() {
         if (m_skillId == 0 || !m_db)
             return;
-        SkillDialog dlg(this);
-        dlg.showSkill(m_db, m_skillId);
-        dlg.exec();
+        auto *d = new SkillDialog(this);
+        d->setAttribute(Qt::WA_DeleteOnClose);
+        d->setWindowModality(Qt::NonModal);
+        d->showSkill(m_db, m_skillId);
+        d->show();
     });
     connect(ui->showModelPushButton, &QPushButton::clicked, this, [this]() {
         if (m_modelId == 0 || !m_db)
             return;
-        ModelDialog dlg(this);
-        dlg.showModel(m_db, m_modelId);
-        dlg.exec();
+        auto *d = new ModelDialog(this);
+        d->setAttribute(Qt::WA_DeleteOnClose);
+        d->setWindowModality(Qt::NonModal);
+        d->showModel(m_db, m_modelId);
+        d->show();
     });
 }
 

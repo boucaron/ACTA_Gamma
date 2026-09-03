@@ -527,10 +527,13 @@ void ExecutionCreateDialog::onShowContextClicked()
         return;
 
     // Read-only view: all data of the selected context. Contexts are
-    // immutable, so nothing changes when the dialog closes.
-    ContextDialog dlg(this);
-    dlg.editContext(m_db, contextId);
-    dlg.exec();
+    // immutable, so nothing changes when the dialog closes. Non-modal
+    // (UR #36) so this picker and the detail dialog stay interactive.
+    auto *d = new ContextDialog(this);
+    d->setAttribute(Qt::WA_DeleteOnClose);
+    d->setWindowModality(Qt::NonModal);
+    d->editContext(m_db, contextId);
+    d->show();
 }
 
 void ExecutionCreateDialog::onShowSkillClicked()
@@ -539,9 +542,13 @@ void ExecutionCreateDialog::onShowSkillClicked()
         return;
 
     // Read-only view of the selected skill (EntityDialog ReadOnly mode).
-    SkillDialog dlg(this);
-    dlg.showSkill(m_db, m_skillEntityId);
-    dlg.exec();
+    // Non-modal (UR #36) so this picker and the detail dialog stay
+    // interactive.
+    auto *d = new SkillDialog(this);
+    d->setAttribute(Qt::WA_DeleteOnClose);
+    d->setWindowModality(Qt::NonModal);
+    d->showSkill(m_db, m_skillEntityId);
+    d->show();
 }
 
 void ExecutionCreateDialog::onShowModelClicked()
@@ -550,9 +557,13 @@ void ExecutionCreateDialog::onShowModelClicked()
         return;
 
     // Read-only view of the selected model (EntityDialog ReadOnly mode).
-    ModelDialog dlg(this);
-    dlg.showModel(m_db, m_modelEntityId);
-    dlg.exec();
+    // Non-modal (UR #36) so this picker and the detail dialog stay
+    // interactive.
+    auto *d = new ModelDialog(this);
+    d->setAttribute(Qt::WA_DeleteOnClose);
+    d->setWindowModality(Qt::NonModal);
+    d->showModel(m_db, m_modelEntityId);
+    d->show();
 }
 
 void ExecutionCreateDialog::onNewContext()
