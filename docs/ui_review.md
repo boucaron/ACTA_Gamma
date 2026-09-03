@@ -27,9 +27,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     ("Immutable input JSON…", "constraint the Output Schema… JSON").
     Validate with `QJsonDocument::fromJson` and show a clear "invalid
     JSON" message before saving; at minimum add a "Validate JSON" button.
-16. **`main.cpp`.** Consider a global crash guard or at least
-    `qInstallMessageHandler` writing to a log file in the app dir, since DB
-    errors currently only go to `qWarning`/console.
 
 ### Architecture
 
@@ -98,7 +95,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      `content` may be plain text; decide scope before implementing)*
 3. **Polish:**
    - #13/#34 "New" target-folder fallback + target label
-   - #16 `main.cpp` log file
    - #26 remaining: JSON highlighting / line numbers
    - #43 i18n consistency
    - #44 live execution UX

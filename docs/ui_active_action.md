@@ -33,6 +33,9 @@ numbering).
   trash icons, panel log table as `QTableView`; 5a6fbc3) and UR #37 (status-meaning
   tooltips via `statusMeaning()`, "Show trash" label, one-shot note in the
   About dialog) and UR #39 (F2 on entities opens Edit, Enter opens the
-  Context Show dialog; both in 25906b2).
+  Context Show dialog; both in 25906b2). UR #16 (global
+  `qInstallMessageHandler` writing Qt records to an app-dir log file,
+  25166c9) was shipped as a standalone fix from the review's Code/Priority
+  list.
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).
