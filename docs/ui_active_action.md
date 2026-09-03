@@ -28,7 +28,9 @@ numbering).
   everything was implemented), P1 (c1ec1f2), P8 (05c68bc),
   P2 (105eed5 + 4d0a315, one icon-only toolbar row per panel),
   P4 (a400386, editExecution err handling; unit tests transversal),
-  P6 (9968571, panel itemChanged(int) signals), UR #37 (status-meaning
+  P6 (9968571, panel itemChanged(int) signals), UR #23 (context tree
+  newest-first sort, execution tree Skill/Model/Context columns, folder/
+  trash icons, panel log table as `QTableView`; 5a6fbc3) and UR #37 (status-meaning
   tooltips via `statusMeaning()`, "Show trash" label, one-shot note in the
   About dialog) and UR #39 (F2 on entities opens Edit, Enter opens the
   Context Show dialog; both in 25906b2).
