@@ -23,9 +23,9 @@ numbering).
 ## Summary
 
 - **Now:** H2 (JSON validation, to analyze) — the only queued action.
-- H3 (execution creation flow, analyzed in
-  [`execution_creation_analysis.md`](execution_creation_analysis.md))
-  shipped (8b4c16d, incl. picker trees, Show buttons and inline
-  previews); P1 shipped (c1ec1f2), P8 shipped (05c68bc).
+- H3 (execution creation flow) shipped (8b4c16d, incl. picker trees,
+  Show buttons and inline previews; the analysis doc was removed once
+  everything was implemented); P1 shipped (c1ec1f2), P8 shipped
+  (05c68bc).
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).

@@ -46,9 +46,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     yet (model load → LLM call → status transitions, `execution_log`
     phase rows). That is the app's core value ("LLMs as actions").
     *(The first step — UI creation of `pending` executions — shipped as
-    H3 (8b4c16d); the analysis is in
-    [`execution_creation_analysis.md`](execution_creation_analysis.md).
-    Full Run flow follows once the runner backend exists.)*
+    H3 (8b4c16d, design details in the git history; the analysis doc
+    was removed once everything was implemented). Full Run flow follows
+    once the runner backend exists.)*
 19. **Panels emit no signals.** No signal after mutation, so `MainWindow`
     can't react (e.g., selecting a skill could prefill an "execute" form).
     At minimum, emit `itemChanged(int id)` so future features can hook in.
@@ -148,8 +148,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 1. **Must-fix:** *(none remaining)*
 2. **High:**
    - #18 remaining: the Run flow (runner backend) — the UI creation
-     flow shipped as H3 (8b4c16d, analyzed in
-     [`execution_creation_analysis.md`](execution_creation_analysis.md))
+     flow shipped as H3 (8b4c16d)
    - #15 JSON validation
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
