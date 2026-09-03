@@ -693,8 +693,22 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
                   "validating raw response against skill output_schema",
                   NULL);
         char verr[256];
-        if (!schema_check(schema_j, ct, verr, sizeof verr, 0, "$"))
+        /* The content is a JSON *string* holding the document; parse it
+         * first, then validate the parsed value against the schema. */
+        cJSON *jv = cJSON_Parse(content);
+        if (!jv) {
+            snprintf(verr, sizeof verr, "raw response is not valid JSON");
+            log_phase(db, exec_id, ACTA_LOG_LEVEL_ERROR, "validation_failed",
+                      verr, NULL);
             FAIL(EXIT_INVALID, "output_schema validation failed: %s", verr);
+        }
+        if (!schema_check(schema_j, jv, verr, sizeof verr, 0, "$")) {
+            cJSON_Delete(jv);
+            log_phase(db, exec_id, ACTA_LOG_LEVEL_ERROR, "validation_failed",
+                      verr, NULL);
+            FAIL(EXIT_INVALID, "output_schema validation failed: %s", verr);
+        }
+        cJSON_Delete(jv);
     }
 
     /* ---- 7. close: complete / fail ---- */
