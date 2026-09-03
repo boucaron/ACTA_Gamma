@@ -44,9 +44,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     H3 (8b4c16d, design details in the git history; the analysis doc
     was removed once everything was implemented). Full Run flow follows
     once the runner backend exists.)*
-19. **Panels emit no signals.** No signal after mutation, so `MainWindow`
-    can't react (e.g., selecting a skill could prefill an "execute" form).
-    At minimum, emit `itemChanged(int id)` so future features can hook in.
 
 ---
 
@@ -140,7 +137,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 3. **Polish:**
    - #13/#34 "New" target-folder fallback + target label
    - #16 `main.cpp` log file
-   - #19 panel signals
    - #23 remaining: context auto-sort, panel log `QTableView`
    - #26 remaining: JSON highlighting / line numbers
    - #39 remaining keyboard support
