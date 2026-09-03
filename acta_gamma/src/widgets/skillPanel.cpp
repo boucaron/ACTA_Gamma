@@ -9,7 +9,7 @@ namespace {
 FolderTreeDao makeSkillDao(db_t *db)
 {
     FolderTreeDao dao;
-    dao.entityTitle = QStringLiteral("Skill");
+    dao.entityTitle = QObject::tr("Skill");
 
     dao.listFolders = [db](bool withDeleted) {
         QList<FolderRow> out;

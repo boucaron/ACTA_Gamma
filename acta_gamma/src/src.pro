@@ -46,6 +46,11 @@ FORMS += \
     ../ui/contextDialog.ui \
     ../ui/executionCreateDialog.ui
 
+# UR #43: translation template (i18n). Regenerate after any string
+# change with `lupdate`; compiled .qm files (when added) are loaded
+# by main.cpp from the application directory.
+TRANSLATIONS += ../translations/acta_gamma.ts
+
 DISTFILES +=
 
 LIBS += $$PWD/../../acta_db/libacta_db.a -lsqlite3

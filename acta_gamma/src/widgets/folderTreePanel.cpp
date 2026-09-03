@@ -552,7 +552,7 @@ void FolderTreePanel::onNewFolderBtnClicked()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, m_dao.entityTitle,
-            friendlyDbError(rc, "folder", trimmed,
+            friendlyDbError(rc, tr("folder"), trimmed,
                             tr("Could not create %1: %2")));
         return;
     }
@@ -584,7 +584,7 @@ void FolderTreePanel::onRenameFolderBtnClicked()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, m_dao.entityTitle,
-            friendlyDbError(rc, "folder", trimmed,
+            friendlyDbError(rc, tr("folder"), trimmed,
                             tr("Could not rename %1: %2")));
         return;
     }
@@ -647,7 +647,7 @@ void FolderTreePanel::onRestoreFolderBtnClicked()
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
             this, m_dao.entityTitle,
-            friendlyDbError(rc, "folder", name,
+            friendlyDbError(rc, tr("folder"), name,
                             tr("Could not restore %1: %2")));
         return;
     }

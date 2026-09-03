@@ -143,7 +143,7 @@ ExecutionCreateDialog::ExecutionCreateDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui_executionCreateDialog)
 {
     ui->setupUi(this);
-    setWindowTitle("New Execution");
+    setWindowTitle(tr("New Execution"));
 
     // This dialog only ever creates: Save | Close from the start.
     ui->buttonBox->setStandardButtons(
@@ -242,7 +242,7 @@ void ExecutionCreateDialog::loadContexts()
         const QString type = QString::fromUtf8(contexts[i]->type);
         const QDateTime created = toDateTime(contexts[i]->created_at);
         const QString label =
-            (type.isEmpty() ? QStringLiteral("context") : type)
+            (type.isEmpty() ? tr("context") : type)
                 + (created.isValid()
                        ? QStringLiteral(" (%1)").arg(
                              created.toString("yyyy-MM-dd"))
@@ -381,7 +381,7 @@ void ExecutionCreateDialog::loadParentExecutions()
     ui->parentExecutionComboBox->clear();
     // "— none —" maps to parent_execution_id = 0 (root execution);
     // default selection.
-    ui->parentExecutionComboBox->addItem(QStringLiteral("— none —"), 0);
+    ui->parentExecutionComboBox->addItem(tr("— none —"), 0);
     if (!m_db)
         return;
 
@@ -398,7 +398,7 @@ void ExecutionCreateDialog::loadParentExecutions()
 
     for (int i = 0; i < n; ++i)
         ui->parentExecutionComboBox->addItem(
-            QStringLiteral("execution %1 (%2)")
+            tr("execution %1 (%2)")
                 .arg(executions[i]->id)
                 .arg(executions[i]->status
                            ? QString::fromUtf8(executions[i]->status)
@@ -615,7 +615,7 @@ void ExecutionCreateDialog::onSaveClicked()
 
     const QString prompt = ui->promptTextEdit->toPlainText().trimmed();
     if (prompt.isEmpty()) {
-        QMessageBox::warning(this, "New Execution",
+        QMessageBox::warning(this, tr("New Execution"),
                              tr("The prompt is required."));
         return;
     }
@@ -641,7 +641,7 @@ void ExecutionCreateDialog::onSaveClicked()
                       "exists.")
                 : tr("Could not create the execution: %1")
                       .arg(QString::fromUtf8(acta_db_strerror(rc)));
-        QMessageBox::warning(this, "New Execution", message);
+        QMessageBox::warning(this, tr("New Execution"), message);
         return;
     }
 

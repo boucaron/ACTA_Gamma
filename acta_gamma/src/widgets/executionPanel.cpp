@@ -31,7 +31,7 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     auto *lay = new QVBoxLayout(this);
     // Panel section header (P2 / UR #21): the objectName targets the
     // #panelHeader rule of the app stylesheet.
-    auto *titleLabel = new QLabel("Execution");
+    auto *titleLabel = new QLabel(tr("Execution"));
     titleLabel->setObjectName(QStringLiteral("panelHeader"));
     lay->addWidget(titleLabel);
 
@@ -43,21 +43,21 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     statusFilter = new QComboBox;
     // "All" is the no-filter entry; the rest is the DB's status
     // vocabulary (acta_db/include/execution.h).
-    statusFilter->addItems({"All",
+    statusFilter->addItems({tr("All"),
                             ACTA_EXEC_STATUS_PENDING,
                             ACTA_EXEC_STATUS_RUNNING,
                             ACTA_EXEC_STATUS_COMPLETED,
                             ACTA_EXEC_STATUS_FAILED,
                             ACTA_EXEC_STATUS_CANCELLED});
-    statusFilter->setToolTip("Show only executions with this status");
+    statusFilter->setToolTip(tr("Show only executions with this status"));
     filterRow->addWidget(statusFilter);
     lay->addLayout(filterRow);
 
     list = new QTreeWidget;
     // Skill / model / context names next to Date + Status (H5 / UR #23).
     list->setColumnCount(5);
-    list->setHeaderLabels({"Date", "Status", "Skill", "Model",
-                           "Context"});
+    list->setHeaderLabels({tr("Date"), tr("Status"), tr("Skill"), tr("Model"),
+                           tr("Context")});
     list->setSortingEnabled(true);
     list->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(list, &QTreeWidget::customContextMenuRequested, this,
@@ -269,8 +269,8 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
         // column headers, like the dialog builds) is the equivalent.
         auto *emptyModel = new QStandardItemModel(0, 4);
         emptyModel->setHorizontalHeaderLabels(
-            {QStringLiteral("Date"), QStringLiteral("Level"),
-             QStringLiteral("Event"), QStringLiteral("Message")});
+            {tr("Date"), tr("Level"),
+             tr("Event"), tr("Message")});
         logList->setModel(emptyModel);
         emptyLogLabel->setVisible(true);
         return;
@@ -286,8 +286,8 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
     // colors), so panel and dialog stay visually in lockstep.
     auto *model = new QStandardItemModel(0, 4);
     model->setHorizontalHeaderLabels(
-        {QStringLiteral("Date"), QStringLiteral("Level"),
-         QStringLiteral("Event"), QStringLiteral("Message")});
+        {tr("Date"), tr("Level"),
+         tr("Event"), tr("Message")});
     if (lines) {
         for (int i = 0; i < n; ++i) {
             const QString level =
@@ -330,7 +330,7 @@ void ExecutionPanel::applyFilters()
         statusFilter ? statusFilter->currentText() : QString();
     for (int i = 0; i < list->topLevelItemCount(); ++i) {
         auto *item = list->topLevelItem(i);
-        bool ok = status.isEmpty() || status == QLatin1String("All")
+        bool ok = status.isEmpty() || status == tr("All")
                    || item->text(1) == status;
         if (ok && !needle.isEmpty()) {
             ok = false;
@@ -394,13 +394,13 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
     QMenu menu(this);
     // Mirrors the other panels' context menus (UR #22): "New…" first,
     // then the row action.
-    auto *aNew = menu.addAction("New…");
+    auto *aNew = menu.addAction(tr("New…"));
     aNew->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
     aNew->setToolTip(tr("Create a new execution"));
     connect(aNew, &QAction::triggered, this, [this] { onNewBtnClicked(); });
-    auto *aShow = menu.addAction("Show");
+    auto *aShow = menu.addAction(tr("Show"));
     aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
-    aShow->setToolTip("Show the details of this execution");
+    aShow->setToolTip(tr("Show the details of this execution"));
     connect(aShow, &QAction::triggered, this, [this, item] {
         onExecutionDoubleClicked(item, 0);
     });

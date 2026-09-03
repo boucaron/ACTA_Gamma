@@ -265,7 +265,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QLabel *logo = new QLabel;
     if (!logoBase.isNull())
         logo->setPixmap(logoBase.scaledToHeight(32));
-    QLabel *title = new QLabel("ACTA Gamma — LLMs as actions, not agents");
+    QLabel *title =
+        new QLabel(tr("ACTA Gamma — LLMs as actions, not agents"));
     h->addWidget(logo);
     h->addWidget(title);
     h->addStretch();

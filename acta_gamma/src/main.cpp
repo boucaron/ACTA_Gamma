@@ -4,7 +4,9 @@
 #include <QDir>
 #include <QFile>
 #include <QMutex>
+#include <QLocale>
 #include <QTextStream>
+#include <QTranslator>
 #include <QtGlobal>
 #include "mainwindow.h"
 
@@ -78,6 +80,16 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("ACTA Gamma"));
 
     QApplication app(argc, argv);
+
+    // i18n (UR #43): load a compiled translation (.qm, shipped next to
+    // the executable) matching the system locale, if one exists.
+    // tr() falls back to the source text when none loads, so the app
+    // is fully functional without translations. The source-string
+    // template is translations/acta_gamma.ts (regenerate with lupdate).
+    QTranslator translator(&app);
+    if (translator.load(QStringLiteral("acta_gamma_")
+                            + QLocale::system().name()))
+        app.installTranslator(&translator);
 
     // File-backed log for Qt records (UR #16).
     setupMessageLogging();

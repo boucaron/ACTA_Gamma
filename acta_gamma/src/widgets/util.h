@@ -84,17 +84,17 @@ inline QString friendlyDbError(int rc, const QString &noun,
 {
     switch (rc) {
     case ACTA_DB_ERR_DUPLICATE:
-        return QStringLiteral("A %1 named \"%2\" already exists in this folder")
+        return QObject::tr("A %1 named \"%2\" already exists in this folder")
             .arg(noun, name);
     case ACTA_DB_ERR_FK:
-        return QStringLiteral("The target folder no longer exists");
+        return QObject::tr("The target folder no longer exists");
     case ACTA_DB_ERR_NOT_FOUND:
-        return QStringLiteral("\"%1\" could not be found (it may have been deleted)")
+        return QObject::tr("\"%1\" could not be found (it may have been deleted)")
             .arg(name);
     default:
         QString err = QString::fromUtf8(acta_db_strerror(rc));
         if (rc == ACTA_DB_ERR_SQL && detail && *detail)
-            err = QStringLiteral("%1: %2")
+            err = QObject::tr("%1: %2")
                 .arg(err, QString::fromUtf8(detail));
         return fallback.arg(noun, err);
     }

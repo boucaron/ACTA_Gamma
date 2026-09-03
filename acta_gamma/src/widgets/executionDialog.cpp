@@ -18,7 +18,7 @@ ExecutionDialog::ExecutionDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui_executionDialog)
 {
     ui->setupUi(this);
-    setWindowTitle("Execution");
+    setWindowTitle(tr("Execution"));
 
     // Input tab: open the read-only dialog of the associated row.
     // Non-modal (UR #36) so both this dialog and the detail dialog stay
@@ -86,7 +86,7 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     if (srev) {
         m_skillId = srev->skill_id;
         ui->skillLineEdit->setText(
-            QStringLiteral("%1 (rev %2)")
+            tr("%1 (rev %2)")
                 .arg(utf8(srev->name)).arg(srev->revision));
         acta_db_skill_revision_free(srev);
     } else if (err != ACTA_DB_OK) {
@@ -98,7 +98,7 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
     if (mrev) {
         m_modelId = mrev->model_id;
         ui->modelLineEdit->setText(
-            QStringLiteral("%1 (rev %2)")
+            tr("%1 (rev %2)")
                 .arg(utf8(mrev->name)).arg(mrev->revision));
         acta_db_model_revision_free(mrev);
     } else if (err != ACTA_DB_OK) {
@@ -137,8 +137,8 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
                                                 &n, &err);
     auto *model = new QStandardItemModel(0, 4, ui->logsTableView);
     model->setHorizontalHeaderLabels(
-        {QStringLiteral("Date"), QStringLiteral("Level"),
-         QStringLiteral("Event"), QStringLiteral("Message")});
+        {tr("Date"), tr("Level"),
+         tr("Event"), tr("Message")});
     if (logs) {
         for (int i = 0; i < n; ++i) {
             auto *dateItem = new QStandardItem(

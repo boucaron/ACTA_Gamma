@@ -31,7 +31,7 @@
     <widget class="QTreeWidget" name="revisionTreeWidget">
      <column>
       <property name="text">
-       <string notr="true">Revision</string>
+       <string>Revision</string>
       </property>
      </column>
     </widget>

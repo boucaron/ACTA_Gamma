@@ -31,7 +31,7 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     auto *lay = new QVBoxLayout(this);
     // Panel section header (P2 / UR #21): the objectName targets the
     // #panelHeader rule of the app stylesheet.
-    auto *titleLabel = new QLabel("Context");
+    auto *titleLabel = new QLabel(tr("Context"));
     titleLabel->setObjectName(QStringLiteral("panelHeader"));
     lay->addWidget(titleLabel);
 
@@ -42,7 +42,7 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
 
     list = new QTreeWidget;
     list->setColumnCount(2);
-    list->setHeaderLabels({"Type", "Date"});
+    list->setHeaderLabels({tr("Type"), tr("Date")});
     list->setSortingEnabled(true);
     connect(list, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *cur, QTreeWidgetItem *) {
@@ -59,7 +59,7 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
 
     editor = new QTextEdit;
     editor->setReadOnly(true); // contexts are immutable; this is display-only
-    editor->setPlaceholderText("Immutable input JSON...");
+    editor->setPlaceholderText(tr("Immutable input JSON..."));
     lay->addWidget(editor);
 
     // Icon-only toolbar row (P2 / UR #22), matching the other panels:

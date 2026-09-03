@@ -43,7 +43,7 @@ void EntityDialog::configureRevisionTree()
 {
     auto *tree = revisionTree();
     tree->setColumnCount(1);
-    tree->setHeaderLabel("Revision");
+    tree->setHeaderLabel(tr("Revision"));
     tree->setRootIsDecorated(false);
     tree->setUniformRowHeights(true);
     connect(tree, &QTreeWidget::currentItemChanged,
@@ -92,7 +92,7 @@ int EntityDialog::loadRevisionTree(
     const QList<RevisionRow> revs = list(m_id, err);
     for (const RevisionRow &r : revs) {
         auto *item = new QTreeWidgetItem(tree);
-        item->setText(0, QStringLiteral("Revision %1").arg(r.revision));
+        item->setText(0, tr("Revision %1").arg(r.revision));
         item->setData(0, RoleRevisionId, r.id);
     }
 

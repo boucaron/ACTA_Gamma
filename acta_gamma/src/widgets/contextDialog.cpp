@@ -15,7 +15,7 @@ ContextDialog::ContextDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui_contextDialog)
 {
     ui->setupUi(this);
-    setWindowTitle("Context");
+    setWindowTitle(tr("Context"));
     setMode(Mode::ReadOnly);
 }
 
@@ -79,7 +79,7 @@ void ContextDialog::editContext(db_t *db, int contextId)
     acta_db_context_free(c);
 
     setMode(Mode::ReadOnly);
-    setWindowTitle(QStringLiteral("Context: %1")
+    setWindowTitle(tr("Context: %1")
                        .arg(ui->typeLineEdit->text()));
 }
 
@@ -96,7 +96,7 @@ void ContextDialog::newContext(db_t *db)
     ui->metaDataTextEdit->clear();
 
     setMode(Mode::New);
-    setWindowTitle("New Context");
+    setWindowTitle(tr("New Context"));
 }
 
 void ContextDialog::onSaveClicked()
@@ -107,8 +107,8 @@ void ContextDialog::onSaveClicked()
     const QString type = ui->typeLineEdit->text().trimmed();
     const QString content = ui->contentTextEdit->toPlainText();
     if (type.isEmpty() || content.isEmpty()) {
-        QMessageBox::warning(this, "Context",
-                             "Type and content are required.");
+        QMessageBox::warning(this, tr("Context"),
+                             tr("Type and content are required."));
         return;
     }
 
@@ -136,8 +136,8 @@ void ContextDialog::onSaveClicked()
     std::free(c.metadata);
     if (rc != ACTA_DB_OK) {
         QMessageBox::warning(
-            this, "Context",
-            friendlyDbError(rc, "context", type,
+            this, tr("Context"),
+            friendlyDbError(rc, tr("context"), type,
                             tr("Could not create %1: %2"),
                             acta_db_last_error(m_db)));
         return;
