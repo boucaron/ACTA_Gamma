@@ -131,22 +131,32 @@ No status widget in the form — the state machine owns it.
   revision. That pre-fill needs panel signals (#19) or a direct
   call-site — deferred until the runner exists.
 
-### 4.6 Show buttons under the pickers (implemented)
+### 4.6 Show buttons and inline previews under the pickers (implemented)
 
 Every picker in the form has a **"Show" button directly under it**
 (same convention as the Show buttons of the panels and of the
 `ExecutionDialog` Input tab); the form grid is a `QGridLayout` with
-the button in its own row under the picker widget:
+the button in its own row under the picker widget. Above two of the
+Show buttons sits a small read-only inline preview (60 px `QTextEdit`,
+cleared when nothing is selected), so the main identifying data is
+visible without opening the full dialog:
 
-- **Context** (combo): the button opens the selected context in the
-  read-only `ContextDialog` (all data: type, content, hash, metadata,
-  dates). Enabled only while a context is selected.
+- **Context** (combo): a read-only preview of the selected context's
+  content (full text via `acta_db_context_get`; the combo tooltip
+  keeps its 400-char truncation), and the Show button opens the
+  selected context in the read-only `ContextDialog` (all data: type,
+  content, hash, metadata, dates). Enabled only while a context is
+  selected.
 - **Skill / model** (folder trees): a button under each tree opens
   the selected entity in the read-only `SkillDialog` / `ModelDialog`
   (`EntityDialog` ReadOnly mode). The selection handlers track the
   entity id behind the current row (an entity row is its own id; a
   revision row takes it from its parent entity row) and enable the
-  button only while an entity (or its revision) is selected.
+  button only while an entity (or its revision) is selected. Under the
+  skill tree, a read-only preview of the selected skill **revision's**
+  prompt (`prompt_template` via `acta_db_skill_revision_get`) — the
+  prompt is what the execution will run, so it is the field worth
+  previewing inline.
 - **Right-click context menu** on the combo: **"New…"** (creates a
   context via `ContextDialog` in New mode; on save the combo is
   rebuilt and the new row is selected — needs the small
@@ -165,7 +175,8 @@ the button in its own row under the picker widget:
   header), optional parent combo, monospace `QTextEdit` for the prompt
   (per #26 style rule), button box — with a "Show" button in its own
   row directly under each of the context combo, skill tree and model
-  tree.
+  tree, and read-only inline previews above the context (content) and
+  skill (prompt) Show buttons.
 - `acta_gamma/src/widgets/executionCreateDialog.{h,cpp}` (new): combo
   context menu (New… / Show; no Edit — contexts are immutable).
 - `acta_gamma/src/widgets/contextDialog.{h,cpp}`: small addition —
