@@ -143,7 +143,7 @@ static void handle_connection(int c, const stub_config_t *cfg)
         int n = sock_read(c, req + total, 1);
         if (n <= 0)
             break;
-        req[total++] = (char)n;
+        total++;   /* the byte is already in req[total-1] */
         if (total >= 4 && memcmp(req + total - 4, "\r\n\r\n", 4) == 0)
             break;
     }

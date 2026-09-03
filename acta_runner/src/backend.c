@@ -115,17 +115,25 @@ int backend_request(const char *method, const char *url,
         return BACKEND_ERR_TRANSPORT;
 
     struct curl_slist *hdrs = NULL;
+    int hdr_fail = 0;
     if (api_key && api_key[0]) {
         char auth[512];
         snprintf(auth, sizeof auth, "Authorization: Bearer %s", api_key);
         hdrs = curl_slist_append(hdrs, auth);
+        if (!hdrs)
+            hdr_fail = 1;
     }
-    if (strcmp(method, "POST") == 0)
+    if (strcmp(method, "POST") == 0) {
         hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
-    if (!hdrs) {
+        if (!hdrs)
+            hdr_fail = 1;
+    }
+    if (hdr_fail) {
+        curl_slist_free_all(hdrs);
         curl_easy_cleanup(h);
         return BACKEND_ERR_ALLOC;
     }
+    /* hdrs may legitimately be NULL (e.g. GET without an api key). */
 
     buf_t body = { NULL, 0, 0 };
 

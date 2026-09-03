@@ -88,16 +88,28 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
 {
     int err = ACTA_DB_OK;
 
+    /* Unique names per call: the schema has unique indexes on
+     * skills.name / models.name (where folder_id IS NULL), so reusing
+     * the same name across seeds would violate uq_skills_root /
+     * uq_models_root. */
+    static int seed_calls = 0;
+    char skill_name[64], model_name[64];
+    snprintf(skill_name, sizeof skill_name, "test-skill-%d", ++seed_calls);
+    snprintf(model_name, sizeof model_name, "test-model-%d", seed_calls);
+
     context_t c;
     memset(&c, 0, sizeof c);
     c.type = "text";
     c.content = "CTX-CONTENT";
+    /* Required non-NULL by acta_db_context_create; the runner pipeline
+     * never verifies the hash, so a fixed placeholder is fine here. */
+    c.content_hash = "test-hash";
     if (acta_db_context_create(db, &c, ctx_id) != ACTA_DB_OK)
         return -1;
 
     skill_t s;
     memset(&s, 0, sizeof s);
-    s.name = "test-skill";
+    s.name = skill_name;
     s.prompt_template = "SYS-TEMPLATE";
     s.output_schema = output_schema;
     int skill_id = 0;
@@ -112,7 +124,7 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
 
     model_t m;
     memset(&m, 0, sizeof m);
-    m.name = "test-model";
+    m.name = model_name;
     m.backend = "llama";
     m.base_url = STUB_BASE_URL;
     m.model_identifier = "stub-model";
