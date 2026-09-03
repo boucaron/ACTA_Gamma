@@ -22,11 +22,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
     Model), if the user has a *skill/model* selected (not a folder),
     `selectedFolderId()` returns 0 and the new item lands at root, not next
     to its sibling. Better: fall back to the selected item's own folder.
-14. **`ExecutionDialog::editExecution` error handling.** Each open builds a
-    new `QStandardItemModel` — fine — but the `context_get`,
-    `skill_revision_get`, `model_revision_get` queries have no `err` checks
-    (only the log list does); failures silently leave blank fields. Add
-    `err` handling / `qWarning` consistent with the rest of the codebase.
 15. **No input validation beyond emptiness.** `output_schema`,
     `configuration`, and context `content` are JSON-ish payloads
     ("Immutable input JSON…", "constraint the Output Schema… JSON").
@@ -144,7 +139,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #37 remaining: status-meaning tooltips, "Show trash" label
 3. **Polish:**
    - #13/#34 "New" target-folder fallback + target label
-   - #14 `editExecution` `err` handling
    - #16 `main.cpp` log file
    - #19 panel signals
    - #23 remaining: context auto-sort, panel log `QTableView`
