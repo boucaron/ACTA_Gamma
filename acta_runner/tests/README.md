@@ -1,20 +1,41 @@
-# acta_runner tests (planned, phase 2)
+# acta_runner tests (phase 2)
 
 Layout mirrors `acta_db_cli/tests/`: one directory per concern, one
 binary per suite.
 
-Planned suites:
+- `tests/stub_server.{h,c}` — in-process stub OpenAI-compatible backend
+  (POSIX sockets + pthread, winsock on Windows). Serves exactly what the
+  runner calls: `/health`, `/v1/models`, `/v1/chat/completions`.
+  Configurable per scenario: health status (200/503), served model id,
+  chat status (200/500), chat content, reply delay (timeout tests).
+- `tests/run/test_run.c` — pipeline (`run_execution`) against the stub
+  on a scratch `:memory:` DB seeded from `acta_gamma/db/schema.sql`:
+  - success → `completed`, raw_response stored, full phase log
+    (execution_started, context_loaded, prompt_resolved, llm_request,
+    llm_response, execution_completed)
+  - `/health` 503 → `failed` ("model still loading") + `EXIT_HTTP`
+  - model mismatch (`/v1/models` id) → `failed` + `EXIT_HTTP`
+  - chat 500 → `failed` + `EXIT_HTTP`
+  - slow reply + small `--timeout` → `failed` + `EXIT_TIMEOUT`
+  - non-pending row → `EXIT_INVALID`, row untouched
+  - unknown id → `EXIT_NOT_FOUND`
+  - `output_schema` + `supports_response_format: false` → post-hoc
+    validation: bad content → `failed` + `EXIT_INVALID`
+    (validation_started/validation_failed logged); valid content →
+    `completed`
 
-- `tests/argparse/`  — pass-1/pass-2 parsing smoke tests (global flag
+Build & run from `acta_runner/`:
+
+    make test        # builds tests/run/test_run and runs it
+    make clean
+
+Exit code 0 = all checks pass, 1 = at least one failure.
+
+Still planned (not yet implemented):
+
+- `tests/argparse/` — pass-1/pass-2 parsing smoke tests (global flag
   extraction, positional skipping, boolean vs value flags,
   `--name=value` inline form, unknown-flag rejection).
-- `tests/run/`       — `run` action against a scratch DB: pending claim
-  path, non-pending rejection, not-found, `--pending` batch loop,
-  `--max`/`--timeout` parsing.
-- `tests/backend/`   — LLM call path against a local mock
-  OpenAI-compatible HTTP stub (chat/completions echo + error cases):
-  success → complete + log rows, HTTP error → fail + log rows,
-  timeout → fail.
-
-No test code yet: the scaffold (`make`, `--help`, `--version`, DB open,
-pending validation) is exercised by hand until phase 2 lands.
+- Manual/CI coverage of `--pending` batch looping and `--max` clamping
+  (the batch loop itself is exercised by hand until a dedicated suite
+  lands).

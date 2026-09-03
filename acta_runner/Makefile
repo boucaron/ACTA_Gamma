@@ -1,12 +1,13 @@
 # acta_runner — LLM execution runner (Plan A)
 #
 #   make          → builds ./acta_runner
-#   make clean    → removes objects + binary
+#   make test     → builds + runs the phase-2 pipeline tests (tests/run)
+#   make clean    → removes objects + binaries
 #
 # Layout:
 #   include/          runner.h, runner_util.h, argparse.h
-#   src/              main.c, argparse.c, run.c
-#   tests/            (phase 2: argparse smoke tests, mock-backend tests)
+#   src/              main.c, argparse.c, run.c, backend.c/h
+#   tests/            stub_server.c/h, run/test_run.c (see tests/README.md)
 #   ../acta_db/libacta_db.a
 #
 # Dependencies: libacta_db (built by ../acta_db), sqlite3, curl, cJSON.
@@ -53,7 +54,23 @@ SRCS := $(wildcard src/*.c)
 OBJS := $(patsubst %.c, %.o, $(SRCS))
 TARGET := acta_runner$(EXEEXT)
 
-.PHONY: all clean
+# ---- tests (phase 2): pipeline against the in-process stub server ----
+# Links the real src/run.c + src/backend.c (no main.o) with the test
+# harness and the stub server.
+TEST_SRCS  := tests/run/test_run.c tests/stub_server.c \
+              src/run.c src/backend.c src/argparse.c
+TEST_OBJS  := $(patsubst %.c, %.o, $(TEST_SRCS))
+TEST_TARGET := tests/run/test_run$(EXEEXT)
+
+ifeq ($(OS),Windows_NT)
+  SOCK_LIBS := -lws2_32
+else
+  SOCK_LIBS :=
+endif
+TEST_LDFLAGS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB) $(CURL_LIB) \
+                -lpthread $(SOCK_LIBS)
+
+.PHONY: all clean test
 
 all: $(TARGET)
 
@@ -65,9 +82,15 @@ $(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h
 $(TARGET): $(OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
+$(TEST_TARGET): $(TEST_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(TEST_LDFLAGS)
+
+test: $(TEST_TARGET)
+	$(TEST_TARGET)
+
 # ---- pattern rule ----
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET)

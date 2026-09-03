@@ -27,9 +27,11 @@ int commands_dispatch(const char *action, cmd_args_t *args,
 /* handler for "run" (src/run.c) */
 int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
 
-/* Single-execution pipeline (src/run.c). Phase-1 scaffold: validates
- * the execution, then stops with "not implemented" before touching
- * state. Returns the process exit code. */
+/* Single-execution pipeline (src/run.c): claim (start), resolve
+ * context/skill/model revisions, preflight (/health, /v1/models),
+ * POST /v1/chat/completions, set_raw_response, optional post-hoc
+ * output_schema validation, complete/fail — logging an execution_log
+ * row per phase. Returns the process exit code. */
 int run_execution(db_t *db, int exec_id, int timeout_sec,
                   const char *api_key);
 
@@ -168,6 +170,23 @@ static inline int emit_not_found(const char *entity)
     char what[128];
     snprintf(what, sizeof what, "%s not found", entity ? entity : "entity");
     return finish_db_error(ACTA_DB_ERR_NOT_FOUND, what);
+}
+
+/* Emit the runner-layer error line for non-DB failures (HTTP, timeout,
+ * validation, claim, ...). Same single-line contract shape as the DB
+ * errors, but `code` is the runner exit code, so it always matches the
+ * process exit code:
+ *   {"error":"ACTA_RUNNER_ERROR","code":<exit_code>,"message":"<msg>"}
+ */
+static inline int emit_runner_error(int exit_code, const char *msg)
+{
+    fprintf(stderr,
+        "{""error\":\"ACTA_RUNNER_ERROR\",\"code\":%d,"
+        "\"message\":",
+        exit_code);
+    json_str(stderr, msg ? msg : "");
+    fputs("}\n", stderr);
+    return exit_code;
 }
 
 #endif /* ACTA_RUNNER_UTIL_H */
