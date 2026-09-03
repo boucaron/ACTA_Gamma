@@ -26,7 +26,10 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 9
   scenarios (success, health 503, model mismatch, chat 500, timeout,
   non-pending, not-found, post-hoc validation fail/pass) on a scratch
-  `:memory:` DB. Run with `make test` in `acta_runner/`.
+  `:memory:` DB. `tests/argparse/test_argparse.c` (51e375c): 31
+  pass-1/pass-2 parsing checks. `tests/llama_smoke.c` (0b06b25): manual
+  smoke test against a LIVE OpenAI-compatible server
+  (`make smoke`). Run with `make test` in `acta_runner/`.
 
 Implementation notes (where the spec left room):
 
@@ -53,8 +56,9 @@ Remaining work (deliberately not in phase 2):
 - Plan D end state: the GUI "Run" button spawning `acta_runner run <id>`
   via `QProcess` with panel polling (covers UI review #18 remainder and
   #44).
-- Test suites for `argparse` pass-1/pass-2 and `--pending` batch looping
-  / `--max` clamping.
+- Test suite for `--pending` batch looping / `--max` clamping. (The
+  `argparse` pass-1/pass-2 suite shipped as `tests/argparse/test_argparse.c`,
+  commit 51e375c; `make test` runs it before the pipeline suite.)
 - Stale-`running` cleanup sweep (`--stale-seconds`), per decision 6.
 
 ## Codebase analysis

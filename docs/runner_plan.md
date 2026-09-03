@@ -2,7 +2,8 @@
 
 Concrete, file-level plan for the queued runner work. Scope and status per
 [`runner_active_action.md`](runner_active_action.md); specs and decisions per
-[`runner_analysis.md`](runner_analysis.md). Order: R1 → R2 → R3 → R4 → R5.
+[`runner_analysis.md`](runner_analysis.md). Order: R1 → ~~R2~~ (shipped) →
+R3 → R4 → R5.
 
 ---
 
@@ -122,27 +123,36 @@ live status + phase log → closes UR #18 remainder and #44.
 
 ---
 
-## R2 — `argparse` pass-1/pass-2 test suite
+## R2 — `argparse` pass-1/pass-2 test suite — SHIPPED (51e375c)
 
-Goal: pin the two-pass option parsing in `acta_runner/src/argparse.c`.
+Shipped as `tests/argparse/test_argparse.c` (31 checks, plain asserts,
+no DB, no stub server); `make test` runs it before the pipeline suite.
+Companion build fixes for the phase-2 suite on mingw (sock_read/recv,
+strncasecmp header lookup, test-local `runner_gopts`): 5616500.
 
-Verified vocabulary (from `argparse.c`):
-- **Pass 1 (globals):** `--db`, `--version`, `--help`, `--verbose`;
-  remainder goes to pass 2; ≥ 1 positional required (the action).
-- **Pass 2 (action flags):** `--pending` (bool), `--max <n>`,
-  `--timeout <n>`, `--api-key <key>`; `cmd_args_next_positional` skips flags
-  and their values per the `flag_spec_t` table; unknown flags assume
-  value-taking (legacy behaviour).
+What the suite pins:
+- **Pass 1** (`parse_globals`): `--db x` / `--db=x`; `--db` missing value
+  → `EXIT_CLI`; globals-only / no args → `EXIT_CLI`; `-v` stackable,
+  clamped at 3; `--verbose=2` / `=7` (clamp) / `=abc` → `EXIT_INVALID`;
+  `--version` (returns 0 with `show_version` set, no remainder); `-h`;
+  global extracted mid-line; unknown global passes through as the action.
+- **Pass 2** (`cmd_args_*`, action token excluded — main.c inits with
+  `gopts.argv + 1`): positional extraction and exhaustion; `--pending`
+  bool leaves no positional and doesn't eat the following token;
+  `--max <n>` / `--max=n` values; `--timeout`/`--api_key` values +
+  positional after them; value flag doesn't eat the following flag;
+  `cmd_args_validate` on known flags, unknown flag, `--bogus=x`, no flags,
+  `--pending=x`.
 
-- New `tests/argparse/test_argparse.c` (plain asserts, no DB, no stub
-  server):
-  - pass 1: `--db x`, `--db=x`, `--verbose`, missing `--db` value,
-    no positionals → `EXIT_CLI`, unknown global flag.
-  - pass 2: `run <id>`; `--pending`; `--max 3`; `--timeout 30`;
-    `--api-key k`; flags before/after positionals; `--max` with missing
-    value; unknown flag; bool flag not eating the following positional
-    (`run --pending <id>`).
-- Wire into `acta_runner/Makefile` `test` target (build + run both suites).
+Also fixed: the stale `parse_globals` doc in `include/argparse.h` (claimed
+`EXIT_CLI` for `--version/--help`; the implementation returns 0 with the
+flag set).
+
+**Open inconsistency (not fixed, needs a decision):** the help text in
+`main.c`/`run.c` documents `--api-key <key>`, but the flag table in
+`argparse.c` and `cmd_run` use `api_key` (underscore); a user typing the
+documented `--api-key` is rejected by `cmd_args_validate` as an unknown
+option. Either the help text or the flag table/handler must change.
 
 ---
 
@@ -225,8 +235,8 @@ with clear "invalid JSON" feedback.
 1. **R1** (High; unblocks the full user story) → commit; drop UR #18
    remainder + #44 from `ui_review.md`, fold into `ui_active_action.md`
    Summary, mark Plan D shipped in `runner_analysis.md`.
-2. **R2 + R3** (can be one commit) → update `runner_analysis.md`
-   "Remaining work".
+2. ~~**R2**~~ — shipped (51e375c); `runner_analysis.md` "Remaining work"
+   updated. Next: **R3** → update `runner_analysis.md` "Remaining work".
 3. **R4** → decision 6 marked implemented in `runner_analysis.md`.
 4. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
 5. **R6** (JSON highlighting / line numbers, UR #26) and **R7**

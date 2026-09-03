@@ -48,7 +48,6 @@ Details for R1:
 
 | # | Action | Source | Notes |
 |---|--------|--------|----------------------|
-| R2 | Test suite for `argparse` pass-1/pass-2 | `runner_analysis.md` "Remaining work" | two-pass option parsing in `src/argparse.c` |
 | R3 | Tests for `run --pending` batch looping and `--max` clamping | `runner_analysis.md` "Remaining work" | includes "worst exit code wins" for the batch |
 | R4 | Stale-`running` cleanup sweep: `--stale-seconds N` finds `running` rows whose last `execution_log` timestamp is older than N and `fail()`s them with a dead-runner error | decision 6 in `runner_analysis.md` | pure DB + time; easy to test on a scratch DB |
 
@@ -65,7 +64,11 @@ Details for R1:
 - **Now:** R1 (in-app "Run" button / Plan D) — the only remaining High action;
   it unblocks the full user story (create → run → live status) and closes
   UR #18 remainder and #44.
-- **Then:** R2–R4 (runner test coverage + stale sweep), R5 (JSON validation,
+- **Shipped:** R2 (argparse pass-1/pass-2 test suite, `tests/argparse/test_argparse.c`,
+  commit 51e375c — 31 checks, `make test` runs it before the pipeline suite;
+  also fixed the stale `parse_globals` doc in `include/argparse.h` and the
+  mingw build of the phase-2 suite, commit 5616500).
+- **Then:** R3–R4 (runner test coverage + stale sweep), R5 (JSON validation,
   analyze first), R6–R7 (polish / housekeeping).
 - After shipping each item: drop it from the open lists in
   `ui_review.md` / `runner_analysis.md` and fold it into the Summary, per the
