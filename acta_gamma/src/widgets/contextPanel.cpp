@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QKeySequence>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QTextEdit>
@@ -59,21 +60,22 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     editor->setPlaceholderText("Immutable input JSON...");
     lay->addWidget(editor);
 
-    // "&" marks the button's accelerator (Alt+letter) (UR #39).
-    // Icon + tooltip to match the other panels (P2 / UR #22).
-    // The inline editor below is the quick content view; the Show
-    // button opens the full read-only details dialog (type, hash,
+    // Icon-only toolbar row (P2 / UR #22), matching the other panels:
+    // the tooltip carries the meaning, the accelerator is Alt+letter
+    // (UR #39). The inline editor below is the quick content view; the
+    // Show button opens the full read-only details dialog (type, hash,
     // metadata, dates), enabled only while a context row is selected.
     auto *btnStyle = style();
     auto *btnRow = new QHBoxLayout;
-    newBtn = new QPushButton("&New");
-    newBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogYesButton));
-    newBtn->setToolTip(tr("Create a new context"));
+    newBtn = makeActionButton(
+        btnStyle->standardIcon(QStyle::SP_DialogYesButton),
+        tr("Create a new context"),
+        QKeySequence(Qt::ALT | Qt::Key_N));
     btnRow->addWidget(newBtn);
-    showBtn = new QPushButton("&Show");
-    showBtn->setIcon(btnStyle->standardIcon(QStyle::SP_DialogOpenButton));
-    showBtn->setToolTip(
-        tr("Show the selected context (all data, read-only)"));
+    showBtn = makeActionButton(
+        btnStyle->standardIcon(QStyle::SP_DialogOpenButton),
+        tr("Show the selected context (all data, read-only)"),
+        QKeySequence(Qt::ALT | Qt::Key_H));
     showBtn->setEnabled(false);
     btnRow->addWidget(showBtn);
     btnRow->addStretch();

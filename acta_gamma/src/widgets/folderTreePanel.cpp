@@ -2,6 +2,7 @@
 
 #include <QCheckBox>
 #include <QColor>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QInputDialog>
@@ -13,6 +14,7 @@
 #include <QScrollBar>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QSet>
 #include <QStyle>
 #include <QTreeWidget>
@@ -66,78 +68,73 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
     showDeletedCheck = new QCheckBox("Show deleted items");
     lay->addWidget(showDeletedCheck);
 
-    // "&" marks each button's accelerator (Alt+letter) (UR #39).
-    // Standard icons + tooltips on the text-only buttons (P7/P8). Qt
-    // has no pencil or restore icons, so Edit / Rename Folder use the
-    // closest standard icon (SP_DialogResetButton) and Restore uses
-    // SP_ArrowBack (undo) — the tooltips carry the meaning.
+    // One icon-only toolbar row per panel (P2 / UR #22): entity
+    // actions, a separator, then folder actions. The tooltips carry
+    // the meaning — icons are shared across groups (trash for "Delete"
+    // and "Delete Folder", SP_DialogResetButton for "Edit" and "Rename
+    // Folder", SP_ArrowBack for both restores). Accelerators are
+    // Alt+letter (UR #39) via setShortcut, all letters unique per
+    // panel.
     const QString noun = m_dao.entityTitle.toLower();
     auto *btnStyle = style();
-    auto mkIcon = [btnStyle](QStyle::StandardPixmap sp) {
-        return btnStyle->standardIcon(sp);
+    auto mkBtn = [btnStyle](QStyle::StandardPixmap sp, const QString &tip,
+                            const QKeySequence &sc) {
+        return makeActionButton(btnStyle->standardIcon(sp), tip, sc);
     };
 
-    auto *actionRow = new QHBoxLayout;
-    newBtn = new QPushButton("&New");
-    newBtn->setIcon(mkIcon(QStyle::SP_DialogYesButton));
-    newBtn->setToolTip(tr("Create a new %1 in the selected folder "
-                           "(or at the root level)")
-                           .arg(noun));
-    showBtn = new QPushButton("S&how");
-    showBtn->setIcon(mkIcon(QStyle::SP_DialogOpenButton));
-    showBtn->setToolTip(tr("Show the details of the selected %1 "
-                            "(read-only)")
-                           .arg(noun));
-    editBtn = new QPushButton(QString("E&dit ") + m_dao.entityTitle);
-    editBtn->setIcon(mkIcon(QStyle::SP_DialogResetButton));
-    editBtn->setToolTip(tr("Edit the selected %1 (saving creates a new "
-                            "revision)")
-                           .arg(noun));
-    actionRow->addWidget(newBtn);
-    actionRow->addWidget(showBtn);
-    actionRow->addWidget(editBtn);
-    actionRow->addStretch();
-    lay->addLayout(actionRow);
+    auto *toolbarRow = new QHBoxLayout;
+    newBtn = mkBtn(QStyle::SP_DialogYesButton,
+                   tr("Create a new %1 in the selected folder "
+                      "(or at the root level)").arg(noun),
+                   QKeySequence(Qt::ALT | Qt::Key_N));
+    showBtn = mkBtn(QStyle::SP_DialogOpenButton,
+                    tr("Show the details of the selected %1 "
+                       "(read-only)").arg(noun),
+                    QKeySequence(Qt::ALT | Qt::Key_H));
+    editBtn = mkBtn(QStyle::SP_DialogResetButton,
+                    tr("Edit the selected %1 (saving creates a new "
+                       "revision)").arg(noun),
+                    QKeySequence(Qt::ALT | Qt::Key_E));
+    deleteBtn = mkBtn(QStyle::SP_TrashIcon,
+                      tr("Soft-delete the selected %1 (it stays in "
+                         "the database and can be restored)").arg(noun),
+                      QKeySequence(Qt::ALT | Qt::Key_D));
+    restoreBtn = mkBtn(QStyle::SP_ArrowBack,
+                       tr("Restore the selected soft-deleted %1").arg(noun),
+                       QKeySequence(Qt::ALT | Qt::Key_T));
+    toolbarRow->addWidget(newBtn);
+    toolbarRow->addWidget(showBtn);
+    toolbarRow->addWidget(editBtn);
+    toolbarRow->addWidget(deleteBtn);
+    toolbarRow->addWidget(restoreBtn);
 
-    auto *btnRow = new QHBoxLayout;
-    deleteBtn = new QPushButton("&Delete");
-    deleteBtn->setIcon(mkIcon(QStyle::SP_TrashIcon));
-    deleteBtn->setToolTip(tr("Soft-delete the selected %1 (it stays in "
-                              "the database and can be restored)")
-                             .arg(noun));
-    restoreBtn = new QPushButton("Res&tore");
-    restoreBtn->setIcon(mkIcon(QStyle::SP_ArrowBack));
-    restoreBtn->setToolTip(tr("Restore the selected soft-deleted %1")
-                               .arg(noun));
-    btnRow->addWidget(deleteBtn);
-    btnRow->addWidget(restoreBtn);
-    btnRow->addStretch();
-    lay->addLayout(btnRow);
+    auto *groupSep = new QFrame;
+    groupSep->setFrameShape(QFrame::VLine);
+    groupSep->setFrameShadow(QFrame::Plain);
+    toolbarRow->addWidget(groupSep);
 
-    auto *folderRow = new QHBoxLayout;
-    newFolderBtn = new QPushButton("New F&older");
-    newFolderBtn->setIcon(mkIcon(QStyle::SP_DirIcon));
-    newFolderBtn->setToolTip(tr("Create a new folder in the selected "
-                                 "folder (or at the root level)"));
-    renameFolderBtn = new QPushButton("Rename &Folder");
-    renameFolderBtn->setIcon(mkIcon(QStyle::SP_DialogResetButton));
-    renameFolderBtn->setToolTip(tr("Rename the selected folder"));
-    deleteFolderBtn = new QPushButton("De&lete Folder");
-    deleteFolderBtn->setIcon(mkIcon(QStyle::SP_TrashIcon));
-    deleteFolderBtn->setToolTip(tr("Soft-delete the selected folder (its "
-                                    "%1s are hidden until the folder is "
-                                    "restored)")
-                                   .arg(noun));
-    restoreFolderBtn = new QPushButton("&Restore Folder");
-    restoreFolderBtn->setIcon(mkIcon(QStyle::SP_ArrowBack));
-    restoreFolderBtn->setToolTip(tr("Restore the selected soft-deleted "
-                                     "folder"));
-    folderRow->addWidget(newFolderBtn);
-    folderRow->addWidget(renameFolderBtn);
-    folderRow->addWidget(deleteFolderBtn);
-    folderRow->addWidget(restoreFolderBtn);
-    folderRow->addStretch();
-    lay->addLayout(folderRow);
+    newFolderBtn = mkBtn(QStyle::SP_DirIcon,
+                         tr("Create a new folder in the selected "
+                            "folder (or at the root level)"),
+                         QKeySequence(Qt::ALT | Qt::Key_F));
+    renameFolderBtn = mkBtn(QStyle::SP_DialogResetButton,
+                           tr("Rename the selected folder"),
+                           QKeySequence(Qt::ALT | Qt::Key_R));
+    deleteFolderBtn = mkBtn(QStyle::SP_TrashIcon,
+                           tr("Soft-delete the selected folder (its "
+                              "%1s are hidden until the folder is "
+                              "restored)").arg(noun),
+                           QKeySequence(Qt::ALT | Qt::Key_L));
+    restoreFolderBtn = mkBtn(QStyle::SP_ArrowBack,
+                            tr("Restore the selected soft-deleted "
+                               "folder"),
+                            QKeySequence(Qt::ALT | Qt::Key_O));
+    toolbarRow->addWidget(newFolderBtn);
+    toolbarRow->addWidget(renameFolderBtn);
+    toolbarRow->addWidget(deleteFolderBtn);
+    toolbarRow->addWidget(restoreFolderBtn);
+    toolbarRow->addStretch();
+    lay->addLayout(toolbarRow);
 
     connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
         reload();
@@ -435,7 +432,7 @@ void FolderTreePanel::onListContextMenu(const QPoint &pos)
     if (!item)
         return;
     // A right-click selects the row, so the handlers operate on it
-    // exactly as the button row does.
+    // exactly as the toolbar row does.
     tree->setCurrentItem(const_cast<QTreeWidgetItem *>(item));
 
     const bool hasEntity = item->data(0, RoleEntityId).toInt() != 0;
@@ -466,8 +463,8 @@ void FolderTreePanel::onListContextMenu(const QPoint &pos)
     auto *aRestoreFolder = menu.addAction(tr("Restore Folder"), this,
                                           &FolderTreePanel::onRestoreFolderBtnClicked);
 
-    // Same icons as the button rows (P7/P8): the context menu mirrors
-    // them, so the two affordances stay aligned.
+    // Same icons as the toolbar row (P7/P8): the context menu mirrors
+    // it, so the two affordances stay aligned.
     auto *mStyle = style();
     aNew->setIcon(mStyle->standardIcon(QStyle::SP_DialogYesButton));
     aShow->setIcon(mStyle->standardIcon(QStyle::SP_DialogOpenButton));

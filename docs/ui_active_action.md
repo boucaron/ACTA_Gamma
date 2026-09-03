@@ -12,6 +12,7 @@ numbering).
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | H2 | **JSON validation (to analyze)** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | analyze first: not all three fields are necessarily JSON — `configuration` is backend-specific JSON (`DBDesign.md`), `output_schema` is a JSON schema, but context `content` may be plain text; decide scope before implementing (dialogs + context panel editor) |
+| P2 | **One toolbar per panel (ACTIVE)** — standardize button rows: all panel actions on one toolbar with sensible order, icons + tooltips on every button | UR #22 | Option B chosen: all actions icon-only on one row (tooltips carry the meaning); entity group + separator + folder group on FolderTreePanel (skill/model); context/execution keep their two buttons |
 
 ### Polish
 
@@ -22,7 +23,12 @@ numbering).
 
 ## Summary
 
-- **Now:** H2 (JSON validation, to analyze) — the only queued action.
+- **Now:** H2 (JSON validation, to analyze) and P2 (one toolbar per
+  panel, active — implementation: `makeActionButton` helper in
+  `util.h`; FolderTreePanel three rows merged into one icon-only
+  toolbar row (entity group + separator + folder group, Alt+letter
+  shortcuts, all letters unique); Context/Execution panels switched to
+  the same icon-only row).
 - H3 (execution creation flow) shipped (8b4c16d, incl. picker trees,
   Show buttons and inline previews; the analysis doc was removed once
   everything was implemented); P1 shipped (c1ec1f2), P8 shipped

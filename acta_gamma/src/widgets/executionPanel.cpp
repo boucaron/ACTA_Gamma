@@ -8,6 +8,7 @@
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QKeySequence>
 #include <QPushButton>
 #include <QStyle>
 #include <QTreeWidget>
@@ -93,19 +94,22 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // redundant "Show Log Details" button and log context menu were
     // dropped (P5 / UR #41).
 
-    // New / Show button row (UR #22): "New" opens the create dialog
-    // (a new row lands in "pending"; the runner that moves it through
-    // start/complete/fail is phase 2). "Show" opens the execution
-    // dialog for the selected execution row; the context menu and
-    // double-click / Enter do the same (UR #33).
+    // Icon-only toolbar row (P2 / UR #22), matching the other panels:
+    // tooltips carry the meaning, accelerators are Alt+letter (UR #39).
+    // "New" opens the create dialog (a new row lands in "pending"; the
+    // runner that moves it through start/complete/fail is phase 2).
+    // "Show" opens the execution dialog for the selected execution row;
+    // the context menu and double-click / Enter do the same (UR #33).
     auto *btnRow = new QHBoxLayout;
-    newExecutionBtn = new QPushButton("&New");
-    newExecutionBtn->setToolTip(tr("Create a new execution"));
-    newExecutionBtn->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
+    newExecutionBtn = makeActionButton(
+        style()->standardIcon(QStyle::SP_DialogYesButton),
+        tr("Create a new execution"),
+        QKeySequence(Qt::ALT | Qt::Key_N));
     btnRow->addWidget(newExecutionBtn);
-    showDetailsBtn = new QPushButton("S&how");
-    showDetailsBtn->setToolTip("Show the details of the selected execution");
-    showDetailsBtn->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    showDetailsBtn = makeActionButton(
+        style()->standardIcon(QStyle::SP_DialogOpenButton),
+        tr("Show the details of the selected execution"),
+        QKeySequence(Qt::ALT | Qt::Key_H));
     btnRow->addWidget(showDetailsBtn);
     lay->addLayout(btnRow);
 

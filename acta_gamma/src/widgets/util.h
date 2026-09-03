@@ -4,9 +4,11 @@
 
 #include <QColor>
 #include <QDateTime>
+#include <QIcon>
 #include <QLabel>
-#include <QLocale>
+#include <QKeySequence>
 #include <QList>
+#include <QPushButton>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -204,4 +206,23 @@ inline void placeEmptyStateLabel(QLabel *label, QTreeWidget *tree)
 {
     if (label)
         label->setGeometry(tree->viewport()->rect());
+}
+
+// Icon-only toolbar button for the panel toolbars (P2 / UR #22): the
+// tooltip carries the meaning (icons are shared across button groups,
+// e.g. trash for "Delete" and "Delete Folder"), and the optional
+// keyboard shortcut is the Alt+letter accelerator (UR #39).
+// NoFocus: the button is only ever clicked or reached via its
+// shortcut, never tabbed into.
+inline QPushButton *makeActionButton(const QIcon &icon,
+                                    const QString &tooltip,
+                                    const QKeySequence &shortcut = QKeySequence())
+{
+    auto *btn = new QPushButton;
+    btn->setIcon(icon);
+    btn->setToolTip(tooltip);
+    btn->setFocusPolicy(Qt::NoFocus);
+    if (!shortcut.isEmpty())
+        btn->setShortcut(shortcut);
+    return btn;
 }
