@@ -2,6 +2,8 @@
 
 #include <QComboBox>
 #include <QHash>
+#include <QMenu>
+#include <QPoint>
 #include <QIcon>
 #include <QList>
 #include <QMessageBox>
@@ -16,6 +18,7 @@
 #include <cstdlib>
 #include <functional>
 
+#include "contextDialog.h"
 #include "util.h"
 
 namespace {
@@ -161,11 +164,25 @@ ExecutionCreateDialog::ExecutionCreateDialog(QWidget *parent)
     connect(ui->modelTreeWidget, &QTreeWidget::currentItemChanged, this,
             &ExecutionCreateDialog::onModelTreeSelectionChanged);
 
-    // Save stays disabled until every required field is set.
+    // Save stays disabled until every required field is set; the Show
+    // button is enabled only while a context is selected.
     connect(ui->contextComboBox, &QComboBox::currentIndexChanged, this,
-            [this](int) { updateSaveEnabled(); });
+            [this](int) {
+                updateSaveEnabled();
+                ui->showContextButton->setEnabled(
+                    ui->contextComboBox->currentData().toInt() != 0);
+            });
+    connect(ui->showContextButton, &QPushButton::clicked, this,
+            &ExecutionCreateDialog::onShowContextClicked);
     connect(ui->promptTextEdit, &QTextEdit::textChanged, this,
             [this] { updateSaveEnabled(); });
+
+    // Right-click context menu on the context combo: "New…" and
+    // "Show" (no "Edit": contexts are immutable — see
+    // onContextComboContextMenu()).
+    ui->contextComboBox->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->contextComboBox, &QComboBox::customContextMenuRequested,
+            this, &ExecutionCreateDialog::onContextComboContextMenu);
 }
 
 ExecutionCreateDialog::~ExecutionCreateDialog()
@@ -425,6 +442,61 @@ void ExecutionCreateDialog::onModelTreeSelectionChanged(QTreeWidgetItem *cur,
         }
     }
     updateSaveEnabled();
+}
+
+void ExecutionCreateDialog::onShowContextClicked()
+{
+    const int contextId = ui->contextComboBox->currentData().toInt();
+    if (contextId == 0 || !m_db)
+        return;
+
+    // Read-only view: all data of the selected context. Contexts are
+    // immutable, so nothing changes when the dialog closes.
+    ContextDialog dlg(this);
+    dlg.editContext(m_db, contextId);
+    dlg.exec();
+}
+
+void ExecutionCreateDialog::onNewContext()
+{
+    ContextDialog dlg(this);
+    dlg.newContext(m_db);
+    dlg.exec();
+    // Reload the combo only when a context was actually created
+    // (UR #8), then select the new row.
+    if (dlg.saved()) {
+        loadContexts();
+        const int newId = dlg.createdId();
+        for (int i = 0; i < ui->contextComboBox->count(); ++i)
+            if (ui->contextComboBox->itemData(i).toInt() == newId) {
+                ui->contextComboBox->setCurrentIndex(i);
+                break;
+            }
+    }
+}
+
+void ExecutionCreateDialog::onContextComboContextMenu(const QPoint &pos)
+{
+    if (!m_db)
+        return;
+
+    QMenu menu(this);
+    auto *aNew = menu.addAction(tr("New…"));
+    aNew->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
+    aNew->setToolTip(tr("Create a new context"));
+    connect(aNew, &QAction::triggered, this, [this] { onNewContext(); });
+    // "Show" operates on the currently selected entry, like the Show
+    // buttons of the panels.
+    auto *aShow = menu.addAction(tr("Show"));
+    aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    aShow->setToolTip(tr("Show the selected context (all data, read-only)"));
+    aShow->setEnabled(ui->contextComboBox->currentData().toInt() != 0);
+    connect(aShow, &QAction::triggered, this,
+            [this] { onShowContextClicked(); });
+    // Note: no "Edit" entry — context rows are immutable (acta_db has
+    // no update API and the schema trigger aborts out-of-band
+    // updates), so there is nothing to edit.
+    menu.exec(ui->contextComboBox->mapToGlobal(pos));
 }
 
 void ExecutionCreateDialog::onSaveClicked()

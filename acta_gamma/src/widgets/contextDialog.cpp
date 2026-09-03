@@ -55,6 +55,7 @@ void ContextDialog::editContext(db_t *db, int contextId)
 {
     m_db = db;
     m_saved = false;
+    m_newId = 0;
 
     int err = ACTA_DB_OK;
     context_t *c = acta_db_context_get(db, contextId, &err);
@@ -86,6 +87,7 @@ void ContextDialog::newContext(db_t *db)
 {
     m_db = db;
     m_saved = false;
+    m_newId = 0;
 
     ui->typeLineEdit->clear();
     ui->contentTextEdit->clear();
@@ -141,6 +143,7 @@ void ContextDialog::onSaveClicked()
         return;
     }
 
+    m_newId = newId;
     // Contexts are immutable: show the created row read-only.
     editContext(m_db, newId);
     // The create was persisted; report it. Must come after

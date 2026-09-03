@@ -60,7 +60,17 @@
      <item row="0" column="1">
       <widget class="QComboBox" name="contextComboBox">
        <property name="toolTip">
-        <string>The context this execution runs in (type + creation date; the content is in the tooltip)</string>
+        <string>The context this execution runs in (type + creation date; the content is in the tooltip; right-click for New/Show)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QPushButton" name="showContextButton">
+       <property name="text">
+        <string>S&amp;how</string>
+       </property>
+       <property name="toolTip">
+        <string>Show the selected context (all data, read-only)</string>
        </property>
       </widget>
      </item>

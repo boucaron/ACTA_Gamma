@@ -31,6 +31,9 @@ public:
     // only when this is set (UR #8).
     bool saved() const { return m_saved; }
 
+    // id of the created context row, valid once saved().
+    int createdId() const { return m_newId; }
+
 private:
     Ui_contextDialog *ui;
     db_t *m_db = nullptr;
@@ -38,6 +41,7 @@ private:
     // Set when the create succeeds, so the panel can reload only if
     // the dialog actually changed the db.
     bool m_saved = false;
+    int m_newId = 0;
 
     // Apply mode: button bar (Close / Save|Close) and field
     // read-only flags.

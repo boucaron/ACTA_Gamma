@@ -7,6 +7,7 @@
 #include "acta_db.h"
 
 class QTreeWidgetItem;
+class QPoint;
 
 class ExecutionCreateDialog : public QDialog
 {
@@ -56,6 +57,20 @@ private:
 
     // Save button slot: create the execution from the dialog fields.
     void onSaveClicked();
+
+    // "Show" button beside the context combo: the selected context in
+    // the read-only ContextDialog (same convention as the Show buttons
+    // of the ExecutionDialog Input tab).
+    void onShowContextClicked();
+
+    // Create a new context (ContextDialog, New mode); on save the
+    // combo is rebuilt and the new row selected.
+    void onNewContext();
+
+    // Right-click context menu on the context combo: "New…" and
+    // "Show". No "Edit": contexts are immutable (acta_db has no
+    // update API; the schema trigger aborts out-of-band updates).
+    void onContextComboContextMenu(const QPoint &pos);
 
     // Tree selection handlers: a revision row selects its id; an
     // entity row auto-selects its latest revision (last child); a
