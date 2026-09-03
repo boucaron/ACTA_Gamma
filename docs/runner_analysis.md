@@ -25,10 +25,11 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 - `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
   POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 9
   scenarios (success, health 503, model mismatch, chat 500, timeout,
-  non-pending, not-found, post-hoc validation fail/pass) on a scratch
-  `:memory:` DB. `tests/argparse/test_argparse.c` (51e375c): 31
-  pass-1/pass-2 parsing checks. `tests/llama_smoke.c` (0b06b25): manual
-  smoke test against a LIVE OpenAI-compatible server
+  non-pending, not-found, post-hoc validation fail/pass), 47 checks,
+  green under `make test`, on a scratch `:memory:` DB.
+  `tests/argparse/test_argparse.c` (51e375c, since extended): 47
+  pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
+  manual smoke test against a LIVE OpenAI-compatible server
   (`make smoke`). Run with `make test` in `acta_runner/`.
 
 Implementation notes (where the spec left room):
@@ -42,7 +43,10 @@ Implementation notes (where the spec left room):
   decision 3's "when the backend supports it".
 - Post-hoc validation is a schema SUBSET validator (recursive `type`,
   `required`, `properties`, `items`; `pattern`/`enum`/`format`/… are out of
-  scope). Violation → `fail()` + `EXIT_INVALID`.
+  scope). The raw response content is first parsed as a JSON document
+  (unparseable → validation failure), then the parsed value is checked
+  against the schema subset. Failure → `fail()` + `EXIT_INVALID`, with
+  `validation_started` / `validation_failed` log rows.
 - Non-DB failures emit a runner-layer JSON error line
   `{"error":"ACTA_RUNNER_ERROR","code":<exit code>,"message":...}`
   (code always equals the process exit code); DB failures keep the

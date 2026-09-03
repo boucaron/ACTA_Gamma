@@ -125,8 +125,11 @@ live status + phase log → closes UR #18 remainder and #44.
 
 ## R2 — `argparse` pass-1/pass-2 test suite — SHIPPED (51e375c)
 
-Shipped as `tests/argparse/test_argparse.c` (31 checks, plain asserts,
-no DB, no stub server); `make test` runs it before the pipeline suite.
+Shipped as `tests/argparse/test_argparse.c` (plain asserts, no DB, no
+stub server); `make test` runs it before the pipeline suite. Since
+51e375c the suite has grown to 47 checks (extra clamp/inline-value/
+remainder edge cases) and is green; the pipeline suite is green as well
+(47 checks).
 Companion build fixes for the phase-2 suite on mingw (sock_read/recv,
 strncasecmp header lookup, test-local `runner_gopts`): 5616500.
 

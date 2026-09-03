@@ -17,8 +17,10 @@ for the UI side (UR #18 remainder, #44, #15).
   `/v1/models` id check) → `POST /v1/chat/completions` →
   `set_raw_response` → optional post-hoc validation → `complete()` /
   `fail()`, one `execution_log` row per phase.
-- `tests/` — in-process stub OpenAI server + 9-scenario pipeline test suite
-  on a scratch `:memory:` DB (`make test` in `acta_runner/`).
+- `tests/` — in-process stub OpenAI server + 9-scenario pipeline test
+  suite, green (47 checks) on a scratch `:memory:` DB (`make test` in
+  `acta_runner/`); post-hoc validation parses the raw response JSON and
+  logs `validation_started` / `validation_failed`.
 - Decisions finalized (f1abce0); docs updated (78325f9).
 
 ## Queued actions
@@ -65,7 +67,8 @@ Details for R1:
   it unblocks the full user story (create → run → live status) and closes
   UR #18 remainder and #44.
 - **Shipped:** R2 (argparse pass-1/pass-2 test suite, `tests/argparse/test_argparse.c`,
-  commit 51e375c — 31 checks, `make test` runs it before the pipeline suite;
+  commit 51e375c — 47 checks as extended, `make test` runs it before the
+  pipeline suite;
   also fixed the stale `parse_globals` doc in `include/argparse.h` and the
   mingw build of the phase-2 suite, commit 5616500).
 - **Then:** R3–R4 (runner test coverage + stale sweep), R5 (JSON validation,
