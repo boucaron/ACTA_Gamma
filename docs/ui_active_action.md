@@ -36,8 +36,9 @@ numbering).
   Context Show dialog; both in 25906b2). UR #16 (global
   `qInstallMessageHandler` writing Qt records to an app-dir log file,
   25166c9), UR #34 (target folder shown in the New skill/model dialog
-  window title, 555e942) and UR #13 (New falls back to the selected
-  entity's own folder, 437c20a) were each shipped as standalone fixes
-  from the review's Priority list.
+  window title, 555e942), UR #13 (New falls back to the selected
+  entity's own folder, 437c20a) and UR #36 (read-only Show context/skill/
+  model dialogs made non-modal to avoid modal-on-modal, 0f1650f) were
+  each shipped as standalone fixes from the review's open lists.
 - P5 closed by decision (no delete for contexts/executions; soft-delete only
   if ever wanted).

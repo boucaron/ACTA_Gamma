@@ -54,10 +54,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ## 3. UX
 
-36. **Modal-on-modal-on-modal.** Panel → dialog → nested dialog (e.g. the
-    Execution dialog's "Show context" opens a dialog inside a dialog).
-    Consider an inline detail pane or a non-modal browser; at minimum keep
-    nesting depth ≤ 2.
 42. **No data lifecycle.** Contexts and executions are append-only with no
     delete/cleanup in the UI — the DB will grow unbounded. Add "Delete"
     (with confirmation) for executions/logs and contexts, or at least an
