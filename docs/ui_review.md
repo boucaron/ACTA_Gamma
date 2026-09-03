@@ -63,13 +63,23 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
      *(Done: the execution tree now has Skill / Model / Context columns,
      filled in `ExecutionPanel::reload()` from the same revision lookups
      the dialog uses; the skill/model trees use folder icons
-     (`SP_DirIcon`) vs trash icons for deleted rows. Still open: the
-     context tree has no auto-sort applied after reload (`sortItems`), and
-     the `ExecutionPanel` log list is still a `QTreeWidget` (the execution
-     *dialog* log table is a `QTableView`).)*
+     (`SP_DirIcon`) vs trash icons for deleted rows.)*
    - The log list is a `QTreeWidget` with 4 columns — a
      `QTableWidget`/`QTableView` is the right control; keep
      `setUniformRowHeights`.
+     *(Done: the `ExecutionPanel` log list is now a `QTableView` with a
+     `QStandardItemModel` rebuilt per selection — the same control and
+     build pattern as the execution *dialog* log table. (A `QTableWidget`
+     was not used: its `setModel` is private in Qt 6.11.) The old
+     `setUniformRowHeights` was dropped: it doesn't exist on `QTableView`
+     in Qt 6.11, and rows now auto-size to their own content (a tall
+     message only grows its own row). The context tree gets a stable newest-first sort after every
+     reload (`sortItems(1, Qt::DescendingOrder)` on the locale-neutral
+     "yyyy-MM-dd HH:mm" Date column; same-minute rows sort in unspecified
+     order, the seconds live only in the tooltip). `makeEmptyStateLabel` /
+     `placeEmptyStateLabel` in `util.h` were generalized from `QTreeWidget*`
+     to `QAbstractScrollArea *` (where `viewport()` lives) so the table
+     view reuses the same empty-state placeholder.)*
 26. **JSON/prompt editors are plain `QTextEdit`.** `prompt`,
    `output_schema`, `configuration`, and context `content` should use a
    monospace font; optionally syntax-highlight JSON or at least show line
@@ -137,7 +147,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 3. **Polish:**
    - #13/#34 "New" target-folder fallback + target label
    - #16 `main.cpp` log file
-   - #23 remaining: context auto-sort, panel log `QTableView`
    - #26 remaining: JSON highlighting / line numbers
    - #39 remaining keyboard support
    - #43 i18n consistency
