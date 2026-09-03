@@ -57,17 +57,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ## 2. UI (widgets & layout)
 
-22. **Button rows inconsistent.** Skill/Model have two rows (New/Show/Edit,
-    then Delete/Restore) while Context has one (New/Show) and Execution has
-    (Show Log Details, Show) stacked vertically. Standardize: one toolbar per panel with
-    all actions, sensible order, and **icons + tooltips** on every button.
-    *(Partly done: every button in all four panels now has an icon +
-    tooltip — execution panel ("Show" / "Show Log Details" with right-click
-    context menus) and context panel ("New" / "Show") added with P2; the
-    context panel "Show" was later removed as redundant (UR #41), then
-    re-added on owner decision together with a right-click context menu
-    on the list ("New…" / "Show"; no "Edit" — contexts are immutable); the
-    "one toolbar per panel" layout standardization is still open.)*
 23. **Trees:**
    - Skill/Model trees: `setHeaderHidden(true)` and no folder icon →
      folders and items are visually indistinguishable. Add a folder icon
@@ -158,7 +147,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #14 `editExecution` `err` handling
    - #16 `main.cpp` log file
    - #19 panel signals
-   - #22 one toolbar per panel
    - #23 remaining: context auto-sort, panel log `QTableView`
    - #26 remaining: JSON highlighting / line numbers
    - #39 remaining keyboard support
