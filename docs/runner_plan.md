@@ -248,7 +248,10 @@ with clear "invalid JSON" feedback.
    remainder + #44 from `ui_review.md`, fold into `ui_active_action.md`
    Summary, mark Plan D shipped in `runner_analysis.md`.
 2. ~~**R2**~~ — shipped (51e375c); `runner_analysis.md` "Remaining work"
-   updated. Next: **R3** → update `runner_analysis.md` "Remaining work".
+   updated. Its open decision — the `--api_key`/`--api-key` help-text
+   mismatch (R8) — shipped as d90e23e: flag stays `api_key`, help text
+   fixed to `--api_key <key>`. Next: **R3** → update
+   `runner_analysis.md` "Remaining work".
 3. **R4** → decision 6 marked implemented in `runner_analysis.md`.
 4. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
 5. **R6** (JSON highlighting / line numbers, UR #26) and **R7**
