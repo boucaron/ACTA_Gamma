@@ -55,31 +55,6 @@ Implementation notes (where the spec left room):
 - User message = `context.content + "\n\n" + execution.prompt` (either
   half may be empty; both empty → fail).
 
-Remaining work (deliberately not in phase 2):
-
-- ~~Plan D end state: the GUI "Run" button spawning `acta_runner run <id>`
-  via `QProcess` with panel polling (covers UI review #18 remainder and
-  #44)~~ — shipped in `acta_gamma` (commit 184d574): `ExecutionPanel`
-  gains a Run button + context-menu entry that spawn
-  `acta_runner run <id> --db <path>` via `QProcess` (exe found next to the
-  app binary, then PATH); a 1.5 s poll updates the status cell in place
-  (`running…`) and refreshes the `execution_log` table with auto-scroll
-  to the newest row; on non-zero exit the runner's single-line JSON
-  stderr is parsed and surfaced; `setDb(db, path)` kills an active
-  runner when the database switches.
-- ~~Test suite for `--pending` batch looping / `--max` clamping~~ —
-  shipped as `tests/run/test_pending.c` (commit 4967a78; `make test` runs
-  it after the pipeline suite; the run exposed a `cmd_run` empty-result
-  bug, fixed in 7ed1794).
-- ~~Stale-`running` cleanup sweep (`--stale-seconds`), per decision 6~~ —
-  shipped as the `sweep` action (`acta_runner/src/sweep.c`,
-  `acta_runner sweep --stale-seconds N`; `tests/run/test_sweep.c`, 36
-  checks, run last by `make test` — commit 8c4d6cd).
-- (The `argparse` pass-1/pass-2 suite shipped as
-  `tests/argparse/test_argparse.c`, commit 51e375c; `make test` runs it
-  before the pipeline suite.)
-- Stale-`running` cleanup sweep (`--stale-seconds`), per decision 6.
-
 ## Codebase analysis
 
 ### acta_db (C11, libacta_db)
@@ -112,11 +87,10 @@ contract.
 
 management GUI. DbHandle is a small RAII wrapper around db_t*.
 ExecutionCreateDialog creates a pending execution (context + skill
-revision + model revision + prompt + optional parent). The code comment
-in executionPanel.cpp says: "the runner that moves it through
-start/complete/fail is phase 2", and docs/ui_review.md #18 confirms:
-Run flow / runner backend is the known missing piece (#44 live status
-UX is a follow-on).
+revision + model revision + prompt + optional parent). The Execution
+panel's "Run" button (Plan D, commit 184d574) spawns
+`acta_runner run <id> --db <path>` via `QProcess` and polls the
+`execution_log` rows for live status.
 
 ## Key observations for the runner
 
@@ -194,8 +168,7 @@ headless/CLI-driven mode later.
 ## Decisions (finalized)
 
 1. **Plan A is the plan.** Standalone C runner in `acta_runner/`.
-   Plan D (GUI spawns it) remains the target end state; nothing in
-   phase 2 blocks it.
+   Plan D (GUI spawns it) shipped in `acta_gamma` (commit 184d574).
 2. **Server lifecycle is user-managed.** The user launches
    `llama-server` (or any OpenAI-compatible backend) manually with
    whatever model they want. The runner is a pure HTTP client: it never
