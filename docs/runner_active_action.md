@@ -73,7 +73,8 @@ Details for R1:
   also fixed the stale `parse_globals` doc in `include/argparse.h` and the
   mingw build of the phase-2 suite, commit 5616500).
   R8 (kept the `api_key` flag as-is; fixed the help-text mismatch in
-  `main.c`/`run.c` to `--api_key <key>` — no rename to `api-key`).
+  `main.c`/`run.c` to `--api_key <key>` — no rename to `api-key`,
+  commit d90e23e).
 - **Then:** R3–R4 (runner test coverage + stale sweep), R5 (JSON validation,
   analyze first), R6–R7 (polish / housekeeping).
 - After shipping each item: drop it from the open lists in
