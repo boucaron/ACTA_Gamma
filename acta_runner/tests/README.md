@@ -38,8 +38,8 @@ binary per suite.
 
 Build & run from `acta_runner/`:
 
-    make test        # builds tests/run/test_run + test_pending and runs
-                     # both (after tests/argparse)
+    make test        # builds tests/run/test_run + test_pending +
+                     # test_sweep and runs them all (after tests/argparse)
     make clean
 
 Exit code 0 = all checks pass, 1 = at least one failure.
@@ -50,6 +50,17 @@ Exit code 0 = all checks pass, 1 = at least one failure.
   `--name=value` inline form, unknown-flag rejection). Run with
   `make test` (runs before the pipeline suite).
 
-Still planned (not yet implemented):
-
-- Stale-`running` sweep tests (R4).
+- `tests/run/test_sweep.c` — `sweep --stale-seconds` stale-`running`
+  cleanup (R4), pure DB + time on a scratch `:memory:` DB (no stub
+  server; timestamps backdated via UPDATE, no sleeping):
+  - no running rows → clean exit 0
+  - fresh `running` row (started_at + logs ≈ now) → left running
+  - stale row (≈ now − 2h) → `failed` with the "stale running" error +
+    `execution_failed` log row
+  - mixed (stale + fresh) → only the stale row swept
+  - orphan (stale started_at, no log rows) → swept via the started_at
+    fallback
+  - newest-wins (fresh started_at, old log) → kept (last activity is
+    max(log, started_at))
+  - `--stale-seconds 0` / missing / non-numeric → `EXIT_INVALID`
+  - inline `--stale-seconds=<n>` form

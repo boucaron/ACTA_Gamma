@@ -7,7 +7,7 @@
  * Flow (mirrors acta_db_cli/main.c):
  *   1. parse_globals  → --db, --version, --help, --verbose
  *   2. early-exit     → version / help
- *   3. require action → "run"
+ *   3. require action → "run" / "sweep"
  *   4. resolve DB path
  *   5. open DB
  *   6. dispatch       → commands_dispatch(action, args, opts, db)
@@ -75,12 +75,17 @@ static void help_print(FILE *out)
         "Actions:\n"
         "  run <execution-id>    Run one pending execution\n"
         "  run --pending         Run pending executions (up to --max)\n"
+        "  sweep                 Fail stale `running` executions\n"
         "\n"
         "run flags:\n"
         "  --pending             Run pending executions instead of one id\n"
         "  --max <n>             Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec>       Backend timeout in seconds (default 300)\n"
         "  --api_key <key>       API key override (default: $OPENAI_API_KEY)\n"
+        "\n"
+        "sweep flags:\n"
+        "  --stale-seconds <n>   Seconds of inactivity before a `running`\n"
+        "                        row is stale (positive integer, required)\n"
         "\n"
         "Global options:\n"
         "  --db <path>           Database file (default: $ACTA_DB, ./acta.db)\n"
@@ -105,6 +110,9 @@ int commands_dispatch(const char *action, cmd_args_t *args,
     }
     if (strcmp(action, "run") == 0) {
         return cmd_run(args, gopts, db);
+    }
+    if (strcmp(action, "sweep") == 0) {
+        return cmd_sweep(args, gopts, db);
     }
 
     /* Unknown action. */

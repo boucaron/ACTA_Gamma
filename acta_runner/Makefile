@@ -3,7 +3,9 @@
 #   make          → builds ./acta_runner
 #   make test     → builds + runs the test suites: argparse
 #                   (tests/argparse), the phase-2 pipeline (tests/run),
-#                   and the --pending batch suite (tests/run/test_pending.c)
+#                   the --pending batch suite (tests/run/test_pending.c)
+#                   and the stale-`running` sweep suite (tests/run/
+#                   test_sweep.c)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
@@ -74,6 +76,13 @@ PEND_SRCS  := tests/run/test_pending.c tests/stub_server.c \
 PEND_OBJS  := $(patsubst %.c, %.o, $(PEND_SRCS))
 PEND_TARGET := tests/run/test_pending$(EXEEXT)
 
+# ---- stale-running sweep test suite (R4): sweep --stale-seconds ----
+# Pure DB + time; no HTTP, no stub server, no backend sources.
+SWEEP_SRCS  := tests/run/test_sweep.c src/sweep.c src/argparse.c
+SWEEP_OBJS  := $(patsubst %.c, %.o, $(SWEEP_SRCS))
+SWEEP_TARGET := tests/run/test_sweep$(EXEEXT)
+SWEEP_LDFLAGS := $(ACTA_DB_LIB) -lsqlite3
+
 # ---- argparse test suite (R2): pass-1/pass-2 parsing, no DB/HTTP ----
 AP_SRCS   := tests/argparse/test_argparse.c src/argparse.c
 AP_OBJS   := $(patsubst %.c, %.o, $(AP_SRCS))
@@ -115,10 +124,14 @@ $(AP_TARGET): $(AP_OBJS)
 $(PEND_TARGET): $(PEND_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(PEND_OBJS) $(TEST_LDFLAGS)
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET)
+$(SWEEP_TARGET): $(SWEEP_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(SWEEP_OBJS) $(SWEEP_LDFLAGS)
+
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET)
 	$(AP_TARGET)
 	$(TEST_TARGET)
 	$(PEND_TARGET)
+	$(SWEEP_TARGET)
 
 $(SMOKE_TARGET): $(SMOKE_OBJS)
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDFLAGS)
@@ -140,6 +153,10 @@ tests/run/test_run.o: tests/run/test_run.c tests/stub_server.h
 tests/run/test_pending.o: tests/run/test_pending.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
+tests/run/test_sweep.o: tests/run/test_sweep.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
-        $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)
+        $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SWEEP_OBJS) \
+        $(SWEEP_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)

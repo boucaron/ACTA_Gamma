@@ -27,6 +27,11 @@ int commands_dispatch(const char *action, cmd_args_t *args,
 /* handler for "run" (src/run.c) */
 int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
 
+/* handler for "sweep" (src/sweep.c): fails `running` executions whose
+ * last execution_log activity is older than --stale-seconds (R4,
+ * dead-runner cleanup per decision 6) */
+int cmd_sweep(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
+
 /* Single-execution pipeline (src/run.c): claim (start), resolve
  * context/skill/model revisions, preflight (/health, /v1/models),
  * POST /v1/chat/completions, set_raw_response, optional post-hoc
