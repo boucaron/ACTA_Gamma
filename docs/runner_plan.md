@@ -41,8 +41,8 @@ live status + phase log → closes UR #18 remainder and #44.
   "/acta.db"`). The runner's own fallback (`$ACTA_DB`, `./acta.db`) must not
   be relied on — its CWD is not the app dir.
 - **Arguments:** `run <id>` `--db <path>` (`--timeout` optional passthrough,
-  default is fine). Do **not** pass `--api-key` from the GUI: the runner
-  already resolves `--api-key` → `$OPENAI_API_KEY` → per-model
+  default is fine). Do **not** pass `--api_key` from the GUI: the runner
+  already resolves `--api_key` → `$OPENAI_API_KEY` → per-model
   `configuration.api_key`.
 - Launch with `QProcess::start()`, not `execute()` (we need
   `finished(int, QProcess::ExitStatus)`).
@@ -151,11 +151,20 @@ Also fixed: the stale `parse_globals` doc in `include/argparse.h` (claimed
 `EXIT_CLI` for `--version/--help`; the implementation returns 0 with the
 flag set).
 
-**Open inconsistency (not fixed, needs a decision):** the help text in
-`main.c`/`run.c` documents `--api-key <key>`, but the flag table in
-`argparse.c` and `cmd_run` use `api_key` (underscore); a user typing the
-documented `--api-key` is rejected by `cmd_args_validate` as an unknown
-option. Either the help text or the flag table/handler must change.
+**Decided (code updated):** the help text in `main.c`/`run.c`
+documented `--api-key <key>`, but the flag table in `argparse.c` and
+`cmd_run` use `api_key` (underscore); a user typing the documented
+`--api-key` is rejected by `cmd_args_validate` as an unknown option.
+Decision: keep BOTH sources — the flag as an explicit override, the env
+var as the default (plus the per-model `configuration.api_key` fallback,
+so the chain stays `--api_key` → `$OPENAI_API_KEY` →
+`configuration.api_key`, per decision 4 in `runner_analysis.md`). Env
+var as the primary source: OpenAI/llama.cpp convention, stays out of
+shell history/Makefiles/scripts; the flag covers one-off overrides, local
+stubs with dummy keys, and CI. The flag name stays `api_key` (no rename
+to `api-key`): the flag table, `cmd_run` handler, and the argparse tests
+already agree on the underscore form, so the mismatch is fixed by
+rewording the help text in `main.c` and `run.c` to `--api_key <key>`.
 
 ---
 

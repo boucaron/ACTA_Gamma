@@ -56,7 +56,7 @@ static void run_usage(FILE *out)
         "  --pending       Run pending executions instead of one id\n"
         "  --max <n>       Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec> Backend timeout in seconds (default 300)\n"
-        "  --api-key <key> API key override (default: $OPENAI_API_KEY)\n",
+        "  --api_key <key> API key override (default: $OPENAI_API_KEY)\n",
         out);
 }
 
@@ -448,7 +448,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
 
     /* ---- configuration JSON (backend knobs) ----
      * Known keys:
-     *   api_key                 string; used when --api-key / env not set
+     *   api_key                 string; used when --api_key / env not set
      *   temperature             number
      *   max_tokens              number
      *   top_k                   number

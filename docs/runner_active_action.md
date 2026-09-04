@@ -34,7 +34,7 @@ for the UI side (UR #18 remainder, #44, #15).
 Details for R1:
 
 - Locate the `acta_runner` exe (next to the app binary, or via PATH); pass
-  `--db` and, if configured, `--api-key`.
+  `--db` and, if configured, `--api_key`.
 - While the process is active: poll the execution row and its `execution_log`
   rows (interval a few seconds is enough at this scale); update the status
   column (`pending` → `running` → `completed`/`failed`) and the log table.
@@ -60,6 +60,7 @@ Details for R1:
 | R5 | **JSON validation (to analyze)** for `output_schema` and model `configuration` (context `content` likely excluded — it may be plain text) | H2 in `ui_active_action.md` / UR #15 | analyze scope first; then `QJsonDocument::fromJson` with a clear "invalid JSON" message in the dialogs/panel editor, at minimum a "Validate JSON" button |
 | R6 | UR #26 remaining: JSON highlighting / line numbers in the editor | `ui_review.md` Polish | independent polish |
 | R7 | Housekeeping: decide fate of untracked `docs/llamacpp_server_README.md` (referenced by `runner_analysis.md` — commit or delete); consider `.gitignore` for build outputs | working tree | — |
+| ~~R8~~ | ~~Rename `api_key` flag to `api-key`~~ — **dropped** on review: the flag stays `api_key` (flag table in `argparse.c`, `cmd_run`, and `tests/argparse/test_argparse.c` already agree on the underscore form). The mismatch is fixed the other way: the help text in `main.c` and `run.c` now says `--api_key <key>` instead of `--api-key`. Chain stays `--api_key` → `$OPENAI_API_KEY` → `configuration.api_key` | decision recorded in `runner_plan.md` R2 | code updated; tests unchanged |
 
 ## Summary
 
@@ -71,6 +72,8 @@ Details for R1:
   pipeline suite;
   also fixed the stale `parse_globals` doc in `include/argparse.h` and the
   mingw build of the phase-2 suite, commit 5616500).
+  R8 (kept the `api_key` flag as-is; fixed the help-text mismatch in
+  `main.c`/`run.c` to `--api_key <key>` — no rename to `api-key`).
 - **Then:** R3–R4 (runner test coverage + stale sweep), R5 (JSON validation,
   analyze first), R6–R7 (polish / housekeeping).
 - After shipping each item: drop it from the open lists in

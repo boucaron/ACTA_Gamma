@@ -35,7 +35,7 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 Implementation notes (where the spec left room):
 
 - The model `configuration` JSON keys the runner understands:
-  `api_key` (fallback for `--api-key` / `$OPENAI_API_KEY`),
+  `api_key` (fallback for `--api_key` / `$OPENAI_API_KEY`),
   `temperature`, `max_tokens`, `top_k`, and `supports_response_format`
   (bool, default `true`). `false` means the backend has no json_schema
   `response_format`: the field is not sent and the raw response is
@@ -192,7 +192,7 @@ headless/CLI-driven mode later.
    `output_schema`, use `response_format: {"type":"json_schema",
    "schema": ...}` when the backend supports it, otherwise validate the
    raw response post-hoc.
-4. **Auth:** `--api-key` flag → `$OPENAI_API_KEY` → per-model
+4. **Auth:** `--api_key` flag → `$OPENAI_API_KEY` → per-model
    `configuration` JSON (`{"api_key": ...}`). Sent as
    `Authorization: Bearer <key>`; optional when the server has no
    `--api-key` set.
@@ -235,7 +235,7 @@ headless/CLI-driven mode later.
 
 - `src/backend.c/h` — small curl wrapper: GET/POST JSON with timeout →
   (http status, body); optional `Authorization: Bearer` from
-  `configuration` / `--api-key`. Contract: `llamacpp_server_contract.md`.
+  `configuration` / `--api_key`. Contract: `llamacpp_server_contract.md`.
 - `src/run.c` — the pipeline above, logging every phase to
   `execution_log`.
 - `tests/` — tiny local stub server (fixed port, echoing `/health`,
