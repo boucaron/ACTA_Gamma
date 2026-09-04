@@ -2,7 +2,8 @@
 #
 #   make          → builds ./acta_runner
 #   make test     → builds + runs the test suites: argparse
-#                   (tests/argparse) and the phase-2 pipeline (tests/run)
+#                   (tests/argparse), the phase-2 pipeline (tests/run),
+#                   and the --pending batch suite (tests/run/test_pending.c)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
@@ -11,7 +12,8 @@
 # Layout:
 #   include/          runner.h, runner_util.h, argparse.h
 #   src/              main.c, argparse.c, run.c, backend.c/h
-#   tests/            stub_server.c/h, run/test_run.c (see tests/README.md)
+#   tests/            stub_server.c/h, run/test_run.c, run/test_pending.c
+#                     (see tests/README.md)
 #   ../acta_db/libacta_db.a
 #
 # Dependencies: libacta_db (built by ../acta_db), sqlite3, curl, cJSON.
@@ -66,6 +68,12 @@ TEST_SRCS  := tests/run/test_run.c tests/stub_server.c \
 TEST_OBJS  := $(patsubst %.c, %.o, $(TEST_SRCS))
 TEST_TARGET := tests/run/test_run$(EXEEXT)
 
+# ---- pending-batch test suite (R3): run --pending loop + --max clamping ----
+PEND_SRCS  := tests/run/test_pending.c tests/stub_server.c \
+              src/run.c src/backend.c src/argparse.c
+PEND_OBJS  := $(patsubst %.c, %.o, $(PEND_SRCS))
+PEND_TARGET := tests/run/test_pending$(EXEEXT)
+
 # ---- argparse test suite (R2): pass-1/pass-2 parsing, no DB/HTTP ----
 AP_SRCS   := tests/argparse/test_argparse.c src/argparse.c
 AP_OBJS   := $(patsubst %.c, %.o, $(AP_SRCS))
@@ -104,9 +112,13 @@ $(TEST_TARGET): $(TEST_OBJS) $(ACTA_DB_LIB)
 $(AP_TARGET): $(AP_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(AP_OBJS)
 
-test: $(TEST_TARGET) $(AP_TARGET)
+$(PEND_TARGET): $(PEND_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(PEND_OBJS) $(TEST_LDFLAGS)
+
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET)
 	$(AP_TARGET)
 	$(TEST_TARGET)
+	$(PEND_TARGET)
 
 $(SMOKE_TARGET): $(SMOKE_OBJS)
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDFLAGS)
@@ -121,10 +133,13 @@ smoke: $(SMOKE_TARGET)
 tests/llama_smoke.o: tests/llama_smoke.c src/backend.h
 	$(CC) $(CFLAGS) -Isrc -c $< -o $@
 
-# The pipeline test includes stub_server.h from tests/ (not in -I paths).
+# The pipeline tests include stub_server.h from tests/ (not in -I paths).
 tests/run/test_run.o: tests/run/test_run.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
+tests/run/test_pending.o: tests/run/test_pending.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
-        $(AP_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)
+        $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)

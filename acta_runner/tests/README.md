@@ -24,9 +24,22 @@ binary per suite.
     (validation_started/validation_failed logged); valid content →
     `completed`
 
+- `tests/run/test_pending.c` — `run --pending` batch loop and `--max`
+  clamping (R3), same stub + scratch-`:memory:` harness:
+  - N pending → all run, all `completed`, one log sequence per row
+  - `--max M < N` → exactly the first M (by `id ASC`) run, the rest stay
+    `pending`; a follow-up unbounded batch consumes the remainder
+  - `--max 0` → no limit, all run
+  - mixed outcomes (model-mismatch failure then success) → batch
+    continues, later rows are still processed, exit = worst exit code
+    seen (12 = HTTP/preflight; 13 timeout, 4 claim/validation in other
+    mixes)
+  - no pending rows → clean exit 0
+
 Build & run from `acta_runner/`:
 
-    make test        # builds tests/run/test_run and runs it
+    make test        # builds tests/run/test_run + test_pending and runs
+                     # both (after tests/argparse)
     make clean
 
 Exit code 0 = all checks pass, 1 = at least one failure.
@@ -39,6 +52,4 @@ Exit code 0 = all checks pass, 1 = at least one failure.
 
 Still planned (not yet implemented):
 
-- Coverage of `--pending` batch looping and `--max` clamping
-  (the batch loop itself is exercised by hand until a dedicated suite
-  lands).
+- Stale-`running` sweep tests (R4).
