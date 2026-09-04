@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QPoint>
+#include <QString>
 #include <QWidget>
+#include <QProcess>
+class QTimer;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QTableView;
@@ -29,14 +32,22 @@ public:
     // Opens the create dialog (new pending execution row); pairs with
     // Show the way the Context panel's New/Show pair does (UR #22).
     QPushButton *newExecutionBtn;
+    // "Run" action (R1 / Plan D): spawns acta_runner run <id> for the
+    // selected row; enabled only while the row is pending and no
+    // runner process is active.
+    QPushButton *runBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
     void reload();
 
     // Re-point the panel at a new db handle (database switched) and
-    // reload the list.
+    // reload the list. Kills any active runner (Plan D): the process
+    // would otherwise keep writing to the stale database.
     void setDb(db_t *db);
+    // Same, carrying the database file path the "Run" button (R1)
+    // passes to acta_runner via --db.
+    void setDb(db_t *db, const QString &dbPath);
 
 signals:
     // The selected execution changed (id; 0 when no row is selected).
@@ -84,4 +95,44 @@ private:
     // Right-click context menu on the execution list: "Show" opens the
     // same dialog as double-click / Enter / Show.
     void onListContextMenu(const QPoint &pos);
+
+private slots:
+    // R1 (Plan D): spawn acta_runner run <id> for the selected row, then
+    // poll the DB for live status + phase log rows (UR #18 remainder,
+    // UR #44).
+    void onRunBtnClicked();
+    void onRunnerFinished(int exitCode, QProcess::ExitStatus status);
+    void onRunnerError(QProcess::ProcessError error);
+    void onPollTick();
+
+private:
+    // Stop the poll timer and kill/delete the runner process (used by
+    // setDb when the database switches underneath an active runner).
+    void stopRunner();
+
+    // Enable state for the Run button / menu entry: db available, a
+    // pending row selected, and no active runner process.
+    void updateRunBtnState();
+
+    // Targeted refresh of the running row's status cell (no reload):
+    // preserves selection, scroll and filters while the runner works.
+    void refreshRunningRow();
+
+    // Refresh the log list of the running row while it is selected,
+    // auto-scrolling to the newest row (UR #44) only when the user was
+    // already at the last row.
+    void refreshRunningLogs();
+
+    // Find the tree row storing executionId in column 0 (RoleExecutionId).
+    QTreeWidgetItem *findRow(int executionId) const;
+
+    // Locate the acta_runner executable: next to the app binary, then
+    // PATH; empty string when not found.
+    QString findRunnerExe() const;
+
+    // R1 state (Plan D).
+    QString m_dbPath;
+    QProcess *m_runner = nullptr;
+    QTimer *m_pollTimer = nullptr;
+    int m_runningExecutionId = 0;
 };
