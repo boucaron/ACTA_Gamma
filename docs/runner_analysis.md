@@ -64,6 +64,10 @@ Remaining work (deliberately not in phase 2):
   shipped as `tests/run/test_pending.c` (commit 4967a78; `make test` runs
   it after the pipeline suite; the run exposed a `cmd_run` empty-result
   bug, fixed in 7ed1794).
+- ~~Stale-`running` cleanup sweep (`--stale-seconds`), per decision 6~~ —
+  shipped as the `sweep` action (`acta_runner/src/sweep.c`,
+  `acta_runner sweep --stale-seconds N`; `tests/run/test_sweep.c`, 36
+  checks, run last by `make test` — commit 8c4d6cd).
 - (The `argparse` pass-1/pass-2 suite shipped as
   `tests/argparse/test_argparse.c`, commit 51e375c; `make test` runs it
   before the pipeline suite.)
@@ -203,8 +207,11 @@ headless/CLI-driven mode later.
 5. **Timeouts / retries:** single request, configurable `--timeout` (s),
    no retries — failures are first-class artifacts here.
 6. **Claim semantics:** the runner only acts on `pending`; `start()` is
-   the atomic lock. Stale-`running` cleanup (dead runner) is deferred:
-   revisit as an explicit `--stale-seconds` sweep later.
+   the atomic lock. Stale-`running` cleanup (dead runner) shipped as the
+   `sweep` action: `acta_runner sweep --stale-seconds N` fails `running`
+   rows whose last activity (max of latest `execution_log` timestamp and
+   `started_at`) is older than N; `--stale-seconds` must be a positive
+   integer.
 7. **Logging granularity:** follow the DBDesign event list exactly
    (execution_started, context_loaded, prompt_resolved, llm_request,
    llm_response, validation_*, execution_completed/failed) so the UI
@@ -253,7 +260,8 @@ headless/CLI-driven mode later.
   model load/unload, load-timeout handling, vendored llama.cpp build).
 - Streaming (SSE) responses.
 - Retries.
-- Stale-`running` cleanup (deferred, see decision 6).
+- Server manager mode already excluded above; stale-`running` cleanup is
+  no longer out of scope (shipped as the `sweep` action, decision 6).
 - Multimodal, tool calling, embeddings, LoRA, slot caching — anything
   beyond `chat/completions` from the backend (see
   `llamacpp_server_contract.md` §6).

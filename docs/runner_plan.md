@@ -3,7 +3,7 @@
 Concrete, file-level plan for the queued runner work. Scope and status per
 [`runner_active_action.md`](runner_active_action.md); specs and decisions per
 [`runner_analysis.md`](runner_analysis.md). Order: R1 → ~~R2~~ (shipped) →
-~~R3~~ (shipped) → R4 → R5.
+~~R3~~ (shipped) → ~~R4~~ (shipped) → R5.
 
 ---
 
@@ -209,9 +209,27 @@ Goal: cover the `run --pending` loop (claim next `pending` via the atomic
 
 ---
 
-## R4 — Stale-`running` cleanup sweep (`--stale-seconds`)
+## R4 — Stale-`running` cleanup sweep (`--stale-seconds`) — SHIPPED
 
 Goal: per decision 6, recover rows stuck in `running` after a dead runner.
+
+Shipped (commit 8c4d6cd) as `acta_runner/src/sweep.c` (`acta_runner sweep
+--stale-seconds N`, dispatched next to `run` in `main.c`;
+`--stale-seconds` registered in `argparse.c`) with
+`tests/run/test_sweep.c` (36 checks, run last by `make test`).
+Implemented semantics (where the plan left room):
+
+- Last runner activity per row = **max**(latest `execution_log.created_at`,
+  `started_at`), falling back to `created_at` — a live runner's row always
+  has a fresh max, so a row claimed within the last N seconds is never
+  swept.
+- `--stale-seconds` must be a **positive** integer; `0` is rejected
+  (`EXIT_INVALID`) — a zero-second sweep would fail every `running` row.
+- If a row leaves `running` between the query and `fail()` (a live runner
+  finished in the meantime), the sweep skips it rather than overwriting
+  the outcome; `execution_failed` is logged only when the fail succeeds.
+- Exit 0 when nothing is running or every row was swept; the initial
+  query failure exits per the standard DB error contract.
 
 - New action: `acta_runner sweep --stale-seconds N` (separate action keeps
   the `run` path pure; dispatched next to `run` in `main.c`).

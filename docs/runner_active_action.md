@@ -46,12 +46,6 @@ Details for R1:
   that are not `pending` (the runner itself refuses them atomically via
   `start()`).
 
-### Medium (runner hardening)
-
-| # | Action | Source | Notes |
-|---|--------|--------|----------------------|
-| R4 | Stale-`running` cleanup sweep: `--stale-seconds N` finds `running` rows whose last `execution_log` timestamp is older than N and `fail()`s them with a dead-runner error | decision 6 in `runner_analysis.md` | pure DB + time; easy to test on a scratch DB |
-
 ### Low
 
 | # | Action | Source | Notes / dependencies |
@@ -75,8 +69,12 @@ Details for R1:
   commit d90e23e).  R3 (`run --pending` batch + `--max` clamping test
   suite, `tests/run/test_pending.c`, commit 4967a78 — the run exposed a
   `cmd_run` bug, the lister returns NULL for an empty result: fixed in
-  7ed1794).
-- **Then:** R4 (stale sweep), R5 (JSON validation, analyze first),
+  7ed1794).  R4 (stale-`running` sweep: `acta_runner sweep
+  --stale-seconds N` in `src/sweep.c` + `tests/run/test_sweep.c`, 36
+  checks, commit 8c4d6cd — last activity is max(latest `execution_log`
+  timestamp, `started_at`); `--stale-seconds` must be a positive
+  integer).
+- **Then:** R5 (JSON validation, analyze first),
   R6–R7 (polish / housekeeping).
 - After shipping each item: drop it from the open lists in
   `ui_review.md` / `runner_analysis.md` and fold it into the Summary, per the
