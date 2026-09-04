@@ -200,7 +200,9 @@ static int log_has_event(db_t *db, int exec_id, const char *event)
     return found;
 }
 
-/* Count executions with the given status. */
+/* Count executions with the given status.
+ * The lister returns NULL for an empty result (n == 0, err == OK),
+ * so only err != OK is a failure. */
 static int count_status(db_t *db, const char *status)
 {
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -208,9 +210,10 @@ static int count_status(db_t *db, const char *status)
     int err = ACTA_DB_OK, n = 0;
     execution_t **rows =
         acta_db_execution_query(db, &q, 0, ACTA_DB_MAX_PAGE, &n, &err);
-    if (err != ACTA_DB_OK || !rows)
+    if (err != ACTA_DB_OK)
         return -1;
-    acta_db_execution_list_free(rows, n);
+    if (rows)
+        acta_db_execution_list_free(rows, n);
     return n;
 }
 

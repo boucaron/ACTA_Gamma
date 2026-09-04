@@ -117,7 +117,9 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         int err = ACTA_DB_OK;
         execution_t **rows =
             acta_db_execution_query(db, &q, 0, max, &n, &err);
-        if (!rows)
+        /* rows is NULL for BOTH a genuine failure and an empty result
+         * (n == 0 with err == ACTA_DB_OK); only the former is an error. */
+        if (rows == NULL && (err != ACTA_DB_OK || n != 0))
             return finish_op_error(db, err, "execution_query");
 
         if (n == 0) {
