@@ -2,12 +2,24 @@
 
 Concrete, file-level plan for the queued runner work. Scope and status per
 [`runner_active_action.md`](runner_active_action.md); specs and decisions per
-[`runner_analysis.md`](runner_analysis.md). Order: R1 → ~~R2~~ (shipped) →
-~~R3~~ (shipped) → ~~R4~~ (shipped) → R5.
+[`runner_analysis.md`](runner_analysis.md). Order: ~~R1~~ (shipped) →
+~~R2~~ (shipped) → ~~R3~~ (shipped) → ~~R4~~ (shipped) → R5.
 
 ---
 
-## R1 — In-app "Run" button (Plan D) in `acta_gamma`
+## R1 — In-app "Run" button (Plan D) in `acta_gamma` — SHIPPED (184d574)
+
+Shipped per the plan below: `ExecutionPanel` gained a Run button +
+context-menu entry (P2/UR #22 toolbar, `SP_MediaPlay`, `Alt+R`), a
+`QProcess` spawn of `acta_runner run <id> --db <path>` (exe found next to
+the app binary, then `QStandardPaths::findExecutable`; warning box when
+missing), a 1.5 s `QTimer` poll doing a targeted row update (`running…`
+suffix, `statusColor`, `statusMeaning`) plus `execution_log` refresh with
+auto-scroll to the newest row only while the user was at the last row, and
+failure surfacing via `QMessageBox::warning` with the runner's single-line
+JSON stderr `message` (raw stderr fallback). `setDb(db, path)` overload
+kills an active runner when the database switches. No `.pro` change
+(`QProcess` is in QtCore); `translations/acta_gamma.ts` regenerated.
 
 Goal: selected execution row → **Run** action → spawns
 `acta_runner run <id>` via `QProcess` → execution panel polls the DB for

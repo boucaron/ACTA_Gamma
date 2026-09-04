@@ -5,7 +5,7 @@ database, resolves a pending execution's skill + model + context, calls the
 OpenAI-compatible backend, and records the outcome (raw response, result,
 error, phase logs) back into the database.
 
-## Status: phase 2 shipped
+## Status: phase 2 shipped, Plan D shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -57,9 +57,16 @@ Implementation notes (where the spec left room):
 
 Remaining work (deliberately not in phase 2):
 
-- Plan D end state: the GUI "Run" button spawning `acta_runner run <id>`
+- ~~Plan D end state: the GUI "Run" button spawning `acta_runner run <id>`
   via `QProcess` with panel polling (covers UI review #18 remainder and
-  #44).
+  #44)~~ — shipped in `acta_gamma` (commit 184d574): `ExecutionPanel`
+  gains a Run button + context-menu entry that spawn
+  `acta_runner run <id> --db <path>` via `QProcess` (exe found next to the
+  app binary, then PATH); a 1.5 s poll updates the status cell in place
+  (`running…`) and refreshes the `execution_log` table with auto-scroll
+  to the newest row; on non-zero exit the runner's single-line JSON
+  stderr is parsed and surfaced; `setDb(db, path)` kills an active
+  runner when the database switches.
 - ~~Test suite for `--pending` batch looping / `--max` clamping~~ —
   shipped as `tests/run/test_pending.c` (commit 4967a78; `make test` runs
   it after the pipeline suite; the run exposed a `cmd_run` empty-result

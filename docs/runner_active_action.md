@@ -25,27 +25,6 @@ for the UI side (UR #18 remainder, #44, #15).
 
 ## Queued actions
 
-### High
-
-| # | Action | Source | Notes / dependencies |
-|---|--------|--------|----------------------|
-| R1 | **In-app "Run" button (Plan D)** in `acta_gamma`: "Run" action on the selected execution row spawns `acta_runner run <id>` via `QProcess`; the execution panel polls `acta_db_execution_query` + `execution_log` rows for live status and phase log | UR #18 remainder + #44; Plan D in `runner_analysis.md` | runner exists standalone (`acta_runner/`); the DB is the message bus (no IPC, WAL supports concurrent readers/writers); also delivers UR #44 live-status UX |
-
-Details for R1:
-
-- Locate the `acta_runner` exe (next to the app binary, or via PATH); pass
-  `--db` and, if configured, `--api_key`.
-- While the process is active: poll the execution row and its `execution_log`
-  rows (interval a few seconds is enough at this scale); update the status
-  column (`pending` → `running` → `completed`/`failed`) and the log table.
-- Progress indicator in the panel while `running`; log list auto-scrolls to
-  the newest row (UR #44).
-- On `QProcess` finished: stop polling; if the exit code is non-zero, show the
-  runner's JSON error line / exit code.
-- Re-entrancy guards: disable "Run" while a process is active; ignore rows
-  that are not `pending` (the runner itself refuses them atomically via
-  `start()`).
-
 ### Low
 
 | # | Action | Source | Notes / dependencies |
@@ -56,10 +35,16 @@ Details for R1:
 
 ## Summary
 
-- **Now:** R1 (in-app "Run" button / Plan D) — the only remaining High action;
-  it unblocks the full user story (create → run → live status) and closes
-  UR #18 remainder and #44.
-- **Shipped:** R2 (argparse pass-1/pass-2 test suite, `tests/argparse/test_argparse.c`,
+- **Now:** R5 (JSON validation, analyze first), then R6–R7
+  (polish / housekeeping).
+- **Shipped:** R1 (in-app "Run" button / Plan D in `acta_gamma` — Run button
+  + context-menu entry on the selected execution row spawn
+  `acta_runner run <id> --db <path>` via `QProcess`, exe located next to the
+  app binary then PATH; 1.5 s DB poll updates the status cell in place
+  (`running…`) and refreshes the `execution_log` table with auto-scroll to
+  the newest row; on non-zero exit the runner's single-line JSON stderr is
+  parsed and shown; `setDb(db, path)` kills an active runner on DB switch;
+  commit 184d574 — closes UR #18 remainder and #44). R2 (argparse pass-1/pass-2 test suite, `tests/argparse/test_argparse.c`,
   commit 51e375c — 47 checks as extended, `make test` runs it before the
   pipeline suite;
   also fixed the stale `parse_globals` doc in `include/argparse.h` and the
@@ -74,8 +59,6 @@ Details for R1:
   checks, commit 8c4d6cd — last activity is max(latest `execution_log`
   timestamp, `started_at`); `--stale-seconds` must be a positive
   integer).
-- **Then:** R5 (JSON validation, analyze first),
-  R6–R7 (polish / housekeeping).
 - After shipping each item: drop it from the open lists in
   `ui_review.md` / `runner_analysis.md` and fold it into the Summary, per the
   repo's shipped-item convention.
