@@ -50,7 +50,6 @@ Details for R1:
 
 | # | Action | Source | Notes |
 |---|--------|--------|----------------------|
-| R3 | Tests for `run --pending` batch looping and `--max` clamping | `runner_analysis.md` "Remaining work" | includes "worst exit code wins" for the batch |
 | R4 | Stale-`running` cleanup sweep: `--stale-seconds N` finds `running` rows whose last `execution_log` timestamp is older than N and `fail()`s them with a dead-runner error | decision 6 in `runner_analysis.md` | pure DB + time; easy to test on a scratch DB |
 
 ### Low
@@ -73,9 +72,12 @@ Details for R1:
   mingw build of the phase-2 suite, commit 5616500).
   R8 (kept the `api_key` flag as-is; fixed the help-text mismatch in
   `main.c`/`run.c` to `--api_key <key>` — no rename to `api-key`,
-  commit d90e23e).
-- **Then:** R3–R4 (runner test coverage + stale sweep), R5 (JSON validation,
-  analyze first), R6–R7 (polish / housekeeping).
+  commit d90e23e).  R3 (`run --pending` batch + `--max` clamping test
+  suite, `tests/run/test_pending.c`, commit 4967a78 — the run exposed a
+  `cmd_run` bug, the lister returns NULL for an empty result: fixed in
+  7ed1794).
+- **Then:** R4 (stale sweep), R5 (JSON validation, analyze first),
+  R6–R7 (polish / housekeeping).
 - After shipping each item: drop it from the open lists in
   `ui_review.md` / `runner_analysis.md` and fold it into the Summary, per the
   repo's shipped-item convention.

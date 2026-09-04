@@ -3,7 +3,7 @@
 Concrete, file-level plan for the queued runner work. Scope and status per
 [`runner_active_action.md`](runner_active_action.md); specs and decisions per
 [`runner_analysis.md`](runner_analysis.md). Order: R1 → ~~R2~~ (shipped) →
-R3 → R4 → R5.
+~~R3~~ (shipped) → R4 → R5.
 
 ---
 
@@ -168,7 +168,31 @@ rewording the help text in `main.c` and `run.c` to `--api_key <key>`.
 
 ---
 
-## R3 — `--pending` batch and `--max` clamping tests
+## R3 — `--pending` batch and `--max` clamping tests — SHIPPED (4967a78)
+
+Shipped as `tests/run/test_pending.c` (same scratch-`:memory:` DB + stub
+server harness as `test_run.c`; `make test` runs it after the pipeline
+suite; 33 checks, green). The run exposed one `cmd_run` bug — the
+lister returns NULL for an empty result, so `run --pending` with zero
+pending rows exited with an `execution_query` error instead of clean
+exit 0; fixed in 7ed1794 (same fix for the test's `count_status`
+helper).
+
+What the suite pins:
+- 3 pending, no `--max` → all run, all `completed`, one log sequence per
+  row, no pending left, exit 0.
+- 4 pending, `--max 2` → exactly the first two (by `id ASC`) run, the
+  other two stay `pending`; a follow-up unbounded batch consumes them.
+- 3 pending, `--max 0` → no limit, all run.
+- mixed outcomes (model-mismatch failure first by id, then success) →
+  batch continues, the later row is still processed, exit = worst exit
+  code seen (12 = HTTP/preflight).
+- no pending rows → clean exit 0.
+
+Note: `--max` is applied at the lister (`acta_db_execution_query` limit),
+not in the loop; the single stub serves one configuration per scenario,
+so the failing row uses a model-identifier mismatch (same EXIT_HTTP
+class as the health-503 case).
 
 Goal: cover the `run --pending` loop (claim next `pending` via the atomic
 `start()`, run, record) and `--max`.
@@ -250,10 +274,11 @@ with clear "invalid JSON" feedback.
 2. ~~**R2**~~ — shipped (51e375c); `runner_analysis.md` "Remaining work"
    updated. Its open decision — the `--api_key`/`--api-key` help-text
    mismatch (R8) — shipped as d90e23e: flag stays `api_key`, help text
-   fixed to `--api_key <key>`. Next: **R3** → update
-   `runner_analysis.md` "Remaining work".
-3. **R4** → decision 6 marked implemented in `runner_analysis.md`.
-4. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
-5. **R6** (JSON highlighting / line numbers, UR #26) and **R7**
+   fixed to `--api_key <key>`.
+3. ~~**R3**~~ — shipped (4967a78, plus the `cmd_run` empty-result fix
+   7ed1794); `runner_analysis.md` "Remaining work" updated.
+4. **R4** → decision 6 marked implemented in `runner_analysis.md`.
+5. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
+6. **R6** (JSON highlighting / line numbers, UR #26) and **R7**
    (housekeeping: fate of untracked `docs/llamacpp_server_README.md`,
    `.gitignore` for build outputs) whenever convenient.

@@ -60,9 +60,13 @@ Remaining work (deliberately not in phase 2):
 - Plan D end state: the GUI "Run" button spawning `acta_runner run <id>`
   via `QProcess` with panel polling (covers UI review #18 remainder and
   #44).
-- Test suite for `--pending` batch looping / `--max` clamping. (The
-  `argparse` pass-1/pass-2 suite shipped as `tests/argparse/test_argparse.c`,
-  commit 51e375c; `make test` runs it before the pipeline suite.)
+- ~~Test suite for `--pending` batch looping / `--max` clamping~~ —
+  shipped as `tests/run/test_pending.c` (commit 4967a78; `make test` runs
+  it after the pipeline suite; the run exposed a `cmd_run` empty-result
+  bug, fixed in 7ed1794).
+- (The `argparse` pass-1/pass-2 suite shipped as
+  `tests/argparse/test_argparse.c`, commit 51e375c; `make test` runs it
+  before the pipeline suite.)
 - Stale-`running` cleanup sweep (`--stale-seconds`), per decision 6.
 
 ## Codebase analysis
