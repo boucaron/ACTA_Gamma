@@ -32,10 +32,11 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
 - `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
-  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 9
+  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 10
   scenarios (success, health 503, model mismatch, chat 500, timeout,
-  non-pending, not-found, post-hoc validation fail/pass), 47 checks,
-  green under `make test`, on a scratch `:memory:` DB.
+  non-pending, not-found, post-hoc validation fail/pass, missing
+  catalog), 58 checks, green under `make test`, on a scratch
+  `:memory:` DB.
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server

@@ -32,8 +32,9 @@ llama-server.exe -m models\my-model.gguf -c 2048
 - `503` → `{"error": {"code": 503, "message": "Loading model",
   "type": "unavailable_error"}}` — still loading.
 
-Runner: poll `/health` before the call, or treat 503 on the call as
-"server warming up".
+Runner: a single `GET /health` check before the call (no retries —
+runner decision 5); a `503` fails the execution as "model still
+loading".
 
 ## 3. Model identity check
 
