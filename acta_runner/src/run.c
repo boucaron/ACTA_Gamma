@@ -556,21 +556,48 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         free(r.body);
         if (!jm)
             FAIL(EXIT_HTTP, "unparseable /v1/models response body");
+        /* The server may serve several models; scan ALL entries for the
+         * execution's model_identifier (not just data[0]). */
         cJSON *data = cJSON_GetObjectItem(jm, "data");
-        cJSON *d0 = (data && cJSON_IsArray(data) && cJSON_GetArraySize(data) > 0)
-            ? cJSON_GetArrayItem(data, 0) : NULL;
-        cJSON *sid = d0 ? cJSON_GetObjectItem(d0, "id") : NULL;
-        if (!cJSON_IsString(sid) || !sid->valuestring ||
-            strcmp(sid->valuestring, model->model_identifier) != 0) {
-            const char *server_id =
-                (cJSON_IsString(sid) && sid->valuestring)
-                    ? sid->valuestring : "(none)";
+        cJSON *match = NULL;
+        if (data && cJSON_IsArray(data)) {
+            int n = cJSON_GetArraySize(data);
+            for (int i = 0; i < n; i++) {
+                cJSON *it = cJSON_GetArrayItem(data, i);
+                cJSON *sid = it ? cJSON_GetObjectItem(it, "id") : NULL;
+                if (cJSON_IsString(sid) && sid->valuestring &&
+                    strcmp(sid->valuestring,
+                         model->model_identifier) == 0) {
+                    match = it;
+                    break;
+                }
+            }
+        }
+        if (!match) {
+            /* Build a list of the ids the server actually has, for the
+             * error message. */
+            char avail[512];
+            avail[0] = 0;
+            if (data && cJSON_IsArray(data)) {
+                int n = cJSON_GetArraySize(data);
+                for (int i = 0; i < n; i++) {
+                    cJSON *it = cJSON_GetArrayItem(data, i);
+                    cJSON *sid = it ? cJSON_GetObjectItem(it, "id") : NULL;
+                    if (!cJSON_IsString(sid) || !sid->valuestring)
+                        continue;
+                    size_t left = sizeof avail - strlen(avail) - 1;
+                    if (left > 0)
+                        snprintf(avail + strlen(avail), left, "%s%s",
+                                 avail[0] ? ", " : "",
+                                 sid->valuestring);
+                }
+            }
             cJSON_Delete(jm);
             FAIL(EXIT_HTTP,
-                 "server model '%s' does not match execution model '%s'",
-                 server_id, model->model_identifier);
+                 "execution model '%s' not served by server (available: %s)",
+                 model->model_identifier, avail[0] ? avail : "(none)");
         }
-        cJSON *mc = d0 ? cJSON_GetObjectItem(d0, "max_context") : NULL;
+        cJSON *mc = cJSON_GetObjectItem(match, "max_context");
         if (cJSON_IsNumber(mc))
             max_ctx = (long)mc->valuedouble;
         cJSON_Delete(jm);
