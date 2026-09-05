@@ -467,22 +467,33 @@ void FolderTreePanel::onEntityRestoreClicked()
 void FolderTreePanel::onListContextMenu(const QPoint &pos)
 {
     const auto *item = tree->itemAt(pos);
-    if (!item)
-        return;
-    // A right-click selects the row, so the handlers operate on it
-    // exactly as the toolbar row does.
-    tree->setCurrentItem(const_cast<QTreeWidgetItem *>(item));
+    // A right-click on a row selects it, so the handlers operate on it
+    // exactly as the toolbar row does. A right-click in the empty area
+    // keeps the current selection: the menu is still shown, with the
+    // row-scoped actions disabled (mirrors ContextPanel, L1).
+    if (item)
+        tree->setCurrentItem(const_cast<QTreeWidgetItem *>(item));
+    // Empty-area menu: no item is targeted, so the creation actions
+    // must go to the root level, not to a stale selection (L1).
+    const bool onEmptyArea = !item;
 
-    const bool hasEntity = item->data(0, RoleEntityId).toInt() != 0;
+    const bool hasEntity =
+        item && item->data(0, RoleEntityId).toInt() != 0;
     const bool isEntityDeleted =
         hasEntity && item->data(0, RoleIsDeleted).toBool();
-    const bool hasFolder = item->data(0, RoleFolderId).toInt() != 0;
+    const bool hasFolder =
+        item && item->data(0, RoleFolderId).toInt() != 0;
     const bool isFolderDeleted =
         hasFolder && item->data(0, RoleFolderIsDeleted).toBool();
 
     QMenu menu(this);
-    auto *aNew = menu.addAction(tr("New"), this,
-                               &FolderTreePanel::onNewBtnClicked);
+    auto *aNew = menu.addAction(tr("New"));
+    connect(aNew, &QAction::triggered, this, [this, onEmptyArea] {
+        if (!m_dao.openNew)
+            return;
+        if (m_dao.openNew(this, onEmptyArea ? 0 : newTargetFolderId()))
+            reload();
+    });
     auto *aShow = menu.addAction(tr("Show"), this,
                                 &FolderTreePanel::onShowBtnClicked);
     auto *aEdit = menu.addAction(tr("Edit %1").arg(m_dao.entityTitle), this,
@@ -492,8 +503,10 @@ void FolderTreePanel::onListContextMenu(const QPoint &pos)
     auto *aRestore = menu.addAction(tr("Restore"), this,
                                    &FolderTreePanel::onEntityRestoreClicked);
     menu.addSeparator();
-    auto *aNewFolder = menu.addAction(tr("New Folder"), this,
-                                     &FolderTreePanel::onNewFolderBtnClicked);
+    auto *aNewFolder = menu.addAction(tr("New Folder"));
+    connect(aNewFolder, &QAction::triggered, this, [this, onEmptyArea] {
+        createFolderWithParent(onEmptyArea ? 0 : selectedFolderId());
+    });
     auto *aRenameFolder = menu.addAction(tr("Rename Folder"), this,
                                          &FolderTreePanel::onRenameFolderBtnClicked);
     auto *aDeleteFolder = menu.addAction(tr("Delete Folder"), this,
@@ -531,12 +544,16 @@ void FolderTreePanel::onListContextMenu(const QPoint &pos)
 
 void FolderTreePanel::onNewFolderBtnClicked()
 {
+    // New folder goes into the selected folder when one is selected,
+    // otherwise at the root level.
+    createFolderWithParent(selectedFolderId());
+}
+
+void FolderTreePanel::createFolderWithParent(int parentId)
+{
     if (!m_dao.createFolder)
         return;
 
-    // New folder goes into the selected folder when one is selected,
-    // otherwise at the root level.
-    const int parentId = selectedFolderId();
     bool ok = false;
     const QString name = QInputDialog::getText(
         this, tr("New Folder"), tr("Folder name:"), QLineEdit::Normal,

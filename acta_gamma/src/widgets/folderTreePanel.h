@@ -139,6 +139,12 @@ private:
     // (0 = root level when the entity is at the root).
     int newTargetFolderId() const;
 
+    // Shared "New Folder" flow with an explicit parent folder
+    // (0 = root level); onNewFolderBtnClicked() picks the parent from
+    // the current selection, the empty-area context menu forces 0
+    // (L1).
+    void createFolderWithParent(int parentId);
+
     // Enable/disable all action buttons according to the current
     // selection (entity / live folder / deleted folder / nothing).
     void updateButtonStates();

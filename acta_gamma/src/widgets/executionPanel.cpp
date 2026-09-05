@@ -673,8 +673,11 @@ void ExecutionPanel::onExecutionDoubleClicked(QTreeWidgetItem *item, int)
 void ExecutionPanel::onListContextMenu(const QPoint &pos)
 {
     auto *item = list->itemAt(pos);
-    if (!item)
-        return;
+    // A right-click on a row selects it; a right-click in the empty
+    // area keeps the current selection — the menu is still shown, with
+    // the row-scoped actions falling back to the button states (L1).
+    if (item)
+        list->setCurrentItem(item);
     QMenu menu(this);
     // Mirrors the other panels' context menus (UR #22): "New…" first,
     // then the row action.
@@ -690,8 +693,10 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
     auto *aShow = menu.addAction(tr("Show"));
     aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     aShow->setToolTip(tr("Show the details of this execution"));
-    connect(aShow, &QAction::triggered, this, [this, item] {
-        onExecutionDoubleClicked(item, 0);
+    aShow->setEnabled(showDetailsBtn->isEnabled());
+    // Operates on the currently selected row, like the Show button.
+    connect(aShow, &QAction::triggered, this, [this] {
+        onExecutionDoubleClicked(list->currentItem(), 0);
     });
     menu.exec(list->viewport()->mapToGlobal(pos));
 }
