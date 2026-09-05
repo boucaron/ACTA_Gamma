@@ -82,13 +82,13 @@ Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
    also maps negative ids to 0 instead of erroring. Negative ids are almost
    certainly user error — clamp-to-root hides it. Flag negatives as invalid.
 
-10. **NULL conflation in string getters**
+9. **NULL conflation in string getters**
     `dup_or_null`/`jget_str` return NULL for both "key absent" and OOM. Same
     ambiguity as the absent/boolean-flag conflation in Part 1 #1. Low risk
     (OOM is fatal in practice) but a
     `*ok` out-param or errno-style convention would make the contract explicit.
 
-11. **Opaque `-1` parse errors**
+10. **Opaque `-1` parse errors**
     All parse failures return -1 with no detail. `cJSON_GetErrorPtr()` is right
     there — at minimum `VLOG(1, ...)` the error pointer + offset on failure so
     `--verbose` users can debug malformed input.

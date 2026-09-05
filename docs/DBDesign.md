@@ -57,9 +57,9 @@ The `models` table represents the configuration needed to invoke an LLM.
 For the initial llama.cpp setup:
 
 ```text
-backend  = openai-compatible
-base_url = http://localhost:8080/v1
-model    = qwen3-...
+backend          = openai-compatible
+base_url         = http://localhost:8080/v1
+model_identifier = qwen3-...
 ```
 
 `configuration` can contain backend-specific JSON without forcing those details into the core schema.
@@ -95,14 +95,13 @@ CREATE TABLE models (
     folder_id       INTEGER,
     name            TEXT NOT NULL,
     description     TEXT NOT NULL,
-    backend         TEXT NOT NULL,
-    base_url        TEXT NOT NULL,
-    model           TEXT NOT NULL,
-    configuration   TEXT,
-    current_revision INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT NOT NULL,
+    backend          TEXT NOT NULL,
+    base_url         TEXT NOT NULL,
+    model_identifier TEXT NOT NULL,
+    configuration    TEXT,
+    created_at       TEXT NOT NULL,
     updated_at       TEXT,
-    deleted_at      TEXT,
+    deleted_at       TEXT,
     FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE SET NULL
 );
 CREATE INDEX idx_models_folder ON models(folder_id);
@@ -118,13 +117,13 @@ CREATE TABLE model_revisions (
     folder_id       INTEGER,
     name            TEXT NOT NULL,
     description     TEXT NOT NULL,
-    backend         TEXT NOT NULL,
-    base_url        TEXT NOT NULL,
-    model           TEXT NOT NULL,
-    configuration   TEXT,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT,
-    deleted_at      TEXT,
+    backend          TEXT NOT NULL,
+    base_url         TEXT NOT NULL,
+    model_identifier TEXT NOT NULL,
+    configuration    TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT,
+    deleted_at       TEXT,
     UNIQUE(model_id, revision),
     FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE SET NULL
 );
@@ -133,13 +132,13 @@ CREATE INDEX IF NOT EXISTS idx_model_revisions_created ON model_revisions(create
 
 DROP TRIGGER IF EXISTS models_create_initial_revision;
 DROP TRIGGER IF EXISTS models_update_revision;
-DROP TRIGGER IF EXISTS models_set_current;
+DROP TRIGGER IF EXISTS models_soft_delete_revision;
 
 CREATE TRIGGER models_create_initial_revision
 AFTER INSERT ON models
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, folder_id, name, description, backend, base_url, model, configuration, created_at, updated_at
+    model_id, revision, folder_id, name, description, backend, base_url, model_identifier, configuration, created_at, updated_at
   ) VALUES (
     NEW.id,
     1,
@@ -148,7 +147,7 @@ BEGIN
     NEW.description,
     NEW.backend,
     NEW.base_url,
-    NEW.model,
+    NEW.model_identifier,
     NEW.configuration,
     datetime('now'),
     datetime('now')
@@ -156,17 +155,20 @@ BEGIN
 END;
 
 CREATE TRIGGER models_update_revision
-AFTER UPDATE OF folder_id, name, description, backend, base_url, model, configuration ON models
-WHEN NEW.folder_id IS NOT OLD.folder_id
-   OR NEW.name IS NOT OLD.name
-   OR NEW.description IS NOT OLD.description
-   OR NEW.backend IS NOT OLD.backend
-   OR NEW.base_url IS NOT OLD.base_url
-   OR NEW.model IS NOT OLD.model
-   OR IFNULL(NEW.configuration,'') IS NOT IFNULL(OLD.configuration,'')
+AFTER UPDATE OF folder_id, name, description, backend, base_url, model_identifier, configuration ON models
+WHEN OLD.deleted_at IS NULL AND (
+    NEW.deleted_at IS NULL AND (
+      NEW.folder_id IS NOT OLD.folder_id
+      OR NEW.name IS NOT OLD.name
+      OR NEW.description IS NOT OLD.description
+      OR NEW.backend IS NOT OLD.backend
+      OR NEW.base_url IS NOT OLD.base_url
+      OR NEW.model_identifier IS NOT OLD.model_identifier
+      OR NEW.configuration IS NOT OLD.configuration
+    ))
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, folder_id, name, description, backend, base_url, model, configuration, created_at, updated_at
+    model_id, revision, folder_id, name, description, backend, base_url, model_identifier, configuration, created_at, updated_at
   ) VALUES (
     NEW.id,
     COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0) + 1,
@@ -175,41 +177,36 @@ BEGIN
     NEW.description,
     NEW.backend,
     NEW.base_url,
-    NEW.model,
+    NEW.model_identifier,
     NEW.configuration,
     datetime('now'),
     datetime('now')
   );
 END;
 
-DROP TRIGGER IF EXISTS models_delete_revision;
-CREATE TRIGGER models_delete_revision
-BEFORE DELETE ON models
+-- A soft delete of a model snapshots a final, deleted_at-carrying revision
+-- (hard delete is out of scope: soft delete only).
+CREATE TRIGGER models_soft_delete_revision
+AFTER UPDATE OF deleted_at ON models
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
 BEGIN
   INSERT INTO model_revisions(
-    model_id, revision, folder_id, name, description, backend, base_url, model, configuration,
+    model_id, revision, folder_id, name, description, backend, base_url, model_identifier, configuration,
     created_at, updated_at, deleted_at
   ) VALUES (
-    OLD.id,
-    COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = OLD.id),0) + 1,
-    OLD.folder_id,
-    OLD.name,
-    OLD.description,
-    OLD.backend,
-    OLD.base_url,
-    OLD.model,
-    OLD.configuration,
+    NEW.id,
+    COALESCE((SELECT MAX(revision) FROM model_revisions WHERE model_id = NEW.id),0) + 1,
+    NEW.folder_id,
+    NEW.name,
+    NEW.description,
+    NEW.backend,
+    NEW.base_url,
+    NEW.model_identifier,
+    NEW.configuration,
     datetime('now'),
     datetime('now'),
-    datetime('now')
+    NEW.deleted_at
   );
-END;
-
-
-CREATE TRIGGER models_set_current
-AFTER INSERT ON model_revisions
-BEGIN
-  UPDATE models SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.model_id;
 END;
 
 
@@ -246,7 +243,6 @@ CREATE TABLE skills (
     description     TEXT,
     prompt_template TEXT NOT NULL,
     output_schema   TEXT,
-    current_revision INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL,
     updated_at      TEXT,
     deleted_at      TEXT,
@@ -277,7 +273,7 @@ CREATE INDEX IF NOT EXISTS idx_skill_revisions_skill_rev ON skill_revisions(skil
 
 DROP TRIGGER IF EXISTS skills_create_initial_revision;
 DROP TRIGGER IF EXISTS skills_update_revision;
-DROP TRIGGER IF EXISTS skills_set_current;
+DROP TRIGGER IF EXISTS skills_soft_delete_revision;
 
 CREATE TRIGGER skills_create_initial_revision
 AFTER INSERT ON skills
@@ -292,11 +288,14 @@ END;
 
 CREATE TRIGGER skills_update_revision
 AFTER UPDATE OF folder_id, name, description, prompt_template, output_schema ON skills
-WHEN NEW.folder_id IS NOT OLD.folder_id
-   OR NEW.name IS NOT OLD.name
-   OR IFNULL(NEW.description,'') IS NOT IFNULL(OLD.description,'')
-   OR NEW.prompt_template IS NOT OLD.prompt_template
-   OR IFNULL(NEW.output_schema,'') IS NOT IFNULL(OLD.output_schema,'')
+WHEN OLD.deleted_at IS NULL AND (
+    NEW.deleted_at IS NULL AND (
+      NEW.folder_id IS NOT OLD.folder_id
+      OR NEW.name IS NOT OLD.name
+      OR NEW.description IS NOT OLD.description
+      OR NEW.prompt_template IS NOT OLD.prompt_template
+      OR NEW.output_schema IS NOT OLD.output_schema
+    ))
 BEGIN
   INSERT INTO skill_revisions(
     skill_id, revision, folder_id, name, description, prompt_template, output_schema, created_at, updated_at
@@ -313,31 +312,27 @@ BEGIN
   );
 END;
 
-DROP TRIGGER IF EXISTS skills_delete_revision;
-CREATE TRIGGER skills_delete_revision
-BEFORE DELETE ON skills
+-- A soft delete of a skill snapshots a final, deleted_at-carrying revision
+-- (hard delete is out of scope: soft delete only).
+CREATE TRIGGER skills_soft_delete_revision
+AFTER UPDATE OF deleted_at ON skills
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
 BEGIN
   INSERT INTO skill_revisions(
     skill_id, revision, folder_id, name, description, prompt_template, output_schema,
     created_at, updated_at, deleted_at
   ) VALUES (
-    OLD.id,
-    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = OLD.id),0) + 1,
-    OLD.folder_id,
-    OLD.name,
-    OLD.description,
-    OLD.prompt_template,
-    OLD.output_schema,
+    NEW.id,
+    COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0) + 1,
+    NEW.folder_id,
+    NEW.name,
+    NEW.description,
+    NEW.prompt_template,
+    NEW.output_schema,
     datetime('now'),
     datetime('now'),
-    datetime('now')
+    NEW.deleted_at
   );
-END;
-
-CREATE TRIGGER skills_set_current
-AFTER INSERT ON skill_revisions
-BEGIN
-  UPDATE skills SET current_revision = NEW.revision, updated_at = datetime('now') WHERE id = NEW.skill_id;
 END;
 
 
@@ -397,6 +392,14 @@ CREATE TABLE contexts (
 
 CREATE INDEX IF NOT EXISTS idx_contexts_type ON contexts(type);
 CREATE INDEX IF NOT EXISTS idx_contexts_created ON contexts(created_at);
+
+-- Contexts are immutable: no UPDATE (or any other) lifecycle at all.
+DROP TRIGGER IF EXISTS contexts_immutable;
+CREATE TRIGGER contexts_immutable
+BEFORE UPDATE ON contexts
+BEGIN
+  SELECT RAISE(ABORT, 'contexts are immutable');
+END;
 ```
 
 ## Executions
@@ -406,7 +409,7 @@ This is where we put the things together, an execution is a given:
 - skill revision
 - context
 
-The execution has a status (pending, running, completed, failed).
+The execution has a status (pending, running, completed, failed, cancelled).
 There is an additional table to store the execution_logs ==> not the app logs.
 
 ### Status
@@ -418,11 +421,26 @@ pending
 running
 completed
 failed
+cancelled
 ```
 
 A failed execution remains in the database.
 
 That is important because failures are part of the experiment history.
+
+The state machine (enforced in the C layer, see `acta_db/include/execution.h`):
+
+```text
+pending ──start()──▶ running ──complete()──▶ completed   (terminal)
+                         │
+                         └──fail()──────────▶ failed ──reset()──▶ pending
+
+pending, running ──cancel()──▶ cancelled   (terminal)
+```
+
+`reset()` makes `failed` re-entrant (retry): it clears the failed attempt's
+data (`error`, `raw_response`, `started_at`, `completed_at`) but preserves the
+`execution_log` audit trail. `completed` and `cancelled` are terminal.
 
 
 ### Logs
@@ -485,7 +503,7 @@ Skill revision:
 {{ context }}"
 ```
 
-The execution stores:
+The resolved prompt for that execution is therefore:
 
 ```text
 "Analyze the following context for security issues:
@@ -518,7 +536,7 @@ CREATE TABLE executions (
     raw_response        TEXT,
     result              TEXT,
     status              TEXT NOT NULL DEFAULT 'pending' 
-                         CHECK(status IN ('pending','running','completed','failed')),
+                         CHECK(status IN ('pending','running','completed','failed','cancelled')),
     error               TEXT,
     created_at          TEXT NOT NULL DEFAULT datetime('now'),
     started_at          TEXT,
@@ -576,7 +594,10 @@ I would **not** add these yet:
 * conversation/session tables
 * queues
 * **hard delete** — lifecycle operations are **soft delete only**
-  (`deleted_at`). If deletion of contexts/executions is ever needed it
+  (`deleted_at`) where a lifecycle exists at all (skills, models, and
+  folders). Contexts and executions have no delete lifecycle today:
+  contexts are immutable, and executions only transition to the terminal
+  `cancelled` state. If deletion of contexts/executions is ever needed it
   must be a `deleted_at` soft delete mirroring the skill/model/folder
   pattern; a hard-delete API is out of scope (owner decision, 2026-07-10)
 

@@ -19,6 +19,22 @@ executions/
 *.o
 *.exe
 *.a
+*.so
+
+# Local build outputs (MSYS2 / Qt)
+.tmp_build/
+out/
+build/
+debug/
+release/
+Makefile
+Makefile.Debug
+Makefile.Release
+*.qmake.stash
+acta_db/test/
+out
+acta_db_out
+models.json
 
 
 # IDE

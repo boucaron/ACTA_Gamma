@@ -3,25 +3,43 @@
 ## Start Devel
 
 ### Deps
-C++
-Qt6: Core, Widgets, Sql
-Sqlite
 
+- C compiler (MinGW/MSYS2 or gcc/clang)
+- SQLite 3
+- Qt 6 (Core, Widgets) — GUI only
+- cJSON — CLI + runner
+- curl — runner
 
-### MinGW64
+### MinGW64 (MSYS2)
+
+```sh
 pacman -Syu
 pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-make
-pacman -S mingw-w64-x86_64-qt6 mingw-w64-x86_64-cmake
-qmake6.exe "CONFIG+=debug" ACTA_Gamma.pro -o Makefile
-make 
+pacman -S mingw-w64-x86_64-qt6
+pacman -S mingw-w64-x86_64-curl
+```
+
+### Build
+
+See `README.md` for the per-component steps:
+
+```sh
+cd acta_db          && make            # libacta_db + unit tests
+cd ../acta_db_cli   && make            # actagamma_db CLI
+cd ../acta_runner   && make            # acta_runner (needs a running
+                                       # OpenAI-compatible backend)
+cd ../acta_gamma    && qmake6 "CONFIG+=debug" ACTA_Gamma.pro -o Makefile
+make
+```
 
 ### Linux
-Easy peasy
 
+Easy peasy
 
 ### Tests
 
-cd tests
-qmake tests.pro -o Makefile
-make
-./release/test_contextdao.exe
+```sh
+cd acta_db       && make test   # C unit tests
+cd ../acta_db_cli && make test  # per-entity CLI tests
+cd ../acta_runner  && make test  # pipeline tests against a local stub backend
+```

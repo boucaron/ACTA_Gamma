@@ -11,7 +11,7 @@ numbering).
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| H2 | **JSON validation (to analyze)** for `output_schema`, `configuration`, context `content` (`QJsonDocument::fromJson`, clear "invalid JSON" message; at minimum a "Validate JSON" button) | UR #15 | analyze first: not all three fields are necessarily JSON — `configuration` is backend-specific JSON (`DBDesign.md`), `output_schema` is a JSON schema, but context `content` may be plain text; decide scope before implementing (dialogs + context panel editor) |
+| H2 | **JSON validation** for `output_schema` and model `configuration` — scope settled in `runner_plan.md` (R5): both must be JSON *objects*; context `content` is **excluded** (it may be plain text) | UR #15 | `QJsonDocument::fromJson`, clear "invalid JSON" message (line/column), block save on invalid JSON, in `ModelDialog::ui->configurationTextEdit` and `SkillDialog::ui->outputSchemaTextEdit` (create + edit); empty fields stay allowed. Same work item as R5 in `runner_active_action.md` |
 
 ## Queued (local observations, not from `ui_review.md`)
 
@@ -49,7 +49,8 @@ numbering).
 
 ## Summary
 
-- **Now:** H2 (JSON validation, to analyze) and L1 (tree context menu on
-  empty area — fix `FolderTreePanel`, sibling `ExecutionPanel`).
+- **Now:** H2 (JSON validation; scope settled in `runner_plan.md`) and
+  L1 (tree context menu on empty area — fix `FolderTreePanel`, sibling
+  `ExecutionPanel`).
 - After shipping each item: drop it from the open lists and the Summary
   (the commit is the record).

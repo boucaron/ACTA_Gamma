@@ -44,7 +44,8 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 Implementation notes (where the spec left room):
 
 - The model `configuration` JSON keys the runner understands:
-  `api_key` (fallback for `--api_key` / `$OPENAI_API_KEY`),
+  `api_key` (takes precedence over `--api_key` / `$OPENAI_API_KEY` when
+  set to a non-empty string),
   `temperature`, `max_tokens`, `top_k`, and `supports_response_format`
   (bool, default `true`). `false` means the backend has no json_schema
   `response_format`: the field is not sent and the raw response is
@@ -217,10 +218,12 @@ headless/CLI-driven mode later.
    (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
    makes the execution self-describing and protects the audit trail if
    prompt-resolution behavior changes later.
-4. **Auth:** `--api_key` flag → `$OPENAI_API_KEY` → per-model
-   `configuration` JSON (`{"api_key": ...}`). Sent as
-   `Authorization: Bearer <key>`; optional when the server has no
-   `--api-key` set.
+4. **Auth:** resolution order, highest first: per-model `configuration`
+   JSON (`{"api_key": ...}`, only when a non-empty string) → `--api_key`
+   flag → `$OPENAI_API_KEY`. The configuration value is applied last in
+   the code, so it wins over the flag and the environment variable. Sent
+   as `Authorization: Bearer <key>` on every request (preflight GETs and
+   the chat POST); optional when the server has no `--api-key` set.
 5. **Timeouts / retries:** single request, configurable `--timeout` (s),
    no retries — failures are first-class artifacts here.
 6. **Claim semantics:** the runner only acts on `pending`; `start()` is
@@ -266,8 +269,10 @@ headless/CLI-driven mode later.
    not used (non-llama backend), parse/validate post-hoc; log
    `validation_started` / `validation_failed`.
 7. **Close** — `complete(result)` or `fail(error)`; log
-   `execution_completed` / `execution_failed`. Exit codes per execution;
-   `--pending` batch returns the worst.
+   `execution_completed` / `execution_failed`. `run --pending` processes
+   all pending rows in `id ASC` order, optionally capped by `--max <n>`
+   (0 = no limit); the batch continues past a failure and returns the
+   worst exit code seen.
 
 ## Code shape in `acta_runner/`
 
@@ -286,9 +291,11 @@ headless/CLI-driven mode later.
 - Server manager mode (`--start-server`, process spawn/termination,
   model load/unload, load-timeout handling, vendored llama.cpp build).
 - Streaming (SSE) responses.
-- Retries.
-- Server manager mode already excluded above; stale-`running` cleanup is
-  no longer out of scope (shipped as the `sweep` action, decision 6).
+- Automatic retries (a failed execution is retried manually via the
+  `failed → pending` reset, `acta_db_execution_reset`).
 - Multimodal, tool calling, embeddings, LoRA, slot caching — anything
   beyond `chat/completions` from the backend (see
   `llamacpp_server_contract.md` §6).
+
+Stale-`running` cleanup used to be listed here; it is now shipped as the
+`sweep` action (decision 6).
