@@ -155,7 +155,9 @@ void MainWindow::applyDbToPanels()
     if (m_contextPanel)
         m_contextPanel->setDb(db);
     if (m_executionPanel)
-        m_executionPanel->setDb(db);
+        // R1 (Plan D): the execution panel needs the database file path
+        // to spawn acta_runner with --db.
+        m_executionPanel->setDb(db, m_dbPath);
 }
 
 void MainWindow::loadDatabase()
