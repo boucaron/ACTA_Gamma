@@ -602,7 +602,7 @@ static void test_mr_list_free_null(void) {
 
 /* ── runner ────────────────────────────────────────────────────────── */
 
-void run_model_revision_tests(void) {
+int run_model_revision_tests(void) {
     fprintf(stderr, "\n=== model_revision tests ===\n");
 
     /* getters */
@@ -650,4 +650,6 @@ void run_model_revision_tests(void) {
     test_mr_free_null();
     test_mr_list_free_valid();
     test_mr_list_free_null();
+
+    return test_failures;
 }

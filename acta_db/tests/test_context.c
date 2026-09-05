@@ -698,7 +698,7 @@ static void test_ctx_create_null_out_id(void)
  *  Entry point
  * ═══════════════════════════════════════════════════════════════════ */
 
-void run_context_tests(void)
+int run_context_tests(void)
 {
     /* create */
     test_ctx_create_valid();
@@ -737,4 +737,6 @@ void run_context_tests(void)
     /* free */
     test_ctx_free_null();
     test_ctx_free_valid();
+
+    return test_failures;
 }

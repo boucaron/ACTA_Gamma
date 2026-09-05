@@ -1319,7 +1319,7 @@ static void test_exec_raw_insert_fk_bypass(void) {
 /*  Runners                                                          */
 /* ================================================================== */
 
-void run_execution_create_tests(void) {
+int run_execution_create_tests(void) {
     fprintf(stderr, "\n--- execution: create ---\n");
     test_exec_create_happy();
     test_exec_create_null_db();
@@ -1333,6 +1333,8 @@ void run_execution_create_tests(void) {
     test_exec_create_with_parent();
     test_exec_create_invalid_parent();
     test_exec_create_ignores_status();
+
+    return test_failures;
 }
 
 void run_execution_get_tests(void) {

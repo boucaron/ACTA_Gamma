@@ -1340,7 +1340,7 @@ static void test_sf_list_free_null(void) {
  *  runner
  * ════════════════════════════════════════════════════════════════════ */
 
-void run_skill_folder_tests(void) {
+int run_skill_folder_tests(void) {
     fprintf(stderr, "\n=== skill_folder tests ===\n");
 
     /* create */
@@ -1432,4 +1432,6 @@ void run_skill_folder_tests(void) {
     /* free */
     test_sf_free_null();
     test_sf_list_free_null();
+
+    return test_failures;
 }

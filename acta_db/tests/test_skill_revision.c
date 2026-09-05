@@ -601,7 +601,7 @@ static void test_sr_count_matches_lister(void) {
 
 
 /* ── Runner ──────────────────────────────────────────────────────────────── */
-void run_skill_revision_tests(void) {
+int run_skill_revision_tests(void) {
     fprintf(stderr, "\n=== skill_revision tests (8.1 → 8.26) ===\n");
 
     /* Getters */
@@ -644,4 +644,6 @@ void run_skill_revision_tests(void) {
     test_sr_count_includes_deleted();
     test_sr_count_null_err();
     test_sr_count_matches_lister();
+
+    return test_failures;
 }

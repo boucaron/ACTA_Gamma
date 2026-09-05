@@ -368,7 +368,7 @@ static void test_count_all_with_deleted(void) {
 
 /* ── runner ───────────────────────────────────────────────────────── */
 
-void run_skill_deleted_tests(void) {
+int run_skill_deleted_tests(void) {
     fprintf(stderr, "\n=== skill_deleted tests ===\n");
 
     /* list_in_folder_with_deleted */
@@ -387,4 +387,6 @@ void run_skill_deleted_tests(void) {
     /* counts */
     test_count_in_folder_with_deleted();
     test_count_all_with_deleted();
+
+    return test_failures;
 }

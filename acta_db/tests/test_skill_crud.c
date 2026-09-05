@@ -731,7 +731,7 @@ static void test_free_and_list_free(void) {
  *  runner
  * ═══════════════════════════════════════════════════════════════════ */
 
-void run_skill_crud_tests(void) {
+int run_skill_crud_tests(void) {
     fprintf(stderr, "\n=== skill_crud tests ===\n");
 
     /* create */
@@ -786,4 +786,6 @@ void run_skill_crud_tests(void) {
 
     /* free */
     test_free_and_list_free();
+
+    return test_failures;
 }

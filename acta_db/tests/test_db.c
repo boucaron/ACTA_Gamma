@@ -629,7 +629,7 @@ static void test_db_close_returns_ok(void) {
 /*  Runner                                                            */
 /* ================================================================== */
 
-void run_db_tests(void) {
+int run_db_tests(void) {
     fprintf(stderr, "\n=== db.h tests ===\n");
     test_db_open_new();
     test_db_open_existing();
@@ -670,4 +670,6 @@ void run_db_tests(void) {
     test_db_exec_error_then_rollback();
     test_db_transaction_nesting_rejected();
     test_db_close_returns_ok();
+
+    return test_failures;
 }

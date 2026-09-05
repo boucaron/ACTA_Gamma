@@ -785,7 +785,7 @@ static void test_exec_query_pagination_loop(void) {
 /*  Runner                                                            */
 /* ================================================================== */
 
-void run_execution_lifecycle_tests(void) {
+int run_execution_lifecycle_tests(void) {
     fprintf(stderr, "\n=== execution lifecycle ===\n");
 
     /* start */
@@ -851,4 +851,6 @@ void run_execution_lifecycle_tests(void) {
 
     /* pagination */
     test_exec_query_pagination_loop();
+
+    return test_failures;
 }

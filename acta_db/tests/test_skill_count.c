@@ -222,7 +222,7 @@ static void test_count_nonexistent_folder(void) {
 
 /* ── runner ─────────────────────────────────────────────────────── */
 
-void run_skill_count_tests(void) {
+int run_skill_count_tests(void) {
     fprintf(stderr, "\n=== skill_count tests ===\n");
 
     test_count_all();
@@ -236,4 +236,6 @@ void run_skill_count_tests(void) {
     test_count_null_db();
     test_count_null_err();
     test_count_nonexistent_folder();
+
+    return test_failures;
 }

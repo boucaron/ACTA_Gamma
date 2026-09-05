@@ -1119,7 +1119,7 @@ static void test_el_free_null(void) {
 /*  runner                                                            */
 /* ================================================================ */
 
-void run_execution_log_tests(void) {
+int run_execution_log_tests(void) {
     fprintf(stderr, "\n=== execution_log tests ===\n");
 
     /* create */
@@ -1184,4 +1184,6 @@ void run_execution_log_tests(void) {
     /* free */
     test_el_free_valid();
     test_el_free_null();
+
+    return test_failures;
 }

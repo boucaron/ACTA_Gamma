@@ -1002,7 +1002,7 @@ static void test_integration_execution_pagination(void) {
 /* ================================================================
  *  Runner
  * ================================================================ */
-void run_integration_tests(void) {
+int run_integration_tests(void) {
     fprintf(stderr, "\n=== Integration / Cross-Cutting Tests ===\n");
     test_integration_model_lifecycle();
     test_integration_skill_lifecycle();
@@ -1019,4 +1019,6 @@ void run_integration_tests(void) {
     test_integration_null_safety();
     test_integration_repeated_open_close();
     test_integration_execution_pagination();
+
+    return test_failures;
 }

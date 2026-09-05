@@ -765,7 +765,7 @@ static void test_exec_count_matches_lister(void) {
 /*  Runner                                                                   */
 /* ========================================================================== */
 
-void run_execution_list_tests(void) {
+int run_execution_list_tests(void) {
     fprintf(stderr, "\n=== execution query/count tests ===\n");
 
     test_exec_query_any();
@@ -800,4 +800,6 @@ void run_execution_list_tests(void) {
     test_exec_count_null_db();
     test_exec_count_null_query();
     test_exec_count_matches_lister();
+
+    return test_failures;
 }

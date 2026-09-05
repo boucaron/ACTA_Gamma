@@ -1517,7 +1517,7 @@ static void test_model_count_all_with_deleted(void) {
 
 /* ---------- runner ---------- */
 
-void run_model_tests(void) {
+int run_model_tests(void) {
     fprintf(stderr, "\n=== model tests ===\n");
 
     /* create */
@@ -1614,4 +1614,6 @@ void run_model_tests(void) {
     test_model_count_all_with_deleted();
 
     test_model_restore_not_found();
+
+    return test_failures;
 }

@@ -321,7 +321,7 @@ static void test_folder_children_root_offset(void) {
 
 /* ── runner ─────────────────────────────────────────────────────── */
 
-void run_skill_placement_tests(void) {
+int run_skill_placement_tests(void) {
     fprintf(stderr, "\n=== skill_placement tests ===\n");
 
     test_list_root();
@@ -337,4 +337,6 @@ void run_skill_placement_tests(void) {
 
     test_folder_children_limit();
     test_folder_children_root_offset();
+
+    return test_failures;
 }

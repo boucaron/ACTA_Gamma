@@ -329,7 +329,7 @@ static void test_list_all_null_out_params(void) {
 
 /* ── runner ─────────────────────────────────────────────────────── */
 
-void run_skill_pagination_tests(void) {
+int run_skill_pagination_tests(void) {
     fprintf(stderr, "\n=== skill_pagination tests ===\n");
 
     test_list_in_folder_first_page();
@@ -347,4 +347,6 @@ void run_skill_pagination_tests(void) {
     test_list_all_offset_beyond();
     test_list_all_negative_offset();
     test_list_all_null_out_params();
+
+    return test_failures;
 }
