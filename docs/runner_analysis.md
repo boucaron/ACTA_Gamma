@@ -58,6 +58,14 @@ Implementation notes (where the spec left room):
   byte counts) in its `metadata`, so each execution is self-describing.
   `executions.prompt` keeps its original meaning: the optional,
   user-entered instruction at creation time.
+- Preflight catalog (R8): after the `/v1/models` id match, the runner
+  fetches the llama.cpp model catalog (`GET /`) and logs a
+  `preflight_passed` event whose `metadata` carries `model_id`,
+  `max_context` (when present in the `/v1/models` entry) and the
+  matched catalog entry's `status.args` + `meta` — the server-instance
+  configuration (launch flags, `n_ctx`, `ftype`, `size`). Best-effort:
+  a missing/unparseable catalog or id miss records `"catalog":null` and
+  never fails the execution.
 
 ## Codebase analysis
 
@@ -202,9 +210,13 @@ headless/CLI-driven mode later.
    `started_at`) is older than N; `--stale-seconds` must be a positive
    integer.
 7. **Logging granularity:** follow the DBDesign event list exactly
-   (execution_started, context_loaded, prompt_resolved, llm_request,
-   llm_response, validation_*, execution_completed/failed) so the UI
-   timeline shows meaningful phases.
+   (execution_started, context_loaded, prompt_resolved, preflight_passed,
+   llm_request, llm_response, validation_*,
+   execution_completed/failed) so the UI timeline shows meaningful
+   phases. `preflight_passed` records the server-instance configuration
+   (R8): the matched model id, `max_context`, and the catalog entry's
+   launch `args` + `meta`. Best-effort: a missing catalog logs
+   `"catalog":null` and never fails the execution.
 
 ## Phase 2 pipeline (spec for `run_execution`)
 
@@ -217,6 +229,12 @@ headless/CLI-driven mode later.
 3. **Preflight** (cheap, makes failures readable) — `GET /health`:
    `503` → fail "model still loading". `GET /v1/models`: mismatched
    `model_identifier` → fail "server is running a different model".
+   Then best-effort `GET /` (llama.cpp model catalog): the matched
+   entry's `status.args` + `meta` (`n_ctx`, `n_params`, `size`, `ftype`)
+   and `max_context` are recorded in a `preflight_passed` log event.
+   A missing/unparseable catalog never fails the execution — it records
+   `"catalog":null` (non-llama OpenAI-compatible backends have no
+   catalog; the engine must not depend on llama.cpp itself).
 4. **Call** — `POST /v1/chat/completions` with `messages = [system:
    prompt_template, user: context.content + prompt]`, `model =
    model_identifier`, params from `configuration`, and

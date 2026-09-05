@@ -1,9 +1,14 @@
 /*
  * stub_server.h — in-process stub OpenAI-compatible backend for tests.
  *
- * Serves exactly the three endpoints the runner calls, on 127.0.0.1:
+ * Serves the four endpoints the runner calls, on 127.0.0.1:
  *   GET  /health                 -> cfg->health_status (200 or 503)
  *   GET  /v1/models              -> one model with id cfg->model_id
+ *   GET  /                       -> the llama.cpp model catalog (canned
+ *                                    entry for cfg->model_id with fixed
+ *                                    status.args + meta);
+ *                                    cfg->catalog_status (default 200,
+ *                                    404 simulates a non-llama backend)
  *   POST /v1/chat/completions    -> cfg->chat_status; on 200 a canned
  *                                    response whose choices[0].message.
  *                                    content is cfg->chat_content
@@ -21,6 +26,8 @@ typedef struct {
     int         chat_status;   /* 200 by default, e.g. 500 for errors */
     const char *chat_error;    /* error message when chat_status != 200 */
     const char *chat_content;  /* message content on a 200 response */
+    int         catalog_status; /* GET / response (default 200; 404 = no
+                                     catalog, i.e. non-llama backend) */
     int         delay_ms;      /* sleep before replying (timeout tests) */
 } stub_config_t;
 

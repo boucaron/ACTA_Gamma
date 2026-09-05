@@ -42,6 +42,23 @@ unless `--alias` was given. Runner should compare the DB
 `model_identifier` against this so a mismatched server config fails
 cleanly instead of producing garbage.
 
+## 3a. Model catalog — `GET /` (llama.cpp-specific, best-effort)
+
+The llama.cpp server also serves its model catalog at `GET /` (the
+`models.json` shape). Per loaded model the entry carries:
+
+- `id` — the model id/alias
+- `status.value` — `loaded` / `unloaded`
+- `status.args` — the **server launch arguments** (`--ctx-size`,
+  `--temperature`, `--top-k`, `--flash-attn`, ...): the actual
+  server-instance configuration
+- `meta` — `n_ctx`, `n_params`, `size`, `ftype` (quantization)
+
+The runner fetches it during preflight and records the matched entry in
+the `preflight_passed` log event. This is **best-effort audit data**:
+non-llama OpenAI-compatible backends have no catalog, so a failure
+there never fails the execution (`"catalog":null` is recorded instead).
+
 ## 4. The call: `POST /v1/chat/completions`
 
 - Headers: `Content-Type: application/json`,

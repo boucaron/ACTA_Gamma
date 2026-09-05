@@ -202,6 +202,33 @@ static void handle_connection(int c, const stub_config_t *cfg)
         return;
     }
 
+    if (strcmp(path, "/") == 0) {
+        if (cfg->catalog_status != 200) {
+            send_response(c, cfg->catalog_status,
+                          cfg->catalog_status == 404 ? "Not Found" : "Error",
+                          "{\"error\":{\"code\":404,"
+                          "\"message\":\"not found\","
+                          "\"type\":\"not_found_error\"}}");
+            return;
+        }
+        /* Canned catalog entry (the llama.cpp "models.json" shape):
+         * one model matching cfg->model_id with fixed launch args and
+         * meta, so tests can assert the catalog logging (R8). */
+        char body[1024];
+        char id[128];
+        json_escape(id, sizeof id, cfg->model_id ? cfg->model_id : "");
+        snprintf(body, sizeof body,
+                 "{\"object\":\"list\",\"data\":[{\"id\":\"%s\","
+                 "\"status\":{\"value\":\"loaded\","
+                 "\"args\":[\"llama-server\",\"--ctx-size\",\"162000\","
+                 "\"--temperature\",\"1.0\"]},"
+                 "\"meta\":{\"n_ctx\":162048,\"n_params\":27320697856,"
+                 "\"size\":10431832064,\"ftype\":\"IQ3_S - 3.4375 bpw\"}}]}",
+                 id);
+        send_response(c, 200, "OK", body);
+        return;
+    }
+
     if (strcmp(path, "/v1/chat/completions") == 0) {
         if (cfg->chat_status != 200) {
             char body[512];
@@ -297,6 +324,8 @@ int stub_server_start(const stub_config_t *cfg)
     g_listen = s;
     g_port = cfg->port;
     g_cfg = *cfg;
+    if (g_cfg.catalog_status == 0)
+        g_cfg.catalog_status = 200;
     g_running = 1;
     if (pthread_create(&g_thread, NULL, server_main, NULL) != 0) {
         g_running = 0;

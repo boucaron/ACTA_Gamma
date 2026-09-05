@@ -435,6 +435,7 @@ It records meaningful execution events:
 execution_started
 context_loaded
 prompt_resolved
+preflight_passed
 llm_request
 llm_response
 validation_started

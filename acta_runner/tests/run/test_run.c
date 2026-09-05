@@ -12,6 +12,8 @@
  *   7. not found          -> EXIT_NOT_FOUND
  *   8. schema validation  -> failed + EXIT_INVALID (post-hoc path)
  *   9. schema validation  -> completed (valid JSON against schema)
+ *   10. missing catalog   -> completed, preflight_passed records
+ *                              "catalog":null (non-llama backend)
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
  * Exit code: 0 = all pass, 1 = at least one failure.
@@ -259,7 +261,8 @@ static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
 
 static const char *EVT_FULL_SUCCESS[] = {
     "execution_started", "context_loaded", "prompt_resolved",
-    "llm_request", "llm_response", "execution_completed",
+    "preflight_passed", "llm_request", "llm_response",
+    "execution_completed",
 };
 
 /* main.c owns runner_gopts in the real binary; the test binary links
@@ -307,6 +310,12 @@ int main(void)
                       db, sid, "prompt_resolved",
                       "\"user\":\"CTX-CONTENT\\n\\nUSER-PROMPT\""),
                   "prompt_resolved metadata carries resolved user");
+            check(log_metadata_contains(db, sid, "preflight_passed",
+                                       "\"n_ctx\":162048"),
+                  "preflight_passed metadata carries catalog n_ctx");
+            check(log_metadata_contains(db, sid, "preflight_passed",
+                                       "\"args\":[\"llama-server\""),
+                  "preflight_passed metadata carries launch args");
         }
     }
 
@@ -442,6 +451,29 @@ int main(void)
                  30, EXIT_OK,
                  ACTA_EXEC_STATUS_COMPLETED, "{\"answer\":\"ok\"}", NULL,
                  events, 2);
+    }
+
+    /* 10. missing catalog (non-llama backend): the run still completes;
+     *     preflight_passed records "catalog":null */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        cfg.catalog_status = 404;
+        const char *events[] = { "preflight_passed" };
+        int cid = scenario("missing catalog", db, &cfg, NULL, NULL, 30,
+                           EXIT_OK,
+                           ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
+                           events, 1);
+        if (cid > 0) {
+            check(log_metadata_contains(db, cid, "preflight_passed",
+                                       "\"catalog\":null"),
+                  "preflight_passed metadata holds null catalog");
+        }
     }
 
     acta_db_close(db);

@@ -8,7 +8,9 @@
  *   2. Resolve   — fetch context, skill revision, model revision;
  *                   log context_loaded / prompt_resolved.
  *   3. Preflight — GET /health (503 -> "model still loading"),
- *                   GET /v1/models (server model id must match).
+ *                   GET /v1/models (server model id must match),
+ *                   GET / (llama.cpp model catalog; best-effort audit
+ *                   source, logged as preflight_passed).
  *   4. Call      — POST /v1/chat/completions with
  *                     system = skill.prompt_template,
  *                     user   = context.content + "\n\n" + execution.prompt,
@@ -505,7 +507,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     }
     int use_response_format = have_schema && supports_rf;
 
-    /* ---- 3. preflight: /health, /v1/models ---- */
+    /* ---- 3. preflight: /health, /v1/models, / (catalog) ---- */
+    long max_ctx = 0;
     {
         char url[1024];
         build_url(url, sizeof url, model->base_url, "/health");
@@ -563,7 +566,76 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
                  "server model '%s' does not match execution model '%s'",
                  server_id, model->model_identifier);
         }
+        cJSON *mc = d0 ? cJSON_GetObjectItem(d0, "max_context") : NULL;
+        if (cJSON_IsNumber(mc))
+            max_ctx = (long)mc->valuedouble;
         cJSON_Delete(jm);
+    }
+
+    /* ---- 3b. preflight catalog (best-effort audit): GET / ----
+     * The llama.cpp server serves its model catalog at GET / (the
+     * "models.json" format). Recording the matched entry's launch args
+     * and meta (n_ctx, n_params, size, ftype, ...) in the execution
+     * timeline makes the server-instance configuration part of the
+     * audit trail: the same model id can be served under different
+     * server flags. Best-effort by contract: non-llama OpenAI-compatible
+     * backends have no catalog — a failure here NEVER fails the
+     * execution, it only records "catalog": null. (R8) */
+    {
+        char url[1024];
+        build_url(url, sizeof url, model->base_url, "/");
+        backend_response_t r;
+        int brc = backend_request("GET", url, NULL, api_key, timeout_sec,
+                                  &r);
+        cJSON *cat = (brc == BACKEND_OK && r.http_status == 200)
+            ? cJSON_Parse(r.body) : NULL;
+        free(r.body);
+
+        cJSON *entry = NULL;
+        if (cat) {
+            cJSON *data = cJSON_GetObjectItem(cat, "data");
+            if (data && cJSON_IsArray(data)) {
+                int n = cJSON_GetArraySize(data);
+                for (int i = 0; i < n; i++) {
+                    cJSON *it = cJSON_GetArrayItem(data, i);
+                    cJSON *iid = it ? cJSON_GetObjectItem(it, "id") : NULL;
+                    if (cJSON_IsString(iid) && iid->valuestring &&
+                        strcmp(iid->valuestring,
+                             model->model_identifier) == 0) {
+                        entry = it;
+                        break;
+                    }
+                }
+            }
+        }
+
+        cJSON *pm = cJSON_CreateObject();
+        cJSON_AddStringToObject(pm, "model_id", model->model_identifier);
+        if (max_ctx > 0)
+            cJSON_AddNumberToObject(pm, "max_context", (double)max_ctx);
+        if (entry) {
+            cJSON *ccat = cJSON_CreateObject();
+            cJSON *status = cJSON_GetObjectItem(entry, "status");
+            cJSON *args = (status && cJSON_IsObject(status))
+                ? cJSON_GetObjectItem(status, "args") : NULL;
+            cJSON *meta = cJSON_GetObjectItem(entry, "meta");
+            if (args && cJSON_IsArray(args))
+                cJSON_AddItemToObject(ccat, "args",
+                                      cJSON_Duplicate(args, 1));
+            if (meta && cJSON_IsObject(meta))
+                cJSON_AddItemToObject(ccat, "meta",
+                                      cJSON_Duplicate(meta, 1));
+            cJSON_AddItemToObject(pm, "catalog", ccat);
+        } else {
+            cJSON_AddNullToObject(pm, "catalog");
+        }
+        if (cat)
+            cJSON_Delete(cat);
+        char *pmeta = json_print(pm);
+        log_phase(db, exec_id, ACTA_LOG_LEVEL_INFO, "preflight_passed",
+                  "preflight passed (model id matched; server catalog "
+                  "recorded or unavailable)", pmeta);
+        free(pmeta);
     }
 
     /* ---- 4. build and send the chat/completions request ---- */
