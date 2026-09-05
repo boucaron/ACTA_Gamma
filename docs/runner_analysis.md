@@ -5,7 +5,7 @@ database, resolves a pending execution's skill + model + context, calls the
 OpenAI-compatible backend, and records the outcome (raw response, result,
 error, phase logs) back into the database.
 
-## Status: phase 2 shipped, Plan D shipped
+## Status: phase 2 shipped, Plan D shipped, R8 shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -22,6 +22,15 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   (http status, latency, token usage, …). Every post-claim failure
   funnels through `fail_execution()` so a row never stays stuck in
   `running`.
+- R8 (commit 2f8085e): preflight catalog logging — after the
+  `/v1/models` id match, the runner fetches the llama.cpp model catalog
+  (`GET /`) and logs a `preflight_passed` event with the matched entry's
+  server-instance configuration (`status.args`, `meta`: `n_ctx`,
+  `n_params`, `size`, `ftype`) plus `max_context`. Best-effort: a missing
+  catalog records `"catalog":null` and never fails the execution; the
+  stub server serves `GET /` with a canned catalog
+  (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
+  catalog path. Tests green, no regressions.
 - `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
   POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 9
   scenarios (success, health 503, model mismatch, chat 500, timeout,
