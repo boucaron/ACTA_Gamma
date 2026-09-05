@@ -343,7 +343,7 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("model mismatch", db, &cfg, NULL, NULL, 30, EXIT_HTTP,
-                 ACTA_EXEC_STATUS_FAILED, NULL, "does not match",
+                 ACTA_EXEC_STATUS_FAILED, NULL, "not served by server",
                  events, 1);
     }
 

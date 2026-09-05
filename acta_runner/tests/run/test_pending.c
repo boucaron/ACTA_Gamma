@@ -381,7 +381,7 @@ int main(void)
             int rc = cmd_run_argv(db, 1, av);
             check(rc == EXIT_HTTP,
                   "worst exit code wins (12 = HTTP/preflight)");
-            check(execution_error(db, id_bad, "does not match"),
+            check(execution_error(db, id_bad, "not served by server"),
                   "failing row failed with model-mismatch error");
             check(log_has_event(db, id_bad, "execution_failed"),
                   "failing row logged execution_failed");
