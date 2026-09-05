@@ -122,16 +122,14 @@ void EntityDialog::onSaveClicked()
         if (rc != ACTA_DB_OK)
             return;
 
-        // The row was persisted; the panel will reload on close.
+        // The row was persisted; the panel will reload on close and
+        // show the new row.
         setSaved(true);
 
-        // Keep the dialog open on the created row, now editable.
-        m_id = newId;
-        loadEntity(newId);
-        setMode(Mode::Edit);
-        setWindowTitle(editTitle());
         QMessageBox::information(this, m_title,
                                 tr("%1 saved.").arg(m_title));
+        // Success: close the dialog — no error, nothing left to do.
+        close();
     } else if (m_mode == Mode::Edit && m_id != 0) {
         if (!validateFields())
             return;
@@ -140,17 +138,17 @@ void EntityDialog::onSaveClicked()
         if (rc != ACTA_DB_OK)
             return;
 
-        // The update was persisted; the panel will reload on close.
+        // The update was persisted; the panel will reload on close and
+        // show the updated row.
         setSaved(true);
 
-        // The update triggered a revision snapshot: reload and switch
-        // back to the read-only view. The "Saved as revision N" feedback
-        // explains why editing stopped (the dialog is now read-only).
+        // The update triggered a revision snapshot: refresh so the
+        // "Saved as revision N" feedback carries the new revision,
+        // then close — no error, nothing left to do.
         loadEntity(m_id);
-        setMode(Mode::ReadOnly);
-        setWindowTitle(showTitle());
         QMessageBox::information(
             this, m_title,
             tr("Saved as revision %1.").arg(m_latestRevision));
+        close();
     }
 }
