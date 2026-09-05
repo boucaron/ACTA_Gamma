@@ -13,7 +13,9 @@
  *                   source, logged as preflight_passed).
  *   4. Call      — POST /v1/chat/completions with
  *                     system = skill.prompt_template,
- *                     user   = context.content + "\n\n" + execution.prompt,
+ *                     user   = execution.prompt + "\n\n" + context.content
+ *                              (execution prompt first when present,
+ *                               context data appended last);
  *                     model  = model_identifier,
  *                     params from the model configuration JSON
  *                     (temperature, max_tokens, top_k, api_key,
@@ -402,21 +404,23 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         return ex;
     }
 
-    /* user message = context.content + "\n\n" + execution.prompt
+    /* user message concatenation order: the optional execution prompt
+     * comes first (when present), then the context data is appended:
+     * execution.prompt + "\n\n" + context.content
      * (either half may be empty; both empty -> fail). */
     const char *prompt = e->prompt;
     const char *cc = ctx->content;
     char *user = NULL;
-    if (cc && cc[0] && prompt && prompt[0]) {
-        size_t n = strlen(cc) + 2 + strlen(prompt);
+    if (prompt && prompt[0] && cc && cc[0]) {
+        size_t n = strlen(prompt) + 2 + strlen(cc);
         user = (char *)malloc(n + 1);
         if (user) {
-            memcpy(user, cc, strlen(cc));
-            memcpy(user + strlen(cc), "\n\n", 2);
-            memcpy(user + strlen(cc) + 2, prompt, strlen(prompt) + 1);
+            memcpy(user, prompt, strlen(prompt));
+            memcpy(user + strlen(prompt), "\n\n", 2);
+            memcpy(user + strlen(prompt) + 2, cc, strlen(cc) + 1);
         }
     } else {
-        const char *src = (cc && cc[0]) ? cc : (prompt ? prompt : "");
+        const char *src = (prompt && prompt[0]) ? prompt : cc;
         user = src ? strdup(src) : NULL;
     }
     if (!user || !user[0]) {

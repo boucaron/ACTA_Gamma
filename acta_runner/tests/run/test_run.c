@@ -308,7 +308,7 @@ int main(void)
                   "prompt_resolved metadata carries resolved system");
             check(log_metadata_contains(
                       db, sid, "prompt_resolved",
-                      "\"user\":\"CTX-CONTENT\\n\\nUSER-PROMPT\""),
+                      "\"user\":\"USER-PROMPT\\n\\nCTX-CONTENT\""),
                   "prompt_resolved metadata carries resolved user");
             check(log_metadata_contains(db, sid, "preflight_passed",
                                        "\"n_ctx\":162048"),

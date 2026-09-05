@@ -61,8 +61,13 @@ Implementation notes (where the spec left room):
   (code always equals the process exit code); DB failures keep the
   `ACTA_DB_ERR_*` contract. Exit codes: 12 for HTTP/preflight failures,
   13 for timeout, 4 for validation/claim failures.
-- User message = `context.content + "\n\n" + execution.prompt` (either
-  half may be empty; both empty → fail). The `prompt_resolved` log event
+- User message concatenation order: the optional `execution.prompt` comes
+  first (when present), then `context.content` is appended:
+  `execution.prompt + "\n\n" + context.content` (either half may be
+  empty; both empty → fail). Together with the system message
+  (`skill.prompt_template`), the full prompt sent to the LLM is therefore:
+  skill prompt first, then the execution prompt (if present), finally the
+  context data. The `prompt_resolved` log event
   records the fully resolved `system` and `user` strings (plus their
   byte counts) in its `metadata`, so each execution is self-describing.
   `executions.prompt` keeps its original meaning: the optional,
@@ -197,7 +202,9 @@ headless/CLI-driven mode later.
    (`base_url`, `model_identifier`, `configuration`) is the only link to
    the server instance.
 3. **Prompt resolution:** `system = skill.prompt_template`,
-   `user = context.content + execution.prompt`. If a skill has an
+   `user = execution.prompt + "\n\n" + context.content` (the optional
+   execution prompt is appended first, then the context data; either
+   half may be empty). If a skill has an
    `output_schema`, use `response_format: {"type":"json_schema",
    "schema": ...}` when the backend supports it, otherwise validate the
    raw response post-hoc. The resolved prompt is NOT stored in
@@ -245,7 +252,7 @@ headless/CLI-driven mode later.
    `"catalog":null` (non-llama OpenAI-compatible backends have no
    catalog; the engine must not depend on llama.cpp itself).
 4. **Call** — `POST /v1/chat/completions` with `messages = [system:
-   prompt_template, user: context.content + prompt]`, `model =
+   prompt_template, user: prompt + context.content]`, `model =
    model_identifier`, params from `configuration`, and
    `response_format = json_schema(output_schema)` when a skill has one;
    log `llm_request` (url, model id, params).
