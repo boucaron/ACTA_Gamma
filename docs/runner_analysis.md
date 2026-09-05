@@ -107,7 +107,11 @@ contracts, ACTA_DB_* error codes, pagination cap 10000):
 Thin CRUD client over the library (create/get/list/count/start/
 cancel/complete/fail/set-raw for exec). Deliberately DB-only; contains
 no HTTP anywhere. JSON via cJSON, verbose stderr logging, JSON error
-contract.
+contract. `exec create` takes `--prompt` as an **optional** field
+(context-only is a valid execution; both prompt and context empty
+fails at run time with the runner's clear error) — aligned with the
+UI and runner decision; `--context_id`, `--skill_revision_id` and
+`--model_revision_id` remain required.
 
 ### acta_gamma (C++ / Qt 6 Widgets)
 

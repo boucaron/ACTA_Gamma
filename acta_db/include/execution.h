@@ -109,8 +109,10 @@ typedef struct {
 /* Insert a new execution row.
  *
  * Required fields (validated up front, all must hold):
- *   context_id > 0, skill_revision_id > 0, model_revision_id > 0,
- *   prompt != NULL.
+ *   context_id > 0, skill_revision_id > 0, model_revision_id > 0.
+ * prompt is OPTIONAL: NULL is stored as SQL NULL (a context-only
+ * execution is valid; the runner fails at run time only if both
+ * prompt and context content are empty).
  *
  * e->status is IGNORED: a new execution is always created "pending";
  * any other state is only reachable via the transition functions

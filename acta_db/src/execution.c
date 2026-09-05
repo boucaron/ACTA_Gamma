@@ -286,8 +286,12 @@ int acta_db_execution_count(db_t *db,
 int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
 {
     if (!db || !e || e->context_id <= 0 || e->skill_revision_id <= 0 ||
-        e->model_revision_id <= 0 || !e->prompt)
+        e->model_revision_id <= 0)
         return ACTA_DB_ERR_INVALID;
+
+    /* e->prompt is optional: a context-only execution is valid, and a
+     * NULL prompt is stored as SQL NULL (the runner fails at run time
+     * only if both prompt and context content are empty). */
 
     /* e->status is deliberately ignored: a new execution is always
      * created "pending"; later state is only reached via the
@@ -306,7 +310,10 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
     sqlite3_bind_int  (stmt, 1, e->context_id);
     sqlite3_bind_int  (stmt, 2, e->skill_revision_id);
     sqlite3_bind_int  (stmt, 3, e->model_revision_id);
-    sqlite3_bind_text (stmt, 4, e->prompt, -1, SQLITE_TRANSIENT);
+    if (e->prompt)
+        sqlite3_bind_text (stmt, 4, e->prompt, -1, SQLITE_TRANSIENT);
+    else
+        sqlite3_bind_null (stmt, 4);
     sqlite3_bind_text (stmt, 5, ACTA_EXEC_STATUS_PENDING, -1, SQLITE_TRANSIENT);
     if (e->parent_execution_id == 0)
         sqlite3_bind_null(stmt, 6);

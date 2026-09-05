@@ -66,7 +66,9 @@ static void test_create_id_only(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_create_missing_prompt(stest_ctx_t *ctx)
+/* prompt is optional: a context-only execution is valid (the runner
+ * fails at run time only if prompt and context are both empty). */
+static void test_create_without_prompt(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
@@ -76,7 +78,8 @@ static void test_create_missing_prompt(stest_ctx_t *ctx)
     targs_flag(a, "model_revision_id", "2", &g);
 
     int rc = do_exec(ctx, "create", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\"");
     targs_free(a, &g);
 }
 
@@ -391,7 +394,7 @@ int run_execution_test_create(void)
     test_create_basic(&ctx);
     test_create_all_fields(&ctx);
     test_create_id_only(&ctx);
-    test_create_missing_prompt(&ctx);
+    test_create_without_prompt(&ctx);
     test_create_missing_context_id(&ctx);
     test_create_missing_skill_revision_id(&ctx);
     test_create_missing_model_revision_id(&ctx);

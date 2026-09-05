@@ -43,12 +43,12 @@ void exec_usage(FILE *f)
 "        <- JSON via stdin\n"
 "\n"
 "  Required fields:\n"
-"    --prompt <str>               The prompt / task description\n"
 "    --context_id <int>           Owning context (must be > 0)\n"
 "    --skill_revision_id <int>    Skill revision (must be > 0)\n"
 "    --model_revision_id <int>    Model revision (must be > 0)\n"
 "\n"
 "  Optional fields:\n"
+"    --prompt <str>               Prompt / task description\n"
 "    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
 "\n"
 "  Options:\n"
@@ -162,12 +162,12 @@ static void usage_create(FILE *f)
 "        <- JSON via stdin\n"
 "\n"
 "  Required fields:\n"
-"    --prompt <str>               The prompt / task description\n"
 "    --context_id <int>           Owning context (must be > 0)\n"
 "    --skill_revision_id <int>    Skill revision (must be > 0)\n"
 "    --model_revision_id <int>    Model revision (must be > 0)\n"
 "\n"
 "  Optional fields:\n"
+"    --prompt <str>               Prompt / task description\n"
 "    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
 "\n"
 "  Options:\n"
@@ -486,7 +486,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         VLOG(1, "exec create: prompt=%s context_id=%d skill_revision_id=%d "
                 "model_revision_id=%d parent_execution_id=%d status=%s",
-             exec.prompt ? exec.prompt : "(missing)",
+             exec.prompt ? exec.prompt : "(none)",
              exec.context_id, exec.skill_revision_id,
              exec.model_revision_id, exec.parent_execution_id,
              exec.status ? exec.status : "(default)");
@@ -505,14 +505,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              (const void *)ga, json_owned, (const void *)&exec,
              (const void *)exec.prompt, (const void *)exec.status);
 
-        /* ── required-field validation ────────────────────────────── */
-        if (!exec.prompt) {
-            VLOG(1, "  ERROR: missing required field 'prompt'");
-            emit_error("missing required field: prompt");
-            usage_create(stderr);
-            ret = EXIT_INVALID;
-            goto cleanup_exec_create;
-        }
+        /* ── required-field validation ──────────────────────────────
+         * prompt is optional (context-only is a valid execution; the
+         * runner fails at run time if prompt and context are both
+         * empty). */
         if (exec.context_id <= 0) {
             VLOG(1, "  ERROR: missing required field 'context_id'");
             emit_error("missing required field: context_id");

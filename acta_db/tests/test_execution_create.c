@@ -133,7 +133,9 @@ static void test_exec_create_invalid_mr(void) {
     test_db_teardown(db, path);
 }
 
-/* The header lists prompt as a required field; NULL must be rejected. */
+/* prompt is optional: a context-only execution is valid, and a NULL
+ * prompt must be stored as SQL NULL (the runner fails at run time only
+ * if both prompt and context content are empty). */
 static void test_exec_create_null_prompt(void) {
     const char *path = "test/acta_test_exec_null_prompt.db";
     remove(path);
@@ -152,7 +154,14 @@ static void test_exec_create_null_prompt(void) {
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
-                       ACTA_DB_ERR_INVALID);
+                       ACTA_DB_OK);
+    TEST_ASSERT(out_id > 0);
+
+    int err = 0;
+    execution_t *got = acta_db_execution_get(db, out_id, &err);
+    TEST_ASSERT_NOT_NULL(got);
+    TEST_ASSERT(got->prompt == NULL);
+    acta_db_execution_free(got);
 
     test_db_teardown(db, path);
 }
