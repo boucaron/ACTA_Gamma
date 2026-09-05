@@ -70,7 +70,7 @@ typedef struct {
  *
  *   pending ──start()──▶ running ──complete()──▶ completed  (terminal)
  *                            │
- *                            └──fail()──────────▶ failed     (terminal)
+ *                            └──fail()──────────▶ failed  ──reset()──▶ pending
  *
  *   pending, running ──cancel()──▶ cancelled  (terminal)
  *
@@ -80,9 +80,13 @@ typedef struct {
  *    cancel()      requires  status ∈ {pending, running}
  *    complete()    requires  status == running
  *    fail()        requires  status == running
+ *    reset()       requires  status == failed
  *
- *  Terminal states (completed, failed, cancelled) are immutable;
- *  no function will modify a row in a terminal state.
+ *  completed and cancelled are immutable; no function will modify a
+ *  row in those states. failed is re-entrant: reset() returns it to
+ *  pending (retry) and clears the failed attempt's data (error,
+ *  raw_response, started_at, completed_at); the execution_log audit
+ *  trail is preserved across retries.
  *
  *  set_raw_response() has NO status restriction — it updates a data
  *  field, not a state transition, and may be called from any state.
@@ -136,6 +140,11 @@ int  acta_db_execution_complete(db_t *db, int id, const char *result);
 
 /* Transition running → failed. Stores the error string. */
 int  acta_db_execution_fail(db_t *db, int id, const char *error);
+
+/* Transition failed → pending (retry). Clears error, raw_response,
+ * started_at and completed_at so the next run starts clean. The
+ * execution_log history of the previous attempt is preserved. */
+int  acta_db_execution_reset(db_t *db, int id);
 
 /* Data update, NOT a state transition. May be called from any state. */
 int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);

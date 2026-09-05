@@ -482,6 +482,32 @@ int acta_db_execution_fail(db_t *db, int id, const char *error)
     return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
 }
 
+int acta_db_execution_reset(db_t *db, int id)
+{
+    if (!db) return ACTA_DB_ERR_INVALID;
+
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_FAILED);
+    if (rc != ACTA_DB_OK) return rc;
+
+    const char *sql =
+        "UPDATE executions "
+        "SET    status = 'pending', error = NULL, raw_response = NULL, "
+        "       started_at = NULL, completed_at = NULL "
+        "WHERE  id = ? AND status = 'failed';";
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(stmt, 1, id);
+
+    int step_rc = sqlite3_step(stmt);
+    int changes = (step_rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
+    sqlite3_finalize(stmt);
+
+    if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
+    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+}
+
 int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw)
 {
     if (!db) return ACTA_DB_ERR_INVALID;

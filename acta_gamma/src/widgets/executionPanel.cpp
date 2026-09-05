@@ -155,7 +155,8 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // remainder, UR #44).
     runBtn = makeActionButton(
         style()->standardIcon(QStyle::SP_MediaPlay),
-        tr("Run the selected execution"),
+        tr("Run the selected execution (a failed execution is reset to "
+           "pending first)"),
         QKeySequence(Qt::ALT | Qt::Key_R));
     btnRow->addWidget(runBtn);
     lay->addLayout(btnRow);
@@ -224,7 +225,8 @@ void ExecutionPanel::updateRunBtnState()
     if (canRun) {
         const auto *cur = list->currentItem();
         canRun = cur != nullptr
-            && cur->text(1) == QLatin1String(ACTA_EXEC_STATUS_PENDING);
+            && (cur->text(1) == QLatin1String(ACTA_EXEC_STATUS_PENDING)
+                || cur->text(1) == QLatin1String(ACTA_EXEC_STATUS_FAILED));
     }
     runBtn->setEnabled(canRun);
 }
@@ -272,13 +274,36 @@ void ExecutionPanel::onRunBtnClicked()
     }
     // The runner atomically refuses non-pending rows via start() anyway;
     // this is a UI convenience (the button is only enabled for pending
-    // rows, but the context menu / shortcut can fire on a stale
-    // selection).
+    // and failed rows, but the context menu / shortcut can fire on a
+    // stale selection).
     const QString status =
         exec->status ? QString::fromUtf8(exec->status) : QString();
     acta_db_execution_free(exec);
-    if (status != QLatin1String(ACTA_EXEC_STATUS_PENDING))
+    if (status != QLatin1String(ACTA_EXEC_STATUS_PENDING)
+            && status != QLatin1String(ACTA_EXEC_STATUS_FAILED))
         return;
+
+    // A failed row is retried: reset failed -> pending first, so the
+    // runner's start() claim succeeds. The previous attempt's log lines
+    // stay in the audit trail. On failure, do not spawn the runner.
+    if (status == QLatin1String(ACTA_EXEC_STATUS_FAILED)) {
+        int rc = acta_db_execution_reset(m_db, executionId);
+        if (rc != ACTA_DB_OK) {
+            qWarning("acta_db_execution_reset(%d) failed: %s",
+                     executionId, acta_db_strerror(rc));
+            return;
+        }
+        // Reflect the reset in the list immediately (the runner's polling
+        // keeps it in sync from here on).
+        QTreeWidgetItem *item = findRow(executionId);
+        if (item) {
+            const QString pending =
+                QLatin1String(ACTA_EXEC_STATUS_PENDING);
+            item->setText(1, pending);
+            item->setForeground(1, statusColor(pending));
+            item->setToolTip(1, statusMeaning(pending));
+        }
+    }
 
     const QString exe = findRunnerExe();
     if (exe.isEmpty()) {
@@ -687,7 +712,8 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
     connect(aNew, &QAction::triggered, this, [this] { onNewBtnClicked(); });
     auto *aRun = menu.addAction(tr("Run"));
     aRun->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    aRun->setToolTip(tr("Run the selected execution"));
+    aRun->setToolTip(tr("Run the selected execution (a failed execution "
+                         "is reset to pending first)"));
     aRun->setEnabled(runBtn->isEnabled());
     connect(aRun, &QAction::triggered, this, [this] { onRunBtnClicked(); });
     auto *aShow = menu.addAction(tr("Show"));
