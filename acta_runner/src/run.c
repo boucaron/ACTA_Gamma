@@ -443,6 +443,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     cJSON_AddNumberToObject(m, "system_bytes",
                             (double)strlen(system ? system : ""));
     cJSON_AddNumberToObject(m, "user_bytes", (double)strlen(user));
+    cJSON_AddStringToObject(m, "system", system ? system : "");
+    cJSON_AddStringToObject(m, "user", user);
     meta = json_print(m);
     log_phase(db, exec_id, ACTA_LOG_LEVEL_INFO, "prompt_resolved",
               "prompt resolved (system + user)", meta);

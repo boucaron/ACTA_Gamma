@@ -494,6 +494,11 @@ The execution stores:
 
 This makes the execution self-describing and protects the audit trail if prompt-resolution behavior changes later.
 
+In the schema this is split in two:
+
+* `executions.prompt` keeps its original meaning: the optional, user-entered instruction given at creation time (the context content alone is already a valid user message).
+* The fully resolved prompt — the actual `system` and `user` messages sent to the backend — is recorded in the `prompt_resolved` event of `execution_logs` (`metadata` carries `system`, `user`, `system_bytes`, `user_bytes`). It is deliberately not duplicated into the `executions` row: contexts are immutable and already referenced by `context_id`, so the log row provides the audit artifact without storing large content in every execution row.
+
 ### Replay ?
 It is possible to replay a job, it creates a new job with the same parameters by defaults, or you can use another model
 A link is done to the parent from where it comes.

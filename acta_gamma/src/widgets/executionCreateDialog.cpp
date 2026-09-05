@@ -458,8 +458,7 @@ void ExecutionCreateDialog::updateSaveEnabled()
     const bool ready =
         ui->contextComboBox->currentData().toInt() != 0
         && m_skillRevisionId != 0
-        && m_modelRevisionId != 0
-        && !ui->promptTextEdit->toPlainText().trimmed().isEmpty();
+        && m_modelRevisionId != 0;
     if (QPushButton *save =
             ui->buttonBox->button(QDialogButtonBox::StandardButton::Save))
         save->setEnabled(ready);
@@ -613,12 +612,10 @@ void ExecutionCreateDialog::onSaveClicked()
     if (!m_db || m_saved)
         return;
 
+    /* Prompt is optional: the context content alone is a valid user
+     * message for the runner. A context-less, prompt-less execution will
+     * fail at run time with a clear error. */
     const QString prompt = ui->promptTextEdit->toPlainText().trimmed();
-    if (prompt.isEmpty()) {
-        QMessageBox::warning(this, tr("New Execution"),
-                             tr("The prompt is required."));
-        return;
-    }
 
     execution_t e{};
     e.context_id = ui->contextComboBox->currentData().toInt();

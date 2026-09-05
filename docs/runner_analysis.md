@@ -53,7 +53,11 @@ Implementation notes (where the spec left room):
   `ACTA_DB_ERR_*` contract. Exit codes: 12 for HTTP/preflight failures,
   13 for timeout, 4 for validation/claim failures.
 - User message = `context.content + "\n\n" + execution.prompt` (either
-  half may be empty; both empty → fail).
+  half may be empty; both empty → fail). The `prompt_resolved` log event
+  records the fully resolved `system` and `user` strings (plus their
+  byte counts) in its `metadata`, so each execution is self-describing.
+  `executions.prompt` keeps its original meaning: the optional,
+  user-entered instruction at creation time.
 
 ## Codebase analysis
 
@@ -179,7 +183,12 @@ headless/CLI-driven mode later.
    `user = context.content + execution.prompt`. If a skill has an
    `output_schema`, use `response_format: {"type":"json_schema",
    "schema": ...}` when the backend supports it, otherwise validate the
-   raw response post-hoc.
+   raw response post-hoc. The resolved prompt is NOT stored in
+   `executions.prompt` (that column stays the user-entered instruction);
+   it is recorded in the `prompt_resolved` event of `execution_logs`
+   (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
+   makes the execution self-describing and protects the audit trail if
+   prompt-resolution behavior changes later.
 4. **Auth:** `--api_key` flag → `$OPENAI_API_KEY` → per-model
    `configuration` JSON (`{"api_key": ...}`). Sent as
    `Authorization: Bearer <key>`; optional when the server has no

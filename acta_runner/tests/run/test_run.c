@@ -175,11 +175,34 @@ static int log_has_event(db_t *db, int exec_id, const char *event)
     return found;
 }
 
+/* True when some log row with the given event has metadata containing
+ * substr. */
+static int log_metadata_contains(db_t *db, int exec_id, const char *event,
+                                const char *substr)
+{
+    int err = ACTA_DB_OK, n = 0;
+    execution_log_t **rows = acta_db_execution_log_list_by_execution(
+        db, exec_id, NULL, 0, ACTA_DB_MAX_PAGE, &n, &err);
+    if (err != ACTA_DB_OK || !rows)
+        return 0;
+    int found = 0;
+    for (int i = 0; i < n; i++)
+        if (rows[i]->event && strcmp(rows[i]->event, event) == 0 &&
+            rows[i]->metadata &&
+            strstr(rows[i]->metadata, substr) != NULL) {
+            found = 1;
+            break;
+        }
+    acta_db_execution_log_list_free(rows, n);
+    return found;
+}
+
 /*
  * One scenario: start the stub, seed a fresh pending execution, run it,
- * verify exit code + row state + log rows, stop the stub.
+ * verify exit code + row state + log rows, stop the stub. Returns the
+ * execution id, or -1 if setup failed.
  */
-static void scenario(const char *name, db_t *db, const stub_config_t *cfg,
+static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
                      const char *output_schema,
                      const char *model_config,
                      int timeout_sec, int expect_exit,
@@ -193,17 +216,17 @@ static void scenario(const char *name, db_t *db, const stub_config_t *cfg,
     int ctx = 0, skr = 0, mkr = 0;
     if (seed(db, &ctx, &skr, &mkr, output_schema, model_config) != 0) {
         check(0, "seed");
-        return;
+        return -1;
     }
     int id = make_execution(db, ctx, skr, mkr);
     if (id < 0) {
         check(0, "make_execution");
-        return;
+        return -1;
     }
 
     if (stub_server_start(cfg) != 0) {
         check(0, "stub server start");
-        return;
+        return -1;
     }
 
     int rc = run_execution(db, id, timeout_sec, NULL);
@@ -229,6 +252,7 @@ static void scenario(const char *name, db_t *db, const stub_config_t *cfg,
     }
 
     stub_server_stop();
+    return id;
 }
 
 /* ── scenarios ────────────────────────────────────────────────────── */
@@ -271,10 +295,19 @@ int main(void)
         cfg.model_id = "stub-model";
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
-        scenario("success", db, &cfg, NULL, NULL, 30, EXIT_OK,
-                 ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
-                 EVT_FULL_SUCCESS, sizeof(EVT_FULL_SUCCESS) /
-                 sizeof(EVT_FULL_SUCCESS[0]));
+        int sid = scenario("success", db, &cfg, NULL, NULL, 30, EXIT_OK,
+                           ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
+                           EVT_FULL_SUCCESS, sizeof(EVT_FULL_SUCCESS) /
+                           sizeof(EVT_FULL_SUCCESS[0]));
+        if (sid > 0) {
+            check(log_metadata_contains(db, sid, "prompt_resolved",
+                                       "\"system\":\"SYS-TEMPLATE\""),
+                  "prompt_resolved metadata carries resolved system");
+            check(log_metadata_contains(
+                      db, sid, "prompt_resolved",
+                      "\"user\":\"CTX-CONTENT\\n\\nUSER-PROMPT\""),
+                  "prompt_resolved metadata carries resolved user");
+        }
     }
 
     /* 2. health 503 -> model still loading */
