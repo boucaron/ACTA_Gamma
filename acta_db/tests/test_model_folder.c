@@ -54,6 +54,31 @@ static void setup(void)
         return;
     }
 
+    /* The partial unique indexes from the production schema
+     * (acta_gamma/db/schema.sql). Duplicate detection in
+     * acta_db_model_folder_create/rename relies on these: the C layer
+     * only maps SQLITE_CONSTRAINT_UNIQUE to ACTA_DB_ERR_DUPLICATE. */
+    rc = acta_db_exec(g_db,
+        "CREATE UNIQUE INDEX uq_model_folders_root "
+        "ON model_folders(name) WHERE parent_id IS NULL;");
+    if (rc != ACTA_DB_OK) {
+        fprintf(stderr, "  FATAL: CREATE UNIQUE INDEX uq_model_folders_root "
+                "failed (%s)\n", acta_db_strerror(rc));
+        acta_db_close(g_db);
+        g_db = NULL;
+        return;
+    }
+    rc = acta_db_exec(g_db,
+        "CREATE UNIQUE INDEX uq_model_folders_child "
+        "ON model_folders(parent_id, name) WHERE parent_id IS NOT NULL;");
+    if (rc != ACTA_DB_OK) {
+        fprintf(stderr, "  FATAL: CREATE UNIQUE INDEX uq_model_folders_child "
+                "failed (%s)\n", acta_db_strerror(rc));
+        acta_db_close(g_db);
+        g_db = NULL;
+        return;
+    }
+
     /* Needed by soft_delete's contained-models guard. */
     rc = acta_db_exec(g_db,
         "CREATE TABLE models ("
