@@ -87,6 +87,13 @@ static skill_t **collect_skill_rows(sqlite3_stmt *stmt,
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Mutators
+ *
+ *  NOTE: the skill_revision row is NOT inserted here. It is snapshotted
+ *  by the `skills_create_initial_revision` / `skills_update_revision`
+ *  / `skills_soft_delete_revision` triggers in acta_gamma/db/schema.sql,
+ *  which fire in the same transaction for every client (C library,
+ *  CLI, GUI, raw SQL). Revision rows are immutable — a separate trigger
+ *  rejects updates/deletes on them.
  * ═══════════════════════════════════════════════════════════════════ */
 
 int acta_db_skill_create(db_t *db, const skill_t *s, int *out_id)
