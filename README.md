@@ -31,7 +31,7 @@ The engine controls the execution. The LLM does not orchestrate itself, maintain
 * **Immutable contexts** — the exact input can be retained for replay.
 * **Model independent** — use llama.cpp, cloud models, or other OpenAI-compatible backends.
 * **Auditable** — executions retain prompts, raw responses, results, errors, and execution events.
-* **Replayable** — run the same context and skill against another model or revision.
+* **Replayable** — a replay is exact when it reuses the same context, skill revision, model revision, and execution prompt.
 * **Benchmarkable** — compare models and skill revisions against the same datasets.
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
@@ -63,7 +63,7 @@ The engine controls the execution. The LLM does not orchestrate itself, maintain
 
 Skills and models are versioned by automatic snapshots: a DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created or updated (`actagamma_db skill create` / `skill update`, `model create` / `model update`). Revision rows are **immutable** — they can be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`) but not edited or deleted. Contexts are likewise immutable (a trigger rejects updates), which is what makes replay exact.
 
-An execution binds to explicit `skill_revision_id` and `model_revision_id`, so a replay runs the exact prompt template, output schema, and model configuration the execution was created with. There is deliberately no `promote` / `deprecate` / `active` marking: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want. That is the whole lifecycle — create/update the parent, revisions are snapshotted automatically, executions reference revision ids.
+An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its final user message is `execution.prompt + "\n\n" + context.content` — so a replay is exact only with all four inputs: the context, the skill revision, the model revision, and the execution-level prompt. There is deliberately no `promote` / `deprecate` / `active` marking: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want. That is the whole lifecycle — create/update the parent, revisions are snapshotted automatically, executions reference revision ids.
 
 ## How a run is assembled
 
@@ -175,9 +175,9 @@ actagamma_db log list
 
 Early prototype / POC.
 
-**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI spawns `acta_runner run <id>` via `QProcess` with live status polling), `sweep` (`acta_runner sweep --stale-seconds N`) as a last-resort safety net for executions left in `running` after a dead runner process — normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
+**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI spawns `acta_runner run <id>` via `QProcess` with live status polling), `sweep` (`acta_runner sweep --stale-seconds N`) cleans up executions left in `running` after a dead runner process: an execution is stale when its last runner activity — the latest of its newest `execution_log.created_at` and `started_at` (falling back to `created_at`) — is older than `now − N` seconds; a stale row transitions `running → failed` with the error `stale running: no runner activity for N s` and an `execution_failed` log row, and any row that leaves `running` between the query and the fail is skipped rather than overwriting a live outcome. `--stale-seconds` must be a positive integer (0 is rejected). Normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
 
-**Not yet implemented:** streaming responses and automatic retries (a failed execution can be retried manually via the `failed → pending` reset).
+**Not yet implemented:** streaming responses and automatic retries (a failed execution can be retried manually via the `failed → pending` reset). Automatic retries are deliberately deferred: transient backend failures are rare in the current single-node deployment, and a manual reset is simpler to reason about and avoids retry storms.
 
 ## Philosophy
 
