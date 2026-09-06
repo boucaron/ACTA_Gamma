@@ -57,6 +57,21 @@ The engine controls the execution. The LLM does not orchestrate itself, maintain
         Observation              Audit
 ```
 
+## Revisions and lifecycle
+
+Skills and models are versioned by automatic snapshots: a DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created or updated (`actagamma_db skill create` / `skill update`, `model create` / `model update`). Revision rows are **immutable** — they can be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`) but not edited or deleted. Contexts are likewise immutable (a trigger rejects updates), which is what makes replay exact.
+
+An execution binds to explicit `skill_revision_id` and `model_revision_id`, so a replay runs the exact prompt template, output schema, and model configuration the execution was created with. There is deliberately no `promote` / `deprecate` / `active` marking: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want. That is the whole lifecycle — create/update the parent, revisions are snapshotted automatically, executions reference revision ids.
+
+## How a run is assembled
+
+The runner assembles the chat call from the bound revisions:
+
+- `system` = `skill.prompt_template` (from the bound skill revision)
+- `user`   = `execution.prompt` (the optional per-execution instruction given at `exec create`) + `\n\n` + `context.content` (from the bound context); when the execution has no `prompt`, the user message is just the context content
+
+So `execution.prompt` is not a second template — it is an optional per-execution instruction layered on top of the skill's prompt template, and it is stored on the execution record so the audit trail shows exactly what was asked.
+
 ## Implementation
 
 The implementation is C/C++ on top of SQLite:
@@ -69,6 +84,8 @@ The implementation is C/C++ on top of SQLite:
 | `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button spawns `acta_runner`) |
 
 Model backends are **OpenAI-compatible** endpoints (local llama.cpp server, cloud APIs, etc.). A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; unknown keys are warned about and ignored, and a malformed blob is warned about and treated as empty.
+
+Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim step is an optimistic `UPDATE … WHERE status = 'pending'` (checked for affected rows), so two runner processes cannot claim the same execution. Sequential use is the normal pattern; parallel runners are safe for claiming, but benchmarking workflows should still not share one in-flight execution.
 
 ### Building
 
