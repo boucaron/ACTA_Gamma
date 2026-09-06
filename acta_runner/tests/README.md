@@ -40,6 +40,8 @@ Build & run from `acta_runner/`:
 
     make test        # builds tests/run/test_run + test_pending +
                      # test_sweep and runs them all (after tests/argparse)
+    make test-e2e    # dead-runner end-to-end suite (real child
+                     # acta_runner processes; ~10-15 s)
     make clean
 
 Exit code 0 = all checks pass, 1 = at least one failure.
@@ -64,3 +66,20 @@ Exit code 0 = all checks pass, 1 = at least one failure.
     max(log, started_at))
   - `--stale-seconds 0` / missing / non-numeric → `EXIT_INVALID`
   - inline `--stale-seconds=<n>` form
+
+- `tests/run/test_deadrunner.c` — end-to-end dead-runner recovery
+  (real processes, scratch FILE db in `tests/run/`, in-process stub
+  server on port 8918; fork/execv/SIGKILL on POSIX,
+  CreateProcess/TerminateProcess on Windows). The `:memory:` suites
+  above prove the sweep logic; this one proves the real loop:
+  - a real `acta_runner run <id>` child claims the execution and blocks
+    on the delayed /health preflight call → observed in `running`
+  - the child is SIGKILL'd mid-run → row stays stuck in `running`
+  - after aging past `--stale-seconds 5` (no timestamp backdating), a
+    second real `acta_runner sweep` child exits 0 and transitions the
+    row `running → failed` with the exact `stale running: no runner
+    activity for 5 s` error + `execution_failed` log row
+  - `execution_started` row intact, no `execution_completed` row
+  - repeat sweep → exit 0, row unchanged
+  Takes ~10-15 s (stale-aging sleep), so it is deliberately NOT in the
+  default `test` target: `make test-e2e`.

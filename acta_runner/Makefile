@@ -9,6 +9,8 @@
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
+#   make test-e2e → builds + runs the dead-runner end-to-end suite
+#                   (spawns real acta_runner child processes; ~10-15 s)
 #   make clean    → removes objects + binaries
 #
 # Layout:
@@ -83,6 +85,14 @@ SWEEP_OBJS  := $(patsubst %.c, %.o, $(SWEEP_SRCS))
 SWEEP_TARGET := tests/run/test_sweep$(EXEEXT)
 SWEEP_LDFLAGS := $(ACTA_DB_LIB) -lsqlite3
 
+# ---- dead-runner end-to-end suite: SIGKILL a real runner, sweep it ----
+# Spawns real acta_runner child processes (run, then sweep) against the
+# in-process stub server; scratch FILE db in tests/run/. ~10-15 s
+# (stale-aging sleep), so it stays out of the default `test` target.
+DEAD_SRCS   := tests/run/test_deadrunner.c tests/stub_server.c
+DEAD_OBJS   := $(patsubst %.c, %.o, $(DEAD_SRCS))
+DEAD_TARGET := tests/run/test_deadrunner$(EXEEXT)
+
 # ---- argparse test suite (R2): pass-1/pass-2 parsing, no DB/HTTP ----
 AP_SRCS   := tests/argparse/test_argparse.c src/argparse.c
 AP_OBJS   := $(patsubst %.c, %.o, $(AP_SRCS))
@@ -103,7 +113,7 @@ endif
 TEST_LDFLAGS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB) $(CURL_LIB) \
                 -lpthread $(SOCK_LIBS)
 
-.PHONY: all clean test smoke
+.PHONY: all clean test test-e2e smoke
 
 all: $(TARGET)
 
@@ -127,11 +137,19 @@ $(PEND_TARGET): $(PEND_OBJS) $(ACTA_DB_LIB)
 $(SWEEP_TARGET): $(SWEEP_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(SWEEP_OBJS) $(SWEEP_LDFLAGS)
 
+$(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDFLAGS)
+
 test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET)
 	$(AP_TARGET)
 	$(TEST_TARGET)
 	$(PEND_TARGET)
 	$(SWEEP_TARGET)
+
+# End-to-end: build the runner binary first, then run the suite from
+# acta_runner/ (the test spawns ./acta_runner[.exe] as child processes).
+test-e2e: $(DEAD_TARGET) $(TARGET)
+	$(DEAD_TARGET)
 
 $(SMOKE_TARGET): $(SMOKE_OBJS)
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDFLAGS)
@@ -156,7 +174,11 @@ tests/run/test_pending.o: tests/run/test_pending.c tests/stub_server.h
 tests/run/test_sweep.o: tests/run/test_sweep.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+tests/run/test_deadrunner.o: tests/run/test_deadrunner.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
         $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SWEEP_OBJS) \
-        $(SWEEP_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)
+        $(SWEEP_TARGET) $(DEAD_OBJS) $(DEAD_TARGET) $(SMOKE_OBJS) \
+        $(SMOKE_TARGET)
