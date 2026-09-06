@@ -68,7 +68,7 @@ The implementation is C/C++ on top of SQLite:
 | `acta_runner/` | C99 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend: claim → resolve → preflight → chat call → record → complete/fail, with `execution_log` phase rows (uses curl + cJSON) |
 | `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button spawns `acta_runner`) |
 
-Model backends are **OpenAI-compatible** endpoints (local llama.cpp server, cloud APIs, etc.). A model record stores `backend`, `base_url`, `model_identifier`, and free-form configuration.
+Model backends are **OpenAI-compatible** endpoints (local llama.cpp server, cloud APIs, etc.). A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; unknown keys are warned about and ignored, and a malformed blob is warned about and treated as empty.
 
 ### Building
 
@@ -105,11 +105,46 @@ pacman -S mingw-w64-x86_64-qt6
 pacman -S mingw-w64-x86_64-curl
 ```
 
+Or, from the repository root, build the three C targets in dependency order with the top-level wrapper:
+
+```sh
+make all     # acta_db -> acta_db_cli -> acta_runner
+make test    # all three C test suites
+make clean
+```
+
+(the GUI still needs its own `qmake6` + `make` step in `acta_gamma/`)
+
+## Minimal end-to-end example
+
+Against a running OpenAI-compatible server (e.g. `llama-server` on `127.0.0.1:8080`):
+
+```sh
+# 1. Register the model
+actagamma_db model create --json '{"name":"llama-local","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"qwen3-8b"}'
+
+# 2. Create a versioned skill (prompt template + optional output schema)
+actagamma_db skill create --json '{"name":"sentiment","prompt_template":"Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}"}'
+
+# 3. Create an immutable context (the input snapshot)
+actagamma_db context create --json '{"type":"text","content":"The build system shipped on time and the release went smoothly."}'
+
+# 4. Create an execution binding context + skill revision + model revision
+actagamma_db exec create --json '{"prompt":"What is the sentiment of the context?","context_id":1,"skill_revision_id":1,"model_revision_id":1}'
+
+# 5. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
+acta_runner run 1
+
+# 6. Inspect the result and the audit trail
+actagamma_db exec get 1
+actagamma_db log list
+```
+
 ## Current status
 
 Early prototype / POC.
 
-**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (Plan D: the GUI spawns `acta_runner run <id>` via `QProcess` with live status polling), `sweep` for stale-`running` cleanup, and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
+**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI spawns `acta_runner run <id>` via `QProcess` with live status polling), `sweep` (`acta_runner sweep --stale-seconds N`) as a last-resort safety net for executions left in `running` after a dead runner process — normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
 
 **Not yet implemented:** streaming responses and automatic retries (a failed execution can be retried manually via the `failed → pending` reset).
 

@@ -468,6 +468,9 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
      */
     cJSON *cfg = (model->configuration && model->configuration[0])
         ? cJSON_Parse(model->configuration) : NULL;
+    if (model->configuration && model->configuration[0] && !cfg)
+        log_phase(db, exec_id, ACTA_LOG_LEVEL_WARN, "config_invalid_json",
+                  "model configuration is not valid JSON; ignoring it", NULL);
     double temperature = -1.0;
     long max_tokens = 0, top_k = 0;
     int supports_rf = 1;
@@ -488,6 +491,34 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         kv = cJSON_GetObjectItem(cfg, "supports_response_format");
         if (cJSON_IsBool(kv))
             supports_rf = cJSON_IsTrue(kv);
+
+        /* Warn on configuration keys the runner does not understand, so
+         * typos and stale keys surface in the audit trail. */
+        const char *known[] = { "api_key", "temperature", "max_tokens",
+                                "top_k", "supports_response_format" };
+        char unknown[256];
+        unknown[0] = '\0';
+        cJSON *item;
+        cJSON_ArrayForEach(item, cfg) {
+            if (!item->string)
+                continue;
+            int i, kn = 0;
+            for (i = 0; i < (int)(sizeof(known) / sizeof(known[0])); i++)
+                if (strcmp(item->string, known[i]) == 0) { kn = 1; break; }
+            if (!kn && strlen(unknown) + strlen(item->string) + 2 < sizeof unknown) {
+                size_t n = strlen(unknown);
+                if (n)
+                    unknown[n++] = ',';
+                memcpy(unknown + n, item->string, strlen(item->string) + 1);
+            }
+        }
+        if (unknown[0]) {
+            char msg[320];
+            snprintf(msg, sizeof msg,
+                     "unknown model configuration keys ignored: %s", unknown);
+            log_phase(db, exec_id, ACTA_LOG_LEVEL_WARN, "config_unknown_keys",
+                      msg, NULL);
+        }
     }
 
     /* ---- output_schema: parse once, used for response_format and/or

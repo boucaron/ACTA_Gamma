@@ -134,8 +134,8 @@ static int exec_create(db_t *db, int ctx_id, int sr_id, int mr_id,
 /* ------------------------------------------------------------------ */
 /*  Sub-runners                                                       */
 /* ------------------------------------------------------------------ */
-void run_execution_create_tests(void);
-void run_execution_lifecycle_tests(void);
-void run_execution_list_tests(void);
+int run_execution_create_tests(void);
+int run_execution_lifecycle_tests(void);
+int run_execution_list_tests(void);
 
 #endif

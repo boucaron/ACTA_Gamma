@@ -27,7 +27,7 @@ out/
 build/
 debug/
 release/
-Makefile
+*/Makefile
 Makefile.Debug
 Makefile.Release
 *.qmake.stash
