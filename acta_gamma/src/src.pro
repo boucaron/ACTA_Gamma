@@ -21,7 +21,8 @@ SOURCES += \
     widgets/skillDialog.cpp \
     widgets/modelDialog.cpp \
     widgets/executionDialog.cpp \
-    widgets/contextDialog.cpp
+    widgets/contextDialog.cpp \
+    widgets/executionLogDialog.cpp
 
 HEADERS += \
     dbhandle.h \
@@ -37,14 +38,16 @@ HEADERS += \
     widgets/skillDialog.h \
     widgets/modelDialog.h \
     widgets/executionDialog.h \
-    widgets/contextDialog.h
+    widgets/contextDialog.h \
+    widgets/executionLogDialog.h
 
 FORMS += \
     ../ui/skillDialog.ui \
     ../ui/modelDialog.ui \
     ../ui/executionDialog.ui \
     ../ui/contextDialog.ui \
-    ../ui/executionCreateDialog.ui
+    ../ui/executionCreateDialog.ui \
+    ../ui/executionLogDialog.ui
 
 # UR #43: translation template (i18n). Regenerate after any string
 # change with `lupdate`; compiled .qm files (when added) are loaded

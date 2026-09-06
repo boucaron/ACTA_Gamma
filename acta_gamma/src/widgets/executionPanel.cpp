@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QEvent>
+#include <QItemSelectionModel>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QKeySequence>
@@ -28,10 +29,14 @@
 
 #include "executionDialog.h"
 #include "executionCreateDialog.h"
+#include "executionLogDialog.h"
 #include "util.h"
 
 namespace {
 const int RoleExecutionId = Qt::UserRole;
+// Log line id carried by the log table model (first column), used by
+// the Show button / context menu to open the log dialog.
+const int RoleLogId = Qt::UserRole + 1;
 
 // Last stderr line that parses as a JSON object with a non-empty
 // "message" field — the runner's single-line error contract
@@ -122,15 +127,22 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // own row.)
     logList = new QTableView;
     lay->addWidget(logList);
+    // Context menu on the log list: "Show" opens the read-only
+    // execution log dialog for the selected line (same pairing as the
+    // execution list's Show context menu, UR #33).
+    logList->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(logList, &QTableView::customContextMenuRequested, this,
+            &ExecutionPanel::onLogListContextMenu);
+    // Selection drives the Show button's enabled state.
+    connect(logList->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, [this](const QItemSelection &, const QItemSelection &) {
+                updateLogBtnState();
+            });
 
     // Centered placeholder over the blank log list (P5 / UR #31);
     // shown/hidden in showExecutionLogs().
     emptyLogLabel = makeEmptyStateLabel(
         logList, tr("No log lines for this execution"));
-
-    // The log list already shows all four log columns inline, so the
-    // redundant "Show Log Details" button and log context menu were
-    // dropped (P5 / UR #41).
 
     // Icon-only toolbar row (P2 / UR #22), matching the other panels:
     // tooltips carry the meaning, accelerators are Alt+letter (UR #39).
@@ -159,6 +171,14 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
            "pending first)"),
         QKeySequence(Qt::ALT | Qt::Key_R));
     btnRow->addWidget(runBtn);
+    // "Show Log": opens the execution log dialog for the selected log
+    // line of the inline log list; the log list's context menu does
+    // the same (UR #33, mirroring the Show/Show-Log button pair).
+    showLogBtn = makeActionButton(
+        style()->standardIcon(QStyle::SP_DialogOpenButton),
+        tr("Show the details of the selected log line"),
+        QKeySequence(Qt::ALT | Qt::Key_L));
+    btnRow->addWidget(showLogBtn);
     lay->addLayout(btnRow);
 
     // callbacks
@@ -169,6 +189,9 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     });
     connect(runBtn, &QPushButton::clicked, this,
             &ExecutionPanel::onRunBtnClicked);
+    connect(showLogBtn, &QPushButton::clicked, this, [this] {
+        showLogDetails(selectedLogId());
+    });
 
     // Keyboard accelerator (UR #39), handled in eventFilter() while the
     // execution list (or its viewport) has focus. Installed on both
@@ -608,6 +631,8 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
                 lines[i]->created_at
                     ? QString::fromUtf8(lines[i]->created_at)
                     : QString());
+            // Show target (Qt 6.11: QDataViewModelItem::setData(value, role)).
+            dateItem->setData(QVariant(lines[i]->id), RoleLogId);
             auto *levelItem = new QStandardItem(level);
             levelItem->setForeground(logLevelColor(level)); // UR #25
             model->appendRow({
@@ -630,6 +655,11 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
 
     // Empty-state placeholder for the log list (P5 / UR #31).
     emptyLogLabel->setVisible(model->rowCount() == 0);
+
+    // A model swap invalidates the previous selection; sync the Show
+    // button's enabled state (selectionChanged also fires, this keeps
+    // the state consistent when no selection remains).
+    updateLogBtnState();
 }
 
 void ExecutionPanel::applyFilters()
@@ -693,6 +723,55 @@ void ExecutionPanel::onExecutionDoubleClicked(QTreeWidgetItem *item, int)
     // changes nothing, so there is nothing to do (and no reload needed)
     // after it closes.
     dlg.exec();
+}
+
+void ExecutionPanel::updateLogBtnState()
+{
+    const QModelIndex idx = logList->currentIndex();
+    showLogBtn->setEnabled(idx.isValid() && logList->model() != nullptr);
+}
+
+int ExecutionPanel::selectedLogId() const
+{
+    const QModelIndex idx = logList->currentIndex();
+    if (!idx.isValid() || !logList->model())
+        return 0;
+    // The log id is stored in column 0 (QDataViewModelItem::data only
+    // serves its payload for column 0), so read the row's sibling there
+    // no matter which column the cursor is on.
+    const QModelIndex idIdx = logList->model()->index(idx.row(), 0);
+    return logList->model()->data(idIdx, RoleLogId).toInt();
+}
+
+void ExecutionPanel::showLogDetails(int logId)
+{
+    if (!m_db || logId == 0)
+        return;
+
+    ExecutionLogDialog dlg(this);
+    dlg.showLog(m_db, logId);
+    dlg.exec();
+}
+
+void ExecutionPanel::onLogListContextMenu(const QPoint &pos)
+{
+    const QModelIndex idx = logList->indexAt(pos);
+    // A right-click on a row selects it; a right-click in the empty
+    // area keeps the current selection — the menu is still shown, with
+    // the entry falling back to the button state (L1).
+    if (idx.isValid()) {
+        logList->setCurrentIndex(idx);
+        updateLogBtnState();
+    }
+    QMenu menu(this);
+    auto *aShow = menu.addAction(tr("Show"));
+    aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    aShow->setToolTip(tr("Show the details of this log line"));
+    aShow->setEnabled(showLogBtn->isEnabled());
+    connect(aShow, &QAction::triggered, this, [this] {
+        showLogDetails(selectedLogId());
+    });
+    menu.exec(logList->viewport()->mapToGlobal(pos));
 }
 
 void ExecutionPanel::onListContextMenu(const QPoint &pos)

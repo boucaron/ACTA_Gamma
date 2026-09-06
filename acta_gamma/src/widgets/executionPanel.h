@@ -36,6 +36,10 @@ public:
     // selected row; enabled only while the row is pending and no
     // runner process is active.
     QPushButton *runBtn;
+    // Opens the execution log dialog for the selected log line of the
+    // inline log list; pairs with the log list's "Show" context menu
+    // entry the way showDetailsBtn pairs with the execution list's.
+    QPushButton *showLogBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
@@ -95,6 +99,21 @@ private:
     // Right-click context menu on the execution list: "Show" opens the
     // same dialog as double-click / Enter / Show.
     void onListContextMenu(const QPoint &pos);
+
+    // Right-click context menu on the inline log list: "Show" opens
+    // the read-only execution log dialog for the selected log line.
+    void onLogListContextMenu(const QPoint &pos);
+
+    // Open the execution log dialog for the given log line id
+    // (0 = nothing to show).
+    void showLogDetails(int logId);
+
+    // Enable state for the log Show button / menu entry: a log line is
+    // currently selected in the log list.
+    void updateLogBtnState();
+
+    // Log line id of the currently selected log row (0 when none).
+    int selectedLogId() const;
 
 private slots:
     // R1 (Plan D): spawn acta_runner run <id> for the selected row, then
