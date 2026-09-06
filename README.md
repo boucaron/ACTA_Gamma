@@ -141,6 +141,8 @@ Or, from the repository root, build the three C targets in dependency order with
 ```sh
 make all     # acta_db -> acta_db_cli -> acta_runner
 make test    # all three C test suites
+make -C acta_runner test-e2e    # optional: dead-runner end-to-end suite
+                                # (real runner processes; ~10-15 s)
 make clean
 ```
 
