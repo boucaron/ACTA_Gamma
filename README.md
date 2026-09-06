@@ -6,6 +6,8 @@
 
 A small, stateless LLM execution engine for versioned skills, reproducible analysis, and model benchmarking.
 
+The C targets build with plain `make` on Windows (MinGW/MSYS2) and Linux (gcc/clang); the Qt 6 GUI additionally needs `qmake6` on either platform.
+
 ## What is ACTA Gamma?
 
 ACTA Gamma treats an LLM as a single controlled action in a larger deterministic flow.
@@ -121,6 +123,18 @@ pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-make
 pacman -S mingw-w64-x86_64-qt6
 pacman -S mingw-w64-x86_64-curl
 ```
+
+Linux (Debian/Ubuntu):
+
+```sh
+sudo apt install build-essential libsqlite3-dev libcjson-dev libcurl4-openssl-dev
+# GUI only:
+sudo apt install qt6-base-dev
+```
+
+The same `make` targets work unchanged on Linux: `CC ?= cc` picks up gcc/clang, `EXEEXT` is empty under POSIX make, and the Makefiles link `-lsqlite3`, `-lcjson`, and `-lcurl` straight from the system packages.
+
+macOS: Xcode command-line tools for the compiler, Homebrew for SQLite 3 and curl (`brew install sqlite curl`). cJSON is not packaged by Homebrew — build it from source and pass `CJSON_DIR=...` / `CJSON_LIB=...` to the CLI and runner Makefiles.
 
 Or, from the repository root, build the three C targets in dependency order with the top-level wrapper:
 
