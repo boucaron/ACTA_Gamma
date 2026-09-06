@@ -79,8 +79,8 @@ The implementation is C/C++ on top of SQLite:
 | Component | Language | Description |
 |---|---|---|
 | `acta_db/` | C11 | SQLite persistence library (`libacta_db`) — skills, skill folders, skill revisions, models, model folders, model revisions, contexts, executions, execution logs |
-| `acta_db_cli/` | C99 | Command-line client (`actagamma_db`) over `acta_db` (uses cJSON for output) |
-| `acta_runner/` | C99 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend: claim → resolve → preflight → chat call → record → complete/fail, with `execution_log` phase rows (uses curl + cJSON) |
+| `acta_db_cli/` | C11 | Command-line client (`actagamma_db`) over `acta_db` (uses cJSON for output) |
+| `acta_runner/` | C11 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend: claim → resolve → preflight → chat call → record → complete/fail, with `execution_log` phase rows (uses curl + cJSON) |
 | `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button spawns `acta_runner`) |
 
 Model backends are **OpenAI-compatible** endpoints (local llama.cpp server, cloud APIs, etc.). A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; unknown keys are warned about and ignored, and a malformed blob is warned about and treated as empty.

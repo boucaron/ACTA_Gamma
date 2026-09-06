@@ -104,7 +104,7 @@ contracts, ACTA_DB_* error codes, pagination cap 10000):
   context_loaded, prompt_resolved, llm_request, llm_response,
   validation_*, execution_completed/failed).
 
-### acta_db_cli (C99, actagamma_db)
+### acta_db_cli (C11, actagamma_db)
 
 Thin CRUD client over the library (create/get/list/count/start/
 cancel/complete/fail/set-raw for exec). Deliberately DB-only; contains

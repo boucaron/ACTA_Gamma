@@ -23,7 +23,7 @@
 #     make CURL_LIB=/opt/curl/lib/libcurl.a CJSON_DIR=/opt/cjson/include
 
 CC      ?= cc
-CFLAGS  ?= -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -O2 -g
+CFLAGS  ?= -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -O2 -g
 CFLAGS  += -Iinclude -I../acta_db/include
 
 ACTA_DB_LIB := ../acta_db/libacta_db.a

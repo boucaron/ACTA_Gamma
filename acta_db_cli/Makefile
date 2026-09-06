@@ -26,7 +26,7 @@
 #     make CJSON_DIR=/opt/cjson/include CJSON_LIB=/opt/cjson/lib/libcjson.a
 
 CC      ?= cc
-CFLAGS  += -Wall -Wextra -std=c99 -D_POSIX_C_SOURCE=200809L -g \
+CFLAGS  += -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
            -Itests/helpers -Itests/skill_folder \
            -Itests/model_folder \
