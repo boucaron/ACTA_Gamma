@@ -36,7 +36,9 @@ public:
     // "Run" action (R1 / Plan D, in-process per M1 / UR #45): runs the
     // runner pipeline (run_execution) on a background worker thread
     // for the selected row; enabled only while the row is pending and
-    // no runner worker is active.
+    // no runner worker is active. While a run is in flight the button
+    // toggles into "Cancel" (cooperative cancel via the runner's cancel
+    // flag; the row transitions to "cancelled").
     QPushButton *runBtn;
     // Opens the execution log dialog for the selected log line of the
     // inline log list; pairs with the log list's "Show" context menu

@@ -34,6 +34,14 @@ public:
     QString dbPath() const { return m_dbPath; }
     int executionId() const { return m_executionId; }
 
+    // Cooperative cancel of the in-flight pipeline (the "Cancel"
+    // meaning of the Run button): sets the runner's process-global
+    // cancel flag, safe to call from the GUI thread.
+    void requestCancel();
+    // Clear the cancel flag (done automatically by runInThread before
+    // and after the run).
+    void resetCancel();
+
     // Queued-invocation entry point; must run in the worker thread.
 public slots:
     void runInThread();

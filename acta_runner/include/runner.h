@@ -22,6 +22,10 @@
  * EXIT_TIMEOUT – the backend call timed out */
 #define EXIT_HTTP           12
 #define EXIT_TIMEOUT        13
+/* EXIT_CANCELED – the run was cancelled cooperatively (UI cancel
+ * button via the backend cancel flag; the row transitions to
+ * "cancelled") */
+#define EXIT_CANCELED       14
 
 /* ---- global options (filled by parse_globals) ----
  *

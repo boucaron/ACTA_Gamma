@@ -95,7 +95,8 @@ static void help_print(FILE *out)
         "\n"
         "Exit codes:\n"
         "  0 ok | 1 not found | 2 sql | 3 alloc | 4 invalid\n"
-        "  10 cli error | 11 db open | 12 http | 13 timeout\n",
+        "  10 cli error | 11 db open | 12 http | 13 timeout | "
+        "14 cancelled (UI cancel only; never emitted by the CLI)\n",
         out);
 }
 

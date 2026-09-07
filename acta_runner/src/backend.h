@@ -17,6 +17,9 @@
  *                           complete response (http_status = 0).
  *   BACKEND_ERR_TIMEOUT   — the request hit the CURLOPT_TIMEOUT.
  *                           (http_status = 0.)
+ *   BACKEND_ERR_CANCELED  — the request was aborted by the cooperative
+ *                           cancel flag (UI cancel button).
+ *                           (http_status = 0.)
  *   BACKEND_ERR_ALLOC     — local allocation failure.
  *
  * out->body is always NUL-terminated and heap-allocated; free() it.
@@ -29,7 +32,21 @@
 #define BACKEND_ERR_TRANSPORT (-1)
 #define BACKEND_ERR_TIMEOUT   (-2)
 #define BACKEND_ERR_ALLOC     (-3)
+#define BACKEND_ERR_CANCELED  (-4)
 
+/*
+ * Cooperative cancellation (UI "Cancel" button).
+ *
+ * A process-global flag: the app runs at most one runner pipeline at a
+ * time, and the CLI never requests a cancel, so a plain global is
+ * sufficient (and lets the GUI thread set it while the worker thread
+ * reads it in the curl xferinfo callback and between phases).
+ */
+void backend_cancel_request(void);
+void backend_cancel_reset(void);
+int  backend_cancel_requested(void);
+
+/* Result of one backend_request() call. */
 typedef struct {
     int   http_status;  /* 0 when the transport failed */
     char *body;         /* heap-allocated, NUL-terminated ("" if empty) */

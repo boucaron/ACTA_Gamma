@@ -25,6 +25,30 @@
 #define ACTA_RUNNER_CURL_TIMED CURLE_OPERATION_TIMED
 #endif
 
+/*
+ * Cooperative cancel flag (UI "Cancel" button). Process-global on
+ * purpose: the app runs at most one pipeline at a time and the CLI
+ * never requests a cancel, so a plain volatile global lets the GUI
+ * thread set it while the worker thread reads it.
+ */
+static volatile int backend_cancel_flag = 0;
+
+void backend_cancel_request(void) { backend_cancel_flag = 1; }
+void backend_cancel_reset(void)   { backend_cancel_flag = 0; }
+int  backend_cancel_requested(void) { return backend_cancel_flag != 0; }
+
+/*
+ * Xferinfo callback: returning non-zero aborts the in-flight transfer
+ * (curl reports CURLE_ABORTED_BY_CALLBACK). This is how a cancel
+ * request interrupts a long-running HTTP exchange.
+ */
+static int on_xferinfo(void *userp, curl_off_t dltotal, curl_off_t dlnow,
+                       curl_off_t ultotal, curl_off_t ulnow)
+{
+    (void)userp; (void)dltotal; (void)dlnow; (void)ultotal; (void)ulnow;
+    return backend_cancel_flag ? 1 : 0;
+}
+
 /* One-shot curl global init (process is single-threaded). */
 static void curl_once(void)
 {
@@ -146,6 +170,8 @@ int backend_request(const char *method, const char *url,
         curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, on_body);
         curl_easy_setopt(h, CURLOPT_WRITEDATA, &body);
         curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(h, CURLOPT_XFERINFOFUNCTION, on_xferinfo);
+        curl_easy_setopt(h, CURLOPT_XFERINFODATA, NULL);
         if (strcmp(method, "POST") == 0)
             curl_easy_setopt(h, CURLOPT_POSTFIELDS,
                              json_body ? json_body : "");
@@ -154,6 +180,10 @@ int backend_request(const char *method, const char *url,
     out->latency_ms = now_ms() - t0;
 
     if (rc != CURLE_OK) {
+        if (rc == CURLE_ABORTED_BY_CALLBACK) {
+            buf_free(&body);
+            return BACKEND_ERR_CANCELED;
+        }
         if (rc == ACTA_RUNNER_CURL_TIMED) {
             buf_free(&body);
             return BACKEND_ERR_TIMEOUT;
@@ -190,6 +220,7 @@ const char *backend_strerror(int rc)
     case BACKEND_ERR_TRANSPORT: return "transport failure";
     case BACKEND_ERR_TIMEOUT:   return "timeout";
     case BACKEND_ERR_ALLOC:     return "allocation failure";
+    case BACKEND_ERR_CANCELED:  return "cancelled";
     default:                    return "unknown backend error";
     }
 }

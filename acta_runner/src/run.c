@@ -214,6 +214,21 @@ static int fail_execution(db_t *db, int exec_id, int exit_code,
     return emit_runner_error(exit_code, msg);
 }
 
+/* Terminal cancel (UI "Cancel" button): log execution_cancelled and
+ * transition the row pending|running -> cancelled. Returns
+ * EXIT_CANCELED; like fail_execution, it is the terminal path for a
+ * cancelled run so the row never stays stuck in "running". */
+static int cancel_execution(db_t *db, int exec_id)
+{
+    log_phase(db, exec_id, ACTA_LOG_LEVEL_INFO, "execution_cancelled",
+              "execution cancelled by user", NULL);
+    int rc = acta_db_execution_cancel(db, exec_id);
+    if (rc != ACTA_DB_OK)
+        VLOG(1, "cancel_execution: execution_cancel returned %s; row may not be cancelled",
+             acta_db_strerror(rc));
+    return EXIT_CANCELED;
+}
+
 /* Set errmsg/exit_code_ and jump to the common failure exit in
  * run_execution. Both are declared at the top of run_execution so the
  * macro can reference them at any point before the `done:` label. */
@@ -222,6 +237,15 @@ static int fail_execution(db_t *db, int exec_id, int exit_code,
         snprintf(errmsg, sizeof errmsg, fmt, ##__VA_ARGS__);        \
         exit_code_ = (exit_code);                                   \
         goto done;                                                  \
+    } while (0)
+
+/* Mark the run cancelled and jump to the common exit in run_execution:
+ * the row transitions pending|running -> cancelled (NOT failed). */
+#define CANCEL()                                                        \
+    do {                                                                \
+        exit_code_ = EXIT_CANCELED;                                     \
+        snprintf(errmsg, sizeof errmsg, "execution cancelled by user"); \
+        goto done;                                                      \
     } while (0)
 
 /* ── post-hoc output_schema validation (subset) ────────────────────── */
@@ -322,9 +346,19 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     int exit_code_ = EXIT_OK;  /* set by FAIL, consumed at `done:` */
     char errmsg[512];           /* set by FAIL, consumed at `done:` */
     cJSON *jr = NULL;           /* parsed response; freed at `done:` */
+    /* Pipeline resources, hoisted so CANCEL() can jump to `done:` at any
+     * point: every free below is NULL-safe (acta_db_*_free, cJSON_Delete
+     * and free all accept NULL). */
+    execution_t *e = NULL;
+    context_t *ctx = NULL;
+    skill_revision_t *skill = NULL;
+    model_revision_t *model = NULL;
+    char *user = NULL;
+    cJSON *cfg = NULL;
+    cJSON *schema_j = NULL;
 
     int err = ACTA_DB_OK;
-    execution_t *e = acta_db_execution_get(db, exec_id, &err);
+    e = acta_db_execution_get(db, exec_id, &err);
     if (err != ACTA_DB_OK) {
         acta_db_execution_free(e);
         return finish_op_error(db, err, "execution_get");
@@ -341,6 +375,11 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         return EXIT_INVALID;
     }
 
+    /* Cancel can arrive even before the claim: pending -> cancelled is
+     * a valid transition, so the row is cancelled, not failed. */
+    if (backend_cancel_requested())
+        CANCEL();
+
     /* ---- 1. claim: pending -> running (atomic) ---- */
     int rc = acta_db_execution_start(db, exec_id);
     if (rc != ACTA_DB_OK) {
@@ -350,9 +389,11 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     }
     log_phase(db, exec_id, ACTA_LOG_LEVEL_INFO, "execution_started",
               "execution claimed (pending -> running)", NULL);
+    if (backend_cancel_requested())
+        CANCEL();
 
     /* ---- 2. resolve refs ---- */
-    context_t *ctx = acta_db_context_get(db, e->context_id, &err);
+    ctx = acta_db_context_get(db, e->context_id, &err);
     if (err != ACTA_DB_OK || !ctx) {
         char msg[192];
         snprintf(msg, sizeof msg, "context fetch failed (id %d): %s",
@@ -364,7 +405,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         return ex;
     }
 
-    skill_revision_t *skill =
+    skill =
         acta_db_skill_revision_get(db, e->skill_revision_id, &err);
     if (err != ACTA_DB_OK || !skill) {
         char msg[192];
@@ -378,7 +419,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         return ex;
     }
 
-    model_revision_t *model =
+    model =
         acta_db_model_revision_get(db, e->model_revision_id, &err);
     if (err != ACTA_DB_OK || !model) {
         char msg[192];
@@ -410,7 +451,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
      * (either half may be empty; both empty -> fail). */
     const char *prompt = e->prompt;
     const char *cc = ctx->content;
-    char *user = NULL;
+    user = NULL;
     if (prompt && prompt[0] && cc && cc[0]) {
         size_t n = strlen(prompt) + 2 + strlen(cc);
         user = (char *)malloc(n + 1);
@@ -466,7 +507,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
      *                             has no json_schema response_format, so
      *                             post-hoc validation applies)
      */
-    cJSON *cfg = (model->configuration && model->configuration[0])
+    cfg = (model->configuration && model->configuration[0])
         ? cJSON_Parse(model->configuration) : NULL;
     if (model->configuration && model->configuration[0] && !cfg)
         log_phase(db, exec_id, ACTA_LOG_LEVEL_WARN, "config_invalid_json",
@@ -525,7 +566,6 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
      *      post-hoc validation ---- */
     const char *schema = skill->output_schema;
     int have_schema = schema && schema[0];
-    cJSON *schema_j = NULL;
     if (have_schema) {
         schema_j = cJSON_Parse(schema);
         if (!schema_j) {
@@ -542,6 +582,9 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     }
     int use_response_format = have_schema && supports_rf;
 
+    if (backend_cancel_requested())
+        CANCEL();
+
     /* ---- 3. preflight: /health, /v1/models, / (catalog) ---- */
     long max_ctx = 0;
     {
@@ -551,6 +594,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         int brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
         if (brc != BACKEND_OK) {
             free(r.body);
+            if (brc == BACKEND_ERR_CANCELED)
+                CANCEL();
             if (brc == BACKEND_ERR_TIMEOUT)
                 FAIL(EXIT_TIMEOUT, "health check timed out after %d s",
                      timeout_sec);
@@ -572,6 +617,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         int brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
         if (brc != BACKEND_OK) {
             free(r.body);
+            if (brc == BACKEND_ERR_CANCELED)
+                CANCEL();
             if (brc == BACKEND_ERR_TIMEOUT)
                 FAIL(EXIT_TIMEOUT, "models check timed out after %d s",
                      timeout_sec);
@@ -652,6 +699,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         cJSON *cat = (brc == BACKEND_OK && r.http_status == 200)
             ? cJSON_Parse(r.body) : NULL;
         free(r.body);
+        if (brc == BACKEND_ERR_CANCELED)
+            CANCEL();
 
         cJSON *entry = NULL;
         if (cat) {
@@ -753,6 +802,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     free(reqbody);
     if (brc != BACKEND_OK) {
         free(resp.body);
+        if (brc == BACKEND_ERR_CANCELED)
+            CANCEL();
         if (brc == BACKEND_ERR_TIMEOUT)
             FAIL(EXIT_TIMEOUT, "backend call timed out after %d s",
                  timeout_sec);
@@ -849,10 +900,15 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         cJSON_Delete(jv);
     }
 
-    /* ---- 7. close: complete / fail ---- */
+    /* ---- 7. close: complete / fail / cancel ---- */
+    if (backend_cancel_requested())
+        CANCEL();
+
 done:
     if (exit_code_ != EXIT_OK) {
-        int ex = fail_execution(db, exec_id, exit_code_, errmsg);
+        int ex = (exit_code_ == EXIT_CANCELED)
+            ? cancel_execution(db, exec_id)
+            : fail_execution(db, exec_id, exit_code_, errmsg);
         cJSON_Delete(cfg);
         cJSON_Delete(schema_j);
         cJSON_Delete(jr);

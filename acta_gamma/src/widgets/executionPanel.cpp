@@ -21,6 +21,7 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
+#include "runner.h" // EXIT_CANCELED
 #include "runnerWorker.h"
 #include "executionDialog.h"
 #include "executionCreateDialog.h"
@@ -230,7 +231,19 @@ void ExecutionPanel::stopRunner()
 
 void ExecutionPanel::updateRunBtnState()
 {
-    bool canRun = m_db != nullptr && m_runnerThread == nullptr;
+    if (m_runnerThread) {
+        // While the pipeline is in flight the button is Cancel: enabled
+        // unconditionally, with the cancel icon and tooltip.
+        runBtn->setEnabled(true);
+        runBtn->setIcon(style()->standardIcon(QStyle::SP_DialogCancelButton));
+        runBtn->setToolTip(tr("Cancel the running execution"));
+        return;
+    }
+    runBtn->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    runBtn->setToolTip(
+        tr("Run the selected execution (a failed execution is reset to "
+           "pending first)"));
+    bool canRun = m_db != nullptr;
     if (canRun) {
         const auto *cur = list->currentItem();
         canRun = cur != nullptr
@@ -252,7 +265,15 @@ QTreeWidgetItem *ExecutionPanel::findRow(int executionId) const
 
 void ExecutionPanel::onRunBtnClicked()
 {
-    if (!m_db || m_runnerThread)
+    // While a run is in flight the button is the Cancel button: set the
+    // runner's cooperative cancel flag. The worker exits through the
+    // cancel path (row pending|running -> cancelled) and the UI
+    // re-syncs on the worker-finished signal.
+    if (m_runnerThread) {
+        m_runnerWorker->requestCancel();
+        return;
+    }
+    if (!m_db)
         return;
     const auto *cur = list->currentItem();
     const int executionId = cur ? cur->data(0, RoleExecutionId).toInt() : 0;
@@ -339,9 +360,10 @@ void ExecutionPanel::onWorkerFinished(int exitCode, const QString &message)
     }
     stopRunner();
 
-    if (sameDb && exitCode != 0) {
+    if (sameDb && exitCode != 0 && exitCode != EXIT_CANCELED) {
         // The execution row already carries the error; this is purely
-        // informational (P4 error-surfacing style).
+        // informational (P4 error-surfacing style). A user-initiated
+        // cancel is not an error: the row just shows "cancelled".
         QMessageBox::warning(
             this,
             tr("Execution failed"),
@@ -745,12 +767,26 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
     aNew->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
     aNew->setToolTip(tr("Create a new execution"));
     connect(aNew, &QAction::triggered, this, [this] { onNewBtnClicked(); });
-    auto *aRun = menu.addAction(tr("Run"));
-    aRun->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    aRun->setToolTip(tr("Run the selected execution (a failed execution "
-                         "is reset to pending first)"));
-    aRun->setEnabled(runBtn->isEnabled());
-    connect(aRun, &QAction::triggered, this, [this] { onRunBtnClicked(); });
+    // The menu entry mirrors the button: Run, or Cancel while a run is
+    // in flight (it triggers the same onRunBtnClicked branch).
+    if (m_runnerThread) {
+        auto *aCancel = menu.addAction(tr("Cancel"));
+        aCancel->setIcon(style()->standardIcon(QStyle::SP_DialogCancelButton));
+        aCancel->setToolTip(tr("Cancel the running execution"));
+        aCancel->setEnabled(runBtn->isEnabled());
+        connect(aCancel, &QAction::triggered, this, [this] {
+            onRunBtnClicked();
+        });
+    } else {
+        auto *aRun = menu.addAction(tr("Run"));
+        aRun->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+        aRun->setToolTip(tr("Run the selected execution (a failed execution "
+                             "is reset to pending first)"));
+        aRun->setEnabled(runBtn->isEnabled());
+        connect(aRun, &QAction::triggered, this, [this] {
+            onRunBtnClicked();
+        });
+    }
     auto *aShow = menu.addAction(tr("Show"));
     aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     aShow->setToolTip(tr("Show the details of this execution"));

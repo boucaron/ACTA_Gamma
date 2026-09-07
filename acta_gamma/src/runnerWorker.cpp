@@ -19,6 +19,8 @@ const global_opts_t *runner_gopts = nullptr;
 extern "C" {
 int run_execution(db_t *db, int executionId, int timeoutSec,
                    const char *apiKey);
+void backend_cancel_request(void);
+void backend_cancel_reset(void);
 }
 
 // Message of the execution's last error-level log line (the terminal
@@ -48,8 +50,22 @@ RunnerWorker::RunnerWorker(int executionId, const QString &dbPath,
 {
 }
 
+void RunnerWorker::requestCancel()
+{
+    backend_cancel_request();
+}
+
+void RunnerWorker::resetCancel()
+{
+    backend_cancel_reset();
+}
+
 void RunnerWorker::runInThread()
 {
+    // A stale flag must not leak into this run (the flag is a process
+    // global shared by all worker runs).
+    resetCancel();
+
     // Guard against an empty path: sqlite3_open("") would silently open
     // an empty database and surface as a misleading "invalid sqlitedb
     // file" error.
@@ -79,6 +95,7 @@ void RunnerWorker::runInThread()
     const char *apiKey = std::getenv("OPENAI_API_KEY");
     const int exitCode =
         run_execution(db, m_executionId, m_timeoutSec, apiKey);
+    resetCancel(); // don't leak the flag into the next run
     const QString message =
         exitCode == 0 ? QString() : lastErrorLogMessage(db, m_executionId);
 
