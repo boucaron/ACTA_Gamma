@@ -124,7 +124,8 @@ panel's "Run" button (Plan D, commit 184d574) spawns
 `acta_runner run <id> --db <path>` via `QProcess` and polls the
 `execution_log` rows for live status. *(Since commit f6efe22, M1 / UR
 #45: the button no longer spawns a process — `run.c`/`backend.c` are
-compiled into the GUI and run on a worker thread with their own DB
+compiled into the GUI and run on a worker thread created with `moveToThread()` (see the
+threading contract in `runnerWorker.h`) with their own DB
 connection; the panel's polling is unchanged. See
 `ui_review.md` / `ui_active_action.md`.)*
 
@@ -208,7 +209,13 @@ headless/CLI-driven mode later.
    Later refinement (M1 / UR #45, commit f6efe22): the GUI runs the
    same pipeline in-process (a closer cousin of Plan B, but reusing
    the C `run.c`/`backend.c` directly instead of a Qt port) — the
-   standalone runner and its CLI remain available.
+   standalone runner and its CLI remain available. The worker must be
+   `moveToThread()`-ed into its `QThread`; reparenting it to the
+   `QThread` (which lives on the GUI thread) would keep the worker's
+   affinity on the GUI thread and dispatch the blocking pipeline into
+   the GUI event loop, freezing the UI for the whole run. Ownership is
+   therefore manual: `stopRunner()` posts `deleteLater()` to the
+   worker's queue before `quit()` + `wait()` (see `runnerWorker.h`).
 2. **Server lifecycle is user-managed.** The user launches
    `llama-server` (or any OpenAI-compatible backend) manually with
    whatever model they want. The runner is a pure HTTP client: it never
