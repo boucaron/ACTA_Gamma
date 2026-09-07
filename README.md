@@ -6,6 +6,8 @@
 
 A small, stateless LLM execution engine for versioned skills and reproducible analysis.
 
+> **The engine decides what happens. The LLM only does the work it's asked to do.**
+
 The C targets build with plain `make` on Windows (MinGW/MSYS2) and Linux (gcc/clang); the Qt 6 GUI additionally needs `qmake6` on either platform.
 
 ## What is ACTA Gamma?
@@ -23,6 +25,8 @@ Context + Skill + Model
 ```
 
 The engine controls the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next.
+
+Terms used throughout this README: a **skill** is a versioned prompt template with an optional output schema — it is not a tool, function, or agent capability; a **context** is a named, immutable snapshot of input data (a document, a code file, a log excerpt) — it is not the model's prompt window.
 
 ## Core ideas
 
@@ -185,9 +189,7 @@ Early prototype / POC.
 
 ## Philosophy
 
-> **The engine decides what happens. The LLM only does the work it's asked to do.**
-
-ACTA Gamma is deliberately not an agent framework. It provides controlled, observable LLM actions that can be composed and evaluated by software outside the model.
+ACTA Gamma is deliberately not an agent framework. It provides controlled, observable LLM actions that can be composed and evaluated by software outside the model — the thesis stated at the top of this README: the engine decides what happens, and the LLM only does the work it's asked to do.
 
 ## License
 
