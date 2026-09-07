@@ -103,64 +103,7 @@ Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim
 
 ### Building
 
-**Dependencies:** C compiler (MinGW or gcc/clang), SQLite 3, Qt 6 (Core, Widgets), cJSON (CLI, runner, GUI), curl (runner, GUI).
-
-```sh
-# 1. Database library (also builds and runs its test suite)
-cd acta_db
-make            # → libacta_db.a / libacta_db.so
-make test       # C unit tests
-
-# 2. CLI tool
-cd ../acta_cli
-make            # → ./acta_cli
-make test       # per-entity CLI tests
-
-# 3. Runner (drives pending executions; needs a running
-#    llama.cpp llama-server in router mode)
-cd ../acta_runner
-make            # → ./acta_runner
-make test       # pipeline tests against a local stub backend
-
-# 4. GUI
-cd ../acta_gui
-qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile
-make
-```
-
-MinGW (MSYS2) setup for development:
-
-```sh
-pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-make
-pacman -S mingw-w64-x86_64-sqlite
-pacman -S mingw-w64-x86_64-qt6
-pacman -S mingw-w64-x86_64-curl
-pacman -S mingw-w64-x86_64-cjson
-```
-
-Linux (Debian/Ubuntu):
-
-```sh
-sudo apt install build-essential libsqlite3-dev libcjson-dev libcurl4-openssl-dev
-# GUI only:
-sudo apt install qt6-base-dev
-```
-
-The same `make` targets work unchanged on Linux: `CC ?= cc` picks up gcc/clang, `EXEEXT` is empty under POSIX make, and the Makefiles link `-lsqlite3`, `-lcjson`, and `-lcurl` straight from the system packages.
-
-macOS: Xcode command-line tools for the compiler, Homebrew for SQLite 3 and curl (`brew install sqlite curl`). cJSON is not packaged by Homebrew — build it from source and pass `CJSON_DIR=...` / `CJSON_LIB=...` to the CLI and runner Makefiles.
-
-Or, from the repository root, build the three C targets in dependency order with the top-level wrapper:
-
-```sh
-make all     # acta_db -> acta_cli -> acta_runner
-make test    # all three C test suites
-make -C acta_runner test-e2e    # optional: dead-runner end-to-end suite
-                                # (real runner processes; ~10-15 s)
-make clean
-```
-
-(the GUI still needs its own `qmake6` + `make` step in `acta_gui/`)
+See [`docs/building.md`](docs/building.md) for dependencies, platform-specific setup (MinGW/MSYS2, Linux, macOS), the per-component `make` steps, and the top-level wrapper (`make all`, `make test`).
 
 ## Minimal end-to-end example
 
