@@ -501,40 +501,63 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
      * Known keys:
      *   api_key                 string; used when --api_key / env not set
      *   temperature             number
-     *   max_tokens              number
-     *   top_k                   number
+     *   max_tokens              positive number
+     *   top_k                   positive number
      *   supports_response_format bool (default true; false => the backend
      *                             has no json_schema response_format, so
      *                             post-hoc validation applies)
+     * Any deviation from that contract — unknown key (typo), wrong type,
+     * or malformed JSON — fails the execution (EXIT_INVALID) instead of
+     * silently falling back to the backend default, which would change
+     * the effective model parameters without the operator noticing.
      */
     cfg = (model->configuration && model->configuration[0])
         ? cJSON_Parse(model->configuration) : NULL;
-    if (model->configuration && model->configuration[0] && !cfg)
-        log_phase(db, exec_id, ACTA_LOG_LEVEL_WARN, "config_invalid_json",
-                  "model configuration is not valid JSON; ignoring it", NULL);
+    if (model->configuration && model->configuration[0] && !cfg) {
+        const char *jerr = cJSON_GetErrorPtr();
+        FAIL(EXIT_INVALID,
+             "model configuration is not valid JSON%s%s",
+             jerr ? ": " : "", jerr ? jerr : "");
+    }
     double temperature = -1.0;
     long max_tokens = 0, top_k = 0;
     int supports_rf = 1;
     if (cfg) {
         cJSON *kv;
         kv = cJSON_GetObjectItem(cfg, "api_key");
-        if (cJSON_IsString(kv) && kv->valuestring)
+        if (kv && !cJSON_IsString(kv))
+            FAIL(EXIT_INVALID,
+                 "model configuration key 'api_key' must be a string");
+        if (kv && kv->valuestring)
             api_key = kv->valuestring;
         kv = cJSON_GetObjectItem(cfg, "temperature");
+        if (kv && !cJSON_IsNumber(kv))
+            FAIL(EXIT_INVALID,
+                 "model configuration key 'temperature' must be a number");
         if (cJSON_IsNumber(kv))
             temperature = kv->valuedouble;
         kv = cJSON_GetObjectItem(cfg, "max_tokens");
-        if (cJSON_IsNumber(kv) && kv->valueint > 0)
+        if (kv && (!cJSON_IsNumber(kv) || kv->valueint <= 0))
+            FAIL(EXIT_INVALID,
+                 "model configuration key 'max_tokens' must be a positive number");
+        if (cJSON_IsNumber(kv))
             max_tokens = kv->valueint;
         kv = cJSON_GetObjectItem(cfg, "top_k");
-        if (cJSON_IsNumber(kv) && kv->valueint > 0)
+        if (kv && (!cJSON_IsNumber(kv) || kv->valueint <= 0))
+            FAIL(EXIT_INVALID,
+                 "model configuration key 'top_k' must be a positive number");
+        if (cJSON_IsNumber(kv))
             top_k = kv->valueint;
         kv = cJSON_GetObjectItem(cfg, "supports_response_format");
+        if (kv && !cJSON_IsBool(kv))
+            FAIL(EXIT_INVALID, "model configuration key "
+                 "'supports_response_format' must be a boolean");
         if (cJSON_IsBool(kv))
             supports_rf = cJSON_IsTrue(kv);
 
-        /* Warn on configuration keys the runner does not understand, so
-         * typos and stale keys surface in the audit trail. */
+        /* Unknown keys are a hard error (not a warning), so typos and
+         * stale keys surface immediately instead of changing the
+         * effective model parameters. */
         const char *known[] = { "api_key", "temperature", "max_tokens",
                                 "top_k", "supports_response_format" };
         char unknown[256];
@@ -553,13 +576,9 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
                 memcpy(unknown + n, item->string, strlen(item->string) + 1);
             }
         }
-        if (unknown[0]) {
-            char msg[320];
-            snprintf(msg, sizeof msg,
-                     "unknown model configuration keys ignored: %s", unknown);
-            log_phase(db, exec_id, ACTA_LOG_LEVEL_WARN, "config_unknown_keys",
-                      msg, NULL);
-        }
+        if (unknown[0])
+            FAIL(EXIT_INVALID, "unknown model configuration keys: %s",
+                 unknown);
     }
 
     /* ---- output_schema: parse once, used for response_format and/or

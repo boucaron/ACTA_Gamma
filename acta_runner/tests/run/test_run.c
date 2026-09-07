@@ -14,6 +14,9 @@
  *   9. schema validation  -> completed (valid JSON against schema)
  *   10. missing catalog   -> completed, preflight_passed records
  *                              "catalog":null (non-llama backend)
+ *   11. unknown config key -> failed + EXIT_INVALID
+ *   12. malformed config JSON -> failed + EXIT_INVALID
+ *   13. wrong config key type -> failed + EXIT_INVALID
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
  * Exit code: 0 = all pass, 1 = at least one failure.
@@ -474,6 +477,54 @@ int main(void)
                                        "\"catalog\":null"),
                   "preflight_passed metadata holds null catalog");
         }
+    }
+
+    /* 11. unknown configuration key (typo) -> hard failure */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        const char *events[] = { "execution_failed" };
+        scenario("unknown config key", db, &cfg, NULL,
+                 "{\"temperature\":0.7,\"temperatue\":1}", 30, EXIT_INVALID,
+                 ACTA_EXEC_STATUS_FAILED, NULL,
+                 "unknown model configuration keys", events, 1);
+    }
+
+    /* 12. malformed configuration JSON -> hard failure */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        const char *events[] = { "execution_failed" };
+        scenario("malformed config JSON", db, &cfg, NULL,
+                 "{\"temperature\":0.7", 30, EXIT_INVALID,
+                 ACTA_EXEC_STATUS_FAILED, NULL,
+                 "not valid JSON", events, 1);
+    }
+
+    /* 13. wrong configuration key type -> hard failure */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        const char *events[] = { "execution_failed" };
+        scenario("wrong config key type", db, &cfg, NULL,
+                 "{\"temperature\":\"high\"}", 30, EXIT_INVALID,
+                 ACTA_EXEC_STATUS_FAILED, NULL,
+                 "must be a number", events, 1);
     }
 
     acta_db_close(db);

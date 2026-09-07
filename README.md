@@ -4,7 +4,7 @@
 
 **LLMs as actions, not agents.**
 
-A small, stateless LLM execution engine for versioned skills, reproducible analysis, and model benchmarking.
+A small, stateless LLM execution engine for versioned skills and reproducible analysis.
 
 The C targets build with plain `make` on Windows (MinGW/MSYS2) and Linux (gcc/clang); the Qt 6 GUI additionally needs `qmake6` on either platform.
 
@@ -29,10 +29,9 @@ The engine controls the execution. The LLM does not orchestrate itself, maintain
 * **Stateless** — every execution is independent and one-shot.
 * **Versioned skills** — prompts and output schemas are revisioned.
 * **Immutable contexts** — the exact input can be retained for replay.
-* **Model independent** — use llama.cpp, cloud models, or other OpenAI-compatible backends.
+* **Multi-model** — the backend serves several models; any model served by the llama.cpp router can be registered as a model record.
 * **Auditable** — executions retain prompts, raw responses, results, errors, and execution events.
-* **Replayable** — a replay is exact when it reuses the same context, skill revision, model revision, and execution prompt.
-* **Benchmarkable** — compare models and skill revisions against the same datasets.
+* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, model revision, and execution prompt. Output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track.
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
 ## Architecture
@@ -61,9 +60,9 @@ The engine controls the execution. The LLM does not orchestrate itself, maintain
 
 ## Revisions and lifecycle
 
-Skills and models are versioned by automatic snapshots: a DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created or updated (`actagamma_db skill create` / `skill update`, `model create` / `model update`). Revision rows are **immutable** — they can be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`) but not edited or deleted. Contexts are likewise immutable (a trigger rejects updates), which is what makes replay exact.
+Skills and models are versioned by automatic snapshots: a DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created or updated (`actagamma_db skill create` / `skill update`, `model create` / `model update`). Revision rows are **immutable** — they can be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`) but not edited or deleted. Contexts are likewise immutable (a trigger rejects updates), which is what makes replay inputs exact.
 
-An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its final user message is `execution.prompt + "\n\n" + context.content` — so a replay is exact only with all four inputs: the context, the skill revision, the model revision, and the execution-level prompt. There is deliberately no `promote` / `deprecate` / `active` marking: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want. That is the whole lifecycle — create/update the parent, revisions are snapshotted automatically, executions reference revision ids.
+An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its final user message is `execution.prompt + "\n\n" + context.content` — so the request inputs are exactly reproducible only with all four inputs: the context, the skill revision, the model revision, and the execution-level prompt (output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track). There is deliberately no `promote` / `deprecate` / `active` marking: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want. That is the whole lifecycle — create/update the parent, revisions are snapshotted automatically, executions reference revision ids. Editing a skill or model therefore creates a new immutable revision; it does not modify the existing one, and executions keep pointing at the revision they were bound to.
 
 ## How a run is assembled
 
@@ -83,11 +82,13 @@ The implementation is C/C++ on top of SQLite:
 | `acta_db/` | C11 | SQLite persistence library (`libacta_db`) — skills, skill folders, skill revisions, models, model folders, model revisions, contexts, executions, execution logs |
 | `acta_db_cli/` | C11 | Command-line client (`actagamma_db`) over `acta_db` (uses cJSON for output) |
 | `acta_runner/` | C11 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend: claim → resolve → preflight → chat call → record → complete/fail, with `execution_log` phase rows (uses curl + cJSON) |
-| `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button runs the runner's pipeline in-process — `run.c`/`backend.c` are compiled into the GUI, no `acta_runner` binary needed) |
+| `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button runs the runner's pipeline in-process — it directly compiles and reuses the runner's own source files `acta_runner/src/run.c` and `acta_runner/src/backend.c` via its qmake project, no `acta_runner` binary needed; there is a single pipeline codebase, not a second copy of the pipeline logic) |
 
-Model backends are **OpenAI-compatible** endpoints (local llama.cpp server, cloud APIs, etc.). A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; unknown keys are warned about and ignored, and a malformed blob is warned about and treated as empty.
+The backend is a llama.cpp `llama-server` running in **router mode** (launched without a model, e.g. with `--models-dir` pointing at local GGUF files): an OpenAI-compatible endpoint that serves several models and routes each request to the matching model instance. A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; any deviation from that contract — an unknown key (typo), a wrong value type, or a malformed blob — fails the execution with `EXIT_INVALID` instead of silently falling back to backend defaults.
 
-Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim step is an optimistic `UPDATE … WHERE status = 'pending'` (checked for affected rows), so two runner processes cannot claim the same execution. Sequential use is the normal pattern; parallel runners are safe for claiming, but benchmarking workflows should still not share one in-flight execution.
+**Preflight** (the `preflight` step of the pipeline) verifies the backend before the chat call: `GET /health` must return 200 (503 means the model is still loading → execution `failed`), `GET /v1/models` must list the model record's `model_identifier` (if not, the execution fails with the ids the server actually serves), and the matched entry's `max_context` is read. As a best-effort audit step, the router's model catalog (`GET /`, models.json format) records the matched model's launch args and meta (`n_ctx`, `n_params`, `size`, `ftype`, …) into the execution timeline, so the server-instance configuration is part of the audit trail — the same model id can be served under different server flags. Success is logged as `preflight_passed`.
+
+Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim step is an optimistic `UPDATE … WHERE status = 'pending'` (checked for affected rows), so two runner processes cannot claim the same execution. Sequential use is the normal pattern; parallel runners are safe for claiming (the claim step guarantees two processes cannot grab the same execution), but interleaving two runners over the same batch is not supported, since per-execution ordering is not guaranteed.
 
 ### Building
 
@@ -105,7 +106,7 @@ make            # → ./actagamma_db
 make test       # per-entity CLI tests
 
 # 3. Runner (drives pending executions; needs a running
-#    OpenAI-compatible backend, e.g. llama-server)
+#    llama.cpp llama-server in router mode)
 cd ../acta_runner
 make            # → ./acta_runner
 make test       # pipeline tests against a local stub backend
@@ -150,7 +151,7 @@ make clean
 
 ## Minimal end-to-end example
 
-Against a running OpenAI-compatible server (e.g. `llama-server` on `127.0.0.1:8080`):
+Against a running llama.cpp `llama-server` in router mode (e.g. on `127.0.0.1:8080`):
 
 ```sh
 # 1. Register the model
@@ -163,6 +164,7 @@ actagamma_db skill create --json '{"name":"sentiment","prompt_template":"Classif
 actagamma_db context create --json '{"type":"text","content":"The build system shipped on time and the release went smoothly."}'
 
 # 4. Create an execution binding context + skill revision + model revision
+# the "prompt" field is optional; omit it to send just the context
 actagamma_db exec create --json '{"prompt":"What is the sentiment of the context?","context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
 # 5. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
@@ -177,7 +179,7 @@ actagamma_db log list
 
 Early prototype / POC.
 
-**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI runs the runner's pipeline in-process on a worker thread — `run.c`/`backend.c` compiled into the app with their own DB connection — with live status polling of the shared database; while a run is in flight the button toggles into Cancel, which cooperatively cancels the run and transitions the row to `cancelled`), `sweep` (`acta_runner sweep --stale-seconds N`) cleans up executions left in `running` after a dead runner process: an execution is stale when its last runner activity — the latest of its newest `execution_log.created_at` and `started_at` (falling back to `created_at`) — is older than `now − N` seconds; a stale row transitions `running → failed` with the error `stale running: no runner activity for N s` and an `execution_failed` log row, and any row that leaves `running` between the query and the fail is skipped rather than overwriting a live outcome. `--stale-seconds` must be a positive integer (0 is rejected). Normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
+**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI runs the runner's pipeline in-process on a worker thread — it directly uses the same runner source files (`acta_runner/src/run.c`, `acta_runner/src/backend.c`), one shared pipeline codebase with no duplicated pipeline logic, on its own DB connection — with live status polling of the shared database; while a run is in flight the button toggles into Cancel, which cooperatively cancels the run and transitions the row to `cancelled`), `sweep` (`acta_runner sweep --stale-seconds N`) cleans up executions left in `running` after a dead runner process: an execution is stale when its last runner activity — the latest of its newest `execution_log.created_at` and `started_at` (falling back to `created_at`) — is older than `now − N` seconds; a stale row transitions `running → failed` with the error `stale running: no runner activity for N s` and an `execution_failed` log row, and any row that leaves `running` between the query and the fail is skipped rather than overwriting a live outcome. `--stale-seconds` is required (there is no default) and must be a positive integer (0 is rejected). Normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
 
 **Not yet implemented:** streaming responses and automatic retries (a failed execution can be retried manually via the `failed → pending` reset). Automatic retries are deliberately deferred: transient backend failures are rare in the current single-node deployment, and a manual reset is simpler to reason about and avoids retry storms.
 
