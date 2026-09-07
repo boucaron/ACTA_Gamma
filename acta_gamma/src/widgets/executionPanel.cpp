@@ -10,10 +10,8 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QKeySequence>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QMessageBox>
-#include <QProcess>
+#include <QThread>
 #include <QPushButton>
 #include <QStyle>
 #include <QStandardItem>
@@ -23,10 +21,7 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
-#include <QCoreApplication>
-#include <QFile>
-#include <QStandardPaths>
-
+#include "runnerWorker.h"
 #include "executionDialog.h"
 #include "executionCreateDialog.h"
 #include "executionLogDialog.h"
@@ -38,27 +33,9 @@ const int RoleExecutionId = Qt::UserRole;
 // the Show button / context menu to open the log dialog.
 const int RoleLogId = Qt::UserRole + 1;
 
-// Last stderr line that parses as a JSON object with a non-empty
-// "message" field — the runner's single-line error contract
-// (error / code / message, per runner_util.h). Empty when no line
-// parses; the caller falls back to raw stderr.
-QString parseRunnerError(const QByteArray &stderrAll)
-{
-    for (const QString &line :
-             QString::fromUtf8(stderrAll).split('\n')) {
-        if (line.trimmed().isEmpty())
-            continue;
-        QJsonParseError parseErr{};
-        const QJsonDocument doc =
-            QJsonDocument::fromJson(line.toUtf8(), &parseErr);
-        if (doc.isNull() || !doc.isObject())
-            continue;
-        const QString message = doc.object().value("message").toString();
-        if (!message.isEmpty())
-            return message;
-    }
-    return QString();
-}
+// Backend timeout for the in-process run, matching the CLI's default
+// (acta_runner help: --timeout, default 300).
+const int kRunnerTimeoutSec = 300;
 } // namespace
 
 ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
@@ -133,11 +110,10 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     logList->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(logList, &QTableView::customContextMenuRequested, this,
             &ExecutionPanel::onLogListContextMenu);
-    // Selection drives the Show button's enabled state.
-    connect(logList->selectionModel(), &QItemSelectionModel::selectionChanged,
-            this, [this](const QItemSelection &, const QItemSelection &) {
-                updateLogBtnState();
-            });
+    // Selection drives the Show button's enabled state; the
+    // selectionChanged connection is (re)established in setLogModel()
+    // after every model swap, because QItemView replaces the
+    // selection model when the table's model changes.
 
     // Centered placeholder over the blank log list (P5 / UR #31);
     // shown/hidden in showExecutionLogs().
@@ -147,8 +123,8 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // Icon-only toolbar row (P2 / UR #22), matching the other panels:
     // tooltips carry the meaning, accelerators are Alt+letter (UR #39).
     // "New" opens the create dialog (a new row lands in "pending"; the
-    // runner that moves it through start/complete/fail lives in
-    // acta_runner — the in-app "Run" button (Plan D) spawns it).
+    // runner that moves it through start/complete/fail is the in-process
+    // worker (M1 / UR #45) — the in-app "Run" button (Plan D) starts it).
     // "Show" opens the execution dialog for the selected execution row;
     // the context menu and double-click / Enter do the same (UR #33).
     auto *btnRow = new QHBoxLayout;
@@ -162,9 +138,9 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
         tr("Show the details of the selected execution"),
         QKeySequence(Qt::ALT | Qt::Key_H));
     btnRow->addWidget(showDetailsBtn);
-    // "Run" (R1 / Plan D): spawns acta_runner run <id> for the selected
-    // row and polls the DB for live status + phase log rows (UR #18
-    // remainder, UR #44).
+    // "Run" (R1 / Plan D): runs the selected execution through the
+    // in-process runner worker (M1 / UR #45) and polls the DB for
+    // live status + phase log rows (UR #18 remainder, UR #44).
     runBtn = makeActionButton(
         style()->standardIcon(QStyle::SP_MediaPlay),
         tr("Run the selected execution (a failed execution is reset to "
@@ -214,6 +190,11 @@ void ExecutionPanel::setDb(db_t *db)
     setDb(db, QString());
 }
 
+ExecutionPanel::~ExecutionPanel()
+{
+    stopRunner();
+}
+
 void ExecutionPanel::setDb(db_t *db, const QString &dbPath)
 {
     stopRunner();
@@ -229,22 +210,27 @@ void ExecutionPanel::stopRunner()
         m_pollTimer->deleteLater();
         m_pollTimer = nullptr;
     }
-    if (m_runner) {
-        // The database switched underneath the runner: kill it rather
-        // than let it keep writing to the stale database.
-        if (m_runner->state() != QProcess::NotRunning) {
-            m_runner->kill();
-            m_runner->waitForFinished(2000);
-        }
-        m_runner->deleteLater();
-        m_runner = nullptr;
+    if (m_runnerThread) {
+        // The database switched underneath the worker (or the app is
+        // shutting down). The worker thread cannot be cancelled
+        // mid-HTTP (the runner's pipeline has no cancellation hook),
+        // so let it run to completion — bounded by the backend
+        // timeout — so the execution row never stays stuck in
+        // "running". Its own DB connection closes with the worker, so
+        // the stale database only receives that execution's final
+        // complete/fail.
+        m_runnerThread->quit();
+        m_runnerThread->wait();
+        delete m_runnerThread; // deletes the worker (its child)
+        m_runnerThread = nullptr;
+        m_runnerWorker = nullptr;
     }
     m_runningExecutionId = 0;
 }
 
 void ExecutionPanel::updateRunBtnState()
 {
-    bool canRun = m_db != nullptr && m_runner == nullptr;
+    bool canRun = m_db != nullptr && m_runnerThread == nullptr;
     if (canRun) {
         const auto *cur = list->currentItem();
         canRun = cur != nullptr
@@ -252,20 +238,6 @@ void ExecutionPanel::updateRunBtnState()
                 || cur->text(1) == QLatin1String(ACTA_EXEC_STATUS_FAILED));
     }
     runBtn->setEnabled(canRun);
-}
-
-QString ExecutionPanel::findRunnerExe() const
-{
-    const QString appDir = QCoreApplication::applicationDirPath();
-    for (const QString &cand :
-             {appDir + QStringLiteral("/acta_runner"),
-              appDir + QStringLiteral("/acta_runner.exe")}) {
-        if (QFile::exists(cand))
-            return cand;
-    }
-    const QString found =
-        QStandardPaths::findExecutable(QStringLiteral("acta_runner"));
-    return found; // empty when not found
 }
 
 QTreeWidgetItem *ExecutionPanel::findRow(int executionId) const
@@ -280,7 +252,7 @@ QTreeWidgetItem *ExecutionPanel::findRow(int executionId) const
 
 void ExecutionPanel::onRunBtnClicked()
 {
-    if (!m_db || m_runner)
+    if (!m_db || m_runnerThread)
         return;
     const auto *cur = list->currentItem();
     const int executionId = cur ? cur->data(0, RoleExecutionId).toInt() : 0;
@@ -308,7 +280,7 @@ void ExecutionPanel::onRunBtnClicked()
 
     // A failed row is retried: reset failed -> pending first, so the
     // runner's start() claim succeeds. The previous attempt's log lines
-    // stay in the audit trail. On failure, do not spawn the runner.
+    // stay in the audit trail. On failure, do not start the worker.
     if (status == QLatin1String(ACTA_EXEC_STATUS_FAILED)) {
         int rc = acta_db_execution_reset(m_db, executionId);
         if (rc != ACTA_DB_OK) {
@@ -328,86 +300,56 @@ void ExecutionPanel::onRunBtnClicked()
         }
     }
 
-    const QString exe = findRunnerExe();
-    if (exe.isEmpty()) {
-        QMessageBox::warning(
-            this,
-            tr("Run"),
-            tr("acta_runner was not found. Build it in acta_runner/ and "
-               "place the executable next to the app, or add it to PATH."));
-        return;
-    }
-
+    // Start the in-process runner worker (M1 / UR #45): it runs
+    // run_execution() on its own thread with its own DB connection and
+    // emits finished() with the exit code and the failure message read
+    // from the execution's log (no stderr parsing).
     m_runningExecutionId = executionId;
-    m_runner = new QProcess(this);
-    connect(m_runner, &QProcess::finished, this,
-            &ExecutionPanel::onRunnerFinished);
-    connect(m_runner, &QProcess::errorOccurred, this,
-            &ExecutionPanel::onRunnerError);
+    m_runnerWorker =
+        new RunnerWorker(executionId, m_dbPath, kRunnerTimeoutSec);
+    m_runnerThread = new QThread(this);
+    m_runnerWorker->setParent(m_runnerThread);
+    connect(m_runnerWorker, &RunnerWorker::finished, this,
+            &ExecutionPanel::onWorkerFinished);
+    connect(m_runnerThread, &QThread::started, m_runnerWorker,
+            &RunnerWorker::runInThread);
+    m_runnerThread->start();
     // Poll the DB while the runner is active (Plan D: the database is
     // the message bus; WAL supports the concurrent reader here).
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(1500);
     connect(m_pollTimer, &QTimer::timeout, this, &ExecutionPanel::onPollTick);
     m_pollTimer->start();
-    // No --api_key (the runner resolves --api_key -> $OPENAI_API_KEY ->
-    // configuration.api_key), no -v, no --timeout (default 300 s).
-    m_runner->start(
-        exe,
-        {QStringLiteral("run"),
-         QString::number(executionId),
-         QStringLiteral("--db"),
-         m_dbPath});
     refreshRunningRow();
     updateRunBtnState();
 }
 
-void ExecutionPanel::onRunnerFinished(int exitCode, QProcess::ExitStatus)
+void ExecutionPanel::onWorkerFinished(int exitCode, const QString &message)
 {
-    if (!m_runner)
-        return;
-    m_pollTimer->stop();
-    m_pollTimer->deleteLater();
-    m_pollTimer = nullptr;
+    // The database may have switched underneath the worker: it ran on
+    // its own connection to the old file, so sync the UI only when the
+    // worker's file is still the current one.
+    const bool sameDb = m_runnerWorker != nullptr
+        && m_runnerWorker->dbPath() == m_dbPath;
+    if (sameDb) {
+        // Final targeted refresh; the row is already completed/failed
+        // in the DB, the refresh only syncs the display.
+        refreshRunningRow();
+        refreshRunningLogs();
+    }
+    stopRunner();
 
-    // Final targeted refresh; the row is already completed/failed in the
-    // DB, the refresh only syncs the display.
-    refreshRunningRow();
-    refreshRunningLogs();
-
-    if (exitCode != 0) {
+    if (sameDb && exitCode != 0) {
         // The execution row already carries the error; this is purely
         // informational (P4 error-surfacing style).
-        const QString detail =
-            parseRunnerError(m_runner->readAllStandardError());
         QMessageBox::warning(
             this,
             tr("Execution failed"),
-            detail.isEmpty()
+            message.isEmpty()
                 ? tr("The runner exited with code %1").arg(exitCode)
-                : detail);
+                : message);
     }
 
-    m_runner->deleteLater();
-    m_runner = nullptr;
-    m_runningExecutionId = 0;
-    updateRunBtnState();
-}
-
-void ExecutionPanel::onRunnerError(QProcess::ProcessError)
-{
-    if (!m_runner)
-        return;
-    m_pollTimer->stop();
-    m_pollTimer->deleteLater();
-    m_pollTimer = nullptr;
-    QMessageBox::warning(
-        this,
-        tr("Run"),
-        tr("Could not start acta_runner: %1").arg(m_runner->errorString()));
-    m_runner->deleteLater();
-    m_runner = nullptr;
-    m_runningExecutionId = 0;
     updateRunBtnState();
 }
 
@@ -593,6 +535,25 @@ void ExecutionPanel::reload()
     updateRunBtnState();
 }
 
+void ExecutionPanel::setLogModel(QStandardItemModel *model)
+{
+    logList->setModel(model);
+    // QItemView creates a new QItemSelectionModel per model, so the
+    // selectionChanged connection must be re-established after every
+    // swap; the old model (and its selection model) is destroyed,
+    // so this never accumulates dead connections. The context object
+    // (logList) keeps the lambda's connection scoped to the view.
+    connect(logList->selectionModel(),
+            &QItemSelectionModel::selectionChanged, logList,
+            [this](const QItemSelection &, const QItemSelection &) {
+                updateLogBtnState();
+            });
+    // A model swap invalidates the previous selection; sync the Show
+    // button's enabled state (selectionChanged also fires, this keeps
+    // the state consistent when no selection remains).
+    updateLogBtnState();
+}
+
 void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
 {
     const int executionId = item ? item->data(0, RoleExecutionId).toInt() : 0;
@@ -603,7 +564,7 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
         emptyModel->setHorizontalHeaderLabels(
             {tr("Date"), tr("Level"),
              tr("Event"), tr("Message")});
-        logList->setModel(emptyModel);
+        setLogModel(emptyModel);
         emptyLogLabel->setVisible(true);
         return;
     }
@@ -651,15 +612,10 @@ void ExecutionPanel::showExecutionLogs(QTreeWidgetItem *item)
         qWarning("acta_db_execution_log_list_by_execution(%d) failed: %s",
                  executionId, acta_db_strerror(err));
     }
-    logList->setModel(model);
+    setLogModel(model);
 
     // Empty-state placeholder for the log list (P5 / UR #31).
     emptyLogLabel->setVisible(model->rowCount() == 0);
-
-    // A model swap invalidates the previous selection; sync the Show
-    // button's enabled state (selectionChanged also fires, this keeps
-    // the state consistent when no selection remains).
-    updateLogBtnState();
 }
 
 void ExecutionPanel::applyFilters()

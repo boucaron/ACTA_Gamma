@@ -3,7 +3,7 @@
 #include <QPoint>
 #include <QString>
 #include <QWidget>
-#include <QProcess>
+class QThread;
 class QTimer;
 class QTreeWidget;
 class QTreeWidgetItem;
@@ -12,6 +12,7 @@ class QPushButton;
 class QLineEdit;
 class QComboBox;
 class QLabel;
+class RunnerWorker;
 
 #include "acta_db.h"
 
@@ -32,9 +33,10 @@ public:
     // Opens the create dialog (new pending execution row); pairs with
     // Show the way the Context panel's New/Show pair does (UR #22).
     QPushButton *newExecutionBtn;
-    // "Run" action (R1 / Plan D): spawns acta_runner run <id> for the
-    // selected row; enabled only while the row is pending and no
-    // runner process is active.
+    // "Run" action (R1 / Plan D, in-process per M1 / UR #45): runs the
+    // runner pipeline (run_execution) on a background worker thread
+    // for the selected row; enabled only while the row is pending and
+    // no runner worker is active.
     QPushButton *runBtn;
     // Opens the execution log dialog for the selected log line of the
     // inline log list; pairs with the log list's "Show" context menu
@@ -46,11 +48,12 @@ public:
     void reload();
 
     // Re-point the panel at a new db handle (database switched) and
-    // reload the list. Kills any active runner (Plan D): the process
-    // would otherwise keep writing to the stale database.
+    // reload the list. Stops any active runner worker (Plan D): the
+    // worker runs to completion on its own DB connection (bounded by
+    // the backend timeout) so no row stays stuck in "running".
     void setDb(db_t *db);
     // Same, carrying the database file path the "Run" button (R1)
-    // passes to acta_runner via --db.
+    // worker opens its own DB connection on.
     void setDb(db_t *db, const QString &dbPath);
 
 signals:
@@ -74,6 +77,11 @@ private:
     // Last id passed to itemChanged; emitItemChanged() suppresses
     // duplicate emissions (UR #19).
     int m_lastEmittedId = 0;
+
+    // Set the log table's model and (re)establish the selectionChanged
+    // connection that drives the Show button (QItemView replaces the
+    // selection model on every setModel).
+    void setLogModel(class QStandardItemModel *model);
 
     // Fill the log list with the log lines of the selected execution
     // (or clear it when the selection leaves an execution row).
@@ -116,21 +124,25 @@ private:
     int selectedLogId() const;
 
 private slots:
-    // R1 (Plan D): spawn acta_runner run <id> for the selected row, then
-    // poll the DB for live status + phase log rows (UR #18 remainder,
-    // UR #44).
+    // R1 (Plan D): run the selected execution through the in-process
+    // runner worker, then poll the DB for live status + phase log rows
+    // (UR #18 remainder, UR #44).
     void onRunBtnClicked();
-    void onRunnerFinished(int exitCode, QProcess::ExitStatus status);
-    void onRunnerError(QProcess::ProcessError error);
+    // Worker finished (queued from the worker thread): exit code per
+    // runner.h plus the failure message read from the execution's log.
+    void onWorkerFinished(int exitCode, const QString &message);
     void onPollTick();
 
 private:
-    // Stop the poll timer and kill/delete the runner process (used by
-    // setDb when the database switches underneath an active runner).
+    ~ExecutionPanel() override; // stops the runner worker (see stopRunner)
+
+    // Stop the poll timer and stop/delete the runner worker (used by
+    // setDb when the database switches underneath an active runner and
+    // by the destructor).
     void stopRunner();
 
     // Enable state for the Run button / menu entry: db available, a
-    // pending row selected, and no active runner process.
+    // pending row selected, and no active runner worker.
     void updateRunBtnState();
 
     // Targeted refresh of the running row's status cell (no reload):
@@ -145,13 +157,10 @@ private:
     // Find the tree row storing executionId in column 0 (RoleExecutionId).
     QTreeWidgetItem *findRow(int executionId) const;
 
-    // Locate the acta_runner executable: next to the app binary, then
-    // PATH; empty string when not found.
-    QString findRunnerExe() const;
-
-    // R1 state (Plan D).
+    // R1 state (Plan D, in-process per M1 / UR #45).
     QString m_dbPath;
-    QProcess *m_runner = nullptr;
+    QThread *m_runnerThread = nullptr;
+    RunnerWorker *m_runnerWorker = nullptr;
     QTimer *m_pollTimer = nullptr;
     int m_runningExecutionId = 0;
 };
