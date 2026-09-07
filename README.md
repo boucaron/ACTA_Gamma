@@ -8,7 +8,7 @@ A small, stateless LLM execution engine for versioned skills and reproducible an
 
 > **The engine decides what happens. The LLM only does the work it's asked to do.**
 
-The C targets build with plain `make` on Windows (MinGW/MSYS2) and Linux (gcc/clang); the Qt 6 GUI additionally needs `qmake6` on either platform.
+The C targets build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
 ## What is ACTA Gamma?
 
@@ -66,7 +66,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 
 The whole lifecycle: create/update the parent, revisions are snapshotted automatically, executions reference revision ids. Concretely:
 
-- **How revisions are created.** A DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created or updated (`acta_cli skill create` / `skill update`, `model create` / `model update`). There is no separate "snapshot" command.
+- **How revisions are created.** A DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created, updated, or soft-deleted (`acta_cli skill create` / `skill update` / `skill delete`, same for `model`). The soft-delete trigger snapshots a final revision carrying `deleted_at`. There is no separate "snapshot" command.
 - **Immutability.** Revision rows cannot be edited or deleted — they can only be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`). Contexts are likewise immutable (a trigger rejects updates), which is what makes replay inputs exact.
 - **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its final user message is `execution.prompt + "\n\n" + context.content`. The request inputs are exactly reproducible only with all four inputs: the context, the skill revision, the model revision, and the execution-level prompt.
 - **Replay caveat.** Output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track.

@@ -140,13 +140,11 @@ connection; the panel's polling is unchanged. See
    endpoint is {base_url}/chat/completions with model =
    model_identifier. The configuration JSON can carry backend-specific
    knobs (temperature, max_tokens, api key).
-3. One ambiguity to decide: prompt resolution. An execution already
-   stores a user-entered prompt at creation, and the skill stores
-   prompt_template. The DBDesign "prompt_resolved" event implies
-   combining context + template + prompt. Simplest sensible mapping:
-   system = skill.prompt_template, user = context.content +
-   execution.prompt; store the resolved prompt back into the execution
-   row if it should be auditable.
+3. Prompt resolution (decided): system = skill.prompt_template,
+   user = execution.prompt + "\n\n" + context.content (prompt first when
+   present, context appended last). The resolved prompt is NOT stored in
+   the execution row; it is recorded in the `prompt_resolved` log event
+   (`metadata`: system, user, system_bytes, user_bytes).
 4. Concurrency: start() is atomic, so the runner can safely claim a
    pending execution; a dead runner leaves a row stuck in running (needs
    a cancel/retry policy).

@@ -60,7 +60,7 @@ For the initial llama.cpp setup:
 
 ```text
 backend          = openai-compatible
-base_url         = http://localhost:8080/v1
+base_url         = http://127.0.0.1:8080
 model_identifier = qwen3-...
 ```
 
