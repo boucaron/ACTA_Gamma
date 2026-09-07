@@ -24,7 +24,7 @@ Context + Skill + Model
          Observation
 ```
 
-The engine controls the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next.
+The engine controls the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next. ACTA Gamma is deliberately not an agent framework.
 
 Terms used throughout this README: a **skill** is a versioned prompt template with an optional output schema — it is not a tool, function, or agent capability; a **context** is a named, immutable snapshot of input data (a document, a code file, a log excerpt) — it is not the model's prompt window.
 
@@ -134,10 +134,6 @@ acta_cli log list
 ## Current status
 
 Early prototype / POC. See [`docs/status.md`](docs/status.md) for what is done and what is not yet implemented.
-
-## Philosophy
-
-ACTA Gamma is deliberately not an agent framework: the engine decides what happens, and the LLM only does the work it's asked to do.
 
 ## License
 
