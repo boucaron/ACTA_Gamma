@@ -92,6 +92,8 @@ The backend is a llama.cpp `llama-server` running in **router mode** (launched w
 
 **Preflight** (the `preflight` step of the pipeline) verifies the backend before the chat call: `GET /health` must return 200 (503 means the model is still loading → execution `failed`), `GET /v1/models` must list the model record's `model_identifier` (if not, the execution fails with the ids the server actually serves), and the matched entry's `max_context` is read. As a best-effort audit step, the router's model catalog (`GET /`, models.json format) records the matched model's launch args and meta (`n_ctx`, `n_params`, `size`, `ftype`, …) into the execution timeline, so the server-instance configuration is part of the audit trail — the same model id can be served under different server flags. Success is logged as `preflight_passed`.
 
+**Output-schema validation** is post-hoc: it runs only when the backend did not apply the schema itself, i.e. when `supports_response_format` is false (the schema is then checked against the raw response after the call). If the response does not match the skill's `output_schema`, the execution **fails** with a `validation_failed` log row (`EXIT_INVALID`) — there is no "complete with a flag" mode. The validator is a hand-rolled subset check, not full JSON Schema.
+
 Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim step is an optimistic `UPDATE … WHERE status = 'pending'` (checked for affected rows), so two runner processes cannot claim the same execution. Sequential use is the normal pattern; parallel runners are safe for claiming (the claim step guarantees two processes cannot grab the same execution), but interleaving two runners over the same batch is not supported, since per-execution ordering is not guaranteed.
 
 ### Building
@@ -189,7 +191,7 @@ Early prototype / POC.
 
 ## Philosophy
 
-ACTA Gamma is deliberately not an agent framework. It provides controlled, observable LLM actions that can be composed and evaluated by software outside the model — the thesis stated at the top of this README: the engine decides what happens, and the LLM only does the work it's asked to do.
+ACTA Gamma is deliberately not an agent framework: the engine decides what happens, and the LLM only does the work it's asked to do.
 
 ## License
 
