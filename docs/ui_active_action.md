@@ -5,12 +5,6 @@ Action plan derived from [`ui_review.md`](ui_review.md). Item numbers
 (completed items were removed from it; item numbers keep the original
 numbering).
 
-## In progress
-
-| # | Action | Source | Status / remaining |
-|---|--------|--------|--------------------|
-| C1 | **Cancel button**: the Run button toggles into Cancel while an execution is in flight (cooperative cancellation; the row transitions pending\|running → `cancelled`, not `failed`) | New (2026-07-11) | **Code written, not committed (build/test pending).** Runner: `backend.h`/`backend.c` — process-global `backend_cancel_request/reset/requested` flag + curl `XFERINFOFUNCTION` abort → new `BACKEND_ERR_CANCELED` (-4); `run.c` — resources hoisted + `CANCEL()` macro + `cancel_execution()` (logs `execution_cancelled`, `acta_db_execution_cancel()`) with checks before claim, after claim, after resolve/config/schema, after each HTTP call, before close; `runner.h` — `EXIT_CANCELED` (14); `main.c` help line ("UI cancel only"). CLI behavior unchanged (it never sets the flag). UI: `runnerWorker.{h,cpp}` — `requestCancel()`/`resetCancel()` (flag reset before/after each run); `executionPanel.{h,cpp}` — Run↔Cancel button + context-menu toggle, error dialog suppressed on `EXIT_CANCELED`. Remaining: build + smoke (run, cancel mid-run, cancelled row renders gray), commit, then a README/doc note. |
-
 ## Queued (from `ui_review.md`)
 
 ### High
@@ -22,7 +16,9 @@ numbering).
 ## Summary
 
 - **Now:** H2 (JSON validation; scope settled in `runner_plan.md`).
-- **C1 (cancel button)** is in progress: code written, awaiting build/test + commit.
+- (C1 — cancel button — is shipped: the Run button toggles into Cancel,
+  cooperative cancellation via the runner's cancel flag, row transitions
+  to `cancelled`.)
 - (L1 — tree context menu on empty area — is shipped: `FolderTreePanel` and
   `ExecutionPanel` both show the menu on empty-area right-clicks with the
   row-scoped actions disabled, mirroring `ContextPanel`.)
