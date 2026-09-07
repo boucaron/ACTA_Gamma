@@ -155,8 +155,9 @@ void MainWindow::applyDbToPanels()
     if (m_contextPanel)
         m_contextPanel->setDb(db);
     if (m_executionPanel)
-        // R1 (Plan D): the execution panel needs the database file path
-        // to spawn acta_runner with --db.
+        // R1 (Plan D, in-process per M1 / UR #45): the execution panel
+        // needs the database file path for the runner worker's own DB
+        // connection.
         m_executionPanel->setDb(db, m_dbPath);
 }
 
@@ -321,6 +322,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     connect(m_retryButton, &QPushButton::clicked, this,
             &MainWindow::retryDatabase);
+    // Hand the panels the open db (and, for the execution panel, the
+    // database file path the runner worker opens its own connection on).
+    // No-op when the bootstrap left the db unavailable.
+    applyDbToPanels();
     syncPanels();
 
     // Minimal menu bar (UR #28): File -> Exit, Database -> Reconnect,
