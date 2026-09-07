@@ -220,9 +220,17 @@ void ExecutionPanel::stopRunner()
         // "running". Its own DB connection closes with the worker, so
         // the stale database only receives that execution's final
         // complete/fail.
+        //
+        // The worker is parent-less (it lives on the worker thread via
+        // moveToThread, so nothing can own it there): post its deletion
+        // to the worker's event queue BEFORE quitting. The deferred
+        // delete is then processed just before the quit event ends the
+        // loop, so the worker self-destructs on its own thread and
+        // wait() cannot return with a dangling worker.
+        m_runnerWorker->deleteLater();
         m_runnerThread->quit();
         m_runnerThread->wait();
-        delete m_runnerThread; // deletes the worker (its child)
+        delete m_runnerThread;
         m_runnerThread = nullptr;
         m_runnerWorker = nullptr;
     }
@@ -329,7 +337,14 @@ void ExecutionPanel::onRunBtnClicked()
     m_runnerWorker =
         new RunnerWorker(executionId, m_dbPath, kRunnerTimeoutSec);
     m_runnerThread = new QThread(this);
-    m_runnerWorker->setParent(m_runnerThread);
+    // moveToThread, not setParent: a QThread object *lives* on the
+    // thread that created it (the GUI thread) and only *runs* on the
+    // new one; reparenting to it would leave the worker on the GUI
+    // thread and dispatch runInThread() — and its blocking HTTP
+    // pipeline — into the GUI event loop, freezing the UI for the
+    // whole run. Ownership is manual instead: stopRunner() posts
+    // deleteLater() to the worker's queue before quit() + wait().
+    m_runnerWorker->moveToThread(m_runnerThread);
     connect(m_runnerWorker, &RunnerWorker::finished, this,
             &ExecutionPanel::onWorkerFinished);
     connect(m_runnerThread, &QThread::started, m_runnerWorker,

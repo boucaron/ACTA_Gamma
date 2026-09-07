@@ -12,13 +12,19 @@
 //    acta_runner/include/runner.h plus a human-readable failure message
 //    read from the execution's last error log line (no stderr parsing).
 //
-// Threading contract: create the worker, reparent it to a QThread,
-// connect QThread::started -> RunnerWorker::runInThread (queued across
-// the thread boundary), then start the thread. runInThread() is the
-// thread's only task; quit() + wait() therefore let it run to
-// completion (it cannot be cancelled mid-HTTP — the runner's pipeline
-// has no cancellation hook, and a stuck "running" row must never be
-// left behind).
+// Threading contract: create the worker (parent-less), moveToThread()
+// it into a QThread, connect QThread::started ->
+// RunnerWorker::runInThread (queued across the thread boundary), then
+// start the thread. (Reparenting to the QThread would NOT move the
+// worker: a QThread object lives on its creating thread, so the
+// worker would keep the GUI thread's affinity and runInThread() would
+// dispatch into the GUI event loop, freezing the UI for the whole
+// run.) Because the worker is parent-less, the owner must post
+// deleteLater() to the worker's queue before quit() + wait().
+// runInThread() is the thread's only task; quit() + wait() therefore
+// let it run to completion (it cannot be cancelled mid-HTTP — the
+// runner's pipeline has no cancellation hook, and a stuck "running"
+// row must never be left behind).
 
 #include <QObject>
 #include <QString>
