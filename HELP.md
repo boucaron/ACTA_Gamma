@@ -7,16 +7,19 @@
 - C compiler (MinGW/MSYS2 or gcc/clang)
 - SQLite 3
 - Qt 6 (Core, Widgets) — GUI only
-- cJSON — CLI + runner
-- curl — runner
+- cJSON — CLI, runner + GUI
+- curl — runner + GUI
+- llama.cpp — local backend server (llama-server in router mode), runtime only
 
 ### MinGW64 (MSYS2)
 
 ```sh
 pacman -Syu
 pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-make
+pacman -S mingw-w64-x86_64-sqlite
 pacman -S mingw-w64-x86_64-qt6
 pacman -S mingw-w64-x86_64-curl
+pacman -S mingw-w64-x86_64-cjson
 ```
 
 ### Build
@@ -32,9 +35,22 @@ cd ../acta_gui    && qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile
 make
 ```
 
-### Linux
+### Linux (Debian/Ubuntu)
 
-Easy peasy
+Easy peasy:
+
+```sh
+sudo apt install build-essential make \
+    libsqlite3-dev libcjson-dev libcurl4-openssl-dev qt6-base-dev
+```
+
+### macOS
+
+```sh
+xcode-select --install                 # Xcode command-line tools (clang, make)
+brew install sqlite cjson curl qt
+brew install llama.cpp                # local backend server (llama-server)
+```
 
 ### Tests
 

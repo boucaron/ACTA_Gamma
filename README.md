@@ -132,8 +132,10 @@ MinGW (MSYS2) setup for development:
 
 ```sh
 pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-make
+pacman -S mingw-w64-x86_64-sqlite
 pacman -S mingw-w64-x86_64-qt6
 pacman -S mingw-w64-x86_64-curl
+pacman -S mingw-w64-x86_64-cjson
 ```
 
 Linux (Debian/Ubuntu):
