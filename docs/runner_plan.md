@@ -42,5 +42,4 @@ with clear "invalid JSON" feedback.
 
 1. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
 2. **R6** (JSON highlighting / line numbers, UR #26) and **R7**
-   (housekeeping: fate of untracked `docs/llamacpp_server_README.md`,
-   `.gitignore` for build outputs) whenever convenient.
+   (housekeeping: `.gitignore` for build outputs) whenever convenient.

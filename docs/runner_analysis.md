@@ -151,10 +151,11 @@ connection; the panel's polling is unchanged. See
 5. Dependencies available on the current stack: cURL (MSYS2
    mingw-w64-x86_64-curl), cJSON already used by the CLI. No HTTP code
    exists yet, so this is the one genuinely new piece.
-6. Backend reference: `llamacpp_server_README.md` is the full
-   auto-generated llama.cpp server reference (long); the
-   runner-relevant subset is distilled in `llamacpp_server_contract.md`
-   (startup, /health, /v1/models, /v1/chat/completions, errors).
+6. Backend reference: the full auto-generated llama.cpp server reference
+   lives in the upstream llama.cpp repository (README.md of
+   `llama-server`); the runner-relevant subset is distilled in
+   `llamacpp_server_contract.md` (startup, /health, /v1/models,
+   /v1/chat/completions, errors).
 
 ## Plans
 

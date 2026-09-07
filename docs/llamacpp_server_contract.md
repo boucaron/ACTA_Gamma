@@ -1,8 +1,8 @@
 # llama.cpp server — runner-relevant contract
 
-Distilled from `llamacpp_server_README.md` (full auto-generated server
-reference; keep that file as the long-form source). Only what
-`acta_runner` (phase 2) needs is here.
+Distilled from the llama.cpp server README (the full auto-generated
+server reference in the upstream llama.cpp repository; only the
+runner-relevant subset is kept here).
 
 ## 1. Server startup (model load = process start)
 
