@@ -26,22 +26,6 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 
 ### Architecture
 
-45. **UI spawns the runner as a child process (`QProcess`).**
-    `ExecutionPanel` locates and spawns `acta_runner run <id> --db <path>`
-    and uses the DB as a message bus (1500 ms polling) while the process
-    lives. The app already links `libacta_db.a` in-process; the runner's
-    pipeline is in-process-callable: `run_execution(db, exec_id,
-    timeout, api_key)` in `acta_runner/src/run.c` (the runner's own tests
-    link `run.c` + `backend.c` without `main.o`). Refactor: compile
-    `run.c` + `backend.c` into the app (`LIBS += -lcurl -lcjson`), call
-    `run_execution()` from a worker thread with a DB handle opened inside
-    the thread (SQLite connections are not shareable across threads; the
-    GUI thread keeps its own handle and the existing polling), and drop
-    QProcess / `findRunnerExe` / stderr-error parsing from the panel. The
-    standalone `acta_runner` CLI stays as-is. First analysis done in the
-    review conversation (2026-07-10); see the active-action entry for the
-    plan.
-
 ---
 
 ## 2. UI (widgets & layout)
@@ -75,9 +59,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #15 JSON validation
      *(to analyze: not all three fields are necessarily JSON — context
      `content` may be plain text; decide scope before implementing)*
-3. **Medium:**
-   - #45 in-process runner (no QProcess)
-4. **Polish:**
+3. **Polish:**
    - #26 remaining: JSON highlighting / line numbers
 
 (#42 data lifecycle is closed by owner decision, not an open action.)
