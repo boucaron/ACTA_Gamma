@@ -9,7 +9,7 @@
 /* ---- version ---- */
 #define ACTA_RUNNER_VERSION "0.1.0"
 
-/* ---- exit codes (mirrors acta_db_cli, plus runner-specific codes) ---- */
+/* ---- exit codes (mirrors acta_cli, plus runner-specific codes) ---- */
 #define EXIT_OK             0
 #define EXIT_NOT_FOUND      1
 #define EXIT_SQL            2

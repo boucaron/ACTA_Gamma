@@ -104,7 +104,7 @@ contracts, ACTA_DB_* error codes, pagination cap 10000):
   context_loaded, prompt_resolved, llm_request, llm_response,
   validation_*, execution_completed/failed).
 
-### acta_db_cli (C11, actagamma_db)
+### acta_cli (C11, acta_cli)
 
 Thin CRUD client over the library (create/get/list/count/start/
 cancel/complete/fail/set-raw for exec). Deliberately DB-only; contains
@@ -115,7 +115,7 @@ fails at run time with the runner's clear error) — aligned with the
 UI and runner decision; `--context_id`, `--skill_revision_id` and
 `--model_revision_id` remain required.
 
-### acta_gamma (C++ / Qt 6 Widgets)
+### acta_gui (C++ / Qt 6 Widgets)
 
 management GUI. DbHandle is a small RAII wrapper around db_t*.
 ExecutionCreateDialog creates a pending execution (context + skill
@@ -183,9 +183,9 @@ price is tying the engine to Qt, which makes it harder to unit-test
 headless, pulls the HTTP stack into the GUI binary, and makes the
 runner harder to reuse from the CLI.
 
-### Plan C — new exec run action inside acta_db_cli
+### Plan C — new exec run action inside acta_cli
 
-Add a run action to the existing actagamma_db CLI so no new binary is
+Add a run action to the existing acta_cli CLI so no new binary is
 needed. It breaks the clean split, though: the CLI is deliberately a
 thin DB client with no HTTP, and bolting network calls, timeouts and
 call failures into a CRUD tool muddles its error contract and scope. Not
@@ -205,7 +205,7 @@ headless/CLI-driven mode later.
 ## Decisions (finalized)
 
 1. **Plan A is the plan.** Standalone C runner in `acta_runner/`.
-   Plan D (GUI spawns it) shipped in `acta_gamma` (commit 184d574).
+   Plan D (GUI spawns it) shipped in `acta_gui` (commit 184d574).
    Later refinement (M1 / UR #45, commit f6efe22): the GUI runs the
    same pipeline in-process (a closer cousin of Plan B, but reusing
    the C `run.c`/`backend.c` directly instead of a Qt port) — the

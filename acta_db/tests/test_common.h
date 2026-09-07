@@ -74,7 +74,7 @@ static db_t *test_db_open(const char *path) {
     /* Schema is expected to be applied at open time by the library.
      * If not, we'd exec it here. Adjust as needed. */
 
-    FILE *f = fopen("../acta_gamma/db/schema.sql", "r");
+    FILE *f = fopen("../acta_gui/db/schema.sql", "r");
     if (f) {
         fseek(f, 0, SEEK_END);
         long len = ftell(f);

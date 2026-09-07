@@ -1,6 +1,6 @@
 # acta_runner tests (phase 2)
 
-Layout mirrors `acta_db_cli/tests/`: one directory per concern, one
+Layout mirrors `acta_cli/tests/`: one directory per concern, one
 binary per suite.
 
 - `tests/stub_server.{h,c}` — in-process stub OpenAI-compatible backend
@@ -9,7 +9,7 @@ binary per suite.
   Configurable per scenario: health status (200/503), served model id,
   chat status (200/500), chat content, reply delay (timeout tests).
 - `tests/run/test_run.c` — pipeline (`run_execution`) against the stub
-  on a scratch `:memory:` DB seeded from `acta_gamma/db/schema.sql`:
+  on a scratch `:memory:` DB seeded from `acta_gui/db/schema.sql`:
   - success → `completed`, raw_response stored, full phase log
     (execution_started, context_loaded, prompt_resolved, llm_request,
     llm_response, execution_completed)

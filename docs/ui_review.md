@@ -1,7 +1,7 @@
 # ACTA Gamma — Qt UI Review
 
 Open items from the original review of the ACTA Gamma desktop app
-(`acta_gamma/`), grouped by **Code**, **UI**, and **UX**, with a suggested
+(`acta_gui/`), grouped by **Code**, **UI**, and **UX**, with a suggested
 priority order at the end. **Completed items have been removed** (they are
 documented in the git history; the active work list lives in
 [`ui_active_action.md`](ui_active_action.md)). Item numbers are kept from
@@ -10,7 +10,7 @@ the original list so cross-references stay valid — gaps are intentional.
 Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 `src/widgets/{skill,model,context,execution}Panel.*`,
 `src/widgets/{skill,model,context,execution}Dialog.*`,
-`ui/*.ui`, `src/src.pro`, `ACTA_Gamma.pro`, `db/schema.sql`.
+`ui/*.ui`, `src/src.pro`, `acta_gui.pro`, `db/schema.sql`.
 
 ---
 

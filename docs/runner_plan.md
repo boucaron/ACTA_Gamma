@@ -34,7 +34,7 @@ with clear "invalid JSON" feedback.
   matching the existing error-handling style (P4). Empty fields stay
   allowed (both fields are optional today — `dupString` gets `nullptr`
   on empty text).
-- `tr()`-wrap all new strings; add to `translations/acta_gamma.ts`.
+- `tr()`-wrap all new strings; add to `translations/acta_gui.ts`.
 
 ---
 

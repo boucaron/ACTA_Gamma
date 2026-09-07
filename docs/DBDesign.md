@@ -2,7 +2,7 @@
 
 This is a deliberately small first-pass schema. The goal is to model the core execution primitive without prematurely introducing datasets, workflows, providers, or other higher-level concepts.
 
-The canonical, executable copy of this schema is `acta_gamma/db/schema.sql` (the same DDL is embedded in `acta_db_cli/acta_test_ref.sql` and seeded by the runner tests); the SQL blocks below mirror it.
+The canonical, executable copy of this schema is `acta_gui/db/schema.sql` (the same DDL is embedded in `acta_cli/acta_test_ref.sql` and seeded by the runner tests); the SQL blocks below mirror it.
 
 ## The core model
 

@@ -1,7 +1,7 @@
 # acta_db API Inconsistency Report
 
 Scope: public headers in `acta_db/include/` cross-checked against `acta_db/src/`
-implementations and the reference schema (`acta_gamma/db/schema.sql`).
+implementations and the reference schema (`acta_gui/db/schema.sql`).
 
 Severity key:
 - **[BUG]** wrong behavior / silently wrong error codes

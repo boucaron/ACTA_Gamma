@@ -1,6 +1,6 @@
-# acta_db_cli — Code Review
+# acta_cli — Code Review
 
-Review of the C CLI (`acta_db_cli/`, ~9k LOC). Conducted in parts:
+Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
 
 | Part | Scope | Status |
 |------|-------|--------|

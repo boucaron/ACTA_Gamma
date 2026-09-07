@@ -176,9 +176,9 @@ static int wait_child(child_t *c, int *exit_code)
 static int load_schema(db_t *db)
 {
     static const char *paths[] = {
-        "../../acta_gamma/db/schema.sql",
-        "../acta_gamma/db/schema.sql",
-        "acta_gamma/db/schema.sql",
+        "../../acta_gui/db/schema.sql",
+        "../acta_gui/db/schema.sql",
+        "acta_gui/db/schema.sql",
     };
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
         FILE *f = fopen(paths[i], "rb");

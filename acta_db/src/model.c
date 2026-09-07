@@ -134,7 +134,7 @@ static model_t **run_model_query(sqlite3_stmt *stmt,
  *
  *  NOTE: the model_revision row is NOT inserted here. It is snapshotted
  *  by the `models_create_initial_revision` / `models_update_revision`
- *  / `models_soft_delete_revision` triggers in acta_gamma/db/schema.sql,
+ *  / `models_soft_delete_revision` triggers in acta_gui/db/schema.sql,
  *  which fire in the same transaction for every client (C library,
  *  CLI, GUI, raw SQL). Revision rows are immutable — a separate trigger
  *  rejects updates/deletes on them.

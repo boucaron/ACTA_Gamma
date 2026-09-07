@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/">
+    <file>assets/logo.jpg</file>
+    <file>assets/style.qss</file>
+    <file>db/schema.sql</file>
+  </qresource>
+</RCC>

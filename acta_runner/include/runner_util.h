@@ -1,4 +1,4 @@
-/* runner_util.h — shared helpers (mirrors acta_db_cli/cli_util.h) */
+/* runner_util.h — shared helpers (mirrors acta_cli/cli_util.h) */
 #ifndef ACTA_RUNNER_UTIL_H
 #define ACTA_RUNNER_UTIL_H
 

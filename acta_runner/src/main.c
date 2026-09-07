@@ -4,7 +4,7 @@
  * Drives pending executions from the database through the acta_db
  * execution lifecycle against the model's OpenAI-compatible backend.
  *
- * Flow (mirrors acta_db_cli/main.c):
+ * Flow (mirrors acta_cli/main.c):
  *   1. parse_globals  → --db, --version, --help, --verbose
  *   2. early-exit     → version / help
  *   3. require action → "run" / "sweep"

@@ -25,10 +25,10 @@ See `README.md` for the per-component steps:
 
 ```sh
 cd acta_db          && make            # libacta_db + unit tests
-cd ../acta_db_cli   && make            # actagamma_db CLI
+cd ../acta_cli   && make            # acta_cli CLI
 cd ../acta_runner   && make            # acta_runner (needs a running
                                        # OpenAI-compatible backend)
-cd ../acta_gamma    && qmake6 "CONFIG+=debug" ACTA_Gamma.pro -o Makefile
+cd ../acta_gui    && qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile
 make
 ```
 
@@ -40,6 +40,6 @@ Easy peasy
 
 ```sh
 cd acta_db       && make test   # C unit tests
-cd ../acta_db_cli && make test  # per-entity CLI tests
+cd ../acta_cli && make test  # per-entity CLI tests
 cd ../acta_runner  && make test  # pipeline tests against a local stub backend
 ```

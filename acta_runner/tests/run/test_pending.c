@@ -20,7 +20,7 @@
  *   5. no pending rows → clean exit 0.
  *
  * Same harness as test_run.c: scratch `:memory:` DB seeded from
- * `acta_gamma/db/schema.sql` + in-process stub server. `cmd_run` is
+ * `acta_gui/db/schema.sql` + in-process stub server. `cmd_run` is
  * called directly with a constructed argv (no process spawn).
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
@@ -63,9 +63,9 @@ const global_opts_t *runner_gopts;
 static int load_schema(db_t *db)
 {
     static const char *paths[] = {
-        "../../acta_gamma/db/schema.sql",
-        "../acta_gamma/db/schema.sql",
-        "acta_gamma/db/schema.sql",
+        "../../acta_gui/db/schema.sql",
+        "../acta_gui/db/schema.sql",
+        "acta_gui/db/schema.sql",
     };
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
         FILE *f = fopen(paths[i], "rb");
