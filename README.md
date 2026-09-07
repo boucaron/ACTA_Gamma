@@ -83,7 +83,7 @@ The implementation is C/C++ on top of SQLite:
 | `acta_db/` | C11 | SQLite persistence library (`libacta_db`) — skills, skill folders, skill revisions, models, model folders, model revisions, contexts, executions, execution logs |
 | `acta_db_cli/` | C11 | Command-line client (`actagamma_db`) over `acta_db` (uses cJSON for output) |
 | `acta_runner/` | C11 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend: claim → resolve → preflight → chat call → record → complete/fail, with `execution_log` phase rows (uses curl + cJSON) |
-| `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button spawns `acta_runner`) |
+| `acta_gamma/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button runs the runner's pipeline in-process — `run.c`/`backend.c` are compiled into the GUI, no `acta_runner` binary needed) |
 
 Model backends are **OpenAI-compatible** endpoints (local llama.cpp server, cloud APIs, etc.). A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; unknown keys are warned about and ignored, and a malformed blob is warned about and treated as empty.
 
@@ -91,7 +91,7 @@ Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim
 
 ### Building
 
-**Dependencies:** C compiler (MinGW or gcc/clang), SQLite 3, Qt 6 (Core, Widgets), cJSON (CLI + runner), curl (runner).
+**Dependencies:** C compiler (MinGW or gcc/clang), SQLite 3, Qt 6 (Core, Widgets), cJSON (CLI, runner, GUI), curl (runner, GUI).
 
 ```sh
 # 1. Database library (also builds and runs its test suite)
@@ -177,7 +177,7 @@ actagamma_db log list
 
 Early prototype / POC.
 
-**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI spawns `acta_runner run <id>` via `QProcess` with live status polling), `sweep` (`acta_runner sweep --stale-seconds N`) cleans up executions left in `running` after a dead runner process: an execution is stale when its last runner activity — the latest of its newest `execution_log.created_at` and `started_at` (falling back to `created_at`) — is older than `now − N` seconds; a stale row transitions `running → failed` with the error `stale running: no runner activity for N s` and an `execution_failed` log row, and any row that leaves `running` between the query and the fail is skipped rather than overwriting a live outcome. `--stale-seconds` must be a positive integer (0 is rejected). Normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
+**Done:** entity model and persistence (C library + CLI + GUI), skill/model versioning and folder organization, execution lifecycle and execution log, replayable immutable contexts, the LLM call path as a standalone runner (`acta_runner`: claim → resolve → preflight → OpenAI-compatible chat call → raw response capture → optional output-schema validation → complete/fail, with `execution_log` phase rows — see `docs/runner_analysis.md`), the in-app "Run" button (the GUI runs the runner's pipeline in-process on a worker thread — `run.c`/`backend.c` compiled into the app with their own DB connection — with live status polling of the shared database), `sweep` (`acta_runner sweep --stale-seconds N`) cleans up executions left in `running` after a dead runner process: an execution is stale when its last runner activity — the latest of its newest `execution_log.created_at` and `started_at` (falling back to `created_at`) — is older than `now − N` seconds; a stale row transitions `running → failed` with the error `stale running: no runner activity for N s` and an `execution_failed` log row, and any row that leaves `running` between the query and the fail is skipped rather than overwriting a live outcome. `--stale-seconds` must be a positive integer (0 is rejected). Normal timeout handling is done by the runner itself (hard per-call HTTP timeout, `--timeout`, default 300 s), and rerun of failed executions (`failed → pending` via `acta_db_execution_reset`).
 
 **Not yet implemented:** streaming responses and automatic retries (a failed execution can be retried manually via the `failed → pending` reset). Automatic retries are deliberately deferred: transient backend failures are rare in the current single-node deployment, and a manual reset is simpler to reason about and avoids retry storms.
 

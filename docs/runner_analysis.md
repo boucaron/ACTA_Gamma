@@ -122,7 +122,11 @@ ExecutionCreateDialog creates a pending execution (context + skill
 revision + model revision + prompt + optional parent). The Execution
 panel's "Run" button (Plan D, commit 184d574) spawns
 `acta_runner run <id> --db <path>` via `QProcess` and polls the
-`execution_log` rows for live status.
+`execution_log` rows for live status. *(Since commit f6efe22, M1 / UR
+#45: the button no longer spawns a process — `run.c`/`backend.c` are
+compiled into the GUI and run on a worker thread with their own DB
+connection; the panel's polling is unchanged. See
+`ui_review.md` / `ui_active_action.md`.)*
 
 ## Key observations for the runner
 
@@ -201,6 +205,10 @@ headless/CLI-driven mode later.
 
 1. **Plan A is the plan.** Standalone C runner in `acta_runner/`.
    Plan D (GUI spawns it) shipped in `acta_gamma` (commit 184d574).
+   Later refinement (M1 / UR #45, commit f6efe22): the GUI runs the
+   same pipeline in-process (a closer cousin of Plan B, but reusing
+   the C `run.c`/`backend.c` directly instead of a Qt port) — the
+   standalone runner and its CLI remain available.
 2. **Server lifecycle is user-managed.** The user launches
    `llama-server` (or any OpenAI-compatible backend) manually with
    whatever model they want. The runner is a pure HTTP client: it never
