@@ -34,6 +34,31 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    other two cases. OOM should be `EXIT_ALLOC` (3); missing flag values need
    their own message naming the flag.
 
+3. **`--result` / `--error` silently drop their value** (`src/argparse.c`
+   flag-spec table, `cmd_args_flag`; `src/commands/execution.c`)
+   In `entity_flag_specs` both `result` and `error` are marked boolean
+   (`has_value = 0`), and `cmd_args_flag(ga, "result", 0)` never consumes
+   the following token — so `exec complete 42 --result "answer"` stores
+   `NULL` and exits 0. Only the `--result=...` form works, contradicting
+   the documented example (`exec complete 42 --result "answer text"`).
+   Data-loss bug with exit 0; same root cause as #1 (the absent/present/
+   boolean conflation).
+
+4. **`resolve_input_source` leaks the full stdin payload to stderr**
+   (`include/commands.h`)
+   A leftover `fprintf(stderr, "DEBUG read_stdin_all: %zu bytes: '%s'")`
+   (marked "remove after diagnosis") runs on every `--stdin` use and dumps
+   the entire payload — potentially megabytes of context content — into
+   stderr, polluting the "line 1 is the JSON contract" stream.
+
+5. **Error contract: two namespaces, broken code/exit invariant**
+   (`src/main.c`, `cli_util.h`, `src/argparse.c`)
+   `main.c` documents that the exit code "always matches the `code` field";
+   that holds for `ACTA_DB_ERR_*` lines (`code` = raw negative rc, so
+   `|code| == exit`) but not for `ACTA_CLI_ERR` lines, which emit
+   `code: -10` while exiting `EXIT_INVALID` (4). Agents branching on
+   `(code, exit)` need one namespace and one table.
+
 ### Nitpicks
 
 - Hard-coded offsets in `parse_globals` (`a[4]`, `a[6]`, `a[8]`, `a[9]`,
@@ -41,7 +66,24 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
   `const char *eq = strchr(a, '=');` after `flag_prefix_match` covers every
   flag in one code path.
 - `--tools` prints `[]` (TODO) yet help advertises it as "full command
-  reference" — implement it or remove it from help text.
+  reference" — implement it or remove it from help text. The machine-readable
+  tool schema (spec §11) is the single biggest gap for agentic use; once
+  S3 settles the per-action success shapes, generate `--tools` from the same
+  per-action data rather than hand-writing it.
+- The per-action `create` usage snippets (6 entities) show
+  `cat x.json | acta_cli <entity> create --json`, but a bare `--json` with no
+  value is unparseable: as the last token, `parse_globals` returns `EXIT_CLI`
+  and `main.c` prints "missing entity and/or action". The working stdin form
+  is `--stdin`; fix the examples (see S4).
+- `--pretty` is parsed (`argparse.c`) and advertised in `--help` ("2-space
+  indent JSON") but honored by no emitter — dead flag; implement it or drop
+  it from the help text (same class as the `--tools` TODO).
+- Naming drift: `--from_file` selects the JSON input source, while `--file`
+  selects the SQL file in `db exec` — two names for the same "read from file"
+  concept.
+- `--verbose 99` clamps with a plain-text stderr line ("--verbose: level
+  clamped to 3") — fine for humans, but it is a non-JSON diagnostic outside
+  the error-line contract.
 - `main.c` re-checks `gopts.argc < 2` although `parse_globals` already
   guarantees ≥ 2. Harmless, but the manual `free(rest)` in 3 early-exit paths
   plus the final `free(gopts.argv)` is the kind of ownership protocol a future
@@ -213,6 +255,14 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    binary) would have caught all of them. This is the highest-value coverage
    gap in the project.
 
+4. **Exec lifecycle transitions emit empty stdout on success**
+   (`src/commands/execution.c`)
+   `start`, `cancel`, `complete`, `fail`, and `set-raw` print nothing on
+   success — only the exit code confirms the transition. `db exec` is the
+   only action whose stdout schema is documented in its usage. S3 must
+   decide the transition success shape (e.g. `{"id":N,"status":"..."}`) so
+   scripts and agents can confirm outcomes by parsing stdout.
+
 ### Makefile
 
 4. **Every new test suite needs ~7 manual edits**
@@ -239,9 +289,47 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
 
 ---
 
+## Agentic usage — what is missing
+
+The CLI is already pipe-safe (stdout carries data, stderr carries the
+contract), but for LLM/script drivers the following are missing:
+
+1. **`--tools` is a stub** — the machine-readable tool/command schema
+   (entities, actions, positionals, flags, required fields, input JSON
+   keys, success stdout shapes, exit codes, error shape) is a TODO that
+   prints `[]`. Until it exists, an agent must scrape help prose and guess
+   the contract. Generate it from the S3 per-action table.
+2. **One unified error contract** — see P1 #5: two namespaces
+   (`ACTA_DB_ERR_*` raw rc vs `ACTA_CLI_ERR` `-10`) and a code/exit-code
+   invariant that does not hold for CLI errors. One table, one namespace.
+3. **Stable, documented success shapes** — S3 / P3 #3 / P4 #7–8 / P5 #4:
+   settle the per-action stdout table, the root-folder wire representation
+   (`null` vs `0`), and the restore-shape drift; give transitions a success
+   line instead of silence.
+4. **Discoverability** — `--help` anywhere in argv short-circuits to
+   top-level help (pass 1), so per-entity help is only reachable as
+   `acta_cli <entity> help`; the undeclared `*_usage` functions (P4 #9 /
+   J3) block wiring a central `acta_cli <entity> --help`. Entity names
+   `exec` / `log` differ from the docs' "execution" / "execution_log" —
+   the fuzzy "Did you mean" covers typos, but doc-driven agents will emit
+   `acta_cli execution list`.
+5. **`db exec` is an unguarded escape hatch** — arbitrary mutating SQL
+   (no SELECT) with no scope limit; fine as an escape hatch, but it is the
+   one surface where an agent can do anything, so document it as such (or
+   scope it).
+
+---
+
 # Summary (unresolved, by severity)
 
-1. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
+1. **`--result` / `--error` silently drop their value** — `exec complete 42 --result "text"` stores `NULL` and exits 0; the documented example is the broken form. Data-loss bug. *(P1 #3)*
+2. **DEBUG stdin leak** — `resolve_input_source` (`include/commands.h`) dumps the full stdin payload to stderr on every `--stdin` use; one-line removal. *(P1 #4)*
+3. **Broken `create --json` usage examples** — 6 entity snippets show `cat x.json | acta_cli <entity> create --json`; bare `--json` is unparseable, the working form is `--stdin`. *(P1 nitpick, S4)*
+4. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
+5. **Per-action stdout table + wire-format decisions + `--tools`** — settle the transition success shape (P5 #4), the root-folder `null` vs `0` and restore-shape drift (P4 #7–8), then generate the `--tools` schema (spec §11) from the same data. *(S3)*
+6. **Error-contract unification** — one namespace, restore the code/exit invariant. *(P1 #5)*
+7. **Parse-layer inconsistencies** — `cmd_args_flag` protocol (root cause of #1), `parse_globals` error conflation, bare `--json`. *(S4)*
+8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`), J2 (`model get --live` wording), J3 (`*_usage` declarations).
 
 **Structural (S1) — resolved:** the copy-paste family (P4 #10) was fixed
 atom-first and stopped there: the common atom set landed in `cli_util.h`
