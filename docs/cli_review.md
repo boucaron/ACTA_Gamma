@@ -58,6 +58,13 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    `|code| == exit`) but not for `ACTA_CLI_ERR` lines, which emit
    `code: -10` while exiting `EXIT_INVALID` (4). Agents branching on
    `(code, exit)` need one namespace and one table.
+   *Current state (audited):* still broken in two places — `ACTA_CLI_ERR`
+   lines (`argparse.c` unknown option / bad `--verbose`, `commands.c`
+   unknown entity) exit 4 with `code:-10`, and `ACTA_DB_ERR_DUPLICATE`/`FK`/
+   `INVALID_DB` exit 4 with codes −6/−7/−8, so `|code| == exit` holds only
+   for −1/−2/−3/−4. Tracked as T2 in
+   [`cli_active_action.md`](cli_active_action.md); `cli_spec.md` defers the
+   invariant ("until then the `code` field is authoritative").
 
 ### Nitpicks
 
@@ -67,9 +74,10 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
   flag in one code path.
 - `--tools` prints `[]` (TODO) yet help advertises it as "full command
   reference" — implement it or remove it from help text. The machine-readable
-  tool schema (spec §11) is the single biggest gap for agentic use; once
-  S3 settles the per-action success shapes, generate `--tools` from the same
-  per-action data rather than hand-writing it.
+  tool schema is the single biggest gap for agentic use; T3 generates
+  `--tools` from the per-action table in
+  [`cli_spec.md`](cli_spec.md) (now the single source of truth) rather than
+  hand-writing it.
 - The per-action `create` usage snippets (6 entities) show
   `cat x.json | acta_cli <entity> create --json`, but a bare `--json` with no
   value is unparseable: as the last token, `parse_globals` returns `EXIT_CLI`
@@ -160,10 +168,12 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    → `{"version":"..."}`. Fine if the spec defines per-action shapes, but there
    is no single place that documents them; `--table` variants add a third
    shape each. Worth a spec table (action → stdout schema).
-   *Partially resolved:* the `db` shapes (`db exec` →
-   `{"status":"ok"}`, `db version` → `{"version":"<version>"}`) plus the
-   JSON error line are now documented in `db_usage()` help; the
-   cross-entity spec table remains open (see P4 #8).
+   *Resolved (T1):* the cross-entity per-action table now exists in
+   [`docs/cli_spec.md`](cli_spec.md) — the single source of truth for the
+   per-action stdout schema (all 10 entities, plus the error line and exit
+   codes). The `db` shapes documented in `db_usage()` match it, and a code
+   audit confirmed every entity emits exactly the documented shapes (the
+   same table also closes P4 #7–8, P5 #4 and Agentic #3).
 
 ### Nitpicks
 
@@ -194,17 +204,25 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
     `model_to_json` emits `"folder_id":null` for root; `model move`'s
     success line emits `"folder_id":0`; `skill move` emits 0. Pick one wire
     representation per entity (and document it; spec §?).
+    *Resolved (T1):* root folder is `null` in **every** JSON emit — the
+    `model_to_json`/`skill_to_json`/revision JSON and the
+    `emit_ok_folder`/`emit_ok_parent` move success lines all emit `null`
+    for root; `0` survives only in `--table` (plain-text) output and in flag
+    values. Documented in [`cli_spec.md`](cli_spec.md).
 
 8. **Success shapes keep multiplying**
     `{"id":N}` / `{"id":N,"folder_id":M}` / `{"deleted":true}` /
     `{"id":N,"restored":true}` / bare `N`. Same ask as Part 3 #3: a single
     per-action output table in the spec, enforced by one emit helper.
-    *Partially resolved (S1/V1):* the emit-helper half is done — the shared
-    atoms `emit_ok_id` / `emit_ok_folder` / `emit_deleted` in `cli_util.h`
-    are adopted by all 9 entity files (`08ebc26`–`829fd5a`). The spec table
-    remains open (S3); evidence to settle it: `model_folder restore` →
-    hand-rolled `{"id":N,"restored":true}` (`model_folder.c:707`) vs
-    `{"id":N}` on `model`/`skill`/`skill_folder` restore.
+    *Resolved (S1/V1 + T1):* both halves are done. Emit-helper half: the
+    shared atoms `emit_ok_id` / `emit_ok_folder` / `emit_deleted`
+    (`08ebc26`–`829fd5a`) plus the later `emit_ok_transition` (exec
+    lifecycle) and `emit_ok_restored` (unified restore lines) cover every
+    success path in all 9 entity files. Spec-table half:
+    [`cli_spec.md`](cli_spec.md) documents the per-action shapes, and the
+    restore-shape drift is gone — `model`/`skill`/`model_folder`/
+    `skill_folder` restore all emit `{"id":N,"restored":true}` via
+    `emit_ok_restored`.
 
 9. **`usage_*` snippets are static per file, `*_usage` are not declared
     anywhere**
@@ -262,6 +280,10 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    only action whose stdout schema is documented in its usage. S3 must
    decide the transition success shape (e.g. `{"id":N,"status":"..."}`) so
    scripts and agents can confirm outcomes by parsing stdout.
+   *Resolved (T1):* all four transitions emit `{"id":N,"status":"<s>"}`
+   via the shared `emit_ok_transition` atom (bare `N` with `--id_only`);
+   `set-raw` re-fetches the row and echoes the unchanged current status.
+   Documented in [`cli_spec.md`](cli_spec.md).
 
 ### Makefile
 
@@ -298,14 +320,23 @@ contract), but for LLM/script drivers the following are missing:
    (entities, actions, positionals, flags, required fields, input JSON
    keys, success stdout shapes, exit codes, error shape) is a TODO that
    prints `[]`. Until it exists, an agent must scrape help prose and guess
-   the contract. Generate it from the S3 per-action table.
+   the contract. T3 generates it from the per-action table in
+   [`cli_spec.md`](cli_spec.md) (now the single source of truth).
 2. **One unified error contract** — see P1 #5: two namespaces
    (`ACTA_DB_ERR_*` raw rc vs `ACTA_CLI_ERR` `-10`) and a code/exit-code
    invariant that does not hold for CLI errors. One table, one namespace.
-3. **Stable, documented success shapes** — S3 / P3 #3 / P4 #7–8 / P5 #4:
-   settle the per-action stdout table, the root-folder wire representation
-   (`null` vs `0`), and the restore-shape drift; give transitions a success
-   line instead of silence.
+   *Current state:* `ACTA_CLI_ERR` lines (`argparse.c` unknown option / bad
+   `--verbose`, `commands.c` unknown entity) still emit `code:-10` while
+   exiting `EXIT_INVALID` (4), and `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB`
+   exit 4 with codes −6/−7/−8 — `|code| == exit` holds only for −1/−2/−3/−4.
+   Still open (T2); `cli_spec.md` documents the exit codes and defers the
+   invariant until T2 lands.
+3. **Stable, documented success shapes** — ✅ *resolved* (S3 / P3 #3 /
+   P4 #7–8 / P5 #4, via T1): the per-action stdout table, the root-folder
+   wire representation (`null` in every JSON emit), and the restore-shape
+   drift are settled and implemented; transitions emit
+   `{"id":N,"status":"<s>"}` instead of silence. All in
+   [`cli_spec.md`](cli_spec.md).
 4. **Discoverability** — `--help` anywhere in argv short-circuits to
    top-level help (pass 1), so per-entity help is only reachable as
    `acta_cli <entity> help`; the undeclared `*_usage` functions (P4 #9 /
@@ -326,7 +357,7 @@ contract), but for LLM/script drivers the following are missing:
 2. **DEBUG stdin leak** — `resolve_input_source` (`include/commands.h`) dumps the full stdin payload to stderr on every `--stdin` use; one-line removal. *(P1 #4)*
 3. **Broken `create --json` usage examples** — 6 entity snippets show `cat x.json | acta_cli <entity> create --json`; bare `--json` is unparseable, the working form is `--stdin`. *(P1 nitpick, S4)*
 4. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
-5. **Per-action stdout table + wire-format decisions + `--tools`** — settle the transition success shape (P5 #4), the root-folder `null` vs `0` and restore-shape drift (P4 #7–8), then generate the `--tools` schema (spec §11) from the same data. *(S3)*
+5. **`--tools`** — the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); what remains is generating the `--tools` schema from that table. *(T3, blocked by T2)*
 6. **Error-contract unification** — one namespace, restore the code/exit invariant. *(P1 #5)*
 7. **Parse-layer inconsistencies** — `cmd_args_flag` protocol (root cause of #1), `parse_globals` error conflation, bare `--json`. *(S4)*
 8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`), J2 (`model get --live` wording), J3 (`*_usage` declarations).
