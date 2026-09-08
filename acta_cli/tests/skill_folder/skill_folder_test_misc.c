@@ -34,7 +34,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     int rc = cmd_skill_folder("frobnicate", a, &g, ctx->db);
     stest_capture_end(ctx);
 
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -93,7 +93,7 @@ static void test_unknown_action_suggests_closest(stest_ctx_t *ctx)
 
     int rc = run_action_capturing_stderr(ctx, "creat", a, g,
                                          errbuf, sizeof errbuf);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     TEST_CONTAINS(ctx, errbuf, "Did you mean 'create'?");
     targs_free(a, &g);
 }

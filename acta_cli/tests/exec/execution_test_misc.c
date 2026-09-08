@@ -39,7 +39,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_exec(ctx, "bogus", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -50,7 +50,7 @@ static void test_closest_match_suggestion(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_exec(ctx, "creat", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -60,7 +60,7 @@ static void test_empty_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_exec(ctx, "", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 

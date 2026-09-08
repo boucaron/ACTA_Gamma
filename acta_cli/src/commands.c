@@ -50,10 +50,10 @@ static entity_fn lookup_entity(const char *entity) {
 }
 
 static int entity_not_found(const char *entity) {
-    fprintf(stderr,
-        "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
-        "\"message\":\"unknown entity: %s\"}\n",
-        entity);
+    char msg[128];
+    snprintf(msg, sizeof msg, "unknown entity: %s",
+             entity ? entity : "(null)");
+    int rc = emit_cli_error(msg);   /* JSON contract line, stderr line 1 */
 
     /* Suggestion line, appended *after* the JSON contract line (scripts
      * parse line 1), same fuzzy matcher as unknown_action(). */
@@ -63,7 +63,7 @@ static int entity_not_found(const char *entity) {
     const char *guess = closest_name(entity, names, ENTITY_COUNT);
     if (guess)
         fprintf(stderr, "  Did you mean '%s'?\n", guess);
-    return EXIT_CLI;
+    return rc;
 }
 
 /* ------------------------------------------------------------------ */

@@ -27,9 +27,11 @@ static int flag_prefix_match(const char *token, const char *name) {
 int parse_globals(int argc, char **argv, global_opts_t *g) {
     memset(g, 0, sizeof(*g));
 
-    /* temp buffer for non-global args */
+    /* temp buffer for non-global args (OOM → EXIT_ALLOC, T2) */
     char **rest = malloc(sizeof(char *) * (size_t)argc);
-    if (!rest) return EXIT_CLI;
+    if (!rest)
+        return finish_db_error(ACTA_DB_ERR_ALLOC,
+                               "out of memory while parsing arguments");
     int rest_n = 0;
 
     for (int i = 1; i < argc; i++) {
@@ -64,7 +66,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             if (a[4] == '=') {
                 g->db = a + 5;
             } else {
-                if (i + 1 >= argc) { free(rest); return EXIT_CLI; }
+                if (i + 1 >= argc) {
+                    free(rest);
+                    return emit_cli_error("missing value for --db");
+                }
                 g->db = argv[++i];
             }
             continue;
@@ -73,7 +78,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (flag_prefix_match(a, "fields")) {
             if (a[8] == '=') g->fields = a + 9;
             else {
-                if (i + 1 >= argc) { free(rest); return EXIT_CLI; }
+                if (i + 1 >= argc) {
+                    free(rest);
+                    return emit_cli_error("missing value for --fields");
+                }
                 g->fields = argv[++i];
             }
             continue;
@@ -103,17 +111,17 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
                 continue;
             }
             if (a[10] == '\0' || !parse_nonneg_int(a + 10, &lvl)) {
-                fprintf(stderr,
-                    "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
-                    "\"message\":\"invalid --verbose level: '");
-                json_str(stderr, a + 10);
-                fprintf(stderr,
-                    "' (expected an integer 0-3)\"}\n");
+                char msg[128];
+                snprintf(msg, sizeof msg,
+                         "invalid --verbose level: '%s' "
+                         "(expected an integer 0-3)", a + 10);
                 free(rest);
-                return EXIT_INVALID;
+                return emit_cli_error(msg);
             }
             if (lvl > 3) {
-                fprintf(stderr, "--verbose: level clamped to 3 (got %d)\n", lvl);
+                /* T2: plain-text clamp line was outside the error-line
+                 * contract; demote to a VLOG-only diagnostic. */
+                VLOG(3, "--verbose: level clamped to 3 (got %d)", lvl);
                 g->verbose = 3;
             } else {
                 g->verbose = lvl;
@@ -124,7 +132,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (flag_prefix_match(a, "json")) {
             if (a[6] == '=') g->json_input = a + 7;
             else {
-                if (i + 1 >= argc) { free(rest); return EXIT_CLI; }
+                if (i + 1 >= argc) {
+                    free(rest);
+                    return emit_cli_error("missing value for --json");
+                }
                 g->json_input = argv[++i];
             }
             continue;
@@ -135,7 +146,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (flag_prefix_match(a, "from_file")) {
             if (a[11] == '=') g->from_file = a + 12;
             else {
-                if (i + 1 >= argc) { free(rest); return EXIT_CLI; }
+                if (i + 1 >= argc) {
+                    free(rest);
+                    return emit_cli_error("missing value for --from_file");
+                }
                 g->from_file = argv[++i];
             }
             continue;
@@ -147,8 +161,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
     g->argc = rest_n;
     g->argv = rest;   /* caller frees via free(g->argv) */
 
-    /* need at least entity + action */
-    if (rest_n < 2) return EXIT_CLI;
+    /* need at least entity + action (T2: JSON error line emitted here,
+     * so main() can just return the code) */
+    if (rest_n < 2)
+        return emit_cli_error("missing entity and/or action. See --help.");
     return 0;
 }
 
@@ -271,8 +287,8 @@ void apply_flag_aliases(char **argv, int argc) {
  * entity flag (entity_flag_specs).  Before this check, unknown long
  * options were silently ignored, so a typo such as `model list
  * --deletd` exited 0 while quietly dropping soft-deleted rows.
- * Returns EXIT_OK, or prints the JSON error to stderr and returns
- * EXIT_INVALID.
+ * Returns EXIT_OK, or emits the JSON CLI-usage error to stderr
+ * (ACTA_CLI_ERR, code -10) and returns EXIT_CLI (T2).
  */
 int cmd_args_validate(const cmd_args_t *it) {
     for (int i = 0; i < it->argc; i++) {
@@ -290,12 +306,10 @@ int cmd_args_validate(const cmd_args_t *it) {
             }
         }
         if (!known) {
-            fprintf(stderr,
-                "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
-                "\"message\":\"unknown option '");
-            json_str(stderr, tok);
-            fprintf(stderr, "' (see --help)\"}\n");
-            return EXIT_INVALID;
+            char msg[128];
+            snprintf(msg, sizeof msg, "unknown option '%s' (see --help)",
+                     tok);
+            return emit_cli_error(msg);
         }
     }
     return EXIT_OK;

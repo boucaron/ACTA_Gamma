@@ -48,7 +48,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "frobnicate", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -59,7 +59,7 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "crete", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     /* suggestion is printed to stderr; we only verify the return code here.
      * If stderr capture is available, assert on "Did you mean 'create'" */
     targs_free(a, &g);

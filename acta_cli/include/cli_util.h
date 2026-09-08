@@ -142,16 +142,9 @@ static inline void json_str(FILE *f, const char *s)
 }
 
 /* ── Single-line JSON error contract (stderr) ─────────────────────── */
-/* Emit the canonical single-line JSON error on stderr:
- *   {"error":"ACTA_DB_ERR_<NAME>","code":<rc>,"message":"<what>"}
- * and return map_rc_to_exit(rc).  `what` is JSON-escaped via json_str
- * and NULL-safe.  `rc` should be a negative ACTA_DB_ERR_* code;
- * ACTA_DB_OK or an unknown code is reported as ACTA_DB_ERR_INVALID.
- * Callers may print human/usage text AFTER the JSON line — stderr
- * line 1 is the contract that scripts parse.  This is the centralized
- * error emitter for library-failure paths (P4 #6); entity files adopt
- * it incrementally. */
-static inline int finish_db_error(int rc, const char *what)
+/* Map a raw ACTA_DB_ERR_* rc to its canonical wire name; NULL for an
+ * unknown rc (callers fall back to a default name). */
+static inline const char *db_err_name(int rc)
 {
     static const struct { int code; const char *name; } names[] = {
         { ACTA_DB_ERR_NOT_FOUND,  "ACTA_DB_ERR_NOT_FOUND"  },
@@ -162,23 +155,55 @@ static inline int finish_db_error(int rc, const char *what)
         { ACTA_DB_ERR_DUPLICATE,  "ACTA_DB_ERR_DUPLICATE"  },
         { ACTA_DB_ERR_FK,         "ACTA_DB_ERR_FK"         },
     };
-    const char *name = NULL;
-    if (rc != ACTA_DB_OK) {
-        for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++)
-            if (names[i].code == rc) { name = names[i].name; break; }
-    }
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++)
+        if (names[i].code == rc) return names[i].name;
+    return NULL;
+}
+
+/* Emit the canonical single-line JSON error on stderr:
+ *   {"error":"ACTA_DB_ERR_<NAME>","code":-<exit>,"message":"<what>"}
+ * and return map_rc_to_exit(rc).  The `code` field is the exit code
+ * negated, so |code| == exit always holds (T2 invariant); the `error`
+ * name keeps per-cause granularity (e.g. ACTA_DB_ERR_DUPLICATE with
+ * code -4, exit 4).  `what` is JSON-escaped via json_str and NULL-safe.
+ * `rc` should be a negative ACTA_DB_ERR_* code; ACTA_DB_OK or an unknown
+ * code is reported as ACTA_DB_ERR_INVALID.  Callers may print human/usage
+ * text AFTER the JSON line — stderr line 1 is the contract that scripts
+ * parse.  This is the centralized error emitter for library-failure paths
+ * (P4 #6); entity files adopt it incrementally. */
+static inline int finish_db_error(int rc, const char *what)
+{
+    int exit_code = map_rc_to_exit(rc);
+    const char *name = db_err_name(rc);
     if (!name) { rc = ACTA_DB_ERR_INVALID; name = "ACTA_DB_ERR_INVALID"; }
     fprintf(stderr, "{\"error\":\"%s\",\"code\":%d,\"message\":",
-            name, rc);
+            name, -exit_code);
     json_str(stderr, what ? what : "");
     fputs("}\n", stderr);
-    return map_rc_to_exit(rc);
+    return exit_code;
+}
+
+/* Emit the DB-open-failure JSON error on stderr and return EXIT_DB_OPEN
+ * (11):
+ *   {"error":"ACTA_DB_ERR_<NAME>","code":-11,"message":"<what>"}
+ * The `error` name keeps the raw rc's granularity (ACTA_DB_ERR_INVALID_DB,
+ * ACTA_DB_ERR_SQL, …); `code` is the exit code negated per the T2
+ * invariant.  Used by main.c on acta_db_open() failure — makes the
+ * spec's exit 11 reachable. */
+static inline int emit_db_open_error(int rc, const char *what)
+{
+    const char *name = db_err_name(rc);
+    if (!name) { name = "ACTA_DB_ERR_INVALID_DB"; }
+    fprintf(stderr, "{\"error\":\"%s\",\"code\":-11,\"message\":", name);
+    json_str(stderr, what ? what : "");
+    fputs("}\n", stderr);
+    return EXIT_DB_OPEN;
 }
 
 /* Emit the JSON error line for a failed library call and return the mapped
  * exit code.  `op` names the operation ("model update", "skill create", …);
  * the detail is `acta_db_last_error(db)`, so the stderr line is
- *   {"error":"ACTA_DB_ERR_*","code":<rc>,"message":"<op> failed: <detail>"}
+ *   {"error":"ACTA_DB_ERR_*","code":-<exit>,"message":"<op> failed: <detail>"}
  * Thin wrapper over finish_db_error for the per-entity
  * `if (rc != ACTA_DB_OK)` paths (P4 #3) — the single place that composes
  * the "<op> failed: <detail>" message. */
@@ -212,8 +237,26 @@ static inline void emit_error(const char *msg)
     fputs("}\n", stderr);
 }
 
+/* Emit the canonical CLI-usage error line on stderr:
+ *   {"error":"ACTA_CLI_ERR","code":-10,"message":"<msg>"}
+ * and return EXIT_CLI (callers: `return emit_cli_error(msg);`).
+ * One namespace for every argv/usage error (unknown entity or action,
+ * unknown option, bad --verbose, missing flag value, too few
+ * positionals); `msg` is JSON-escaped via json_str.  Callers may print
+ * human/usage text AFTER the JSON line — stderr line 1 is the contract
+ * that scripts parse. */
+static inline int emit_cli_error(const char *msg)
+{
+    fprintf(stderr,
+        "{\"error\":\"ACTA_CLI_ERR\",\"code\":-10,"
+        "\"message\":");
+    json_str(stderr, msg ? msg : "");
+    fputs("}\n", stderr);
+    return EXIT_CLI;
+}
+
 /* Emit the canonical not-found error line on stderr:
- *   {"error":"ACTA_DB_ERR_NOT_FOUND","code":-5,"message":"<entity> not found"}
+ *   {"error":"ACTA_DB_ERR_NOT_FOUND","code":-1,"message":"<entity> not found"}
  * and return EXIT_NOT_FOUND (callers: `return emit_not_found("model");`).
  * Same bytes as finish_db_error(ACTA_DB_ERR_NOT_FOUND, "<entity> not found"). */
 static inline int emit_not_found(const char *entity)
@@ -492,9 +535,10 @@ static inline const char *closest_action(const char *input,
  * exit code. Single implementation for all entities (the previous per-file
  * copy-paste had drifted: 2 of 10 files logged the wrong VLOG label / help
  * pointer). `vlog_label` and `help_target` are passed by the caller, not
- * derived, and the stderr text is a fixed contract (scripts grep for
- * "Unknown action") — output stays byte-stable, historical quirks
- * included. */
+ * derived.  T2: unknown action is a CLI-usage error — stderr line 1 is
+ * the JSON contract (ACTA_CLI_ERR, code -10, exit EXIT_CLI); the human
+ * text ("Unknown action …" / suggestion / help pointer) follows on
+ * lines 2+ for people and fuzzy greps. */
 static inline int unknown_action(const char *vlog_label, const char *action,
                                  const char *help_target,
                                  const action_def_t *actions, size_t n)
@@ -505,11 +549,15 @@ static inline int unknown_action(const char *vlog_label, const char *action,
     VLOG(1, "%s: unknown action '%s'%s",
          vlog_label, shown, guess ? "  (suggestion below)" : "");
 
+    char msg[128];
+    snprintf(msg, sizeof msg, "unknown action: %s", shown);
+    int rc = emit_cli_error(msg);
+
     fprintf(stderr, "Unknown action '%s'.\n", shown);
     if (guess)
         fprintf(stderr, "  Did you mean '%s'?\n", guess);
     fprintf(stderr, "  Run '%s' for full usage.\n", help_target);
-    return EXIT_INVALID;
+    return rc;
 }
 
 

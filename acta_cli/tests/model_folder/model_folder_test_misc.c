@@ -41,7 +41,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "frobnicate", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -52,7 +52,7 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "cretae", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -62,7 +62,7 @@ static void test_empty_string_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 

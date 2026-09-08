@@ -29,7 +29,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     int rc = cmd_skill("frobnicate", NULL, &g, ctx->db);
     stest_capture_end(ctx);
 
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_typo_suggests_closest(stest_ctx_t *ctx)
@@ -40,7 +40,7 @@ static void test_typo_suggests_closest(stest_ctx_t *ctx)
     int rc = cmd_skill("creat", NULL, &g, ctx->db);
     stest_capture_end(ctx);
 
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     /* stderr should contain "Did you mean 'create'?"
      * ADAPT: if you capture stderr too, assert here.
      * For now just verify the exit code.
@@ -54,7 +54,7 @@ static void test_empty_action(stest_ctx_t *ctx)
     int rc = cmd_skill("", NULL, &g, ctx->db);
     stest_capture_end(ctx);
 
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_verbose_does_not_corrupt_stdout(stest_ctx_t *ctx)

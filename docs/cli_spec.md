@@ -42,13 +42,16 @@ Output modifiers (all entities): `--id_only` (bare `N` where noted),
 (subject to those modifiers).
 
 Exit codes: `0` ok, `1` not found, `2` SQL error, `3` OOM, `4` invalid
-argument / missing flag / missing required field, `10` CLI usage error
-(unknown entity/action, too few positionals, bad input source), `11` DB
-open failed. Errors: single JSON line on stderr
-`{"error":"ACTA_DB_ERR_*","code":<negative-rc>,"message":"..."}`.
-(The `code`/`exit` invariant and the error namespace are T2 — see
-[`t2_analysis.md`](t2_analysis.md); until then the `code` field is
-authoritative.)
+argument / missing flag / missing required field / duplicate / FK
+violation / invalid DB file, `10` CLI usage error (unknown entity,
+unknown action, unknown option, bad `--verbose`, too few positionals,
+missing flag value), `11` DB open failed. Errors: single JSON line on
+stderr `{"error":"ACTA_DB_ERR_*"|"ACTA_CLI_ERR","code":<n>,"message":"..."}`
+where the exit code is authoritative and `code` = −exit (the T2
+invariant, restored per [`t2_analysis.md`](t2_analysis.md) Option A);
+the `error` name keeps per-cause granularity — e.g.
+`ACTA_DB_ERR_DUPLICATE` is `code:-4` with exit `4`, and a DB-open failure
+is `code:-11` with exit `11`.
 
 ## db
 

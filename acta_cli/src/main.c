@@ -39,10 +39,10 @@ const char *resolve_db_path(const char *flag_db) {
 /*
  * Single-line JSON error → stderr, empty stdout.
  * Enforces the §7.1 schema once: delegates to finish_db_error
- * (cli_util.h) — error name from the raw rc, rc in "code",
- * message formatted then JSON-escaped (paths with `"`/`\` are
- * safe). The exit code is derived from rc (map_rc_to_exit) and
- * returned, so it always matches the "code" field.
+ * (cli_util.h) — error name from the raw rc, `code` = exit code
+ * negated (T2 invariant, |code| == exit), message formatted then
+ * JSON-escaped (paths with `"`/`\` are safe). The exit code is
+ * derived from rc (map_rc_to_exit) and returned.
  */
 int cli_error(int rc, const char *fmt, ...) {
     char msg[2048];
@@ -58,12 +58,13 @@ int main(int argc, char **argv) {
     global_opts_t gopts;
     memset(&gopts, 0, sizeof(gopts));
 
-    /* ---- pass 1: global flags ---- */
+    /* ---- pass 1: global flags ----
+     * T2: parse_globals distinguishes OOM (EXIT_ALLOC), missing flag
+     * value and too-few-positionals (EXIT_CLI) and emits the JSON error
+     * line itself — just return its code here. */
     int rc = parse_globals(argc, argv, &gopts);
-    if (rc == EXIT_CLI) {
-        return cli_error(ACTA_DB_ERR_INVALID,
-                         "missing entity and/or action. See --help.");
-    }
+    if (rc != EXIT_OK)
+        return rc;
 
     /* ---- early exits (no DB needed) ---- */
     if (gopts.show_version) { version_print(stdout);  return EXIT_OK; }
@@ -87,27 +88,31 @@ int main(int argc, char **argv) {
 
     /* Unknown --name tokens must not be silently ignored: the old
      * behaviour let a typo'd filter flag through, which exited 0 with
-     * a plausible-looking but wrong result set. */
-    if (cmd_args_validate(&ga) != EXIT_OK) {
+     * a plausible-looking but wrong result set.  T2: unknown option
+     * is a CLI-usage error — cmd_args_validate emits the JSON line
+     * (ACTA_CLI_ERR, code -10) and returns EXIT_CLI. */
+    int vrc = cmd_args_validate(&ga);
+    if (vrc != EXIT_OK) {
         free(gopts.argv);
-        return EXIT_INVALID;
+        return vrc;
     }
 
     /* ---- resolve DB path ---- */
     const char *db_path = resolve_db_path(gopts.db);
 
-    /* ---- open database ---- */
+    /* ---- open database ----
+     * T2: a failed open is its own class — exit EXIT_DB_OPEN (11),
+     * code -11, error name keeps the raw rc's granularity. */
     int db_err = ACTA_DB_OK;
     db_t *db = acta_db_open(db_path, &db_err, ACTA_DB_OPEN_EXISTING);
     if (!db) {
-        /* Raw library rc flows into the JSON "code" field; the exit
-         * code is map_rc_to_exit(db_err). */
-        int open_exit = cli_error(db_err,
-                                 "cannot open database '%s' (%s): check the "
-                                 "path and that it is a valid SQLite database",
-                                 db_path, acta_db_strerror(db_err));
+        char msg[2048];
+        snprintf(msg, sizeof msg,
+                 "cannot open database '%s' (%s): check the path and that "
+                 "it is a valid SQLite database",
+                 db_path, acta_db_strerror(db_err));
         free(gopts.argv);
-        return open_exit;
+        return emit_db_open_error(db_err, msg);
     }
 
     /* ---- dispatch (handlers receive the open db handle) ---- */

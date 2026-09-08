@@ -7,9 +7,10 @@
  *    (normalised to the canonical name in apply_flag_aliases BEFORE
  *    dispatch, so it works uniformly for get / list / count)
  *  - strict pass-2 flag validation: unknown long options must fail
- *    with EXIT_INVALID instead of being silently ignored (the old
- *    behaviour let a typo'd filter flag through and produced a
- *    plausible-looking but wrong result set).
+ *    with EXIT_CLI (10; T2: CLI-usage error, ACTA_CLI_ERR / code -10)
+ *    instead of being silently ignored (the old behaviour let a typo'd
+ *    filter flag through and produced a plausible-looking but wrong
+ *    result set).
  *
  * Reference-DB layout (acta_test_ref.db):
  *   skills: id=1 (folder 2), id=2 (root, "tata"), id=3 (folder 1),
@@ -178,7 +179,7 @@ static void test_unknown_flag_rejected(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "skill", "list", "--deletd" };
     int rc = stest_run_argv(ctx, cmd_skill, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_unknown_flag_typo_close_to_real(stest_ctx_t *ctx)
@@ -187,14 +188,14 @@ static void test_unknown_flag_typo_close_to_real(stest_ctx_t *ctx)
      * filter. */
     char *argv0[] = { "acta_cli", "skill", "list", "--include_delete" };
     int rc = stest_run_argv(ctx, cmd_skill, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_unknown_flag_equals_form_rejected(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "skill", "list", "--no_such_opt=1" };
     int rc = stest_run_argv(ctx, cmd_skill, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_known_flags_still_accepted(stest_ctx_t *ctx)

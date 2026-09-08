@@ -35,7 +35,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "bogus", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -46,7 +46,7 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_action(ctx, "creat", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     /* The suggestion goes to stderr; in this harness stderr is not
      * captured, so we only verify the exit code.
      * If you add stderr capture, assert:

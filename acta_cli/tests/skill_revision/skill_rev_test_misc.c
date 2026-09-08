@@ -36,7 +36,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_rev(ctx, "bogus", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     /* error goes to stderr; capture may or may not include stderr.
      * If not, just assert the return code. */
     targs_free(a, &g);
@@ -49,7 +49,7 @@ static void test_unknown_action_suggestion_list(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_rev(ctx, "lst", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -60,7 +60,7 @@ static void test_unknown_action_suggestion_get(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_rev(ctx, "gt", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 

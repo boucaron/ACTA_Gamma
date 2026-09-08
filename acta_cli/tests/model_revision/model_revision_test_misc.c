@@ -35,7 +35,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_rev(ctx, "frobnicate", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -46,7 +46,7 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     cmd_args_t *a = targs_new();
 
     int rc = do_rev(ctx, "listt", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     /* suggestion text goes to stderr; can only assert rc here */
     targs_free(a, &g);
 }

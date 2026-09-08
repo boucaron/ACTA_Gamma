@@ -78,11 +78,11 @@ const char *resolve_db_path(const char *flag_db);
 /* CLI-layer error emitter (defined in main.c). Emits the canonical
  * single-line JSON error on stderr, enforcing the §7.1 schema exactly
  * once (same shape as finish_db_error in cli_util.h):
- *   {"error":"ACTA_DB_ERR_<NAME>","code":<rc>,"message":"<escaped>"}
+ *   {"error":"ACTA_DB_ERR_<NAME>","code":-<exit>,"message":"<escaped>"}
  * `rc` is the raw (negative) ACTA_DB_ERR_* code; the message is
- * formatted then JSON-escaped. Returns the exit code derived from rc
- * (map_rc_to_exit) so the exit code always matches the "code" field;
- * callers must return it. */
+ * formatted then JSON-escaped. The `code` field is the exit code
+ * negated (T2 invariant, |code| == exit); the returned exit code is
+ * map_rc_to_exit(rc). Callers must return it. */
 int cli_error(int rc, const char *fmt, ...);
 
 #endif /* ACTA_CLI_H */

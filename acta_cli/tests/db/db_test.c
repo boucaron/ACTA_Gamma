@@ -302,7 +302,7 @@ static void test_unknown_action(stest_ctx_t *ctx)
     cmd_args_t   *a = targs_new();
 
     int rc = do_db(ctx, "frobnicate", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     targs_free(a, &g);
 }
 
@@ -313,7 +313,7 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     cmd_args_t   *a = targs_new();
 
     int rc = do_db(ctx, "exect", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
     /* suggestion goes to stderr, not captured stdout; just check rc */
     targs_free(a, &g);
 }

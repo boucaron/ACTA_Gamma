@@ -58,14 +58,21 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    `|code| == exit`) but not for `ACTA_CLI_ERR` lines, which emit
    `code: -10` while exiting `EXIT_INVALID` (4). Agents branching on
    `(code, exit)` need one namespace and one table.
-   *Current state (audited):* still broken in two places — `ACTA_CLI_ERR`
-   lines (`argparse.c` unknown option / bad `--verbose`, `commands.c`
-   unknown entity) exit 4 with `code:-10`, and `ACTA_DB_ERR_DUPLICATE`/`FK`/
-   `INVALID_DB` exit 4 with codes −6/−7/−8, so `|code| == exit` holds only
-   for −1/−2/−3/−4. Tracked as T2 in
-   [`cli_active_action.md`](cli_active_action.md); full analysis, options
-   and recommendation in [`t2_analysis.md`](t2_analysis.md); `cli_spec.md`
-   defers the invariant ("until then the `code` field is authoritative").
+   *Resolved (T2):* Option A from [`t2_analysis.md`](t2_analysis.md) —
+   the exit code is canonical and `code` = −exit everywhere. All
+   CLI-usage errors (unknown entity/action/option, bad `--verbose`,
+   missing flag value, too few positionals) emit `ACTA_CLI_ERR`/
+   `code:-10`/exit `10` (new `emit_cli_error` atom in `cli_util.h`; the
+   shared `unknown_action` now emits the JSON line and returns `EXIT_CLI`);
+   `parse_globals` distinguishes OOM (exit 3) / missing flag value /
+   too-few-positionals and emits its own JSON line; the `--verbose` clamp
+   line is VLOG-only; `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB` keep their
+   names but carry `code:-4` with exit `4` (`finish_db_error` prints
+   `code` as `map_rc_to_exit(rc)` negated); DB open failure emits
+   `code:-11`/exit `11` (`emit_db_open_error`, `EXIT_DB_OPEN`) — the spec's
+   exit 11 is now reachable. Contract pinned in
+   `tests/cli_util/cli_util_test_error_contract.c`; `cli_spec.md`
+   documents the invariant.
 
 ### Nitpicks
 
@@ -326,13 +333,13 @@ contract), but for LLM/script drivers the following are missing:
 2. **One unified error contract** — see P1 #5: two namespaces
    (`ACTA_DB_ERR_*` raw rc vs `ACTA_CLI_ERR` `-10`) and a code/exit-code
    invariant that does not hold for CLI errors. One table, one namespace.
-   *Current state:* `ACTA_CLI_ERR` lines (`argparse.c` unknown option / bad
-   `--verbose`, `commands.c` unknown entity) still emit `code:-10` while
-   exiting `EXIT_INVALID` (4), and `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB`
-   exit 4 with codes −6/−7/−8 — `|code| == exit` holds only for −1/−2/−3/−4.
-   Still open (T2); full analysis and recommended direction in
-   [`t2_analysis.md`](t2_analysis.md); `cli_spec.md` documents the exit
-   codes and defers the invariant until T2 lands.
+   *Resolved (T2):* the exit code is canonical, `code` = −exit
+   everywhere, and the error shape is settled — `ACTA_DB_ERR_*` names for
+   library failures, `ACTA_CLI_ERR`/`code:-10`/exit `10` for every
+   argv/usage error, `code:-11`/exit `11` for DB open failure. Full
+   analysis and the chosen direction in
+   [`t2_analysis.md`](t2_analysis.md); `cli_spec.md` documents the
+   invariant, so T3 `--tools` can state the error shape truthfully.
 3. **Stable, documented success shapes** — ✅ *resolved* (S3 / P3 #3 /
    P4 #7–8 / P5 #4, via T1): the per-action stdout table, the root-folder
    wire representation (`null` in every JSON emit), and the restore-shape
@@ -359,8 +366,8 @@ contract), but for LLM/script drivers the following are missing:
 2. **DEBUG stdin leak** — `resolve_input_source` (`include/commands.h`) dumps the full stdin payload to stderr on every `--stdin` use; one-line removal. *(P1 #4)*
 3. **Broken `create --json` usage examples** — 6 entity snippets show `cat x.json | acta_cli <entity> create --json`; bare `--json` is unparseable, the working form is `--stdin`. *(P1 nitpick, S4)*
 4. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
-5. **`--tools`** — the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); what remains is generating the `--tools` schema from that table. *(T3, blocked by T2)*
-6. **Error-contract unification** — one namespace, restore the code/exit invariant. *(P1 #5)*
+5. **`--tools`** — the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); what remains is generating the `--tools` schema from that table. *(T3 — T2, its blocker, is now done)*
+6. **Error-contract unification** — ✅ *resolved* (T2, Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace (`ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for argv/usage errors), `code` = −exit everywhere, and the spec's exit 11 (DB open failed) reachable via `emit_db_open_error`. *(P1 #5)
 7. **Parse-layer inconsistencies** — `cmd_args_flag` protocol (root cause of #1), `parse_globals` error conflation, bare `--json`. *(S4)*
 8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`), J2 (`model get --live` wording), J3 (`*_usage` declarations).
 

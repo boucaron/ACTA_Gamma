@@ -327,8 +327,12 @@ int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
                    int argc, char **argv, const char *stdin_blob)
 {
     global_opts_t g;
-    if (parse_globals(argc, argv, &g) != 0)
-        return EXIT_CLI;
+    /* T2: return parse_globals' real rc (EXIT_CLI for missing flag
+     * value / too few positionals, EXIT_ALLOC for OOM) exactly like
+     * main.c does. */
+    int prc = parse_globals(argc, argv, &g);
+    if (prc != EXIT_OK)
+        return prc;
 
 #ifdef _WIN32
     int saved_in  = _dup(STDIN_FILENO);
@@ -374,7 +378,10 @@ int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
     cmd_args_t ga;
     apply_flag_aliases(g.argv, g.argc);
     cmd_args_init(&ga, g.argc - 2, g.argv + 2);
-    if (cmd_args_validate(&ga) != EXIT_OK) {
+    /* T2: unknown option is a CLI-usage error (EXIT_CLI); return the
+     * real rc from cmd_args_validate, like main.c. */
+    int vrc = cmd_args_validate(&ga);
+    if (vrc != EXIT_OK) {
         fflush(stdout);
         dup2(saved_out, STDOUT_FILENO);
         dup2(saved_in, STDIN_FILENO);
@@ -382,7 +389,7 @@ int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
         close(saved_out);
         close(out_p[0]);
         free(g.argv);
-        return EXIT_INVALID;
+        return vrc;
     }
     int rc = fn(g.argv[1], &ga, &g, ctx->db);
 

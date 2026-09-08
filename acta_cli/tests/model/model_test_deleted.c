@@ -6,9 +6,10 @@
  *    (normalised to the canonical name in apply_flag_aliases BEFORE
  *    dispatch, so it works uniformly for get / list / count)
  *  - strict pass-2 flag validation: unknown long options must fail
- *    with EXIT_INVALID instead of being silently ignored (the old
- *    behaviour let a typo'd filter flag through and produced a
- *    plausible-looking but wrong result set).
+ *    with EXIT_CLI (10; T2: CLI-usage error, ACTA_CLI_ERR / code -10)
+ *    instead of being silently ignored (the old behaviour let a typo'd
+ *    filter flag through and produced a plausible-looking but wrong
+ *    result set).
  *
  * All cases run through parse_globals + validation + handler exactly
  * like main.c does (stest_run_argv).
@@ -137,7 +138,7 @@ static void test_unknown_flag_rejected(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "model", "list", "--deletd" };
     int rc = stest_run_argv(ctx, cmd_model, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_unknown_flag_typo_close_to_real(stest_ctx_t *ctx)
@@ -146,14 +147,14 @@ static void test_unknown_flag_typo_close_to_real(stest_ctx_t *ctx)
      * filter. */
     char *argv0[] = { "acta_cli", "model", "list", "--include_delete" };
     int rc = stest_run_argv(ctx, cmd_model, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_unknown_flag_equals_form_rejected(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "model", "list", "--no_such_opt=1" };
     int rc = stest_run_argv(ctx, cmd_model, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 static void test_known_flags_still_accepted(stest_ctx_t *ctx)
