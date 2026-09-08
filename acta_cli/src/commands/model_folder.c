@@ -701,10 +701,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  restored model folder id=%d", id);
-        if (gopts->id_only)
-            emit_ok_id(gopts, id);
-        else
-            fprintf(stdout, "{\"id\":%d,\"restored\":true}\n", id);
+        emit_ok_restored(gopts, id);
         return EXIT_OK;
     }
 
@@ -715,7 +712,6 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
                                  "model_folder move", &folder_id))
             return EXIT_INVALID;
 
-        const char *s_new_parent = cmd_args_flag(ga, "parent_id", 1);
         int new_parent_id = 0;
         if (parse_nonneg_int_flag(ga, "parent_id", &new_parent_id, 1,
                                   usage_mf_move,
@@ -738,14 +734,7 @@ int cmd_model_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  moved model folder id=%d → parent_id=%d", folder_id, new_parent_id);
-        if (gopts->id_only)
-            emit_ok_id(gopts, folder_id);
-        else
-            /* entity wire (not emit_ok_folder): key is "parent_id",
-             * root is null, value echoed verbatim from the flag. */
-            fprintf(stdout, "{\"id\":%d,\"parent_id\":%s}\n",
-                    folder_id,
-                    new_parent_id == 0 ? "null" : s_new_parent);
+        emit_ok_parent(gopts, folder_id, new_parent_id);
         return EXIT_OK;
     }
 

@@ -37,7 +37,7 @@ static void test_move_to_root(stest_ctx_t *ctx)
 
     int rc = do_move(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"folder_id\":0");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"folder_id\":null");
     // TEST_CONTAINS(ctx, stest_stdout(ctx), "\"name\":\"summarize4_moved\"");
     targs_free(a, &g);
 }

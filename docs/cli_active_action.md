@@ -29,6 +29,23 @@ was folded into the plan below (F3 → S2, F2 → S3).
 These blocks are accepted as-is; a future edit that touches one should
 keep the canonical message texts.
 
+## Agentic usage — `--tools` machine-readable tool schema
+
+`tools_print` (`commands.c`) is a stub that prints `[]`, while help
+advertises it as "full command reference". The review calls this the
+single biggest gap for agentic use: agents must otherwise scrape help
+prose and guess the contract. Design rule from the review: *generate
+`--tools` from the same per-action data (spec §11) rather than
+hand-writing it* — one table drives both the spec doc and the emitted
+JSON.
+
+| # | Action | Source | Notes / dependencies |
+|---|--------|--------|----------------------|
+| T1 | **Wire-format decisions + spec §11 table** — settle the three open decisions `--tools` must document: transition success shape (`exec start/cancel/complete/fail/set-raw` print nothing on success — decide a shape, e.g. `{"id":N,"status":"..."}`, and emit it via the shared atoms); root-folder wire representation (`null` in `model_to_json` vs `0` in move success lines — pick one, `null` recommended for all JSON emits); restore-shape drift (`model_folder restore` → `{"id":N,"restored":true}` vs `emit_ok_id` elsewhere — add an `emit_ok_restored` atom or standardize). Then write the per-action table (entity → action → positionals, flags, input JSON keys, stdout schema, exit codes) in a spec doc (`db_usage()` is the template); §11 does not exist in `docs/` yet | P5 #4 / P4 #7–8, Agentic #1–3 | Extends S3: S3 documents the entity-action shapes; T1 adds the `exec`/`log` transition shapes and the three wire-format decisions. All emits already flow through the `cli_util.h` atoms, so the table is documentation of existing behavior once the decisions land |
+| T2 | **Error-contract unification** — one namespace (`ACTA_DB_ERR_*` raw negative rc vs `ACTA_CLI_ERR` `-10` today) and restore the `code`/`exit` invariant; `--tools` documents the error shape, so it cannot be emitted truthfully until this is settled | P1 #5, Agentic #2 | Blocker for T3 |
+| T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) | Agentic #1, P1 nitpick, Agentic #4–5 | Data-only table — distinct from the excluded V3 field-descriptor + shared-driver refactor. 10 entities × their actions. After this the help line "full command reference" is true |
+| T4 | **Test `--tools`** — output is valid JSON (parse with the project's own json layer); it covers all 10 entities and the full action set (count check); each entry's flags/positionals match what `parse_globals` + dispatch actually accept (ideally by feeding generated commands through the raw-argv path, which also exercises the S2 layer) | Agentic #1, P5 #3 | Depends on T1–T3 |
+
 ## Residual (from `cli_review.md`, low priority)
 
 | # | Action | Source | Notes |
@@ -39,7 +56,8 @@ keep the canonical message texts.
 
 ## Summary
 
-- **Next:** S2–S4, then the J1–J3 residual items.
+- **Next:** S2–S4, then the `--tools` chain T1–T4 (T1 extends S3; T3
+  depends on T1 + T2), then the J1–J3 residual items.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)

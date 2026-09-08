@@ -234,12 +234,14 @@ static inline void emit_ok_id(const global_opts_t *g, int id)
 }
 
 /* Emit a move success on stdout: {"id":N,"folder_id":M} (or bare N with
- * --id_only).  folder_id is the raw int (0 = root) — the S3 root-folder
- * wire question (null vs 0) is decided per entity, not here. */
+ * --id_only).  Root folder is `null` on the wire (S3 decision: root =
+ * null in all JSON emits; --table output is unaffected). */
 static inline void emit_ok_folder(const global_opts_t *g, int id, int folder_id)
 {
     if (g && g->id_only)
         fprintf(stdout, "%d\n", id);
+    else if (folder_id == 0)
+        fprintf(stdout, "{\"id\":%d,\"folder_id\":null}\n", id);
     else
         fprintf(stdout, "{\"id\":%d,\"folder_id\":%d}\n", id, folder_id);
 }
@@ -248,6 +250,41 @@ static inline void emit_ok_folder(const global_opts_t *g, int id, int folder_id)
 static inline void emit_deleted(void)
 {
     fputs("{\"deleted\":true}\n", stdout);
+}
+
+/* Emit a lifecycle-transition success on stdout:
+ * {"id":N,"status":"<status>"} (or bare N with --id_only).
+ * `<status>` is the new status — one of the ACTA_EXEC_STATUS_* values. */
+static inline void emit_ok_transition(const global_opts_t *g, int id,
+                                      const char *status)
+{
+    if (g && g->id_only)
+        fprintf(stdout, "%d\n", id);
+    else
+        fprintf(stdout, "{\"id\":%d,\"status\":\"%s\"}\n", id, status);
+}
+
+/* Emit a folder-move success on stdout: {"id":N,"parent_id":M} (or
+ * bare N with --id_only).  Root parent is `null` on the wire (same S3
+ * decision as emit_ok_folder). */
+static inline void emit_ok_parent(const global_opts_t *g, int id, int parent_id)
+{
+    if (g && g->id_only)
+        fprintf(stdout, "%d\n", id);
+    else if (parent_id == 0)
+        fprintf(stdout, "{\"id\":%d,\"parent_id\":null}\n", id);
+    else
+        fprintf(stdout, "{\"id\":%d,\"parent_id\":%d}\n", id, parent_id);
+}
+
+/* Emit a restore success on stdout: {"id":N,"restored":true} (or bare N
+ * with --id_only). */
+static inline void emit_ok_restored(const global_opts_t *g, int id)
+{
+    if (g && g->id_only)
+        fprintf(stdout, "%d\n", id);
+    else
+        fprintf(stdout, "{\"id\":%d,\"restored\":true}\n", id);
 }
 
 /* ── input atoms ──────────────────────────────────────────────────── */

@@ -780,7 +780,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  deleted model id=%d", id);
-        emit_ok_id(gopts, id);
+        emit_deleted();
         return EXIT_OK;
     }
 
@@ -803,7 +803,7 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         VLOG(1, "  restored model id=%d", id);
-        emit_ok_id(gopts, id);
+        emit_ok_restored(gopts, id);
         return EXIT_OK;
     }
 

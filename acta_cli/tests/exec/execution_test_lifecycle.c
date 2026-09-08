@@ -29,6 +29,20 @@ static void test_start_basic(stest_ctx_t *ctx)
 
     int rc = do_exec(ctx, "start", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":1,\"status\":\"running\"}\n");
+    targs_free(a, &g);
+}
+
+static void test_start_id_only(stest_ctx_t *ctx)
+{
+    /* --id_only honours the transition shape too: bare N, no JSON. */
+    global_opts_t g = gopts_id_only();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "2", &g);   /* still pending; cancel test runs later */
+
+    int rc = do_exec(ctx, "start", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_STREQ(ctx, stest_stdout(ctx), "2\n");
     targs_free(a, &g);
 }
 
@@ -77,6 +91,7 @@ static void test_cancel_basic(stest_ctx_t *ctx)
 
     int rc = do_exec(ctx, "cancel", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":2,\"status\":\"cancelled\"}\n");
     targs_free(a, &g);
 }
 
@@ -136,6 +151,7 @@ static void test_complete_with_result(stest_ctx_t *ctx)
 
         int rc = do_exec(ctx, "complete", a, g);
         TEST_EQ(ctx, rc, EXIT_OK);
+        TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":3,\"status\":\"completed\"}\n");
         targs_free(a, &g);
     }
 }
@@ -210,6 +226,7 @@ static void test_fail_with_error(stest_ctx_t *ctx)
         targs_flag(a, "error", "timeout after 30s", &g);
         int rc = do_exec(ctx, "fail", a, g);
         TEST_EQ(ctx, rc, EXIT_OK);
+        TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":4,\"status\":\"failed\"}\n");
         targs_free(a, &g);
     }
 }
@@ -265,6 +282,9 @@ static void test_set_raw_basic(stest_ctx_t *ctx)
 
     int rc = do_exec(ctx, "set-raw", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
+    /* set-raw does not change status; the line echoes id=1's current
+     * status (failed — test_fail_no_error transitioned it above). */
+    TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":1,\"status\":\"failed\"}\n");
     targs_free(a, &g);
 }
 
@@ -313,6 +333,7 @@ int run_execution_test_lifecycle(void)
 
     /* start */
     test_start_basic(&ctx);
+    test_start_id_only(&ctx);
     test_start_missing_id(&ctx);
     test_start_id_zero(&ctx);
     test_start_nonexistent(&ctx);

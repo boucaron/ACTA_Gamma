@@ -691,7 +691,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  moved skill_folder id=%d → parent_id=%d", id, new_parent_id);
-        emit_ok_folder(gopts, id, new_parent_id);
+        emit_ok_parent(gopts, id, new_parent_id);
         return EXIT_OK;
     }
 
@@ -735,7 +735,7 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
         }
 
         VLOG(1, "  restored skill_folder id=%d", id);
-        emit_ok_id(gopts, id);
+        emit_ok_restored(gopts, id);
         return EXIT_OK;
     }
 

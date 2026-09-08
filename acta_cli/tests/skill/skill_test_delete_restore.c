@@ -26,7 +26,7 @@ static void test_delete_existing(stest_ctx_t *ctx)
 
     int rc = do_delete(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":5");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"deleted\":true");
     targs_free(a, &g);
 }
 
@@ -96,6 +96,7 @@ static void test_restore_deleted(stest_ctx_t *ctx)
     int rc = do_restore(ctx, ra, rg);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":5");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"restored\":true");
     targs_free(ra, &rg);
 }
 

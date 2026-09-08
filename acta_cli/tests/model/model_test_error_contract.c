@@ -156,7 +156,7 @@ static void test_success_path_keeps_stderr_clean(stest_ctx_t *ctx)
     int rc = do_delete(ctx, a, g);
 
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":1");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"deleted\":true");
     TEST_STREQ(ctx, captured_stderr(), "");
     targs_free(a, &g);
 }

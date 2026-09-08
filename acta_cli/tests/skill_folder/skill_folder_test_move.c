@@ -31,6 +31,7 @@ static void test_move_to_existing_parent(stest_ctx_t *ctx)
     int rc = do_move(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":2");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"parent_id\":null");
     targs_free(a, &g);
 }
 
@@ -44,6 +45,7 @@ static void test_move_omitted_parent_defaults_root(stest_ctx_t *ctx)
 
     int rc = do_move(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":2,\"parent_id\":null}\n");
     targs_free(a, &g);
 }
 

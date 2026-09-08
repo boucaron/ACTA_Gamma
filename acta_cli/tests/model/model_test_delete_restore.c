@@ -134,6 +134,7 @@ static void test_restore_basic(stest_ctx_t *ctx)
     targs_pos(a, "5", &g);
     int rc = do_restore(ctx, a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"restored\":true");
     TEST_EQ(ctx, is_deleted(ctx, 5), 0);
     targs_free(a, &g);
 }

@@ -86,6 +86,7 @@ static void test_move_to_root(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_OK);
     /* folder_id should be NULL (root) */
     TEST_EQ(ctx, get_folder_id(ctx, 4), -1); /* -1 means NULL */
+    TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":4,\"folder_id\":null}\n");
     targs_free(a, &g);
 }
 

@@ -163,6 +163,7 @@ static void test_restore_deleted(stest_ctx_t *ctx)
     rc = do_restore(ctx, ra, rg);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"restored\":true");
     targs_free(ra, &rg);
 
     /* back to 3 live folders (baseline 2 + RestoreMe) */

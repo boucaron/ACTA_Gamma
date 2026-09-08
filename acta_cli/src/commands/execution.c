@@ -197,7 +197,9 @@ static void usage_start(FILE *f)
 "== start <id> ======================================================\n"
 "  Transition an execution to 'running'.\n"
 "\n"
-"    acta_cli exec start 42\n", f);
+"    acta_cli exec start 42\n"
+"\n"
+"  stdout on success: {\"id\":N,\"status\":\"running\"} (bare N with --id_only)\n", f);
 }
 
 static void usage_cancel(FILE *f)
@@ -206,7 +208,9 @@ static void usage_cancel(FILE *f)
 "== cancel <id> ====================================================\n"
 "  Transition an execution to 'cancelled'.\n"
 "\n"
-"    acta_cli exec cancel 42\n", f);
+"    acta_cli exec cancel 42\n"
+"\n"
+"  stdout on success: {\"id\":N,\"status\":\"cancelled\"} (bare N with --id_only)\n", f);
 }
 
 static void usage_complete(FILE *f)
@@ -218,7 +222,9 @@ static void usage_complete(FILE *f)
 "    acta_cli exec complete 42 --result \"answer text\"\n"
 "\n"
 "  Options:\n"
-"    --result <str>       Final result / answer text\n", f);
+"    --result <str>       Final result / answer text\n"
+"\n"
+"  stdout on success: {\"id\":N,\"status\":\"completed\"} (bare N with --id_only)\n", f);
 }
 
 static void usage_fail(FILE *f)
@@ -230,7 +236,9 @@ static void usage_fail(FILE *f)
 "    acta_cli exec fail 42 --error \"timeout after 30s\"\n"
 "\n"
 "  Options:\n"
-"    --error <str>        Error description\n", f);
+"    --error <str>        Error description\n"
+"\n"
+"  stdout on success: {\"id\":N,\"status\":\"failed\"} (bare N with --id_only)\n", f);
 }
 
 static void usage_set_raw(FILE *f)
@@ -242,7 +250,10 @@ static void usage_set_raw(FILE *f)
 "    acta_cli exec set-raw 42 --raw '<full raw output>'\n"
 "\n"
 "  Options:\n"
-"    --raw <str>          Raw response text (required)\n", f);
+"    --raw <str>          Raw response text (required)\n"
+"\n"
+"  stdout on success: {\"id\":N,\"status\":\"<current status, unchanged>\"}\n"
+"  (bare N with --id_only)\n", f);
 }
 
 static void usage_list(FILE *f)
@@ -627,6 +638,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return finish_op_error(db, rc, "execution start");
         }
         VLOG(1, "  started id=%d", id);
+        emit_ok_transition(gopts, id, ACTA_EXEC_STATUS_RUNNING);
         return EXIT_OK;
     }
 
@@ -646,6 +658,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return finish_op_error(db, rc, "execution cancel");
         }
         VLOG(1, "  cancelled id=%d", id);
+        emit_ok_transition(gopts, id, ACTA_EXEC_STATUS_CANCELLED);
         return EXIT_OK;
     }
 
@@ -669,6 +682,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return finish_op_error(db, rc, "execution complete");
         }
         VLOG(1, "  completed id=%d", id);
+        emit_ok_transition(gopts, id, ACTA_EXEC_STATUS_COMPLETED);
         return EXIT_OK;
     }
 
@@ -692,6 +706,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return finish_op_error(db, rc, "execution fail");
         }
         VLOG(1, "  failed id=%d", id);
+        emit_ok_transition(gopts, id, ACTA_EXEC_STATUS_FAILED);
         return EXIT_OK;
     }
 
@@ -722,6 +737,14 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return finish_op_error(db, rc, "execution set-raw");
         }
         VLOG(1, "  set raw response for id=%d", id);
+        /* Status is unchanged by set-raw; echo it so agents can confirm
+         * the row's lifecycle state without a follow-up get. */
+        int err = 0;
+        execution_t *e = acta_db_execution_get(db, id, &err);
+        if (e) {
+            emit_ok_transition(gopts, id, e->status ? e->status : "");
+            acta_db_execution_free(e);
+        }
         return EXIT_OK;
     }
 
