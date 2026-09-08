@@ -702,17 +702,20 @@ static void js(FILE *f, const char *s)
     json_str(f, s);
 }
 
-/* "key": separator — compact: ", " before every field but the first;
- * pretty: newline + 2*level spaces, trailing comma unless last. */
+/* "key": separator — both modes: optional leading comma before fields
+ * with i > 0 (no comma before the first, none after the last), so no
+ * object ever ends with a trailing comma.  `n` is unused; callers keep
+ * passing it for symmetry with the array helpers. */
 static void jsep(FILE *f, int pretty, int level, int i, int n)
 {
+    (void)n;
     if (!pretty) {
         if (i > 0) fputs(", ", f);
         return;
     }
     fputs("\n", f);
     indent_line(f, level);
-    if (i + 1 < n) fputc(',', f);
+    if (i > 0) fputc(',', f);
 }
 
 static void jf_str(FILE *f, const char *k, const char *v,

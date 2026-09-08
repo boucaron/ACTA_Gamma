@@ -10,6 +10,40 @@ Goal (from the plan): a static per-(entity, action) data table in one file
 `tools_print` renders it with the existing JSON emitter. After this the
 help line "see --tools for full command reference" is true.
 
+## 0. Status (post-implementation, audited)
+
+T3 is **implemented**: `src/tools.c` holds the 69-entry table and the
+renderer; `tools_print(FILE*, int pretty)` moved out of `commands.c`;
+`main.c` passes `gopts.pretty`; help line updated per D3. M1–M3 spec
+table fixes are applied in `cli_spec.md`. Verified against a live
+`--tools` run:
+
+- valid JSON (compact default, one line, trailing newline);
+- **69 entries** (59 actions + 10 help); per-entity counts: db 3,
+  context 5, model 9, model_folder 9, model_revision 5, skill 9,
+  skill_folder 9, skill_revision 5, exec 10, log 5;
+- exactly the 8 JSON-capable actions carry `json_keys` (incl.
+  `skill.update` per M2, `hash` key per M1);
+- per-action flag lists match `cli_spec.md` (spot-checked, e.g.
+  `exec count` = `exec list` minus `--count/--table/--fields/--no_nulls`).
+
+**Bug found during the audit and fixed:** the `--pretty` rendering was
+invalid JSON — `jsep`'s pretty path used `if (i + 1 < n) fputc(',', f)`,
+which emitted a leading comma **before the first field** of every
+object. Fixed to `if (i > 0)` (leading-comma scheme; no trailing comma
+after the last field). Compact mode was already valid. **T4 must test
+both modes** — `--tools --pretty` before the fix failed any JSON parse.
+
+Deviations to carry into T4:
+
+- Per-entry `aliases` arrays are all empty — alias info lives in the
+  global `entity_aliases` map plus the repeated "canonical entity is
+  `exec`/`log`" description text. T4 must not assert non-empty
+  `aliases` per entry.
+- M4/M5 remain deferred: the table follows `cli_spec.md`, not the code,
+  for `skill list`/`count` (`--all` absent) and `skill_folder move`
+  (`--parent_id` still required in the spec).
+
 ## 1. Current state (audited)
 
 | Item | State |
@@ -279,8 +313,9 @@ other changes. No new test files in T3 (that is T4).
 
 ## 8. Unblocks / next
 
-T4 (`test --tools`): valid JSON via the project's json layer, 69-entry
-count, per-entity action coverage, and per-entry flag/positional
-cross-check by feeding generated commands through the raw-argv path
-(`tests/helpers/test_helpers` `stest_run_argv`) — which also exercises
-the S2 global-parse layer.
+T4 (`test --tools`): valid JSON via the project's json layer **in both
+compact and `--pretty` modes** (pretty was invalid JSON before the
+leading-comma fix in `jsep`), 69-entry count, per-entity action
+coverage, and per-entry flag/positional cross-check by feeding
+generated commands through the raw-argv path (`tests/helpers/test_helpers`
+`stest_run_argv`) — which also exercises the S2 global-parse layer.
