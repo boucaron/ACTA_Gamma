@@ -64,7 +64,7 @@ is `code:-11` with exit `11`.
 
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
-| `context create` | — | `--type*`, `--content*`, `--hash*`, `--metadata` | flags or JSON `{type*, content*, content_hash*, metadata}` | `{"id":N}` |
+| `context create` | — | `--type*`, `--content*`, `--hash*`, `--metadata` | flags or JSON `{type*, content*, hash*, metadata}` | `{"id":N}` |
 | `context get <id>` | `id` | — | — | context JSON object |
 | `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `context count` | — | `--type`, `--hash` | — | bare int |
@@ -110,7 +110,7 @@ is `code:-11` with exit `11`.
 |---------|-------------|-------|-------|-------------------|
 | `skill create` | — | `--name*`, `--prompt_template*`, `--folder_id`, `--description`, `--output_schema` | flags or JSON (same keys) | `{"id":N}` |
 | `skill get <id>` | `id` | `--include_deleted` / `--deleted` | — | skill JSON object |
-| `skill update <id>` | `id` | `--name`, `--folder_id`, `--description`, `--prompt_template`, `--output_schema` (≥ 1 required) | — | `{"id":N}` |
+| `skill update <id>` | `id` | `--name`, `--folder_id`, `--description`, `--prompt_template`, `--output_schema` (≥ 1 required) | flags or JSON `{name, prompt_template, folder_id, description, output_schema}` (≥ 1) | `{"id":N}` |
 | `skill delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `skill restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
 | `skill move <id>` | `id` | `--folder_id*` (0 = root) | — | `{"id":N,"folder_id":null\|M}` |
@@ -123,8 +123,8 @@ is `code:-11` with exit `11`.
 |---------|-------------|-------|-------|-------------------|
 | `skill_folder create` | — | `--name*`, `--parent_id` (0/omitted = root) | flags or JSON `{name*, parent_id}` | `{"id":N}` |
 | `skill_folder get <id>` | `id` | — | — | folder JSON object |
-| `skill_folder list` | — | `--parent_id`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
-| `skill_folder count` | — | `--parent_id` | — | bare int |
+| `skill_folder list` | `parent_id` (optional; `all` = all folders) | `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | positional / flag | `[ … ]` / `[]`; `--count` → bare int |
+| `skill_folder count` | `parent_id` (optional; `all` = all folders) | — | positional | bare int |
 | `skill_folder rename <id>` | `id` | `--name*` | — | `{"id":N}` |
 | `skill_folder delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `skill_folder restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |

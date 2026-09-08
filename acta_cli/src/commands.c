@@ -110,7 +110,8 @@ void help_print(FILE *out)
         "  --id_only          print only the id\n"
         "  --count            print only the row count\n"
         "  --table            columnar output\n"
-        "  --pretty           2-space indent JSON\n"
+        "  --pretty           2-space indent JSON (applies to --tools\n"
+        "                     output)\n"
         "  --json <blob>      input JSON object\n"
         "  --stdin            read JSON from stdin\n"
         "  --from_file <p>    read JSON from file\n"
@@ -124,9 +125,5 @@ void help_print(FILE *out)
         "see --tools for full command reference.\n");
 }
 
-int tools_print(FILE *out)
-{
-    /* TODO: emit the full JSON array from spec §11 */
-    fprintf(out, "[]");
-    return EXIT_OK;
-}
+/* tools_print() moved to src/tools.c (T3): the static per-(entity,
+ * action) data table plus its JSON renderer live there. */

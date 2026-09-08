@@ -18,7 +18,9 @@
 
 void version_print(FILE *out);
 void help_print(FILE *out);
-int tools_print(FILE *out);
+/* Emit the --tools JSON schema (static data, no DB).  `pretty` = 1
+ * switches to 2-space indent; default is single-line compact. */
+int tools_print(FILE *out, int pretty);
 
 /**
  * Dispatch a parsed (entity, action) pair to its handler.
