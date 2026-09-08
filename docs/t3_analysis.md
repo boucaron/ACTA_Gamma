@@ -38,7 +38,14 @@ Action counts per entity, from [`cli_spec.md`](cli_spec.md):
 | skill_revision | `get`, `get-latest`, `list`, `count` (4) | 1 |
 | exec | `create`, `get`, `start`, `cancel`, `complete`, `fail`, `set-raw`, `list`, `count` (9) | 1 |
 | log | `create`, `get`, `list`, `count` (4) | 1 |
-| **Total** | **57** | **10 → 67 entries** |
+| **Total** | **59**¹ | **10 → 69 entries** |
+
+¹ *Correction (found during T3 implementation):* the per-entity counts in
+this table sum to **59**, not 57 — the 57/67 figures carried through
+earlier drafts were an arithmetic error. The implemented table has
+**69 entries** (verified against both this table and the
+`action_def_t` arrays in all 10 handlers). **T4's count check must
+assert 69.**
 
 Doc aliases that agents will actually emit (dispatch only accepts the
 canonical names — `lookup_entity` in `commands.c`): `execution` for
@@ -69,7 +76,7 @@ positional `sql` or `--sql` / `--file` (≤ 64 KiB) / `--sql_stdin`
 ## 3. Spec-vs-code mismatches found during the audit
 
 These must be settled **before** the data table is written, because the
-table claims single-source-of-truth status. All three are spec-table
+table claims single-source-of-truth status. All are spec-table
 errors (code is the behavior to document):
 
 | # | Mismatch | Code fact | Fix |
@@ -83,6 +90,19 @@ Related quirk (out of T3 scope, note for S4): because `--parent_id` is in
 `skill_folder list --parent_id 3` and the handler silently ignores it.
 The tools table must document the positional (per M3), not the flag.
 
+**M4/M5 — found during T3 implementation, deferred follow-ups.**
+Two further spec-vs-code mismatches surfaced while building the table.
+Per the D2 rule ("flags exactly as `cli_spec.md` lists them") the
+table follows the spec for both, so the spec table is still incomplete
+with respect to "full command reference"; T4's cross-check passes
+either way (`--all` is in `entity_flag_specs`, and an optional flag
+documented as required is never rejected):
+
+| # | Mismatch | Code fact | Follow-up |
+|---|----------|-----------|-----------|
+| M4 | `cli_spec.md` skill `list`/`count` flags omit `--all` | `skill.c:895,1002` — a real boolean `--all` flag ("skills from all folders"); in `entity_flag_specs`; documented in the per-action usage text | add `--all` to the spec flag cells, then to `tool_table` |
+| M5 | `cli_spec.md` `skill_folder move`: `--parent_id*` (required) | `skill_folder.c:676` — `parse_nonneg_int_flag(..., 0, ...)`: optional, defaults to root (0) | spec: `--parent_id` (0 = root), drop the `*`; `model_folder move` stays required (`model_folder.c:716`) |
+
 ## 4. Wire-format decisions
 
 ### D1 — Top-level shape
@@ -90,7 +110,7 @@ The tools table must document the positional (per M3), not the flag.
 **Decision: top-level object with a `tools` array plus a `global`
 section** (replacing the `[]` stub; nothing consumes the stub today, so
 changing the top level is free). The common contract is stated **once**,
-not repeated 67 times:
+not repeated 69 times:
 
 ```json
 {
@@ -105,12 +125,12 @@ not repeated 67 times:
                    "10":"CLI usage error","11":"DB open failed"},
   "error": {"stream":"stderr","line1":"{\"error\":\"ACTA_DB_ERR_*|ACTA_CLI_ERR\",\"code\":-<exit>,\"message\":\"...\"}",
             "invariant":"code == -exit"},
-  "tools": [ <67 entries> ]
+  "tools": [ <69 entries> ]
 }
 ```
 
 Rationale: flat arrays of per-action objects can't hold the exit-code /
-error-line contract without 67-fold repetition; the wrapper costs one
+error-line contract without 69-fold repetition; the wrapper costs one
 level of parsing and self-documents. `--tools` needs no DB
 (`main.c:72`), so the whole object is static data.
 
@@ -153,7 +173,7 @@ Rules:
   common-shapes table).
 - `help` actions: 10 extra entries with `"input":"none"`,
   `"success":"usage text (plain, not JSON)"`, exit `0`. Included so the
-  "full action set" is literally complete (T4 count check: 67).
+  "full action set" is literally complete (T4 count check: 69).
 - No per-entry exit codes — the global section covers all; an action
   that can only fail 0/1/4 gets nothing extra (agents should not be told
   an exit code that can't happen).
@@ -205,7 +225,7 @@ layer; cJSON is parse-only by design (`json.h`).
        const char *success;
    } tool_entry_t;
 
-   static const tool_entry_t tool_table[] = { /* 67 entries */ };
+   static const tool_entry_t tool_table[] = { /* 69 entries */ };
    ```
 
    - NULL-terminated string arrays for `aliases`/`json_keys` (or count
@@ -254,12 +274,12 @@ other changes. No new test files in T3 (that is T4).
    flat array with per-entry repetition. **Recommendation: object.**
 2. `--pretty` implemented, scoped to `--tools`, via
    `tools_print(FILE*, int pretty)` (D3).
-3. `help` actions included in the table (67 entries, T4 count = 67).
+3. `help` actions included in the table (69 entries, T4 count = 69).
 4. M1–M3 spec-table fixes as the single source of truth (code wins).
 
 ## 8. Unblocks / next
 
-T4 (`test --tools`): valid JSON via the project's json layer, 67-entry
+T4 (`test --tools`): valid JSON via the project's json layer, 69-entry
 count, per-entity action coverage, and per-entry flag/positional
 cross-check by feeding generated commands through the raw-argv path
 (`tests/helpers/test_helpers` `stest_run_argv`) — which also exercises
