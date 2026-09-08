@@ -46,8 +46,9 @@ argument / missing flag / missing required field, `10` CLI usage error
 (unknown entity/action, too few positionals, bad input source), `11` DB
 open failed. Errors: single JSON line on stderr
 `{"error":"ACTA_DB_ERR_*","code":<negative-rc>,"message":"..."}`.
-(The `code`/`exit` invariant and the error namespace are T2; until then the
-`code` field is authoritative.)
+(The `code`/`exit` invariant and the error namespace are T2 — see
+[`t2_analysis.md`](t2_analysis.md); until then the `code` field is
+authoritative.)
 
 ## db
 

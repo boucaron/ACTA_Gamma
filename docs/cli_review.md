@@ -63,8 +63,9 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    unknown entity) exit 4 with `code:-10`, and `ACTA_DB_ERR_DUPLICATE`/`FK`/
    `INVALID_DB` exit 4 with codes −6/−7/−8, so `|code| == exit` holds only
    for −1/−2/−3/−4. Tracked as T2 in
-   [`cli_active_action.md`](cli_active_action.md); `cli_spec.md` defers the
-   invariant ("until then the `code` field is authoritative").
+   [`cli_active_action.md`](cli_active_action.md); full analysis, options
+   and recommendation in [`t2_analysis.md`](t2_analysis.md); `cli_spec.md`
+   defers the invariant ("until then the `code` field is authoritative").
 
 ### Nitpicks
 
@@ -329,8 +330,9 @@ contract), but for LLM/script drivers the following are missing:
    `--verbose`, `commands.c` unknown entity) still emit `code:-10` while
    exiting `EXIT_INVALID` (4), and `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB`
    exit 4 with codes −6/−7/−8 — `|code| == exit` holds only for −1/−2/−3/−4.
-   Still open (T2); `cli_spec.md` documents the exit codes and defers the
-   invariant until T2 lands.
+   Still open (T2); full analysis and recommended direction in
+   [`t2_analysis.md`](t2_analysis.md); `cli_spec.md` documents the exit
+   codes and defers the invariant until T2 lands.
 3. **Stable, documented success shapes** — ✅ *resolved* (S3 / P3 #3 /
    P4 #7–8 / P5 #4, via T1): the per-action stdout table, the root-folder
    wire representation (`null` in every JSON emit), and the restore-shape
