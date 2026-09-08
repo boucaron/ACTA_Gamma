@@ -404,9 +404,12 @@ int acta_db_execution_cancel(db_t *db, int id)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    /* Allow cancel from pending or running. */
+    /* Allow cancel from pending or running. A row in some other
+     * state makes the pending check fail with INVALID (not
+     * NOT_FOUND), so always fall through to the running check
+     * before giving up. */
     int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING);
-    if (rc == ACTA_DB_ERR_NOT_FOUND)
+    if (rc != ACTA_DB_OK)
         rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
     if (rc != ACTA_DB_OK) return rc;
 
