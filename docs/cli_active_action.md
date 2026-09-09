@@ -46,6 +46,20 @@ implemented, scoped to `--tools`.)*
 | T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) — ✅ *done*: `src/tools.c` holds the 69-entry table (59 actions + 10 help) and the renderer; `tools_print(FILE*, int pretty)` (no DB); default compact one-line JSON, `--pretty` = 2-space indent, both valid; global section carries the exit-code / error-line contract once (D1); per-entry `aliases` left empty with alias info in `entity_aliases` + descriptions; M1–M3 spec fixes applied, M4/M5 deferred (table follows spec). Audited status + the pretty-mode leading-comma bug (found & fixed) recorded in [`t3_analysis.md`](t3_analysis.md) §0 | Agentic #1, P1 nitpick, Agentic #4–5 | Done; the help line "full command reference" is now true |
 | T4 | **Test `--tools`** — ✅ *done*: suite in `acta_cli/tests/tools/tools_test_main.c` (D1–D7 per [`t4_analysis.md`](t4_analysis.md)); compact **and** `--pretty` outputs validated via `json_validate` + cJSON shape walk; 69-entry count and per-entity action coverage from `cli_spec.md`; exactly the 8 `flags|json` entries carry `json_keys`; raw-argv cross-check of all 69 entries (`rc != EXIT_CLI`) plus `--stdin`/`--from_file` smoke runs; green in `make test`. The cross-check root-vs-`tools`-array arg bug found during development is recorded in [`t4_analysis.md`](t4_analysis.md) §0 | Agentic #1, P5 #3 | T1–T3 done; closed the T-chain |
 
+## `--tools` table follow-ups (deferred in T3)
+
+| # | Action | Source | Notes |
+|---|--------|--------|-------|
+| M4 | **`--all` on `skill list`/`count`** — the real boolean flag (`skill.c:895,1002`; in `entity_flag_specs`; documented in the usage text) is missing from both the `cli_spec.md` flag cells and the `tool_table` (`f_skill_list`/`f_skill_count`), so an agent cannot discover it via `--tools` | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Add `--all` to the two spec flag cells, then to the two table flag arrays; no dispatch change |
+| M5 | **`skill_folder move` `--parent_id*`** — spec and table say required, but the code makes it optional (`skill_folder.c:676`: `parse_nonneg_int_flag(..., 0, ...)`, 0/omitted = root) | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Spec cell → `--parent_id` (0 = root); table → `f_parent_id` (optional). `model_folder move` stays required (`model_folder.c:716`) |
+| M6 | **Per-entry `aliases`** — all 69 entries carry empty `aliases`; the alias info lives only in the global `entity_aliases` map plus repeated description prose, so the schema never literally says "`execution create` is not a command" | T3 §0 deviation (chosen during implementation) | Optional: fill `aliases` with `["execution"]` on the 10 exec entries and `["execution_log"]` on the 5 log entries |
+
+Maintenance note: `tool_table[].flags` and argparse's `entity_flag_specs` remain two hand-synced
+sources of truth — `make test`'s 69× raw-argv cross-check is the drift detector, and for the
+M4/M5 cells it can only prove acceptance, not spec-vs-code agreement (see
+[`t4_analysis.md`](t4_analysis.md) §4). A shared `has_value` header was considered in
+T3 and is not required.
+
 ## Residual (from `cli_review.md`, low priority)
 
 | # | Action | Source | Notes |
@@ -61,8 +75,8 @@ implemented, scoped to `--tools`.)*
   and its contract test (T4; `make test` green, both compact and
   `--pretty` validated, 69-entry count asserted).
 - **Next:** S2 (dedicated global-parse suite) and S4 (parse-layer
-  inconsistencies) stand independently of the T-chain, then the J1–J3
-  residual items.
+  inconsistencies) stand independently of the T-chain; then the
+  `--tools` table follow-ups M4–M6, and the J1–J3 residual items.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)

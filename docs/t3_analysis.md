@@ -134,7 +134,8 @@ Related quirk (out of T3 scope, note for S4): because `--parent_id` is in
 `skill_folder list --parent_id 3` and the handler silently ignores it.
 The tools table must document the positional (per M3), not the flag.
 
-**M4/M5 — found during T3 implementation, deferred follow-ups.**
+**M4/M5 — found during T3 implementation, deferred follow-ups** (now
+tracked as action items in [`cli_active_action.md`](cli_active_action.md)).
 Two further spec-vs-code mismatches surfaced while building the table.
 Per the D2 rule ("flags exactly as `cli_spec.md` lists them") the
 table follows the spec for both, so the spec table is still incomplete

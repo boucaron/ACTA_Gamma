@@ -161,8 +161,13 @@ inventory, not the schema data:
   optional positional; the validator-accepts-but-ignored
   `--parent_id` quirk is *not* tested here (S4 scope).
 - **M4/M5**: the suite consumes the table, which follows the spec for
-  those two cells — it inherits that choice and cannot contradict it;
-  fixing M4/M5 later only changes the data, not the test logic.
+  those two cells — it inherits that choice and cannot contradict it.
+  In particular, the 69× raw-argv cross-check **cannot detect
+  spec-vs-code drift for those cells**: an optional flag documented as
+  required is never rejected, and `--all` is a valid
+  `entity_flag_specs` flag either way. Fixing M4/M5 later (now tracked
+  as action items in [`cli_active_action.md`](cli_active_action.md))
+  only changes the data, not the test logic.
 - **Entity-handler map in the test**: a 10-entry `entity → cmd_*` table
   duplicates `commands.c`'s `entity_table` — dispatch wiring, not
   schema data; acceptable.
