@@ -131,6 +131,11 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    `commands.h`, which is a dispatch-layer header. Move the structs to a
    dedicated `entities.h` (owned by the db-lib side or the CLI) so
    `json.c → entities.h` and no cycle exists.
+   *Resolved (J1):* entity structs now live in the acta_db per-entity
+   headers (`<acta_db.h>` — e.g. `model_t` in `acta_db/include/model.h`)
+   instead of `commands.h`; `json.c` includes only `json.h`, `<acta_db.h>`
+   and `cli.h`, so the cycle is gone without a new `entities.h` (the
+   db-lib per-entity headers play that role).
 
 ### Design / consistency issues
 
@@ -148,22 +153,39 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    `(int)item->valuedouble` maps `3.7 → 3` and silently wraps ids beyond
    `INT_MAX`. Use a range check (`item->valuedouble >= INT_MIN && <= INT_MAX`)
    or `cJSON_GetNumberValue`, and decide whether floats should be an error.
+   *Resolved (J1):* `jget_int` now returns `-1` for values outside
+   `[INT_MIN, INT_MAX]` or for non-integral values (`3.7` is an error,
+   not `3`); absent or wrong type still maps to `0`. Pinned in
+   `tests/json/json_test_main.c` (fractional, `INT_MAX`, `INT_MAX+1`,
+   `INT_MIN` cases).
 
 8. **`>0 else 0` clamping conflates three states**
    `(id > 0) ? id : 0` is correct for "0 = root / no parent" semantics, but it
    also maps negative ids to 0 instead of erroring. Negative ids are almost
    certainly user error — clamp-to-root hides it. Flag negatives as invalid.
+   *Resolved (J1):* `jget_id` returns `-1` for negative values (`0` remains
+   the valid root/omitted sentinel) — parse failure, not silent clamp.
 
 9. **NULL conflation in string getters**
     `dup_or_null`/`jget_str` return NULL for both "key absent" and OOM. Same
     ambiguity as the absent/boolean-flag conflation in Part 1 #1. Low risk
     (OOM is fatal in practice) but a
     `*ok` out-param or errno-style convention would make the contract explicit.
+    *Resolved (J1):* `jget_str`/`str_dup` now return `0` with `*out = NULL`
+    for absent / JSON null / wrong type, and `-1` for OOM — the two NULL
+    causes are distinguishable by the return code, documented in-code and
+    in `json.h`.
 
 10. **Opaque `-1` parse errors**
     All parse failures return -1 with no detail. `cJSON_GetErrorPtr()` is right
     there — at minimum `VLOG(1, ...)` the error pointer + offset on failure so
     `--verbose` users can debug malformed input.
+    *Resolved (J1):* `parse_root` and `json_validate` `VLOG(1, "JSON parse
+    failed at offset %zu: %s")` with the `cJSON_GetErrorPtr()` text; the
+    failure path is also hardened with `cJSON_ParseWithOpts(
+    require_null_terminated)` (trailing garbage like `"{} x"` is rejected)
+    and a fully-zeroed struct on `-1` (partial string copies freed; caller
+    frees nothing per the `json.h` contract).
 
 ### Nitpicks
 
@@ -406,7 +428,7 @@ contract), but for LLM/script drivers the following are missing:
 5. **`--tools`** — ✅ *resolved* (T1–T4): the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); the 69-entry schema is generated from that table (`src/tools.c`, T3, done) and its contract test suite is green in `make test` (T4, done). *(T3 — T2, its blocker, is now done)*
 6. **Error-contract unification** — ✅ *resolved* (T2, Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace (`ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for argv/usage errors), `code` = −exit everywhere, and the spec's exit 11 (DB open failed) reachable via `emit_db_open_error`. *(P1 #5)
 7. **Parse-layer inconsistencies** — `cmd_args_flag` protocol (root cause of #1), `parse_globals` error conflation, bare `--json`. *(S4)*
-8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`) **open**; J2 (`model get --live` wording) ✅ *resolved* (stale item — current help wording already correct, no code change); J3 (`*_usage` declarations) ✅ *resolved* (all nine made static, matching `db_usage`).
+8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`) ✅ *resolved*: entity structs moved to the acta_db per-entity headers (no `json.c → commands.h` cycle), `jget_int` range-checks and rejects non-integral values, negative ids error instead of clamping, `jget_str`/`str_dup` distinguish absent from OOM, and parse failures `VLOG` the `cJSON_GetErrorPtr()` offset — pinned in `tests/json/json_test_main.c` (268 assertions, green); J2 (`model get --live` wording) ✅ *resolved* (stale item — current help wording already correct, no code change); J3 (`*_usage` declarations) ✅ *resolved* (all nine made static, matching `db_usage`).
 
 **Structural (S1) — resolved:** the copy-paste family (P4 #10) was fixed
 atom-first and stopped there: the common atom set landed in `cli_util.h`

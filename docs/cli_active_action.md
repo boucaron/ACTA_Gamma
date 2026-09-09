@@ -68,7 +68,7 @@ T3 and is not required.
 
 | # | Action | Source | Notes |
 |---|--------|--------|-------|
-| J1 | **JSON layer cleanup** — include cycle `json.c` → `commands.h` (move entity structs to an `entities.h` so `json.c` doesn't include the dispatch header); `jget_int` truncates/wraps (`3.7 → 3`, silent wrap past `INT_MAX`) — range-check it; negative-id `(id > 0) ? id : 0` clamping hides user errors — error instead; `jget_str`/`dup_or_null` conflate "absent" and OOM in the NULL return; opaque `-1` parse errors — `VLOG` the `cJSON_GetErrorPtr()` offset on failure | P2 #5–#10 | Layer under every entity; J1's cycle is the one with real rework cost |
+| J1 | **JSON layer cleanup** — ✅ *done*: all five items landed in `src/json.c` / `include/json.h`. (a) Include cycle resolved: entity structs now live in the acta_db per-entity headers (`<acta_db.h>`; e.g. `model_t` in `acta_db/include/model.h`) instead of `commands.h` — `json.c` includes only `json.h`, `<acta_db.h>` and `cli.h`, so no dispatch-header cycle (no `entities.h` needed). (b) `jget_int` range-checks `[INT_MIN, INT_MAX]` and rejects non-integral values (`3.7 → -1`, no truncation or wrap). (c) `jget_id` reports negative ids as `-1` instead of clamping to 0. (d) `jget_str`/`str_dup` distinguish absent/null/wrong-type (`0`, `*out = NULL`) from OOM (`-1`). (e) `parse_root` / `json_validate` `VLOG(1)` the `cJSON_GetErrorPtr()` offset on parse failure. Bonus hardening: `cJSON_ParseWithOpts(require_null_terminated)` rejects trailing garbage (`"{} x"`), and on `-1` the struct is left fully zeroed with partial string copies freed (json.h contract: caller frees nothing). Pinned in `tests/json/json_test_main.c` (268 assertions, green in `make test`). Residual: the `"hash"` → `content_hash` key mapping is kept intentionally (it is the spec's wire key) | P2 #5–#10 | Done |
 | J2 | **`model get --live` help wording** — ✅ *done (no code change)*: current `model get` help already reads `--include_deleted  Return the row even if soft-deleted` in both `model_usage` and the `usage_get` snippet — the review's `--live` wording is a stale reference to the old flag name (flag is now `--include_deleted`, alias `--deleted`) | P4 #6 | Stale item; residual: dead `"live"` entry in `entity_flag_specs` (accepted-but-ignored, same quirk family as `skill_folder list --parent_id`) is left for S4 |
 | J3 | **`*_usage` declarations** — ✅ *done*: all nine (`model_usage`, `ctx_usage`, `skill_usage`, `skill_folder_usage`, `skill_rev_usage`, `model_folder_usage`, `model_revision_usage`, `exec_usage`, `execution_log_usage`) are now `static`, matching the `db_usage` precedent; none is declared in `include/commands.h` and each is used only in its own file, so static is the consistent choice (central `acta <entity> --help` can revisit the `commands.h` route later) | P4 #9 | Done |
 
@@ -80,8 +80,12 @@ T3 and is not required.
   green, both compact and `--pretty` validated, 69-entry count
   asserted, aliases pinned), and all three table follow-ups
   (M4 `--all`, M5 optional `--parent_id`, M6 per-entry aliases).
-- **Next:** S2 and S4 are done, M4–M6 are done and so are J2/J3,
-  leaving J1 (JSON layer cleanup) as the last low-priority residual.
+- **Next:** S2 and S4 are done, M4–M6 are done, J2/J3 are done, and
+  **J1 is now done as well** — the JSON layer (include cycle, `jget_int`
+  range check, negative-id error, absent-vs-OOM distinction, error-offset
+  VLOG) is implemented, pinned in `tests/json/json_test_main.c`, and green
+  in `make test`. The full `cli_review.md` backlog is closed; nothing left
+  on the action plan.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)
