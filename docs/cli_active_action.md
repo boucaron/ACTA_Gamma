@@ -31,19 +31,19 @@ keep the canonical message texts.
 
 ## Agentic usage — `--tools` machine-readable tool schema
 
-`tools_print` (`commands.c`) is a stub that prints `[]`, while help
-advertises it as "full command reference". The review calls this the
-single biggest gap for agentic use: agents must otherwise scrape help
-prose and guess the contract. Design rule from the review: *generate
-`--tools` from the same per-action data (spec §11) rather than
-hand-writing it* — one table drives both the spec doc and the emitted
-JSON.
+The review called this the single biggest gap for agentic use: agents
+must otherwise scrape help prose and guess the contract. Design rule
+from the review: *generate `--tools` from the same per-action data (spec
+§11) rather than hand-writing it* — one table drives both the spec doc
+and the emitted JSON. *(Resolved by T3 below: the static table in
+`src/tools.c` renders the schema with the existing emitter; `--pretty`
+implemented, scoped to `--tools`.)*
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
 | T1 | **Wire-format decisions + spec §11 table** — ✅ *done*: [`cli_spec.md`](cli_spec.md) settles all three decisions (transitions emit `{"id":N,"status":"<s>"}` via `emit_ok_transition`, `set-raw` echoes the unchanged current status; root folder = `null` in every JSON emit; restore = `{"id":N,"restored":true}` via `emit_ok_restored`) and carries the full per-action table for all 10 entities plus the exit-code / error-line contract. A code audit verified the implementation matches the table | P5 #4 / P4 #7–8, Agentic #1–3 | Done; the table is now the generation source for T3 `--tools` |
 | T2 | **Error-contract unification** — ✅ *done* (Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace — `ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for every argv/usage error — and the `code`/`exit` invariant restored: `code` = −exit everywhere (`finish_db_error` now prints `code` as `map_rc_to_exit(rc)` negated, so `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB` are `code:-4` with exit `4`); all CLI-usage errors (unknown entity/action/option, bad `--verbose`, missing flag value, too few positionals) emit `ACTA_CLI_ERR`/`code:-10`/exit `10` via the new `emit_cli_error` atom (unknown action via the shared `unknown_action`); DB open failure gets its own emit (`emit_db_open_error`) with `code:-11`/exit `11` (`EXIT_DB_OPEN`), making the spec's 11 reachable; `parse_globals` distinguishes OOM (exit 3) / missing flag value / too-few-positionals and the `--verbose` clamp line is VLOG-only. Contract pinned in `tests/cli_util/cli_util_test_error_contract.c`; `cli_spec.md` documents the invariant | P1 #5, Agentic #2 | Done; T3's error-shape documentation is unblocked |
-| T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) | Agentic #1, P1 nitpick, Agentic #4–5 | Data-only table — distinct from the excluded V3 field-descriptor + shared-driver refactor. 10 entities × their actions. After this the help line "full command reference" is true. *Current state (audited):* `tools_print` (`commands.c`) still prints `[]`; `--pretty` is still parsed (`argparse.c`) and advertised in help but honored by no emitter — both remain open items here |
+| T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) — ✅ *done*: `src/tools.c` holds the 69-entry table (59 actions + 10 help) and the renderer; `tools_print(FILE*, int pretty)` (no DB); default compact one-line JSON, `--pretty` = 2-space indent, both valid; global section carries the exit-code / error-line contract once (D1); per-entry `aliases` left empty with alias info in `entity_aliases` + descriptions; M1–M3 spec fixes applied, M4/M5 deferred (table follows spec). Audited status + the pretty-mode leading-comma bug (found & fixed) recorded in [`t3_analysis.md`](t3_analysis.md) §0 | Agentic #1, P1 nitpick, Agentic #4–5 | Done; the help line "full command reference" is now true |
 | T4 | **Test `--tools`** — output is valid JSON (parse with the project's own json layer); it covers all 10 entities and the full action set (count check); each entry's flags/positionals match what `parse_globals` + dispatch actually accept (ideally by feeding generated commands through the raw-argv path, which also exercises the S2 layer) | Agentic #1, P5 #3 | Depends on T1–T3 |
 
 ## Residual (from `cli_review.md`, low priority)
@@ -56,9 +56,10 @@ JSON.
 
 ## Summary
 
-- **Next:** T3 (implement `--tools` — T2, its blocker, is done), then
-  T4. T1 and T2 are done and S3 is closed; S2 and S4 stand independently
-  of the T-chain. Then the J1–J3 residual items.
+- **Next:** T4 (test `--tools` — T3, its last blocker, is done; T4 must
+  validate the JSON in **both** compact and `--pretty` modes and assert
+  the 69-entry count). T1, T2 and T3 are done and S3 is closed; S2 and
+  S4 stand independently of the T-chain. Then the J1–J3 residual items.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)
