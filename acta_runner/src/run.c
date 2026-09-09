@@ -537,17 +537,17 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         if (cJSON_IsNumber(kv))
             temperature = kv->valuedouble;
         kv = cJSON_GetObjectItem(cfg, "max_tokens");
-        if (kv && (!cJSON_IsNumber(kv) || kv->valueint <= 0))
+        if (kv && (!cJSON_IsNumber(kv) || kv->valuedouble <= 0.0))
             FAIL(EXIT_INVALID,
                  "model configuration key 'max_tokens' must be a positive number");
         if (cJSON_IsNumber(kv))
-            max_tokens = kv->valueint;
+            max_tokens = (long)kv->valuedouble;
         kv = cJSON_GetObjectItem(cfg, "top_k");
-        if (kv && (!cJSON_IsNumber(kv) || kv->valueint <= 0))
+        if (kv && (!cJSON_IsNumber(kv) || kv->valuedouble <= 0.0))
             FAIL(EXIT_INVALID,
                  "model configuration key 'top_k' must be a positive number");
         if (cJSON_IsNumber(kv))
-            top_k = kv->valueint;
+            top_k = (long)kv->valuedouble;
         kv = cJSON_GetObjectItem(cfg, "supports_response_format");
         if (kv && !cJSON_IsBool(kv))
             FAIL(EXIT_INVALID, "model configuration key "
@@ -862,11 +862,11 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     if (usage) {
         cJSON *kv;
         kv = cJSON_GetObjectItem(usage, "prompt_tokens");
-        if (cJSON_IsNumber(kv)) prompt_tokens = kv->valueint;
+        if (cJSON_IsNumber(kv)) prompt_tokens = (long)kv->valuedouble;
         kv = cJSON_GetObjectItem(usage, "completion_tokens");
-        if (cJSON_IsNumber(kv)) completion_tokens = kv->valueint;
+        if (cJSON_IsNumber(kv)) completion_tokens = (long)kv->valuedouble;
         kv = cJSON_GetObjectItem(usage, "total_tokens");
-        if (cJSON_IsNumber(kv)) total_tokens = kv->valueint;
+        if (cJSON_IsNumber(kv)) total_tokens = (long)kv->valuedouble;
     }
 
     rc = acta_db_execution_set_raw_response(db, exec_id, content);

@@ -223,7 +223,7 @@ int main(int argc, char **argv)
             printf("    usage:");
             for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
                 cJSON *v = cJSON_GetObjectItem(usage, names[i]);
-                if (cJSON_IsNumber(v)) printf(" %s=%d", names[i], v->valueint);
+                if (cJSON_IsNumber(v)) printf(" %s=%d", names[i], (int)v->valuedouble);
             }
             printf("\n");
         }

@@ -192,7 +192,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     TEST_STREQ(ctx, cj_str(root, "name"), "acta_cli");
     cJSON *ver = cJSON_GetObjectItem(root, "version");
     TEST(ctx, ver && cJSON_IsNumber(ver));
-    TEST_EQ(ctx, ver ? ver->valueint : 0, 1);
+    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 1);
     TEST_NOT_NULL(ctx, cj_str(root, "usage"));
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");
@@ -353,7 +353,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
             for (int p = 0; p < cJSON_GetArraySize(pos); p++) {
                 cJSON *pe = cJSON_GetArrayItem(pos, p);
                 cJSON *req = cJSON_GetObjectItem(pe, "required");
-                if (req && req->valueint)
+                if (req && req->valuedouble != 0.0)
                     argv[argc++] = (char *)"1";
             }
 
@@ -363,7 +363,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
                 cJSON *fe = cJSON_GetArrayItem(fl, f);
                 cJSON *req = cJSON_GetObjectItem(fe, "required");
                 cJSON *hv  = cJSON_GetObjectItem(fe, "has_value");
-                if (!(req && req->valueint)) continue;
+                if (!(req && req->valuedouble != 0.0)) continue;
                 const char *fname = cj_str(fe, "name");
                 if (!fname) continue;
                 char name[64];
@@ -371,7 +371,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
                 char *nm = strdup(name);
                 argv[argc++]   = nm;
                 owned[n_owned++] = nm;
-                if (hv && hv->valueint)
+                if (hv && hv->valuedouble != 0.0)
                     argv[argc++] = (char *)"x";
             }
 
