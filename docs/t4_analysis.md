@@ -15,7 +15,35 @@ exercises the S2 global-parse seam. Added from T3's post-implementation
 audit: **both compact and `--pretty` modes** must be validated (pretty
 was invalid JSON before the T3 fix).
 
-## 1. Current state (audited)
+## 0. Status (post-implementation, audited)
+
+T4 is **done**: `acta_cli/tests/tools/tools_test_main.c` implements
+D1–D7; `make test` runs `test_tools` green alongside the other suites.
+
+- compact **and** `--pretty` outputs pass `json_validate` (the
+  project's own json layer) and the shape checks (D7);
+- 69-entry count + per-entity action coverage from `cli_spec.md`;
+- exactly the 8 `flags|json` entries carry `json_keys`;
+- raw-argv cross-check for all 69 entries (`rc != EXIT_CLI`, with
+  `EXIT_OK` pinned on the `help` actions) plus the `--stdin` /
+  `--from_file` smoke runs (D5).
+
+**Bug found during T4 development and fixed:** the first test run
+failed with 9 × `fn != NULL` in the raw-argv cross-check —
+`run_tools_test` had passed the **root** JSON object to `cross_check`
+instead of the `"tools"` array, so the loop walked the 9 top-level
+fields (none of which carry `entity`) and `handler_for(NULL)` failed
+each time. Fixed to `cross_check(ctx, cJSON_GetObjectItem(root,
+"tools"))`. The emitted schema itself was never at fault (all 69
+entries verified to carry proper `entity`/`action`).
+
+Also hardened: the suite's assertions are NULL-safe throughout
+(defensive `cj_str` lookups, `entry_exists_safe`, `cJSON_IsBool` on the
+`required`/`has_value` booleans), so a future schema break fails
+loudly at the offending assertion instead of crashing on a NULL
+dereference.
+
+## 1. Current state (audited — pre-implementation)
 
 | Item | State |
 |------|-------|
@@ -148,7 +176,7 @@ inventory, not the schema data:
    D1–D7.
 2. `acta_cli/Makefile` — `TOOLS_TEST_SRCS/OBJS/TARGET` section +
    `test_tools` rule, added to `ALL_TEST_TARGETS` and `clean`.
-3. Build + `make test` (pending — this round is doc + code only).
+3. Build + `make test` — **done**; suite green (see §0).
 
 ## 6. Unblocks / next
 

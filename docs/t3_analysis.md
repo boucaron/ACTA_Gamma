@@ -323,9 +323,11 @@ other changes. No new test files in T3 (that is T4).
 
 ## 8. Unblocks / next
 
-T4 (`test --tools`): valid JSON via the project's json layer **in both
-compact and `--pretty` modes** (pretty was invalid JSON before the
-leading-comma fix in `jsep`), 69-entry count, per-entity action
-coverage, and per-entry flag/positional cross-check by feeding
-generated commands through the raw-argv path (`tests/helpers/test_helpers`
-`stest_run_argv`) — which also exercises the S2 global-parse layer.
+T4 (`test --tools`) — ✅ *done* ([`t4_analysis.md`](t4_analysis.md)); the
+suite is implemented and green in `make test`: valid JSON via the
+project's json layer **in both compact and `--pretty` modes** (pretty
+was invalid JSON before the leading-comma fix in `jsep`), 69-entry
+count, per-entity action coverage, and per-entry flag/positional
+cross-check by feeding generated commands through the raw-argv path
+(`tests/helpers/test_helpers` `stest_run_argv`) — which also exercises
+the S2 global-parse layer.
