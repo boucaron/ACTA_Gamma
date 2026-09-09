@@ -52,7 +52,10 @@ Deviations to carry into T4:
   `aliases` per entry.
 - M4/M5 remain deferred: the table follows `cli_spec.md`, not the code,
   for `skill list`/`count` (`--all` absent) and `skill_folder move`
-  (`--parent_id` still required in the spec).
+  (`--parent_id` still required in the spec). *(Since resolved: M4 added
+  `--all` to the spec cells and `f_skill_list`/`f_skill_count`; M5 made
+  the spec cell and `skill_folder.move` table entry optional —
+  `f_parent_id`.)*
 
 ## 1. Current state (audited)
 

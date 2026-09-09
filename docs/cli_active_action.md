@@ -51,7 +51,7 @@ implemented, scoped to `--tools`.)*
 | # | Action | Source | Notes |
 |---|--------|--------|-------|
 | M4 | **`--all` on `skill list`/`count`** — ✅ *done*: `--all` (all folders) added to the `cli_spec.md` `skill list`/`skill count` flag cells and to `f_skill_list`/`f_skill_count` in `tool_table` (`{ "all", 0, 0 }`; flag counts 8→9, 2→3). No dispatch change. The T4 raw-argv cross-check now exercises the new flag automatically (flag ⊆ `entity_flag_specs` still holds); functional `--all` behavior was already covered in `skill_test_list_count` / `skill_test_deleted` | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Done |
-| M5 | **`skill_folder move` `--parent_id*`** — spec and table say required, but the code makes it optional (`skill_folder.c:676`: `parse_nonneg_int_flag(..., 0, ...)`, 0/omitted = root) | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Spec cell → `--parent_id` (0 = root); table → `f_parent_id` (optional). `model_folder move` stays required (`model_folder.c:716`) |
+| M5 | **`skill_folder move` `--parent_id*`** — ✅ *done*: spec cell → `--parent_id` (0/omitted = root); `skill_folder.move` table entry now uses optional `f_parent_id` (`skill_folder.c:676` makes it optional, 0/omitted = root). `model_folder move` stays required (`model_folder.c:716`) and its table entry keeps `f_parent_id_req`. `skill_folder_test_move.c` already covers omitted-flag → root | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Done |
 | M6 | **Per-entry `aliases`** — all 69 entries carry empty `aliases`; the alias info lives only in the global `entity_aliases` map plus repeated description prose, so the schema never literally says "`execution create` is not a command" | T3 §0 deviation (chosen during implementation) | Optional: fill `aliases` with `["execution"]` on the 10 exec entries and `["execution_log"]` on the 5 log entries |
 
 Maintenance note: `tool_table[].flags` and argparse's `entity_flag_specs` remain two hand-synced
@@ -76,7 +76,7 @@ T3 and is not required.
   `--pretty` validated, 69-entry count asserted).
 - **Next:** S2 (dedicated global-parse suite) and S4 (parse-layer
   inconsistencies) stand independently of the T-chain; then the
-  `--tools` table follow-ups M5–M6, and the J1–J3 residual items.
+  `--tools` table follow-up M6, and the J1–J3 residual items.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)

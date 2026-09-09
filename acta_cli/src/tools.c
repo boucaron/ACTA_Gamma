@@ -530,7 +530,7 @@ static const tool_entry_t tool_table[] = {
 
     { "skill_folder.move", "skill_folder", "move", NULL, 0,
       "Move a skill folder to a parent (0 = root).",
-      p_id, 1, f_parent_id_req, 1, "flags",
+      p_id, 1, f_parent_id, 1, "flags",
       NULL, 0, NULL, 0,
       "{\"id\":N,\"parent_id\":null|M}" },
 

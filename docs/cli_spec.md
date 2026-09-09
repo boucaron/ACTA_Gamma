@@ -128,7 +128,7 @@ is `code:-11` with exit `11`.
 | `skill_folder rename <id>` | `id` | `--name*` | — | `{"id":N}` |
 | `skill_folder delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `skill_folder restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
-| `skill_folder move <id>` | `id` | `--parent_id*` (0 = root) | — | `{"id":N,"parent_id":null\|M}` |
+| `skill_folder move <id>` | `id` | `--parent_id` (0/omitted = root) | — | `{"id":N,"parent_id":null\|M}` |
 
 ## skill_revision
 
