@@ -69,7 +69,10 @@ int main(int argc, char **argv) {
     /* ---- early exits (no DB needed) ---- */
     if (gopts.show_version) { version_print(stdout);  return EXIT_OK; }
     if (gopts.show_help)    { help_print(stdout);     return EXIT_OK; }
-    if (gopts.show_tools)   { tools_print(stdout, gopts.pretty);
+    if (gopts.show_tools)   { if (gopts.compact)
+                                 tools_print_compact(stdout);
+                              else
+                                 tools_print(stdout, gopts.pretty);
                               return EXIT_OK; }
 
     /* ---- need at least entity + action ---- */

@@ -21,6 +21,12 @@
  * single-line compact (script-friendly, one JSON value); --pretty
  * switches to 2-space indent.  A trailing newline is emitted in both
  * modes.
+ *
+ * `--tools --compact` (tools_print_compact) emits a plain-text schema of
+ * ~7 KB: one line per command (positionals, flags, JSON keys, input),
+ * intended for LLM/agent in-context use.  The full JSON output of
+ * `--tools` stays the source of truth; compact is derived from the same
+ * static table, so it cannot drift from it.
  */
 
 #include <stdio.h>
@@ -208,7 +214,7 @@ static const tool_flag_t global_flags[] = {
     { "id_only", 0, 0 }, { "count", 0, 0 }, { "table", 0, 0 },
     { "pretty", 0, 0 }, { "json", 1, 0 }, { "stdin", 0, 0 },
     { "from_file", 1, 0 }, { "version", 0, 0 }, { "help", 0, 0 },
-    { "tools", 0, 0 }, { "verbose", 0, 0 },
+    { "tools", 0, 0 }, { "compact", 0, 0 }, { "verbose", 0, 0 },
 };
 
 static const char *const input_sources[] = { "json", "stdin", "from_file" };
@@ -1015,6 +1021,88 @@ static void emit_entry(FILE *f, const tool_entry_t *e, int pretty,
         indent_line(f, 2);
         fputs(t + 1 < n ? "},\n" : "}\n", f);
     }
+}
+
+/* ------------------------------------------------------------------ */
+/*  tools_print_compact — one line per command (~7 KB)                 */
+/* ------------------------------------------------------------------ */
+
+/* flag list: "a,b*,c" (* = required) */
+static void compact_flags(FILE *f, const tool_flag_t *fl, size_t n)
+{
+    for (size_t k = 0; k < n; k++) {
+        if (k) fputc(',', f);
+        fputs(fl[k].name, f);
+        if (fl[k].required) fputc('*', f);
+    }
+}
+
+/* positional list: "name(type)*" */
+static void compact_pos(FILE *f, const tool_pos_t *p, size_t n)
+{
+    for (size_t k = 0; k < n; k++) {
+        if (k) fputc(',', f);
+        fputs(p[k].name, f);
+        if (p[k].type && p[k].type[0]) {
+            fputc('(', f);
+            fputs(p[k].type, f);
+            fputc(')', f);
+        }
+        if (p[k].required) fputc('*', f);
+    }
+}
+
+int tools_print_compact(FILE *out)
+{
+    fputs("# acta_cli tools v1 (compact); full JSON: --tools\n", out);
+    fputs("usage: acta_cli [global flags] <entity> <action> [args]\n", out);
+    fputs("globals: --db --fields --no_nulls --id_only --count --table "
+          "--pretty --json --stdin --from_file --version --help --tools "
+          "--compact --verbose\n", out);
+    fputs("input_sources: json,stdin,from_file (mutually exclusive)\n", out);
+    fputs("error: stderr {\"error\":\"ACTA_DB_ERR_*\"|\"ACTA_CLI_ERR\","
+          "\"code\":-<exit>,\"message\":\"...\"} (code == -exit)\n", out);
+    fputs("exits: 0 ok | 1 not found | 2 SQL error | 3 OOM | "
+          "4 invalid arg / missing flag / missing required field / "
+          "duplicate / FK violation / invalid DB file | 10 CLI usage "
+          "error | 11 DB open failed\n", out);
+    fputs("# command  pos  flags  json  input  aliases   (* = required)\n",
+          out);
+    for (size_t t = 0; t < TOOL_COUNT; t++) {
+        const tool_entry_t *e = &tool_table[t];
+        fputs(e->command, out);
+        fputs("  pos:", out);
+        if (e->n_pos) compact_pos(out, e->positionals, e->n_pos);
+        else fputc('-', out);
+        fputs("  flags:", out);
+        if (e->n_flags) compact_flags(out, e->flags, e->n_flags);
+        else fputc('-', out);
+        if (e->n_json_req || e->n_json_opt) {
+            fputs("  json:", out);
+            for (size_t k = 0; k < e->n_json_req; k++) {
+                if (k) fputc(',', out);
+                fputs(e->json_req[k], out);
+                fputc('*', out);   /* JSON keys are required by definition */
+            }
+            if (e->n_json_opt) {
+                fputs(" / ", out);
+                for (size_t k = 0; k < e->n_json_opt; k++) {
+                    if (k) fputc(',', out);
+                    fputs(e->json_opt[k], out);
+                }
+            }
+        }
+        fprintf(out, "  input:%s", e->input);
+        if (e->n_aliases) {
+            fputs("  aliases:", out);
+            for (size_t k = 0; k < e->n_aliases; k++) {
+                if (k) fputc(',', out);
+                fputs(e->aliases[k], out);
+            }
+        }
+        fputc('\n', out);
+    }
+    return EXIT_OK;
 }
 
 /* ------------------------------------------------------------------ */

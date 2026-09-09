@@ -120,6 +120,8 @@ void help_print(FILE *out)
         "  --version          print version\n"
         "  --help, -h         this help\n"
         "  --tools            JSON tool schema\n"
+        "  --compact          compact schema (with --tools): one line\n"
+        "                     per command\n"
         "  --verbose, -v      increase verbosity (repeatable, 1-3)\n"
         "\n"
         "see --tools for full command reference.\n");

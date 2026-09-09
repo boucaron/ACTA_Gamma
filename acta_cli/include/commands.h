@@ -21,6 +21,9 @@ void help_print(FILE *out);
 /* Emit the --tools JSON schema (static data, no DB).  `pretty` = 1
  * switches to 2-space indent; default is single-line compact. */
 int tools_print(FILE *out, int pretty);
+/* Emit the compact --tools schema (`--tools --compact`): one
+ * line per command, ~7 KB.  Static data, no DB. */
+int tools_print_compact(FILE *out);
 
 /**
  * Dispatch a parsed (entity, action) pair to its handler.

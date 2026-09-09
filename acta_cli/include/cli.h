@@ -32,6 +32,7 @@ typedef struct {
     int         count;       /* --count */
     int         table;       /* --table */
     int         pretty;      /* --pretty */
+    int         compact;     /* --compact (with --tools: compact schema) */
 
     /* meta */
     int         show_version;/* --version */

@@ -96,6 +96,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (strcmp(a, "--table") == 0)    { g->table = 1;    continue; }
         /* ---- --pretty ---- */
         if (strcmp(a, "--pretty") == 0)   { g->pretty = 1;   continue; }
+        /* ---- --compact (meaningful with --tools) ---- */
+        if (strcmp(a, "--compact") == 0)  { g->compact = 1;  continue; }
         /* ---- --verbose / -v (stackable, 0–3) ---- */
         if (strcmp(a, "--verbose") == 0 || strcmp(a, "-v") == 0) {
             if (g->verbose < 3) g->verbose++;
