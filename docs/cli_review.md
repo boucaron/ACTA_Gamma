@@ -385,6 +385,10 @@ contract), but for LLM/script drivers the following are missing:
    the three table follow-ups are closed (M4 `--all` on `skill
    list`/`count`, M5 optional `skill_folder move --parent_id`, M6 per-entry
    `aliases` `["execution"]` / `["execution_log"]`).
+   *Addendum:* the full schema is ~30 KB of single-line JSON — heavy for
+   an LLM's context. `--tools --compact` adds a plain-text one-line-per-command
+   renderer (~7 KB, same `tool_table`); the full JSON remains the source of
+   truth and the T4 suite still pins it.
 2. **One unified error contract** — see P1 #5: two namespaces
    (`ACTA_DB_ERR_*` raw rc vs `ACTA_CLI_ERR` `-10`) and a code/exit-code
    invariant that does not hold for CLI errors. One table, one namespace.

@@ -33,6 +33,12 @@ the drift detector, and for the M4/M5 cells it can only prove acceptance,
 not spec-vs-code agreement (see [`t4_analysis.md`](t4_analysis.md) §4). A
 shared `has_value` header was considered in T3 and is not required.
 
+`--tools --compact` (plain-text, one line per command) is a second
+renderer over the same `tool_table` — no new source of truth and no new
+drift surface; both renderers live in `src/tools.c` and the T4 suite's
+schema walk still pins the full JSON (the compact mode is exercised
+manually, not yet pinned in `make test`).
+
 ## Closed (for the record)
 
 - **Structural:** S2 (global-parse test suite, `tests/gparse`), S3 (spec

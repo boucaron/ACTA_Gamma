@@ -41,6 +41,13 @@ Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--no_nulls`. `get`/`get-latest` return the full entity JSON object
 (subject to those modifiers).
 
+Schema flags: `--tools` emits the machine-readable JSON schema (T3,
+`src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
+rendering (~7 KB) of the same static table — positionals, flags (with `*`
+= required), JSON keys, input mode, aliases — intended for LLM/agent
+in-context use. The full JSON output stays the source of truth; compact
+is derived from the same `tool_table`, so it cannot drift from it.
+
 Exit codes: `0` ok, `1` not found, `2` SQL error, `3` OOM, `4` invalid
 argument / missing flag / missing required field / duplicate / FK
 violation / invalid DB file, `10` CLI usage error (unknown entity,
