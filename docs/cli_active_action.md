@@ -1,18 +1,14 @@
 # Active Actions — from `cli_review.md`
 
-Action plan derived from [`cli_review.md`](cli_review.md). The earlier
-`db`-surface round closed its in-scope items; what remained there (F2, F3)
-was folded into the plan below (F3 → S2, F2 → S3).
+Action plan derived from [`cli_review.md`](cli_review.md). **All actions are
+closed** — S2, S3, S4, T1–T4, M4–M6, and J1–J3 are done. The record of each
+resolution (what changed, where, and why) lives in the *Resolved* notes in
+[`cli_review.md`](cli_review.md) and in the git history; this file now only
+tracks what is still live.
 
-## Structural (highest long-term payoff)
+## Live constraints
 
-| # | Action | Source | Notes / dependencies |
-|---|--------|--------|----------------------|
-| S2 | **Test the global parse layer** — ✅ *done*: dedicated suite `acta_cli/tests/gparse/gparse_test_main.c` (wired in the Makefile as `test_gparse`), feeding raw argv through the `main.c` seam. Covers: too-few positionals (`argc` 1 / entity without action → `EXIT_CLI`); missing flag value for `--db` / `--json` / `--fields` / `--from_file` as last token → `EXIT_CLI`; value consumption (`--json --table` eaten as blob → handler `EXIT_INVALID`, not `EXIT_CLI`); unknown long option → `EXIT_CLI`; `--verbose=99` clamp → `EXIT_OK`; the three JSON input sources end-to-end + mutual exclusion; and a local `run_dispatch()` replicating `main.c` with the test DB for unknown entity/action → `EXIT_CLI`, known actions → `EXIT_OK`, `--version` early exit. OOM (`EXIT_ALLOC`) deliberately untested (not reproducible in-process) | P5 #3 | Done; green in `make test` |
-| S3 | **Per-action stdout-schema table in the spec** — ✅ *closed via T1*: [`cli_spec.md`](cli_spec.md) is the single source of truth for the per-action stdout schema (all 10 entities, plus the error line and exit codes); a code audit confirmed every shape is emitted through the shared atoms (`emit_ok_id` / `emit_ok_folder` / `emit_deleted` / `emit_ok_transition` / `emit_ok_restored` / `emit_ok_parent`), root folder is `null` in every JSON emit, and restore lines are unified on `{"id":N,"restored":true}` | P3 #3 / P4 #8 | Done; nothing left |
-| S4 | Resolve the remaining parse-layer inconsistencies — ✅ *done*: (a) `argparse.h` docs rewritten to the one real protocol: `cmd_args_flag` scans the full range, never advances `pos`, and returns NULL for both "absent" and "boolean present" (use `cmd_args_has_flag` for booleans); `cmd_args_has_flag` now scans from 0 (was `it->pos`) so a flag before an already-consumed positional is still found; `cmd_args_validate` docs say EXIT_CLI, not EXIT_INVALID; `parse_globals` docs spell out the real return classes (EXIT_OK + `show_*` flags for `--version`/`--help`/`--tools`, `EXIT_ALLOC` OOM, `EXIT_CLI` missing flag value / too-few positionals — the T2 split, main.c just returns the code). (b) dead `{ "live", 0 }` entry removed from `entity_flag_specs` — `--live` is now a proper unknown-option error instead of accepted-and-ignored. (c) the 12 broken `create` usage snippets (6 entities × full usage + per-action) now show the working stdin form `cat x.json | acta_cli <entity> create --stdin`; bare `--json` still requires a value, and every doc (global help `--json <blob>`, spec, `--tools`) agrees | P1 #1–2, P1 nitpick, J2 residual | Done |
-
-## Hand-rolled residue (intentional — no `cli_util.h` atom expresses these)
+### Hand-rolled residue (intentional — no `cli_util.h` atom expresses these)
 
 - `skill_folder list`/`count`: the *optional* `<parent_id>` positional with
   its `"all"` sentinel — `parse_id_positional` is required and
@@ -29,63 +25,35 @@ was folded into the plan below (F3 → S2, F2 → S3).
 These blocks are accepted as-is; a future edit that touches one should
 keep the canonical message texts.
 
-## Agentic usage — `--tools` machine-readable tool schema
+### `--tools` maintenance note
 
-The review called this the single biggest gap for agentic use: agents
-must otherwise scrape help prose and guess the contract. Design rule
-from the review: *generate `--tools` from the same per-action data (spec
-§11) rather than hand-writing it* — one table drives both the spec doc
-and the emitted JSON. *(Resolved by T3 below: the static table in
-`src/tools.c` renders the schema with the existing emitter; `--pretty`
-implemented, scoped to `--tools`.)*
+`tool_table[].flags` and argparse's `entity_flag_specs` remain two
+hand-synced sources of truth — `make test`'s 69× raw-argv cross-check is
+the drift detector, and for the M4/M5 cells it can only prove acceptance,
+not spec-vs-code agreement (see [`t4_analysis.md`](t4_analysis.md) §4). A
+shared `has_value` header was considered in T3 and is not required.
 
-| # | Action | Source | Notes / dependencies |
-|---|--------|--------|----------------------|
-| T1 | **Wire-format decisions + spec §11 table** — ✅ *done*: [`cli_spec.md`](cli_spec.md) settles all three decisions (transitions emit `{"id":N,"status":"<s>"}` via `emit_ok_transition`, `set-raw` echoes the unchanged current status; root folder = `null` in every JSON emit; restore = `{"id":N,"restored":true}` via `emit_ok_restored`) and carries the full per-action table for all 10 entities plus the exit-code / error-line contract. A code audit verified the implementation matches the table | P5 #4 / P4 #7–8, Agentic #1–3 | Done; the table is now the generation source for T3 `--tools` |
-| T2 | **Error-contract unification** — ✅ *done* (Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace — `ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for every argv/usage error — and the `code`/`exit` invariant restored: `code` = −exit everywhere (`finish_db_error` now prints `code` as `map_rc_to_exit(rc)` negated, so `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB` are `code:-4` with exit `4`); all CLI-usage errors (unknown entity/action/option, bad `--verbose`, missing flag value, too few positionals) emit `ACTA_CLI_ERR`/`code:-10`/exit `10` via the new `emit_cli_error` atom (unknown action via the shared `unknown_action`); DB open failure gets its own emit (`emit_db_open_error`) with `code:-11`/exit `11` (`EXIT_DB_OPEN`), making the spec's 11 reachable; `parse_globals` distinguishes OOM (exit 3) / missing flag value / too-few-positionals and the `--verbose` clamp line is VLOG-only. Contract pinned in `tests/cli_util/cli_util_test_error_contract.c`; `cli_spec.md` documents the invariant | P1 #5, Agentic #2 | Done; T3's error-shape documentation is unblocked |
-| T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) — ✅ *done*: `src/tools.c` holds the 69-entry table (59 actions + 10 help) and the renderer; `tools_print(FILE*, int pretty)` (no DB); default compact one-line JSON, `--pretty` = 2-space indent, both valid; global section carries the exit-code / error-line contract once (D1); per-entry `aliases` left empty at the time (since filled by M6); M1–M3 spec fixes applied, M4/M5 deferred then resolved. Audited status + the pretty-mode leading-comma bug (found & fixed) recorded in [`t3_analysis.md`](t3_analysis.md) §0 | Agentic #1, P1 nitpick, Agentic #4–5 | Done; the help line "full command reference" is now true |
-| T4 | **Test `--tools`** — ✅ *done*: suite in `acta_cli/tests/tools/tools_test_main.c` (D1–D7 per [`t4_analysis.md`](t4_analysis.md)); compact **and** `--pretty` outputs validated via `json_validate` + cJSON shape walk; 69-entry count and per-entity action coverage from `cli_spec.md`; exactly the 8 `flags|json` entries carry `json_keys`; raw-argv cross-check of all 69 entries (`rc != EXIT_CLI`) plus `--stdin`/`--from_file` smoke runs; green in `make test`. The cross-check root-vs-`tools`-array arg bug found during development is recorded in [`t4_analysis.md`](t4_analysis.md) §0 | Agentic #1, P5 #3 | T1–T3 done; closed the T-chain |
+## Closed (for the record)
 
-## `--tools` table follow-ups (deferred in T3 — ✅ all resolved)
+- **Structural:** S2 (global-parse test suite, `tests/gparse`), S3 (spec
+  table, closed via T1), S4 (parse-layer inconsistencies, docs + dead
+  `--live` + `--stdin` usage snippets).
+- **`--tools` chain:** T1 (wire-format decisions + spec §11 table in
+  [`cli_spec.md`](cli_spec.md)), T2 (error-contract unification, Option A
+  from [`t2_analysis.md`](t2_analysis.md)), T3 (69-entry schema in
+  `src/tools.c`, `--pretty`), T4 (contract suite, `tests/tools`), M4
+  (`--all` on `skill list`/`count`), M5 (optional `skill_folder move
+  --parent_id`), M6 (per-entry aliases `["execution"]` /
+  `["execution_log"]`).
+- **Residuals:** J1 (JSON layer cleanup: per-entity acta_db headers break
+  the include cycle, `jget_int` range check, negative-id error,
+  absent-vs-OOM distinction, error-offset VLOG — pinned in
+  `tests/json/json_test_main.c`), J2 (`model get --live` — stale item, no
+  code change), J3 (nine `*_usage` made `static`).
 
-All three follow-ups (M4–M6) are done; the rows below keep the audit
-detail. The `--tools` chain is complete: spec (T1) → error contract
-(T2) → implementation (T3) → contract test (T4) → follow-ups (M4–M6).
-
-| # | Action | Source | Notes |
-|---|--------|--------|-------|
-| M4 | **`--all` on `skill list`/`count`** — ✅ *done*: `--all` (all folders) added to the `cli_spec.md` `skill list`/`skill count` flag cells and to `f_skill_list`/`f_skill_count` in `tool_table` (`{ "all", 0, 0 }`; flag counts 8→9, 2→3). No dispatch change. The T4 raw-argv cross-check now exercises the new flag automatically (flag ⊆ `entity_flag_specs` still holds); functional `--all` behavior was already covered in `skill_test_list_count` / `skill_test_deleted` | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Done |
-| M5 | **`skill_folder move` `--parent_id*`** — ✅ *done*: spec cell → `--parent_id` (0/omitted = root); `skill_folder.move` table entry now uses optional `f_parent_id` (`skill_folder.c:676` makes it optional, 0/omitted = root). `model_folder move` stays required (`model_folder.c:716`) and its table entry keeps `f_parent_id_req`. `skill_folder_test_move.c` already covers omitted-flag → root | T3 audit, [`t3_analysis.md`](t3_analysis.md) §3 | Done |
-| M6 | **Per-entry `aliases`** — ✅ *done*: `alias_execution` / `alias_execution_log` arrays added in `src/tools.c`; the 10 exec entries carry `["execution"]` and the 5 log entries carry `["execution_log"]`; the other 54 stay `[]`. Pinned in `tools_test_main.c` per-entry invariants (exact shape in both compact and `--pretty` passes) | T3 §0 deviation (chosen during implementation) | Done |
-
-Maintenance note: `tool_table[].flags` and argparse's `entity_flag_specs` remain two hand-synced
-sources of truth — `make test`'s 69× raw-argv cross-check is the drift detector, and for the
-M4/M5 cells it can only prove acceptance, not spec-vs-code agreement (see
-[`t4_analysis.md`](t4_analysis.md) §4). A shared `has_value` header was considered in
-T3 and is not required.
-
-## Residual (from `cli_review.md`, low priority)
-
-| # | Action | Source | Notes |
-|---|--------|--------|-------|
-| J1 | **JSON layer cleanup** — ✅ *done*: all five items landed in `src/json.c` / `include/json.h`. (a) Include cycle resolved: entity structs now live in the acta_db per-entity headers (`<acta_db.h>`; e.g. `model_t` in `acta_db/include/model.h`) instead of `commands.h` — `json.c` includes only `json.h`, `<acta_db.h>` and `cli.h`, so no dispatch-header cycle (no `entities.h` needed). (b) `jget_int` range-checks `[INT_MIN, INT_MAX]` and rejects non-integral values (`3.7 → -1`, no truncation or wrap). (c) `jget_id` reports negative ids as `-1` instead of clamping to 0. (d) `jget_str`/`str_dup` distinguish absent/null/wrong-type (`0`, `*out = NULL`) from OOM (`-1`). (e) `parse_root` / `json_validate` `VLOG(1)` the `cJSON_GetErrorPtr()` offset on parse failure. Bonus hardening: `cJSON_ParseWithOpts(require_null_terminated)` rejects trailing garbage (`"{} x"`), and on `-1` the struct is left fully zeroed with partial string copies freed (json.h contract: caller frees nothing). Pinned in `tests/json/json_test_main.c` (268 assertions, green in `make test`). Residual: the `"hash"` → `content_hash` key mapping is kept intentionally (it is the spec's wire key) | P2 #5–#10 | Done |
-| J2 | **`model get --live` help wording** — ✅ *done (no code change)*: current `model get` help already reads `--include_deleted  Return the row even if soft-deleted` in both `model_usage` and the `usage_get` snippet — the review's `--live` wording is a stale reference to the old flag name (flag is now `--include_deleted`, alias `--deleted`) | P4 #6 | Stale item; residual: dead `"live"` entry in `entity_flag_specs` (accepted-but-ignored, same quirk family as `skill_folder list --parent_id`) is left for S4 |
-| J3 | **`*_usage` declarations** — ✅ *done*: all nine (`model_usage`, `ctx_usage`, `skill_usage`, `skill_folder_usage`, `skill_rev_usage`, `model_folder_usage`, `model_revision_usage`, `exec_usage`, `execution_log_usage`) are now `static`, matching the `db_usage` precedent; none is declared in `include/commands.h` and each is used only in its own file, so static is the consistent choice (central `acta <entity> --help` can revisit the `commands.h` route later) | P4 #9 | Done |
-
-## Summary
-
-- **T1–T4 done** (S3 was already closed) and **M4–M6 done** — the
-  `--tools` chain is complete end to end: spec table (T1), error
-  contract (T2), implementation (T3), contract test (T4; `make test`
-  green, both compact and `--pretty` validated, 69-entry count
-  asserted, aliases pinned), and all three table follow-ups
-  (M4 `--all`, M5 optional `--parent_id`, M6 per-entry aliases).
-- **Next:** S2 and S4 are done, M4–M6 are done, J2/J3 are done, and
-  **J1 is now done as well** — the JSON layer (include cycle, `jget_int`
-  range check, negative-id error, absent-vs-OOM distinction, error-offset
-  VLOG) is implemented, pinned in `tests/json/json_test_main.c`, and green
-  in `make test`. The full `cli_review.md` backlog is closed; nothing left
-  on the action plan.
-
-(History of the closed rounds lives in the git log; `cli_review.md` keeps
-the full original list.)
+Low-priority nitpicks intentionally left as-is (no action taken):
+Makefile libraries in `LDFLAGS` rather than `LDLIBS`; the hard-coded
+offsets in `parse_globals` (`a[4]`, `a[6]`, `a[9]`, `a[11]`); the redundant
+`gopts.argc < 2` re-check in `main.c`; the `--from_file` / `db exec
+--file` naming drift; and the `"hash"` → `content_hash` wire-key mapping
+(kept — it is the documented contract in `cli_spec.md`).
