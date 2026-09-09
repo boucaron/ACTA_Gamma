@@ -43,10 +43,14 @@ implemented, scoped to `--tools`.)*
 |---|--------|--------|----------------------|
 | T1 | **Wire-format decisions + spec §11 table** — ✅ *done*: [`cli_spec.md`](cli_spec.md) settles all three decisions (transitions emit `{"id":N,"status":"<s>"}` via `emit_ok_transition`, `set-raw` echoes the unchanged current status; root folder = `null` in every JSON emit; restore = `{"id":N,"restored":true}` via `emit_ok_restored`) and carries the full per-action table for all 10 entities plus the exit-code / error-line contract. A code audit verified the implementation matches the table | P5 #4 / P4 #7–8, Agentic #1–3 | Done; the table is now the generation source for T3 `--tools` |
 | T2 | **Error-contract unification** — ✅ *done* (Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace — `ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for every argv/usage error — and the `code`/`exit` invariant restored: `code` = −exit everywhere (`finish_db_error` now prints `code` as `map_rc_to_exit(rc)` negated, so `ACTA_DB_ERR_DUPLICATE`/`FK`/`INVALID_DB` are `code:-4` with exit `4`); all CLI-usage errors (unknown entity/action/option, bad `--verbose`, missing flag value, too few positionals) emit `ACTA_CLI_ERR`/`code:-10`/exit `10` via the new `emit_cli_error` atom (unknown action via the shared `unknown_action`); DB open failure gets its own emit (`emit_db_open_error`) with `code:-11`/exit `11` (`EXIT_DB_OPEN`), making the spec's 11 reachable; `parse_globals` distinguishes OOM (exit 3) / missing flag value / too-few-positionals and the `--verbose` clamp line is VLOG-only. Contract pinned in `tests/cli_util/cli_util_test_error_contract.c`; `cli_spec.md` documents the invariant | P1 #5, Agentic #2 | Done; T3's error-shape documentation is unblocked |
-| T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) — ✅ *done*: `src/tools.c` holds the 69-entry table (59 actions + 10 help) and the renderer; `tools_print(FILE*, int pretty)` (no DB); default compact one-line JSON, `--pretty` = 2-space indent, both valid; global section carries the exit-code / error-line contract once (D1); per-entry `aliases` left empty with alias info in `entity_aliases` + descriptions; M1–M3 spec fixes applied, M4/M5 deferred (table follows spec). Audited status + the pretty-mode leading-comma bug (found & fixed) recorded in [`t3_analysis.md`](t3_analysis.md) §0 | Agentic #1, P1 nitpick, Agentic #4–5 | Done; the help line "full command reference" is now true |
+| T3 | **Implement `--tools`** — a static per-(entity, action) data table in one file (e.g. `src/tools.c`) that is the single source of truth; `tools_print` renders it with the existing json emitter. The table covers: command + doc aliases (`execution`, `execution_log` — agents will emit those), description, positionals, flags (incl. `has_value`), input modes (`flags` / `--json` / `--stdin` / `--from_file` + required JSON keys), success stdout schema, exit codes (`0/1/2/3/4/10/11` + raw DB codes), error shape. Also settle dead `--pretty` (implement it or emit tools compact) — ✅ *done*: `src/tools.c` holds the 69-entry table (59 actions + 10 help) and the renderer; `tools_print(FILE*, int pretty)` (no DB); default compact one-line JSON, `--pretty` = 2-space indent, both valid; global section carries the exit-code / error-line contract once (D1); per-entry `aliases` left empty at the time (since filled by M6); M1–M3 spec fixes applied, M4/M5 deferred then resolved. Audited status + the pretty-mode leading-comma bug (found & fixed) recorded in [`t3_analysis.md`](t3_analysis.md) §0 | Agentic #1, P1 nitpick, Agentic #4–5 | Done; the help line "full command reference" is now true |
 | T4 | **Test `--tools`** — ✅ *done*: suite in `acta_cli/tests/tools/tools_test_main.c` (D1–D7 per [`t4_analysis.md`](t4_analysis.md)); compact **and** `--pretty` outputs validated via `json_validate` + cJSON shape walk; 69-entry count and per-entity action coverage from `cli_spec.md`; exactly the 8 `flags|json` entries carry `json_keys`; raw-argv cross-check of all 69 entries (`rc != EXIT_CLI`) plus `--stdin`/`--from_file` smoke runs; green in `make test`. The cross-check root-vs-`tools`-array arg bug found during development is recorded in [`t4_analysis.md`](t4_analysis.md) §0 | Agentic #1, P5 #3 | T1–T3 done; closed the T-chain |
 
-## `--tools` table follow-ups (deferred in T3)
+## `--tools` table follow-ups (deferred in T3 — ✅ all resolved)
+
+All three follow-ups (M4–M6) are done; the rows below keep the audit
+detail. The `--tools` chain is complete: spec (T1) → error contract
+(T2) → implementation (T3) → contract test (T4) → follow-ups (M4–M6).
 
 | # | Action | Source | Notes |
 |---|--------|--------|-------|
@@ -70,10 +74,12 @@ T3 and is not required.
 
 ## Summary
 
-- **T1–T4 done** (S3 was already closed) — the T-chain is complete:
-  spec table (T1), error contract (T2), `--tools` implementation (T3),
-  and its contract test (T4; `make test` green, both compact and
-  `--pretty` validated, 69-entry count asserted).
+- **T1–T4 done** (S3 was already closed) and **M4–M6 done** — the
+  `--tools` chain is complete end to end: spec table (T1), error
+  contract (T2), implementation (T3), contract test (T4; `make test`
+  green, both compact and `--pretty` validated, 69-entry count
+  asserted, aliases pinned), and all three table follow-ups
+  (M4 `--all`, M5 optional `--parent_id`, M6 per-entry aliases).
 - **Next:** S2 (dedicated global-parse suite) and S4 (parse-layer
   inconsistencies) stand independently of the T-chain; M4–M6 are all
   done and so are J2/J3, leaving J1 (JSON layer cleanup) as the last
