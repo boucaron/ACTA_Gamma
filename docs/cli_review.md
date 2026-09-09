@@ -94,6 +94,9 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
 - `--pretty` is parsed (`argparse.c`) and advertised in `--help` ("2-space
   indent JSON") but honored by no emitter — dead flag; implement it or drop
   it from the help text (same class as the `--tools` TODO).
+  *Resolved (T3):* implemented — `tools_print(FILE*, int pretty)` honors it,
+  scoped to `--tools` (2-space indent, still valid JSON); pinned in the T4
+  suite (`--pretty` output validated via `json_validate` + shape walk).
 - Naming drift: `--from_file` selects the JSON input source, while `--file`
   selects the SQL file in `db exec` — two names for the same "read from file"
   concept.
@@ -205,6 +208,10 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
     - `model get --live` is documented as "Include soft-deleted rows"; the
       flag selects the *unfiltered* fetch — wording is backwards and should
       be "fetch even if soft-deleted".
+    *Resolved (J2):* stale item — the current `model get` help (both
+    `model_usage` and the `usage_get` snippet) already reads
+    `--include_deleted  Return the row even if soft-deleted`; `--live` was
+    the old flag name. No code change needed.
 
 ### Design / consistency
 
@@ -243,6 +250,13 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
     other 9 entities carry the issue. Note the `usage_create` name is reused
     (statically) across 8 files — fine, but a `usage_<entity>_<action>` naming
     convention would let the declarations coexist.
+    *Resolved (J3):* all nine (`model_usage`, `ctx_usage`, `skill_usage`,
+    `skill_folder_usage`, `skill_rev_usage`, `model_folder_usage`,
+    `model_revision_usage`, `exec_usage`, `execution_log_usage`) are now
+    `static`, matching the `db_usage` precedent; none was declared in a
+    header and each is used only in its own file. The `commands.h`
+    declaration route can be revisited if a central `acta <entity> --help`
+    is ever wired.
 
 10. **Structural duplication is the dominant cost in this family**
     Each of the 8 files re-implements: the
@@ -330,6 +344,11 @@ contract), but for LLM/script drivers the following are missing:
    prints `[]`. Until it exists, an agent must scrape help prose and guess
    the contract. T3 generates it from the per-action table in
    [`cli_spec.md`](cli_spec.md) (now the single source of truth).
+   *Resolved (T3–T4 + M4–M6):* `src/tools.c` holds the 69-entry schema
+   (renderer + `--pretty`), its contract suite is green in `make test`, and
+   the three table follow-ups are closed (M4 `--all` on `skill
+   list`/`count`, M5 optional `skill_folder move --parent_id`, M6 per-entry
+   `aliases` `["execution"]` / `["execution_log"]`).
 2. **One unified error contract** — see P1 #5: two namespaces
    (`ACTA_DB_ERR_*` raw rc vs `ACTA_CLI_ERR` `-10`) and a code/exit-code
    invariant that does not hold for CLI errors. One table, one namespace.
@@ -353,6 +372,10 @@ contract), but for LLM/script drivers the following are missing:
    `exec` / `log` differ from the docs' "execution" / "execution_log" —
    the fuzzy "Did you mean" covers typos, but doc-driven agents will emit
    `acta_cli execution list`.
+   *Partially resolved (J3 + M6):* the `--tools` schema now states the
+   aliases literally (per-entry `aliases`), and the `*_usage` functions are
+   settled (static, J3). Wiring a central `acta_cli <entity> --help` remains
+   an open design choice.
 5. **`db exec` is an unguarded escape hatch** — arbitrary mutating SQL
    (no SELECT) with no scope limit; fine as an escape hatch, but it is the
    one surface where an agent can do anything, so document it as such (or
@@ -369,7 +392,7 @@ contract), but for LLM/script drivers the following are missing:
 5. **`--tools`** — ✅ *resolved* (T1–T4): the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); the 69-entry schema is generated from that table (`src/tools.c`, T3, done) and its contract test suite is green in `make test` (T4, done). *(T3 — T2, its blocker, is now done)*
 6. **Error-contract unification** — ✅ *resolved* (T2, Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace (`ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for argv/usage errors), `code` = −exit everywhere, and the spec's exit 11 (DB open failed) reachable via `emit_db_open_error`. *(P1 #5)
 7. **Parse-layer inconsistencies** — `cmd_args_flag` protocol (root cause of #1), `parse_globals` error conflation, bare `--json`. *(S4)*
-8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`), J2 (`model get --live` wording), J3 (`*_usage` declarations).
+8. **JSON-layer + help + usage-declaration residue** — J1 (include cycle, `jget_int` truncation, clamping, NULL conflation, opaque `-1`) **open**; J2 (`model get --live` wording) ✅ *resolved* (stale item — current help wording already correct, no code change); J3 (`*_usage` declarations) ✅ *resolved* (all nine made static, matching `db_usage`).
 
 **Structural (S1) — resolved:** the copy-paste family (P4 #10) was fixed
 atom-first and stopped there: the common atom set landed in `cli_util.h`
