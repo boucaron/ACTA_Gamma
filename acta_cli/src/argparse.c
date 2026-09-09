@@ -53,13 +53,13 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             g->argv = NULL;
             return 0;
         }
-        /* ---- --tools ---- */
+        /* ---- --tools ----
+         * Do NOT return here: a global flag placed after --tools
+         * (e.g. `--tools --pretty`) must still be scanned, so keep the
+         * pass going and short-circuit at the end via show_tools. */
         if (strcmp(a, "--tools") == 0) {
-            free(rest);
             g->show_tools = 1;
-            g->argc = 0;
-            g->argv = NULL;
-            return 0;
+            continue;
         }
         /* ---- --db <path> ---- */
         if (flag_prefix_match(a, "db")) {
@@ -156,6 +156,15 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         /* not a recognised global → keep as entity/action/positional */
         rest[rest_n++] = a;
+    }
+
+    /* --tools short-circuits: no entity/action needed, rest (if any)
+     * is ignored (main() returns before dispatch). */
+    if (g->show_tools) {
+        free(rest);
+        g->argc = 0;
+        g->argv = NULL;
+        return 0;
     }
 
     g->argc = rest_n;
