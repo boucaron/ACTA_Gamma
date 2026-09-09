@@ -294,6 +294,9 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    `argv` through `parse_globals` + `commands_dispatch` (or spawns the built
    binary) would have caught all of them. This is the highest-value coverage
    gap in the project.
+   *Resolved (S2):* `tests/gparse/gparse_test_main.c` is the dedicated
+   raw-argv suite; it exercises the seam end to end (rejections, value
+   consumption, input sources, unknown entity/action via dispatch).
 
 4. **Exec lifecycle transitions emit empty stdout on success**
    (`src/commands/execution.c`)
@@ -388,7 +391,7 @@ contract), but for LLM/script drivers the following are missing:
 1. **`--result` / `--error` silently drop their value** — `exec complete 42 --result "text"` stores `NULL` and exits 0; the documented example is the broken form. Data-loss bug. *(P1 #3)*
 2. **DEBUG stdin leak** — `resolve_input_source` (`include/commands.h`) dumps the full stdin payload to stderr on every `--stdin` use; one-line removal. *(P1 #4)*
 3. **Broken `create --json` usage examples** — 6 entity snippets show `cat x.json | acta_cli <entity> create --json`; bare `--json` is unparseable, the working form is `--stdin`. *(P1 nitpick, S4)*
-4. **Global parse layer untested** — the layer that owns the input-source class and all the flag-shadowing issues; orphaned `tests_parse_globals.c` is the seed for that suite. *(P5 #3)*
+4. **Global parse layer untested** — ✅ *resolved (S2)*: dedicated suite `tests/gparse/gparse_test_main.c` feeds raw argv through the `main.c` seam (parse_globals → aliases → validate → handler/dispatch); pins too-few positionals, missing flag values, value consumption, unknown options, `--verbose` clamp, the three input sources + exclusion, and unknown entity/action via `commands_dispatch`. Green in `make test`. *(P5 #3)*
 5. **`--tools`** — ✅ *resolved* (T1–T4): the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); the 69-entry schema is generated from that table (`src/tools.c`, T3, done) and its contract test suite is green in `make test` (T4, done). *(T3 — T2, its blocker, is now done)*
 6. **Error-contract unification** — ✅ *resolved* (T2, Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace (`ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for argv/usage errors), `code` = −exit everywhere, and the spec's exit 11 (DB open failed) reachable via `emit_db_open_error`. *(P1 #5)
 7. **Parse-layer inconsistencies** — `cmd_args_flag` protocol (root cause of #1), `parse_globals` error conflation, bare `--json`. *(S4)*

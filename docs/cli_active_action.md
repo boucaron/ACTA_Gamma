@@ -8,7 +8,7 @@ was folded into the plan below (F3 → S2, F2 → S3).
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| S2 | **Test the global parse layer** — raw `argv` through `parse_globals` + `commands_dispatch` (in-process or spawning the binary). Every bug in the P2 class (`--json` blob ignored, `--stdin` eaten, bare `--json` unparseable, dead local `--count`) lives in this untested seam (former F3) | P5 #3 | the `stest_run_argv` helper (`tests/helpers/test_helpers`) is already the in-process raw-argv path used by the P2 input-source regression cases — a dedicated suite is the missing piece (the earlier orphaned `tests_parse_globals.c` seed was deleted in `d31ce98`; the helper above is the starting point) |
+| S2 | **Test the global parse layer** — ✅ *done*: dedicated suite `acta_cli/tests/gparse/gparse_test_main.c` (wired in the Makefile as `test_gparse`), feeding raw argv through the `main.c` seam. Covers: too-few positionals (`argc` 1 / entity without action → `EXIT_CLI`); missing flag value for `--db` / `--json` / `--fields` / `--from_file` as last token → `EXIT_CLI`; value consumption (`--json --table` eaten as blob → handler `EXIT_INVALID`, not `EXIT_CLI`); unknown long option → `EXIT_CLI`; `--verbose=99` clamp → `EXIT_OK`; the three JSON input sources end-to-end + mutual exclusion; and a local `run_dispatch()` replicating `main.c` with the test DB for unknown entity/action → `EXIT_CLI`, known actions → `EXIT_OK`, `--version` early exit. OOM (`EXIT_ALLOC`) deliberately untested (not reproducible in-process) | P5 #3 | Done; green in `make test` |
 | S3 | **Per-action stdout-schema table in the spec** — ✅ *closed via T1*: [`cli_spec.md`](cli_spec.md) is the single source of truth for the per-action stdout schema (all 10 entities, plus the error line and exit codes); a code audit confirmed every shape is emitted through the shared atoms (`emit_ok_id` / `emit_ok_folder` / `emit_deleted` / `emit_ok_transition` / `emit_ok_restored` / `emit_ok_parent`), root folder is `null` in every JSON emit, and restore lines are unified on `{"id":N,"restored":true}` | P3 #3 / P4 #8 | Done; nothing left |
 | S4 | Resolve the remaining parse-layer inconsistencies: `cmd_args_flag` doc/implementation mismatch (present-vs-absent indistinguishable); `parse_globals` conflates OOM / missing flag value / too-few positionals into one `EXIT_CLI` with the wrong main.c message; bare `--json` (no value) still unparseable after the input-source fix — parser still requires a value (help text no longer documents it) | P1 #1–2 | Small, but the flag API is what W1 and the dead flags keep tripping on |
 
@@ -80,10 +80,10 @@ T3 and is not required.
   green, both compact and `--pretty` validated, 69-entry count
   asserted, aliases pinned), and all three table follow-ups
   (M4 `--all`, M5 optional `--parent_id`, M6 per-entry aliases).
-- **Next:** S2 (dedicated global-parse suite) and S4 (parse-layer
-  inconsistencies) stand independently of the T-chain; M4–M6 are all
-  done and so are J2/J3, leaving J1 (JSON layer cleanup) as the last
-  low-priority residual.
+- **Next:** S4 (parse-layer inconsistencies) stands independently of the
+  T-chain; S2 (global-parse suite) is done, M4–M6 are done and so are
+  J2/J3, leaving J1 (JSON layer cleanup) as the last low-priority
+  residual.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)
