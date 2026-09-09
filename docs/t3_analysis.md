@@ -49,7 +49,10 @@ Deviations to carry into T4:
 - Per-entry `aliases` arrays are all empty — alias info lives in the
   global `entity_aliases` map plus the repeated "canonical entity is
   `exec`/`log`" description text. T4 must not assert non-empty
-  `aliases` per entry.
+  `aliases` per entry. *(Since resolved by M6: the 10 exec entries
+  carry `["execution"]` and the 5 log entries carry
+  `["execution_log"]`; the T4 per-entry invariants now pin the exact
+  shape in both compact and `--pretty` passes.)*
 - M4/M5 remain deferred: the table follows `cli_spec.md`, not the code,
   for `skill list`/`count` (`--all` absent) and `skill_folder move`
   (`--parent_id` still required in the spec). *(Since resolved: M4 added
@@ -137,8 +140,9 @@ Related quirk (out of T3 scope, note for S4): because `--parent_id` is in
 `skill_folder list --parent_id 3` and the handler silently ignores it.
 The tools table must document the positional (per M3), not the flag.
 
-**M4/M5 — found during T3 implementation, deferred follow-ups** (now
-tracked as action items in [`cli_active_action.md`](cli_active_action.md)).
+**M4/M5 — found during T3 implementation, deferred follow-ups** (tracked
+as action items in [`cli_active_action.md`](cli_active_action.md); both
+since resolved — see the ✅ rows there).
 Two further spec-vs-code mismatches surfaced while building the table.
 Per the D2 rule ("flags exactly as `cli_spec.md` lists them") the
 table follows the spec for both, so the spec table is still incomplete

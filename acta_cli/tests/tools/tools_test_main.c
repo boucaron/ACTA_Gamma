@@ -20,7 +20,9 @@
  *      and exercises the S2 global-parse seam.  The 8 flags|json
  *      entries are additionally run with a --json blob built from their
  *      json_keys.required, and --stdin/--from_file smoke runs pin the
- *      remaining global input sources.
+ *      remaining global input sources.  Per-entry aliases are pinned too
+ *      (M6): exec entries carry ["execution"], log entries carry
+ *      ["execution_log"], every other entry carries [].
  *
  * The suite consumes the parsed output as data — the 69-entry table is
  * NOT duplicated here; only the small expected sets from cli_spec.md
@@ -300,6 +302,25 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
             TEST_NOT_NULL(ctx, cj_str(fe, "name"));
             TEST(ctx, cJSON_IsBool(cJSON_GetObjectItem(fe, "has_value")));
             TEST(ctx, cJSON_IsBool(cJSON_GetObjectItem(fe, "required")));
+        }
+
+        /* aliases (M6): exec entries carry ["execution"], log entries
+         * carry ["execution_log"], every other entry carries [] */
+        cJSON *aliases = cJSON_GetObjectItem(e, "aliases");
+        TEST(ctx, cJSON_IsArray(aliases));
+        int n_al = aliases ? cJSON_GetArraySize(aliases) : 0;
+        if (strcmp(entity, "exec") == 0) {
+            TEST_EQ(ctx, n_al, 1);
+            TEST_STREQ(ctx, (aliases && n_al == 1)
+                ? cJSON_GetArrayItem(aliases, 0)->valuestring : NULL,
+                       "execution");
+        } else if (strcmp(entity, "log") == 0) {
+            TEST_EQ(ctx, n_al, 1);
+            TEST_STREQ(ctx, (aliases && n_al == 1)
+                ? cJSON_GetArrayItem(aliases, 0)->valuestring : NULL,
+                       "execution_log");
+        } else {
+            TEST_EQ(ctx, n_al, 0);
         }
     }
 }

@@ -114,6 +114,11 @@ static const tool_flag_t f_parent_id[]   = { { "parent_id", 1, 0 } };
 static const tool_flag_t f_name[]        = { { "name", 1, 1 } };
 static const tool_flag_t f_parent_id_req[] = { { "parent_id", 1, 1 } };
 
+/* Documented dispatch aliases, repeated per-entry so the schema literally
+ * says `execution <action>` / `execution_log <action>` are not commands. */
+static const char *const alias_execution[]    = { "execution" };
+static const char *const alias_execution_log[] = { "execution_log" };
+
 static const tool_flag_t f_rev_list[] = {
     { "offset", 1, 0 }, { "limit", 1, 0 },
     { "count", 0, 0 }, { "table", 0, 0 },
@@ -572,7 +577,7 @@ static const tool_entry_t tool_table[] = {
       "usage text (plain, not JSON)" },
 
     /* ── exec ── */
-    { "exec.create", "exec", "create", NULL, 0,
+    { "exec.create", "exec", "create", alias_execution, 1,
       "Create an execution from flags or a JSON body. The row is always "
       "created 'pending'; --status (flag or JSON key) is rejected — later "
       "states are reached via start/complete/fail/cancel. The canonical "
@@ -581,42 +586,42 @@ static const tool_entry_t tool_table[] = {
       jk_exec_req, 3, jk_exec_opt, 2,
       "{\"id\":N} (row always created 'pending')" },
 
-    { "exec.get", "exec", "get", NULL, 0,
+    { "exec.get", "exec", "get", alias_execution, 1,
       "Fetch an execution by id. (Canonical entity name is 'exec'; "
       "dispatch rejects the alias 'execution'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
       "execution JSON object" },
 
-    { "exec.start", "exec", "start", NULL, 0,
+    { "exec.start", "exec", "start", alias_execution, 1,
       "Start an execution (pending -> running). (Canonical entity name is "
       "'exec'; dispatch rejects the alias 'execution'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
       "{\"id\":N,\"status\":\"running\"}" },
 
-    { "exec.cancel", "exec", "cancel", NULL, 0,
+    { "exec.cancel", "exec", "cancel", alias_execution, 1,
       "Cancel an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
       "{\"id\":N,\"status\":\"cancelled\"}" },
 
-    { "exec.complete", "exec", "complete", NULL, 0,
+    { "exec.complete", "exec", "complete", alias_execution, 1,
       "Complete an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
       p_id, 1, f_exec_complete, 1, "flags",
       NULL, 0, NULL, 0,
       "{\"id\":N,\"status\":\"completed\"}" },
 
-    { "exec.fail", "exec", "fail", NULL, 0,
+    { "exec.fail", "exec", "fail", alias_execution, 1,
       "Fail an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
       p_id, 1, f_exec_fail, 1, "flags",
       NULL, 0, NULL, 0,
       "{\"id\":N,\"status\":\"failed\"}" },
 
-    { "exec.set-raw", "exec", "set-raw", NULL, 0,
+    { "exec.set-raw", "exec", "set-raw", alias_execution, 1,
       "Set the raw model response on an execution. Status is unchanged; "
       "the success line echoes the current status. (Canonical entity name "
       "is 'exec'; dispatch rejects the alias 'execution'.)",
@@ -624,14 +629,14 @@ static const tool_entry_t tool_table[] = {
       NULL, 0, NULL, 0,
       "{\"id\":N,\"status\":\"<current status, unchanged>\"}" },
 
-    { "exec.list", "exec", "list", NULL, 0,
+    { "exec.list", "exec", "list", alias_execution, 1,
       "List executions, optionally filtered by status and refs. (Canonical "
       "entity name is 'exec'; dispatch rejects the alias 'execution'.)",
       NULL, 0, f_exec_list, 11, "flags",
       NULL, 0, NULL, 0,
       "[ ... ] / []; --count -> bare int" },
 
-    { "exec.count", "exec", "count", NULL, 0,
+    { "exec.count", "exec", "count", alias_execution, 1,
       "Count executions, optionally filtered by status and refs. "
       "(Canonical entity name is 'exec'; dispatch rejects the alias "
       "'execution'.)",
@@ -639,7 +644,7 @@ static const tool_entry_t tool_table[] = {
       NULL, 0, NULL, 0,
       "bare int" },
 
-    { "exec.help", "exec", "help", NULL, 0,
+    { "exec.help", "exec", "help", alias_execution, 1,
       "Show the exec usage text. (Canonical entity name is 'exec'; "
       "dispatch rejects the alias 'execution'.)",
       NULL, 0, NULL, 0, "none",
@@ -647,7 +652,7 @@ static const tool_entry_t tool_table[] = {
       "usage text (plain, not JSON)" },
 
     /* ── log ── */
-    { "log.create", "log", "create", NULL, 0,
+    { "log.create", "log", "create", alias_execution_log, 1,
       "Create an execution log entry from flags or a JSON body. level "
       "must be one of: debug, info, warn, error. The canonical entity name "
       "is 'log' (dispatch rejects the alias 'execution_log').",
@@ -655,14 +660,14 @@ static const tool_entry_t tool_table[] = {
       jk_log_req, 3, jk_log_opt, 2,
       "{\"id\":N}" },
 
-    { "log.get", "log", "get", NULL, 0,
+    { "log.get", "log", "get", alias_execution_log, 1,
       "Fetch a log entry by id. (Canonical entity name is 'log'; dispatch "
       "rejects the alias 'execution_log'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
       "log JSON object" },
 
-    { "log.list", "log", "list", NULL, 0,
+    { "log.list", "log", "list", alias_execution_log, 1,
       "List log entries of an execution, optionally filtered by level. "
       "(Canonical entity name is 'log'; dispatch rejects the alias "
       "'execution_log'.)",
@@ -670,7 +675,7 @@ static const tool_entry_t tool_table[] = {
       NULL, 0, NULL, 0,
       "[ ... ] / []; --count -> bare int" },
 
-    { "log.count", "log", "count", NULL, 0,
+    { "log.count", "log", "count", alias_execution_log, 1,
       "Count log entries of an execution, optionally filtered by level. "
       "(Canonical entity name is 'log'; dispatch rejects the alias "
       "'execution_log'.)",
@@ -678,7 +683,7 @@ static const tool_entry_t tool_table[] = {
       NULL, 0, NULL, 0,
       "bare int" },
 
-    { "log.help", "log", "help", NULL, 0,
+    { "log.help", "log", "help", alias_execution_log, 1,
       "Show the log usage text. (Canonical entity name is 'log'; dispatch "
       "rejects the alias 'execution_log'.)",
       NULL, 0, NULL, 0, "none",
