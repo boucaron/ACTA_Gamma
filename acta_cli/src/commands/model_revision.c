@@ -12,7 +12,7 @@
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli model_revision --help
  */
-void model_revision_usage(FILE *f)
+static void model_revision_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli model_revision <action> [options]\n"

@@ -13,7 +13,7 @@
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli model --help
  */
-void model_usage(FILE *f)
+static void model_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli model <action> [options]\n"

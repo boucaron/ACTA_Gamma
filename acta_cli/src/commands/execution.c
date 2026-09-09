@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli exec --help                                          */
-void exec_usage(FILE *f)
+static void exec_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli exec <action> [options]\n"

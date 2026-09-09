@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this to handle
  *   acta_cli context --help   without re-parsing the subcommand.          */
-void ctx_usage(FILE *f)
+static void ctx_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli context <action> [options]\n"

@@ -12,7 +12,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli skill --help                                       */
-void skill_usage(FILE *f)
+static void skill_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli skill <action> [options]\n"

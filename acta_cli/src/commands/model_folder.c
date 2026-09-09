@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli model_folder --help                                   */
-void model_folder_usage(FILE *f)
+static void model_folder_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli model_folder <action> [options]\n"

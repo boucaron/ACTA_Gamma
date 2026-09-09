@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli log --help                                          */
-void execution_log_usage(FILE *f)
+static void execution_log_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli log <action> [options]\n"

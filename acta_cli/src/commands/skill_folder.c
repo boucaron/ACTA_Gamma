@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli skill_folder --help                                     */
-void skill_folder_usage(FILE *f)
+static void skill_folder_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli skill_folder <action> [options]\n"

@@ -65,8 +65,8 @@ T3 and is not required.
 | # | Action | Source | Notes |
 |---|--------|--------|-------|
 | J1 | **JSON layer cleanup** — include cycle `json.c` → `commands.h` (move entity structs to an `entities.h` so `json.c` doesn't include the dispatch header); `jget_int` truncates/wraps (`3.7 → 3`, silent wrap past `INT_MAX`) — range-check it; negative-id `(id > 0) ? id : 0` clamping hides user errors — error instead; `jget_str`/`dup_or_null` conflate "absent" and OOM in the NULL return; opaque `-1` parse errors — `VLOG` the `cJSON_GetErrorPtr()` offset on failure | P2 #5–#10 | Layer under every entity; J1's cycle is the one with real rework cost |
-| J2 | **`model get --live` help wording** — "Include soft-deleted rows" is backwards; the flag selects the unfiltered fetch ("fetch even if soft-deleted") | P4 #6 | One line in `model_usage` (+ per-action snippet) |
-| J3 | **`*_usage` declarations** — `model_usage`, `ctx_usage`, … are non-static ("the dispatch layer can call this") but declared in no header, so the dispatch layer can't call them; declare them in `commands.h` (enables central `acta <entity> --help`) or make them static | P4 #9 | `db_usage` already resolved as static; 9 entities carry the issue |
+| J2 | **`model get --live` help wording** — ✅ *done (no code change)*: current `model get` help already reads `--include_deleted  Return the row even if soft-deleted` in both `model_usage` and the `usage_get` snippet — the review's `--live` wording is a stale reference to the old flag name (flag is now `--include_deleted`, alias `--deleted`) | P4 #6 | Stale item; residual: dead `"live"` entry in `entity_flag_specs` (accepted-but-ignored, same quirk family as `skill_folder list --parent_id`) is left for S4 |
+| J3 | **`*_usage` declarations** — ✅ *done*: all nine (`model_usage`, `ctx_usage`, `skill_usage`, `skill_folder_usage`, `skill_rev_usage`, `model_folder_usage`, `model_revision_usage`, `exec_usage`, `execution_log_usage`) are now `static`, matching the `db_usage` precedent; none is declared in `include/commands.h` and each is used only in its own file, so static is the consistent choice (central `acta <entity> --help` can revisit the `commands.h` route later) | P4 #9 | Done |
 
 ## Summary
 
@@ -76,7 +76,8 @@ T3 and is not required.
   `--pretty` validated, 69-entry count asserted).
 - **Next:** S2 (dedicated global-parse suite) and S4 (parse-layer
   inconsistencies) stand independently of the T-chain; M4–M6 are all
-  done, so the remaining items are J1–J3.
+  done and so are J2/J3, leaving J1 (JSON layer cleanup) as the last
+  low-priority residual.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)
