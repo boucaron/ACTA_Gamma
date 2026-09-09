@@ -713,7 +713,7 @@ static void jsep(FILE *f, int pretty, int level, int i, int n)
         if (i > 0) fputs(", ", f);
         return;
     }
-    fputs("\n", f);
+    if (i > 0) fputs("\n", f);          /* first field follows "{" directly */
     indent_line(f, level);
     if (i > 0) fputc(',', f);
 }
@@ -904,7 +904,7 @@ static void jf_entity_aliases(FILE *f, int pretty, int level, int *i, int n)
         indent_line(f, level + 1);
         fputs("\"exec\":[\n", f);
         indent_line(f, level + 2);
-        fputs("\"execution\",\n", f);
+        fputs("\"execution\"\n", f);
         indent_line(f, level + 1);
         fputs("],\n", f);
         indent_line(f, level + 1);

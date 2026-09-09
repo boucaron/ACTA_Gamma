@@ -34,6 +34,16 @@ object. Fixed to `if (i > 0)` (leading-comma scheme; no trailing comma
 after the last field). Compact mode was already valid. **T4 must test
 both modes** — `--tools --pretty` before the fix failed any JSON parse.
 
+**Two further `--pretty` defects found during T4 development (both
+fixed):**
+
+- `jsep`'s pretty path emitted a leading `\n` unconditionally, so the
+  first field landed on line 3 with a blank line after the opening
+  `{` (still valid JSON, but broke the shape contract). The newline is
+  now emitted only for `i > 0`.
+- `jf_entity_aliases`' pretty path emitted a trailing comma inside the
+  `exec` array (`"execution", ]`) — invalid JSON. Removed.
+
 Deviations to carry into T4:
 
 - Per-entry `aliases` arrays are all empty — alias info lives in the

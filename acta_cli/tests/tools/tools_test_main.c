@@ -120,18 +120,22 @@ static const char *cj_str(cJSON *o, const char *key)
 
 static int contains(const char *const *list, size_t n, const char *s)
 {
+    if (!s) return 0;                     /* NULL = "absent", not a crash */
     for (size_t i = 0; i < n; i++)
         if (strcmp(list[i], s) == 0) return 1;
     return 0;
 }
 
-static int entry_exists(cJSON *tools, const char *entity, const char *action)
+/* per-(entity, action) lookup, NULL-safe on every lookup */
+static int entry_exists_safe(cJSON *tools, const char *entity,
+                             const char *action)
 {
     int n = cJSON_GetArraySize(tools);
     for (int i = 0; i < n; i++) {
         cJSON *e = cJSON_GetArrayItem(tools, i);
-        if (strcmp(cj_str(e, "entity"),  entity)  == 0 &&
-            strcmp(cj_str(e, "action"),  action)  == 0)
+        const char *ent = cj_str(e, "entity");
+        const char *act = cj_str(e, "action");
+        if (ent && act && strcmp(ent, entity) == 0 && strcmp(act, action) == 0)
             return 1;
     }
     return 0;
@@ -139,6 +143,7 @@ static int entry_exists(cJSON *tools, const char *entity, const char *action)
 
 static stest_cmd_fn_t handler_for(const char *entity)
 {
+    if (!entity) return NULL;
     for (size_t i = 0; i < sizeof(entity_fns) / sizeof(entity_fns[0]); i++)
         if (strcmp(entity_fns[i].name, entity) == 0)
             return entity_fns[i].fn;
@@ -183,7 +188,9 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
 {
     TEST(ctx, cJSON_IsObject(root));
     TEST_STREQ(ctx, cj_str(root, "name"), "acta_cli");
-    TEST_EQ(ctx, cJSON_GetObjectItem(root, "version")->valueint, 1);
+    cJSON *ver = cJSON_GetObjectItem(root, "version");
+    TEST(ctx, ver && cJSON_IsNumber(ver));
+    TEST_EQ(ctx, ver ? ver->valueint : 0, 1);
     TEST_NOT_NULL(ctx, cj_str(root, "usage"));
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");
@@ -192,25 +199,33 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
 
     cJSON *al = cJSON_GetObjectItem(root, "entity_aliases");
     TEST(ctx, cJSON_IsObject(al));
-    TEST_EQ(ctx, cJSON_GetArraySize(cJSON_GetObjectItem(al, "exec")), 1);
-    TEST_STREQ(ctx,
-        cJSON_GetArrayItem(cJSON_GetObjectItem(al, "exec"), 0)->valuestring,
-        "execution");
-    TEST_EQ(ctx, cJSON_GetArraySize(cJSON_GetObjectItem(al, "log")), 1);
-    TEST_STREQ(ctx,
-        cJSON_GetArrayItem(cJSON_GetObjectItem(al, "log"), 0)->valuestring,
-        "execution_log");
+    cJSON *ax = cJSON_GetObjectItem(al, "exec");
+    TEST(ctx, ax && cJSON_IsArray(ax) && cJSON_GetArraySize(ax) == 1);
+    TEST_STREQ(ctx, (ax && cJSON_GetArraySize(ax) == 1)
+        ? cJSON_GetArrayItem(ax, 0)->valuestring : NULL, "execution");
+    cJSON *lg = cJSON_GetObjectItem(al, "log");
+    TEST(ctx, lg && cJSON_IsArray(lg) && cJSON_GetArraySize(lg) == 1);
+    TEST_STREQ(ctx, (lg && cJSON_GetArraySize(lg) == 1)
+        ? cJSON_GetArrayItem(lg, 0)->valuestring : NULL, "execution_log");
 
     cJSON *src = cJSON_GetObjectItem(root, "input_sources");
     TEST(ctx, cJSON_IsArray(src));
     TEST_EQ(ctx, cJSON_GetArraySize(src), 3);
-    for (int k = 0; k < 3; k++)
+    for (int k = 0; k < 3; k++) {
+        cJSON *s = cJSON_GetArrayItem(src, k);
+        TEST(ctx, s && cJSON_IsString(s));
         TEST(ctx, contains((const char *const[3]){"json", "stdin", "from_file"},
-                           3, cJSON_GetArrayItem(src, k)->valuestring) == 1);
+                           3, s ? s->valuestring : NULL) == 1);
+    }
 
     cJSON *ec = cJSON_GetObjectItem(root, "exit_codes");
     TEST(ctx, cJSON_IsObject(ec));
-    TEST_EQ(ctx, cJSON_GetObjectSize(ec), 7);
+    int n_ec = 0;                              /* cJSON has no object-size
+                                               API — count the child chain */
+    if (ec && cJSON_IsObject(ec))
+        for (cJSON *it = ec->child; it; it = it->next)
+            n_ec++;
+    TEST_EQ(ctx, n_ec, 7);
     for (size_t i = 0; i < sizeof(EXIT_CODE_KEYS) / sizeof(EXIT_CODE_KEYS[0]); i++)
         TEST_NOT_NULL(ctx, cJSON_GetObjectItem(ec, EXIT_CODE_KEYS[i]));
 
@@ -227,8 +242,8 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
 
     for (size_t e = 0; e < sizeof(expected) / sizeof(expected[0]); e++)
         for (size_t a = 0; a < expected[e].n_actions; a++)
-            TEST(ctx, entry_exists(tools, expected[e].entity,
-                                  expected[e].actions[a]));
+            TEST(ctx, entry_exists_safe(tools, expected[e].entity,
+                                       expected[e].actions[a]));
 
     /* ── exactly the 8 JSON-capable commands carry json_keys ── */
     int n = cJSON_GetArraySize(tools);
@@ -252,6 +267,9 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
         const char *entity = cj_str(e, "entity");
         const char *action = cj_str(e, "action");
         const char *input  = cj_str(e, "input");
+        TEST_NOT_NULL(ctx, entity);
+        TEST_NOT_NULL(ctx, action);
+        if (!entity || !action) continue;   /* schema broken — no crash */
 
         char want[128];
         snprintf(want, sizeof want, "%s.%s", entity, action);
@@ -260,15 +278,18 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
         TEST_NOT_NULL(ctx, input);
         TEST(ctx, contains((const char *const[5]){"flags", "flags|json",
             "positional|flags", "positional", "none"}, 5, input) == 1);
-        TEST(ctx, (strcmp(action, "help") == 0) ==
-               (strcmp(input, "none") == 0));
+        /* input "none" ⇔ the 10 help actions + db.version
+         * (a pure-output action). */
+        TEST(ctx, (strcmp(action, "help") == 0 ||
+                   strcmp(action, "version") == 0) ==
+               (input != NULL && strcmp(input, "none") == 0));
 
         cJSON *pos = cJSON_GetObjectItem(e, "positionals");
         TEST(ctx, cJSON_IsArray(pos));
         for (int p = 0; p < cJSON_GetArraySize(pos); p++) {
             cJSON *pe = cJSON_GetArrayItem(pos, p);
             TEST_NOT_NULL(ctx, cj_str(pe, "name"));
-            TEST(ctx, cJSON_IsNumber(cJSON_GetObjectItem(pe, "required")));
+            TEST(ctx, cJSON_IsBool(cJSON_GetObjectItem(pe, "required")));
             TEST_NOT_NULL(ctx, cj_str(pe, "type"));
         }
 
@@ -277,8 +298,8 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
         for (int f = 0; f < cJSON_GetArraySize(fl); f++) {
             cJSON *fe = cJSON_GetArrayItem(fl, f);
             TEST_NOT_NULL(ctx, cj_str(fe, "name"));
-            TEST(ctx, cJSON_IsNumber(cJSON_GetObjectItem(fe, "has_value")));
-            TEST(ctx, cJSON_IsNumber(cJSON_GetObjectItem(fe, "required")));
+            TEST(ctx, cJSON_IsBool(cJSON_GetObjectItem(fe, "has_value")));
+            TEST(ctx, cJSON_IsBool(cJSON_GetObjectItem(fe, "required")));
         }
     }
 }
@@ -322,8 +343,10 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
                 cJSON *req = cJSON_GetObjectItem(fe, "required");
                 cJSON *hv  = cJSON_GetObjectItem(fe, "has_value");
                 if (!(req && req->valueint)) continue;
+                const char *fname = cj_str(fe, "name");
+                if (!fname) continue;
                 char name[64];
-                snprintf(name, sizeof name, "--%s", cj_str(fe, "name"));
+                snprintf(name, sizeof name, "--%s", fname);
                 char *nm = strdup(name);
                 argv[argc++]   = nm;
                 owned[n_owned++] = nm;
@@ -348,10 +371,11 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
             int off = (int)snprintf(blob, sizeof blob, "{");
             if (reqk && cJSON_IsArray(reqk))
                 for (int k = 0; k < cJSON_GetArraySize(reqk); k++) {
-                    const char *key =
-                        cJSON_GetArrayItem(reqk, k)->valuestring;
+                    cJSON *key = cJSON_GetArrayItem(reqk, k);
+                    if (!key || !cJSON_IsString(key)) continue;
                     off += snprintf(blob + off, sizeof blob - off,
-                                   "%s\"%s\":\"x\"", k ? "," : "", key);
+                                   "%s\"%s\":\"x\"", k ? "," : "",
+                                   key->valuestring);
                 }
             snprintf(blob + off, sizeof blob - off, "}");
 
@@ -365,8 +389,9 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
     }
 
     /* input-source smoke runs: --stdin and --from_file end-to-end
-     * (deterministic success on context create) */
-    const char *blob = "{\"type\":\"t\",\"content\":\"c\"}";
+     * (deterministic success on context create; its required
+     * fields are type + content + hash) */
+    const char *blob = "{\"type\":\"t\",\"content\":\"c\",\"hash\":\"h\"}";
     char *argv_stdin[4] = { "acta_cli", "context", "create", "--stdin" };
     TEST_EQ(ctx, stest_run_argv(ctx, cmd_context, 4, argv_stdin, blob),
             EXIT_OK);
@@ -390,30 +415,31 @@ int run_tools_test(void)
 
     char compact[TOOLS_MAX_LEN], pretty[TOOLS_MAX_LEN];
     int clen = capture_tools(&ctx, 0, compact, sizeof compact);
-    TEST(ctx, clen >= 0);
+    TEST(&ctx, clen >= 0);
     int plen = capture_tools(&ctx, 1, pretty, sizeof pretty);
-    TEST(ctx, plen >= 0);
+    TEST(&ctx, plen >= 0);
 
     if (clen >= 0) {
         /* D3: valid JSON via the project's own json layer */
-        TEST_EQ(ctx, json_validate(compact), 0);
+        TEST_EQ(&ctx, json_validate(compact), 0);
         check_shape(&ctx, compact, clen, 0);
 
         cJSON *root = cJSON_Parse(compact);
-        TEST_NOT_NULL(ctx, root);
+        TEST_NOT_NULL(&ctx, root);
         if (root) {
             check_structure(&ctx, root);
-            cross_check(&ctx, root);          /* raw-argv cross-check */
+            cross_check(&ctx, cJSON_GetObjectItem(root, "tools"));
+            /* raw-argv cross-check (69-entry tools array, not the root) */
             cJSON_Delete(root);
         }
     }
 
     if (plen >= 0) {
-        TEST_EQ(ctx, json_validate(pretty), 0);
+        TEST_EQ(&ctx, json_validate(pretty), 0);
         check_shape(&ctx, pretty, plen, 1);
 
         cJSON *root = cJSON_Parse(pretty);
-        TEST_NOT_NULL(ctx, root);
+        TEST_NOT_NULL(&ctx, root);
         if (root) {
             check_structure(&ctx, root);      /* same structure, indented */
             cJSON_Delete(root);

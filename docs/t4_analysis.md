@@ -97,8 +97,9 @@ inventory, not the schema data:
   `invariant = "code == -exit"`;
 - per-entry invariants: `command == "<entity>.<action>"`; `input` is
   one of `flags | flags|json | positional|flags | positional | none`;
-  `help` ⇔ `input == "none"`; `positionals`/`flags` are arrays whose
-  elements carry `name` (+ `required`/`type` / `has_value`/`required`).
+  `input == "none"` ⇔ the 10 help actions + `db.version` (pure-output);
+  `positionals`/`flags` are arrays whose elements carry `name`
+  (+ `required`/`type` / `has_value`/`required`, booleans).
 
 ### D7 — Shape checks
 
