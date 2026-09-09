@@ -114,8 +114,8 @@ is `code:-11` with exit `11`.
 | `skill delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `skill restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
 | `skill move <id>` | `id` | `--folder_id*` (0 = root) | — | `{"id":N,"folder_id":null\|M}` |
-| `skill list` | — | `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
-| `skill count` | — | `--folder_id`, `--include_deleted` / `--deleted` | — | bare int |
+| `skill list` | — | `--all` (all folders), `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `skill count` | — | `--all` (all folders), `--folder_id`, `--include_deleted` / `--deleted` | — | bare int |
 
 ## skill_folder
 

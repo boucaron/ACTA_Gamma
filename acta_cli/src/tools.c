@@ -129,12 +129,12 @@ static const tool_flag_t f_skill_update[] = {
     { "prompt_template", 1, 0 }, { "output_schema", 1, 0 },
 };
 static const tool_flag_t f_skill_list[] = {
-    { "folder_id", 1, 0 }, { "offset", 1, 0 }, { "limit", 1, 0 },
+    { "all", 0, 0 }, { "folder_id", 1, 0 }, { "offset", 1, 0 }, { "limit", 1, 0 },
     { "include_deleted", 0, 0 }, { "count", 0, 0 }, { "table", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_skill_count[] = {
-    { "folder_id", 1, 0 }, { "include_deleted", 0, 0 },
+    { "all", 0, 0 }, { "folder_id", 1, 0 }, { "include_deleted", 0, 0 },
 };
 
 static const tool_flag_t f_sf_list[] = {
@@ -466,13 +466,13 @@ static const tool_entry_t tool_table[] = {
 
     { "skill.list", "skill", "list", NULL, 0,
       "List skills, optionally filtered by folder.",
-      NULL, 0, f_skill_list, 8, "flags",
+      NULL, 0, f_skill_list, 9, "flags",
       NULL, 0, NULL, 0,
       "[ ... ] / []; --count -> bare int" },
 
     { "skill.count", "skill", "count", NULL, 0,
       "Count skills, optionally filtered by folder.",
-      NULL, 0, f_skill_count, 2, "flags",
+      NULL, 0, f_skill_count, 3, "flags",
       NULL, 0, NULL, 0,
       "bare int" },
 
