@@ -26,6 +26,12 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    **Fix:** commit to one protocol (e.g. `flag()` never advances; return a
    small struct `{present, value}`), fix the docs, and reconcile the scan
    ranges.
+   *Resolved (S4):* docs now state the real protocol — `cmd_args_flag`
+   scans the full range, never advances `pos`, and returns NULL for both
+   absent and boolean-present (callers use `cmd_args_has_flag` for
+   booleans); `cmd_args_has_flag` now scans from 0, reconciling the
+   ranges. The struct-returning API change was rejected as breaking;
+   the doc fix is the committed resolution.
 
 2. **`parse_globals` conflates three error classes** (`src/argparse.c`)
    OOM on the `rest` malloc, a missing value for `--db`/`--json`/etc., and
@@ -91,6 +97,11 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
   value is unparseable: as the last token, `parse_globals` returns `EXIT_CLI`
   and `main.c` prints "missing entity and/or action". The working stdin form
   is `--stdin`; fix the examples (see S4).
+  *Resolved (S4):* all 12 snippets (6 entities × full usage + per-action)
+  now show `cat x.json | acta_cli <entity> create --stdin`. Bare `--json`
+  still requires a value; `parse_globals` emits the explicit
+  `missing value for --json` error line, and global help / spec / `--tools`
+  all document `--json <blob>` consistently.
 - `--pretty` is parsed (`argparse.c`) and advertised in `--help` ("2-space
   indent JSON") but honored by no emitter — dead flag; implement it or drop
   it from the help text (same class as the `--tools` TODO).
@@ -390,7 +401,7 @@ contract), but for LLM/script drivers the following are missing:
 
 1. **`--result` / `--error` silently drop their value** — `exec complete 42 --result "text"` stores `NULL` and exits 0; the documented example is the broken form. Data-loss bug. *(P1 #3)*
 2. **DEBUG stdin leak** — `resolve_input_source` (`include/commands.h`) dumps the full stdin payload to stderr on every `--stdin` use; one-line removal. *(P1 #4)*
-3. **Broken `create --json` usage examples** — 6 entity snippets show `cat x.json | acta_cli <entity> create --json`; bare `--json` is unparseable, the working form is `--stdin`. *(P1 nitpick, S4)*
+3. **Broken `create --json` usage examples** — ✅ *resolved (S4)*: all 12 snippets show the `--stdin` form; bare `--json` (no value) gives the explicit `missing value for --json` error and is consistently documented as `--json <blob>`. *(P1 nitpick)*
 4. **Global parse layer untested** — ✅ *resolved (S2)*: dedicated suite `tests/gparse/gparse_test_main.c` feeds raw argv through the `main.c` seam (parse_globals → aliases → validate → handler/dispatch); pins too-few positionals, missing flag values, value consumption, unknown options, `--verbose` clamp, the three input sources + exclusion, and unknown entity/action via `commands_dispatch`. Green in `make test`. *(P5 #3)*
 5. **`--tools`** — ✅ *resolved* (T1–T4): the per-action stdout table and the wire-format decisions (transition shape, root-folder `null`, restore drift) are settled and implemented, documented in [`cli_spec.md`](cli_spec.md) (T1, done); the 69-entry schema is generated from that table (`src/tools.c`, T3, done) and its contract test suite is green in `make test` (T4, done). *(T3 — T2, its blocker, is now done)*
 6. **Error-contract unification** — ✅ *resolved* (T2, Option A from [`t2_analysis.md`](t2_analysis.md)): one namespace (`ACTA_DB_ERR_*` names for library failures, `ACTA_CLI_ERR`/`code:-10` for argv/usage errors), `code` = −exit everywhere, and the spec's exit 11 (DB open failed) reachable via `emit_db_open_error`. *(P1 #5)

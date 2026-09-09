@@ -10,7 +10,7 @@ was folded into the plan below (F3 → S2, F2 → S3).
 |---|--------|--------|----------------------|
 | S2 | **Test the global parse layer** — ✅ *done*: dedicated suite `acta_cli/tests/gparse/gparse_test_main.c` (wired in the Makefile as `test_gparse`), feeding raw argv through the `main.c` seam. Covers: too-few positionals (`argc` 1 / entity without action → `EXIT_CLI`); missing flag value for `--db` / `--json` / `--fields` / `--from_file` as last token → `EXIT_CLI`; value consumption (`--json --table` eaten as blob → handler `EXIT_INVALID`, not `EXIT_CLI`); unknown long option → `EXIT_CLI`; `--verbose=99` clamp → `EXIT_OK`; the three JSON input sources end-to-end + mutual exclusion; and a local `run_dispatch()` replicating `main.c` with the test DB for unknown entity/action → `EXIT_CLI`, known actions → `EXIT_OK`, `--version` early exit. OOM (`EXIT_ALLOC`) deliberately untested (not reproducible in-process) | P5 #3 | Done; green in `make test` |
 | S3 | **Per-action stdout-schema table in the spec** — ✅ *closed via T1*: [`cli_spec.md`](cli_spec.md) is the single source of truth for the per-action stdout schema (all 10 entities, plus the error line and exit codes); a code audit confirmed every shape is emitted through the shared atoms (`emit_ok_id` / `emit_ok_folder` / `emit_deleted` / `emit_ok_transition` / `emit_ok_restored` / `emit_ok_parent`), root folder is `null` in every JSON emit, and restore lines are unified on `{"id":N,"restored":true}` | P3 #3 / P4 #8 | Done; nothing left |
-| S4 | Resolve the remaining parse-layer inconsistencies: `cmd_args_flag` doc/implementation mismatch (present-vs-absent indistinguishable); `parse_globals` conflates OOM / missing flag value / too-few positionals into one `EXIT_CLI` with the wrong main.c message; bare `--json` (no value) still unparseable after the input-source fix — parser still requires a value (help text no longer documents it) | P1 #1–2 | Small, but the flag API is what W1 and the dead flags keep tripping on |
+| S4 | Resolve the remaining parse-layer inconsistencies — ✅ *done*: (a) `argparse.h` docs rewritten to the one real protocol: `cmd_args_flag` scans the full range, never advances `pos`, and returns NULL for both "absent" and "boolean present" (use `cmd_args_has_flag` for booleans); `cmd_args_has_flag` now scans from 0 (was `it->pos`) so a flag before an already-consumed positional is still found; `cmd_args_validate` docs say EXIT_CLI, not EXIT_INVALID; `parse_globals` docs spell out the real return classes (EXIT_OK + `show_*` flags for `--version`/`--help`/`--tools`, `EXIT_ALLOC` OOM, `EXIT_CLI` missing flag value / too-few positionals — the T2 split, main.c just returns the code). (b) dead `{ "live", 0 }` entry removed from `entity_flag_specs` — `--live` is now a proper unknown-option error instead of accepted-and-ignored. (c) the 12 broken `create` usage snippets (6 entities × full usage + per-action) now show the working stdin form `cat x.json | acta_cli <entity> create --stdin`; bare `--json` still requires a value, and every doc (global help `--json <blob>`, spec, `--tools`) agrees | P1 #1–2, P1 nitpick, J2 residual | Done |
 
 ## Hand-rolled residue (intentional — no `cli_util.h` atom expresses these)
 
@@ -80,10 +80,8 @@ T3 and is not required.
   green, both compact and `--pretty` validated, 69-entry count
   asserted, aliases pinned), and all three table follow-ups
   (M4 `--all`, M5 optional `--parent_id`, M6 per-entry aliases).
-- **Next:** S4 (parse-layer inconsistencies) stands independently of the
-  T-chain; S2 (global-parse suite) is done, M4–M6 are done and so are
-  J2/J3, leaving J1 (JSON layer cleanup) as the last low-priority
-  residual.
+- **Next:** S2 and S4 are done, M4–M6 are done and so are J2/J3,
+  leaving J1 (JSON layer cleanup) as the last low-priority residual.
 
 (History of the closed rounds lives in the git log; `cli_review.md` keeps
 the full original list.)

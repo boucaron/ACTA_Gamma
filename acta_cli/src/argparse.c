@@ -216,7 +216,6 @@ static const flag_spec_t entity_flag_specs[] = {
     { "include_deleted", 0 },
     { "level", 1 },
     { "limit", 1 },
-    { "live", 0 },
     { "message", 1 },
     { "metadata", 1 },
     { "model_identifier", 1 },
@@ -340,7 +339,8 @@ const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value)
 
 
 int cmd_args_has_flag(cmd_args_t *it, const char *name) {
-    for (int i = it->pos; i < it->argc; i++) {
+    /* Same protocol as cmd_args_flag: full range, no pos advance. */
+    for (int i = 0; i < it->argc; i++) {
         if (flag_prefix_match(it->argv[i], name)) return 1;
     }
     return 0;
