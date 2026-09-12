@@ -62,8 +62,8 @@ manually, not yet pinned in `make test`).
   code change), J3 (nine `*_usage` made `static`).
 
 Low-priority nitpicks intentionally left as-is (no action taken):
-Makefile libraries in `LDFLAGS` rather than `LDLIBS`; the hard-coded
-offsets in `parse_globals` (`a[4]`, `a[6]`, `a[9]`, `a[11]`); the redundant
-`gopts.argc < 2` re-check in `main.c`; the `--from_file` / `db exec
---file` naming drift; and the `"hash"` → `content_hash` wire-key mapping
-(kept — it is the documented contract in `cli_spec.md`).
+the hard-coded offsets in `parse_globals` (`a[4]`, `a[8]`, `a[6]`,
+`a[11]`); the redundant `gopts.argc < 2` re-check in `main.c`; the
+`--from_file` / `db exec --file` naming drift; and the `"hash"` →
+`content_hash` wire-key mapping (kept — it is the documented contract in
+`cli_spec.md`).
