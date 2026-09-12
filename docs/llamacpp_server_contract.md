@@ -4,25 +4,39 @@ Distilled from the llama.cpp server README (the full auto-generated
 server reference in the upstream llama.cpp repository; only the
 runner-relevant subset is kept here).
 
-## 1. Server startup (model load = process start)
+## 1. Server startup (canonical: router mode)
+
+The canonical ACTA deployment is **router mode** — one `llama-server`
+process serves several models and routes each request to the matching
+model instance (this is what the README, `building.md` and the runner
+preflight assume):
 
 ```
-llama-server.exe -m models\my-model.gguf -c 2048
+llama-server --models-dir models -c 2048
 ```
 
-- Loads the GGUF model at startup; listens on `127.0.0.1:8080` by default.
+- Launched **without** `-m`; every GGUF file in `--models-dir` becomes a
+  served model, and each model's `id` defaults to the file's basename
+  (e.g. `qwen3-8b` for `models/qwen3-8b.gguf`) — that is the value to
+  store in the DB `model_identifier`.
+- Listens on `127.0.0.1:8080` by default.
 - Relevant flags:
-  - `-m <file>`        model path (this also becomes the default model `id`)
-  - `--alias <name>`   custom model `id` (use this so the DB
-                       `model_identifier` is stable, not a file path)
+  - `--models-dir <dir>` directory of GGUF models (router mode)
+  - `-m <file>`        single-model mode: load one model at process start;
+                       the file path becomes the model `id` unless aliased
+  - `--alias <name>`   custom model `id` instead of the file path
+                       (single-model mode)
   - `--port / --host`  endpoint the DB `base_url` points at
   - `-c <n>`           prompt context size
   - `--api-key KEY`    if set, requests need `Authorization: Bearer <key>`;
                        if not set, any/absent key is accepted
   - `-j <json-schema>` schema-constrained generation at the server side
   - `-n <n>`           max tokens to predict
-- **One server = one model.** Loading/unloading = starting/stopping the
-  process; swapping a model = restarting with a different `-m`.
+- Router mode: **one server = N models**. Adding/removing a model =
+  adding/removing a GGUF file in `--models-dir` and restarting the
+  process (loading/unloading = process start/stop in either mode).
+- Single-model mode (`-m`) remains a fully supported alternative; every
+  contract below holds in both modes.
 
 ## 2. Readiness check
 
@@ -38,10 +52,13 @@ loading".
 
 ## 3. Model identity check
 
-`GET /v1/models` returns exactly one model. Its `id` is the `-m` path
-unless `--alias` was given. Runner should compare the DB
-`model_identifier` against this so a mismatched server config fails
-cleanly instead of producing garbage.
+`GET /v1/models` returns one entry per served model — all directory
+models in router mode, exactly one in single-model mode. Each entry's
+`id` is the basename/alias described in §1. The runner checks that the
+DB record's `model_identifier` is **among** the returned ids (a subset
+check, not an exact single-id match): a mismatched server config fails
+cleanly instead of producing garbage (the execution fails with the ids
+the server actually serves).
 
 ## 3a. Model catalog — `GET /` (llama.cpp-specific, best-effort)
 
