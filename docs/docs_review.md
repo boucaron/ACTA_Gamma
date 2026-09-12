@@ -105,6 +105,12 @@ CLI/agent users have no documented way to retry a failed execution
 `exec reset` to the CLI (and spec + tools table) or document the GUI path
 as the supported one.
 
+**Resolved:** the GUI path is documented as the supported one: `status.md`
+(rerun + "Not yet implemented" notes), `runner_analysis.md` (out-of-scope
+retries note) and `cli_spec.md` (new `exec` note: no `exec reset` action,
+`failed → pending` reset is GUI Retry-button only). Adding a CLI `exec
+reset` action remains a possible extension.
+
 ---
 
 ## M6 — `context create` JSON key: three-way mismatch (`hash` vs `content_hash`)
@@ -134,6 +140,11 @@ implementing)*". The scope is already settled in
 `content` is **excluded** (may be plain text). Update the `ui_review.md`
 note so all three docs agree.
 
+**Resolved:** the `ui_review.md` note now states the settled scope
+(validate `output_schema` and model `configuration` as JSON objects;
+context `content` excluded), matching `runner_plan.md` R5 and
+`ui_active_action.md` H2.
+
 ## M8 — `test-e2e` missing from the runner docs
 
 [`building.md`](building.md) documents
@@ -143,6 +154,10 @@ note so all three docs agree.
 `test_run.c`, `test_argparse.c`, `llama_smoke.c`) and
 [`runner_active_action.md`](runner_active_action.md) never mention the
 suite. Add it to the runner test inventory.
+
+**Resolved:** `make -C acta_runner test-e2e` is now listed in
+`runner_analysis.md`'s tests section and in a new "Test inventory"
+section of `runner_active_action.md`.
 
 ## M9 — Replay is promised but never specified
 
@@ -159,6 +174,11 @@ No replay action exists anywhere; the only mechanism is
 replay" note (in `cli_spec.md` or `status.md`) so the promise is
 actionable.
 
+**Resolved:** `cli_spec.md` carries a "Notes on `exec`" block with a
+Replay paragraph: `exec create` with the same `context_id` /
+`skill_revision_id` / `model_revision_id` (and `--prompt` if the original
+had one) plus `--parent_execution_id <id>`; new row created `pending`.
+
 ## M10 — `cli_spec.md` transition status vocabulary is incomplete for `set-raw`
 
 The common-shapes table says `{"id":N,"status":"<s>"}` with
@@ -169,6 +189,9 @@ it "echoes the unchanged current status" — which can be `pending`
 running/pending record). Tiny, but this is the doc declared to be "the
 single source of truth".
 
+**Resolved:** the `cli_spec.md` common-shapes row now says `set-raw`
+"echoes the unchanged current status, which can also be `pending`".
+
 ---
 
 ## L11 — `cli_active_action.md` "all closed" framing vs `cli_review.md` open items
@@ -178,6 +201,10 @@ should enumerate which [`cli_review.md`](cli_review.md) summary items
 remain open (P1 #1 `--result`/`--error`, P1 #2 DEBUG leak) instead of a
 blanket "All actions are closed" that the other doc contradicts.
 
+**Resolved:** `cli_active_action.md`'s header now enumerates the closed
+`cli_review.md` summary items (1–8, with their closing work items) instead
+of a blanket claim.
+
 ## L12 — `llamacpp_server_contract.md` §5 exit codes are unnamed numbers
 
 §5 says "any non-2xx → `execution_fail` … `EXIT_HTTP` for transport
@@ -186,6 +213,10 @@ documents 12 (HTTP/preflight) and 13 (timeout); the canonical values are
 in `acta_runner/include/runner.h` (`EXIT_INVALID 4`, `EXIT_HTTP 12`,
 `EXIT_TIMEOUT 13`). Add the numbers (or a pointer to `runner.h`) so the
 contract doc is self-contained.
+
+**Resolved:** `llamacpp_server_contract.md` §5 now states the numbers:
+`EXIT_INVALID 4`, `EXIT_HTTP 12`, `EXIT_TIMEOUT 13`, with a pointer to
+`acta_runner/include/runner.h`.
 
 ---
 

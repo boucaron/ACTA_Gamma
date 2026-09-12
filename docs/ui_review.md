@@ -57,8 +57,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 1. **Must-fix:** *(none remaining)*
 2. **High:**
    - #15 JSON validation
-     *(to analyze: not all three fields are necessarily JSON — context
-     `content` may be plain text; decide scope before implementing)*
+     *(scope settled in [`runner_plan.md`](runner_plan.md) R5 /
+     [`ui_active_action.md`](ui_active_action.md) H2: validate skill
+     `output_schema` and model `configuration` as JSON **objects**;
+     context `content` is excluded — it may be plain text)*
 3. **Polish:**
    - #26 remaining: JSON highlighting / line numbers
 

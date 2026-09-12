@@ -30,7 +30,7 @@ Wire-format decisions settled here (T1):
 | `{"id":N,"parent_id":null\|M}` | `model_folder move` / `skill_folder move` success |
 | `{"id":N,"restored":true}` | restore success |
 | `{"deleted":true}` | `model_folder delete` / `skill_folder delete` success |
-| `{"id":N,"status":"<s>"}` | exec transition success (`s` ∈ running, cancelled, completed, failed); `set-raw` echoes the unchanged current status |
+| `{"id":N,"status":"<s>"}` | exec transition success (`s` ∈ running, cancelled, completed, failed); `set-raw` echoes the unchanged current status, which can also be `pending` |
 | `{"status":"ok"}` | `db exec` success |
 | `{"version":"<ver>"}` | `db version` success |
 | `[ {…}, … ]` / `[]` | list success (empty list → `[]`) |
@@ -161,6 +161,18 @@ is `code:-11` with exit `11`.
 | `exec set-raw <id>` | `id` | `--raw*` | — | `{"id":N,"status":"<current status, unchanged>"}` |
 | `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `exec count` | — | same filters as `exec list` (minus `--count`/`--table`/`--fields`/`--no_nulls`) | — | bare int |
+
+Notes on `exec`:
+
+- **Replay** — there is no dedicated replay action. Replay an execution by
+  creating a new one with the same inputs — `exec create` with the same
+  `context_id` / `skill_revision_id` / `model_revision_id` (and `--prompt`
+  if the original had one) — plus `--parent_execution_id <id>` to link the
+  new row to the one being replayed; the new row is created `pending` and
+  runs normally.
+- **Reset** — there is no `exec reset` action: the `failed → pending`
+  reset (`acta_db_execution_reset`) is exposed by the GUI Retry button
+  only.
 
 ## log (execution_log)
 

@@ -112,7 +112,9 @@ OAI-shaped: `{"error": {"code": <http>, "message": "...", "type": "..."}}`
   `invalid_request_error`, ...).
 
 Runner mapping: any non-2xx → `execution_fail` with the error body as
-the error string; `EXIT_HTTP` for transport failures.
+the error string; `EXIT_HTTP` for transport failures. Exit codes
+(canonical values in `acta_runner/include/runner.h`): `EXIT_INVALID 4`,
+`EXIT_HTTP 12`, `EXIT_TIMEOUT 13`.
 
 ## 6. What the runner deliberately does NOT use
 

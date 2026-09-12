@@ -1,10 +1,14 @@
 # Active Actions — from `cli_review.md`
 
-Action plan derived from [`cli_review.md`](cli_review.md). **All actions are
-closed** — S2, S3, S4, T1–T4, M4–M6, and J1–J3 are done. The record of each
-resolution (what changed, where, and why) lives in the *Resolved* notes in
-[`cli_review.md`](cli_review.md) and in the git history; this file now only
-tracks what is still live.
+Action plan derived from [`cli_review.md`](cli_review.md). **All summary
+items in `cli_review.md` are closed** — item 1 (`--result`/`--error`
+data loss), 2 (DEBUG stdin leak), 3 (`create --json` snippets, S4),
+4 (global parse layer, S2), 5 (`--tools`, T1–T4), 6 (error-contract
+unification, T2), 7 (parse-layer inconsistencies, S4), and 8 (JSON-layer
+residue, J1–J3) — each carrying a *Resolved* note in
+[`cli_review.md`](cli_review.md). The record of each resolution (what
+changed, where, and why) lives in those notes and in the git history;
+this file now only tracks what is still live.
 
 ## Live constraints
 

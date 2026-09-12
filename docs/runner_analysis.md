@@ -41,6 +41,9 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server
   (`make smoke`). Run with `make test` in `acta_runner/`.
+  `make -C acta_runner test-e2e`: dead-runner end-to-end suite — spawns
+  real `acta_runner` processes against the stub server (~10–15 s),
+  separate from `make test` (see `building.md`).
 
 Implementation notes (where the spec left room):
 
@@ -307,7 +310,8 @@ headless/CLI-driven mode later.
   model load/unload, load-timeout handling, vendored llama.cpp build).
 - Streaming (SSE) responses.
 - Automatic retries (a failed execution is retried manually via the
-  `failed → pending` reset, `acta_db_execution_reset`).
+  `failed → pending` reset, `acta_db_execution_reset` — exposed by the
+  GUI Retry button; the CLI has no `exec reset` action).
 - Multimodal, tool calling, embeddings, LoRA, slot caching — anything
   beyond `chat/completions` from the backend (see
   `llamacpp_server_contract.md` §6).

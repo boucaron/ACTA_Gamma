@@ -17,6 +17,13 @@ Action plan for the runner workstream. Specs and decisions per
 not vendored here (see `llamacpp_server_contract.md`), and build outputs
 are in `.gitignore`.)
 
+## Test inventory
+
+- `tests/stub_server.{h,c}` — in-process stub OpenAI server; `tests/run/test_run.c` — 10 scenarios, 58 checks, green under `make test`.
+- `tests/argparse/test_argparse.c` — 47 pass-1/pass-2 parsing checks, green.
+- `tests/llama_smoke.c` — manual smoke test against a LIVE OpenAI-compatible server (`make smoke`).
+- `make -C acta_runner test-e2e` — dead-runner end-to-end suite: spawns real `acta_runner` processes (~10–15 s), separate from `make test` (see `building.md`).
+
 ## Summary
 
 - **Now:** R5 (JSON validation; scope settled in `runner_plan.md`), then
