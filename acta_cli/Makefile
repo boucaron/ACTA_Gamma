@@ -31,11 +31,19 @@
 CC      ?= cc
 CFLAGS  += -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
-           -Itests/helpers -Itests/skill_folder \
-           -Itests/model_folder \
-           -Itests/context -Itests/db \
-           -Itests/execution_log -Itests/exec \
-           -Itests/model -Itests/cli_util -Itests/gparse
+           -Itests/helpers
+
+# ---- test-suite directories (auto-derived) -------------------------
+# TEST_DIRS = every tests/<suite>/ directory except tests/helpers/.
+# New test suites are picked up automatically: create tests/<suite>/
+# with part files (each exposing one run_<suite>_test_<part>() function)
+# plus a <suite>_test_main.c that declares and calls them — no Makefile
+# edits needed beyond that directory.
+TEST_DIRS   := $(filter-out tests/helpers/, $(sort $(wildcard tests/*/)))
+TEST_SUITES := $(notdir $(patsubst %/,%,$(TEST_DIRS)))
+
+# one -I per test-suite directory
+CFLAGS    += $(foreach d,$(TEST_DIRS),-I$(d))
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build)
 CJSON_DIR ?=
@@ -68,80 +76,22 @@ OBJS    := $(patsubst %.c, %.o, $(SRCS))
 APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS))
 TARGET  := acta_cli$(EXEEXT)
 
-# ---- sources (tests: skill) ----
-TEST_SRCS   := $(wildcard tests/skill/*.c)
-TEST_OBJS   := $(patsubst %.c, %.o, $(TEST_SRCS))
-TEST_TARGET := test_skill$(EXEEXT)
-
-# ---- sources (tests: skill_revision) ----
-SRV_TEST_SRCS   := $(wildcard tests/skill_revision/*.c)
-SRV_TEST_OBJS   := $(patsubst %.c, %.o, $(SRV_TEST_SRCS))
-SRV_TEST_TARGET := test_skill_rev$(EXEEXT)
-
-# ---- sources (tests: skill_folder) ----
-SFL_TEST_SRCS   := $(wildcard tests/skill_folder/*.c)
-SFL_TEST_OBJS   := $(patsubst %.c, %.o, $(SFL_TEST_SRCS))
-SFL_TEST_TARGET := test_skill_folder$(EXEEXT)
-
-# ---- sources (tests: model) ----
-MOD_TEST_SRCS   := $(wildcard tests/model/*.c)
-MOD_TEST_OBJS   := $(patsubst %.c, %.o, $(MOD_TEST_SRCS))
-MOD_TEST_TARGET := test_model$(EXEEXT)
-
-# ---- sources (tests: model_folder) ----
-MF_TEST_SRCS   := $(wildcard tests/model_folder/*.c)
-MF_TEST_OBJS   := $(patsubst %.c, %.o, $(MF_TEST_SRCS))
-MF_TEST_TARGET := test_model_folder$(EXEEXT)
-
-# ---- sources (tests: context) ----
-CTX_TEST_SRCS   := $(wildcard tests/context/*.c)
-CTX_TEST_OBJS   := $(patsubst %.c, %.o, $(CTX_TEST_SRCS))
-CTX_TEST_TARGET := test_context$(EXEEXT)
-
-# ---- sources (tests: db) ----
-DB_TEST_SRCS   := $(wildcard tests/db/*.c)
-DB_TEST_OBJS   := $(patsubst %.c, %.o, $(DB_TEST_SRCS))
-DB_TEST_TARGET := test_db$(EXEEXT)
-
-# ---- sources (tests: execution_log) ----
-EL_TEST_SRCS   := $(wildcard tests/execution_log/*.c)
-EL_TEST_OBJS   := $(patsubst %.c, %.o, $(EL_TEST_SRCS))
-EL_TEST_TARGET := test_execution_log$(EXEEXT)
-
-# ---- sources (tests: exec) ----
-EXEC_TEST_SRCS   := $(wildcard tests/exec/*.c)
-EXEC_TEST_OBJS   := $(patsubst %.c, %.o, $(EXEC_TEST_SRCS))
-EXEC_TEST_TARGET := test_exec$(EXEEXT)
-
-# ---- sources (tests: cli_util) ----
-CU_TEST_SRCS   := $(wildcard tests/cli_util/*.c)
-CU_TEST_OBJS   := $(patsubst %.c, %.o, $(CU_TEST_SRCS))
-CU_TEST_TARGET := test_cli_util$(EXEEXT)
-
-# ---- sources (tests: tools / --tools, T4) ----
-TOOLS_TEST_SRCS   := $(wildcard tests/tools/*.c)
-TOOLS_TEST_OBJS   := $(patsubst %.c, %.o, $(TOOLS_TEST_SRCS))
-TOOLS_TEST_TARGET := test_tools$(EXEEXT)
-
-# ---- sources (tests: gparse / global-parse seam, S2) ----
-GP_TEST_SRCS   := $(wildcard tests/gparse/*.c)
-GP_TEST_OBJS   := $(patsubst %.c, %.o, $(GP_TEST_SRCS))
-GP_TEST_TARGET := test_gparse$(EXEEXT)
-
-# ---- sources (tests: json layer, J1) ----
-JSN_TEST_SRCS   := $(wildcard tests/json/*.c)
-JSN_TEST_OBJS   := $(patsubst %.c, %.o, $(JSN_TEST_SRCS))
-JSN_TEST_TARGET := test_json$(EXEEXT)
+# ---- test binaries (one per tests/<suite>/ directory) --------------
+# One binary per suite, generated from TEST_DIRS above: each links the
+# suite's objects + the shared test framework + the app objects (minus
+# main.o) + libacta_db.  Adding a suite = adding a tests/<suite>/
+# directory (part files + <suite>_test_main.c); no Makefile edit needed.
+TEST_BINS   := $(foreach s,$(TEST_SUITES),test_$(s)$(EXEEXT))
 
 # shared test-framework object (lives in tests/helpers/, used by all suites)
 HELPERS_OBJ := tests/helpers/test_helpers.o
 
-# all test targets (drives the `test` phony + clean)
-ALL_TEST_TARGETS := $(TEST_TARGET) $(SRV_TEST_TARGET) $(SFL_TEST_TARGET) \
-                    $(MOD_TEST_TARGET) $(MF_TEST_TARGET) \
-                    $(CTX_TEST_TARGET) $(DB_TEST_TARGET) \
-                    $(EL_TEST_TARGET) $(EXEC_TEST_TARGET) $(CU_TEST_TARGET) \
-                    $(TOOLS_TEST_TARGET) $(GP_TEST_TARGET) $(JSN_TEST_TARGET)
+define TEST_SUITE
+test_$(1)$(EXEEXT): $(patsubst %.c,%.o,$(wildcard tests/$(1)/*.c)) \
+                    $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $$@ $$^ $(LDLIBS)
+endef
+$(foreach s,$(TEST_SUITES),$(eval $(call TEST_SUITE,$(s))))
 
 .PHONY: all clean test
 
@@ -155,61 +105,9 @@ $(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h
 $(TARGET): $(OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
-# ---- test binary: skill ----
-$(TEST_TARGET): $(TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: skill_revision ----
-$(SRV_TEST_TARGET): $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(SRV_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: skill_folder ----
-$(SFL_TEST_TARGET): $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(SFL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: model ----
-$(MOD_TEST_TARGET): $(MOD_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(MOD_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: model_folder ----
-$(MF_TEST_TARGET): $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(MF_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: context ----
-$(CTX_TEST_TARGET): $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(CTX_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: db ----
-$(DB_TEST_TARGET): $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(DB_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: execution_log ----
-$(EL_TEST_TARGET): $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(EL_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: exec ----
-$(EXEC_TEST_TARGET): $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(EXEC_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: cli_util ----
-$(CU_TEST_TARGET): $(CU_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(CU_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: tools / --tools (T4) ----
-$(TOOLS_TEST_TARGET): $(TOOLS_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(TOOLS_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: gparse (global-parse seam, S2) ----
-$(GP_TEST_TARGET): $(GP_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(GP_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-# ---- test binary: json layer (J1) ----
-$(JSN_TEST_TARGET): $(JSN_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(JSN_TEST_OBJS) $(HELPERS_OBJ) $(APP_OBJS_NO_MAIN) $(LDLIBS)
-
-test: $(ALL_TEST_TARGETS)
+test: $(TEST_BINS)
 	@fail=0; \
-	for t in $(ALL_TEST_TARGETS); do \
+	for t in $(TEST_BINS); do \
 		echo "== $$t =="; \
 		./$$t || fail=1; \
 	done; \
@@ -225,10 +123,6 @@ HDRS := $(wildcard include/*.h) $(wildcard ../acta_db/include/*.h)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TEST_OBJS) $(SRV_TEST_OBJS) $(SFL_TEST_OBJS) \
-	      $(MOD_TEST_OBJS) \
-	      $(MF_TEST_OBJS) \
-	      $(CTX_TEST_OBJS) $(DB_TEST_OBJS) $(EL_TEST_OBJS) \
-	      $(EXEC_TEST_OBJS) $(CU_TEST_OBJS) $(TOOLS_TEST_OBJS) \
-	      $(GP_TEST_OBJS) $(JSN_TEST_OBJS) \
-	      $(TARGET) $(ALL_TEST_TARGETS)
+	rm -f $(OBJS) $(HELPERS_OBJ) \
+	      $(foreach d,$(TEST_DIRS),$(wildcard $(d)/*.o)) \
+	      $(TARGET) $(TEST_BINS)
