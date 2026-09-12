@@ -63,10 +63,15 @@ the open/closed status between the two action docs.
   `fprintf(stderr, "DEBUG read_stdin_all: %zu bytes: '%s'\n", ...)` — the
   full stdin payload (potentially megabytes of context content) is dumped
   to stderr on every `--stdin` use, polluting the stderr error contract.
-- [`cli_review.md`](cli_review.md) P1 #4 / summary item 2 lists it as an
+- [`cli_review.md`](cli_review.md) P1 #4 / summary item 2 listed it as an
   open one-line removal.
 - [`cli_active_action.md`](cli_active_action.md) again claims all actions
   are closed and omits it.
+
+**Resolved:** the `DEBUG read_stdin_all` fprintf block is removed from
+`resolve_input_source` (`acta_cli/include/commands.h`); `--stdin` no longer
+dumps the payload to stderr, and `cli_review.md` summary item 2 is marked
+resolved.
 
 ## H5 — `failed → pending` reset is unreachable from the CLI
 

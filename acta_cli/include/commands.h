@@ -196,11 +196,6 @@ static inline int resolve_input_source(const global_opts_t *g, char **out)
     }
     *out = stdin_blob;
 
-  /* DEBUG — remove after diagnosis */
-    fprintf(stderr, "DEBUG read_stdin_all: %zu bytes: '%s'\n",
-            strlen(stdin_blob), stdin_blob);
-    /* END DEBUG */
-
     return 1;
 }
 
