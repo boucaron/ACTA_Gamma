@@ -202,7 +202,10 @@ The individual skills do not delegate to one another.
 
 This keeps each operation small, understandable, testable, and independently replaceable.
 
-A future workflow layer can compose these actions without changing the fundamental execution model.
+Workflow composition is built **on top of** this primitive, not inside it: a
+higher-level program can chain the actions — security → correctness → test
+analysis → final report — using each execution's result as the next context, while
+the engine itself stays a single, replayable, auditable building block.
 
 ## The broader idea
 
