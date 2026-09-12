@@ -255,13 +255,12 @@ static void test_exec_cancel_running_to_cancelled(void) {
     int eid = env_exec(&e, "CancelRun", 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid),
-                       ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid), ACTA_DB_OK);
 
     int err = 0;
     execution_t *got = acta_db_execution_get(e.db, eid, &err);
     TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_RUNNING);
+    TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_CANCELLED);
     acta_db_execution_free(got);
     env_close(&e);
 }
