@@ -195,6 +195,11 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
 - `json_parse_context` maps the JSON key `"hash"` to `content_hash` while every
   other key is a straight name match — inconsistent wire format; prefer
   `"content_hash"`.
+  *Resolved (M6):* the wire key was settled on `hash` (parser, `cli_spec.md`,
+  `tools.c`, and the in-code usage text all agree); the stray
+  `content_hash` usage example in `context.c` was fixed. Additionally,
+  `hash` is now optional: `context create` derives it as SHA-256 of the
+  content (lowercase hex, same rule as the GUI) when omitted.
 - `model.c`'s flag path (the `else` branch) uses the shared strict
   `parse_folder_id` helper (cli_util.h, `strtol` + endptr + ERANGE) for
   `folder_id` in create/update/move — good; the JSON path goes through
