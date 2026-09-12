@@ -28,6 +28,7 @@ build/
 debug/
 release/
 */Makefile
+!acta_cli/Makefile
 Makefile.Debug
 Makefile.Release
 *.qmake.stash

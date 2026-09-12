@@ -1,6 +1,6 @@
 CC      ?= cc
 CFLAGS  ?= -Wall -Wextra -std=c11 -O2 -g
-LDFLAGS ?= -lsqlite3
+LDLIBS ?= -lsqlite3
 
 INC_DIR  := include
 SRC_DIR  := src
@@ -35,7 +35,7 @@ $(LIB_STATIC): $(OBJS)
 	ar rcs $@ $^
 
 $(LIB_SHARED): $(OBJS)
-	$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$(CC) -shared -o $@ $^ $(LDLIBS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)
@@ -47,7 +47,7 @@ test: $(LIB_STATIC) $(TEST_BIN_DIR)/run
 
 $(TEST_BIN_DIR)/run: $(TEST_SRCS) $(LIB_STATIC)
 	@mkdir -p $(TEST_BIN_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -o $@ $(TEST_SRCS) -L. -lacta_db $(LDFLAGS)
+	$(CC) $(CFLAGS) -I$(INC_DIR) -o $@ $(TEST_SRCS) -L. -lacta_db $(LDLIBS)
 
 # ─── Run a single module's tests ──────────────────────────────────────────────
 # Usage:
@@ -71,7 +71,7 @@ test-%: $(LIB_STATIC)
 	@echo "}" >> $(OBJ_DIR)/_gen_main_$*.c
 	$(CC) $(CFLAGS) -I$(INC_DIR) -o $(TEST_BIN_DIR)/run_$* \
 		$(TEST_DIR)/test_$*.c $(OBJ_DIR)/_gen_main_$*.c \
-		-L. -lacta_db $(LDFLAGS)
+		-L. -lacta_db $(LDLIBS)
 	rm -f $(OBJ_DIR)/_gen_main_$*.c
 	./$(TEST_BIN_DIR)/run_$*
 
@@ -89,7 +89,7 @@ test-build: $(LIB_STATIC) $(TEST_BIN_DIR)/run
 		echo "}" >> $(OBJ_DIR)/_gen_main_$$m.c; \
 		$(CC) $(CFLAGS) -I$(INC_DIR) -o $(TEST_BIN_DIR)/run_$$m \
 			$(TEST_DIR)/test_$$m.c $(OBJ_DIR)/_gen_main_$$m.c \
-			-L. -lacta_db $(LDFLAGS); \
+			-L. -lacta_db $(LDLIBS); \
 		rm -f $(OBJ_DIR)/_gen_main_$$m.c; \
 		echo "  built test/run_$$m"; \
 	done

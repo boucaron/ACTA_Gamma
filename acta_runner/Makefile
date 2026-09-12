@@ -29,7 +29,7 @@ CFLAGS  ?= -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -O2 -g
 CFLAGS  += -Iinclude -I../acta_db/include
 
 ACTA_DB_LIB := ../acta_db/libacta_db.a
-LDFLAGS += $(ACTA_DB_LIB) -lsqlite3
+LDLIBS += $(ACTA_DB_LIB) -lsqlite3
 
 # ---- curl (override CURL_INC / CURL_LIB to point at a custom build) ----
 CURL_INC ?=
@@ -44,7 +44,7 @@ CJSON_LIB ?= -lcjson
 ifneq ($(CJSON_DIR),)
 CFLAGS += -I$(CJSON_DIR)
 endif
-LDFLAGS += $(CJSON_LIB) $(CURL_LIB)
+LDLIBS += $(CJSON_LIB) $(CURL_LIB)
 
 # Executable targets carry $(EXEEXT): empty under POSIX make, ".exe" under
 # Windows (mingw) make, so the same Makefile builds on both.
@@ -83,7 +83,7 @@ PEND_TARGET := tests/run/test_pending$(EXEEXT)
 SWEEP_SRCS  := tests/run/test_sweep.c src/sweep.c src/argparse.c
 SWEEP_OBJS  := $(patsubst %.c, %.o, $(SWEEP_SRCS))
 SWEEP_TARGET := tests/run/test_sweep$(EXEEXT)
-SWEEP_LDFLAGS := $(ACTA_DB_LIB) -lsqlite3
+SWEEP_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
 
 # ---- dead-runner end-to-end suite: SIGKILL a real runner, sweep it ----
 # Spawns real acta_runner child processes (run, then sweep) against the
@@ -103,14 +103,14 @@ AP_TARGET := tests/argparse/test_argparse$(EXEEXT)
 SMOKE_SRCS  := tests/llama_smoke.c src/backend.c
 SMOKE_OBJS  := $(patsubst %.c, %.o, $(SMOKE_SRCS))
 SMOKE_TARGET := tests/llama_smoke$(EXEEXT)
-SMOKE_LDFLAGS := $(CJSON_LIB) $(CURL_LIB)
+SMOKE_LDLIBS := $(CJSON_LIB) $(CURL_LIB)
 
 ifeq ($(OS),Windows_NT)
   SOCK_LIBS := -lws2_32
 else
   SOCK_LIBS :=
 endif
-TEST_LDFLAGS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB) $(CURL_LIB) \
+TEST_LDLIBS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB) $(CURL_LIB) \
                 -lpthread $(SOCK_LIBS)
 
 .PHONY: all clean test test-e2e smoke
@@ -123,22 +123,22 @@ $(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h
 	$(MAKE) -C ../acta_db libacta_db.a
 
 $(TARGET): $(OBJS) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
 $(TEST_TARGET): $(TEST_OBJS) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(TEST_LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS) $(TEST_LDLIBS)
 
 $(AP_TARGET): $(AP_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(AP_OBJS)
 
 $(PEND_TARGET): $(PEND_OBJS) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(PEND_OBJS) $(TEST_LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(PEND_OBJS) $(TEST_LDLIBS)
 
 $(SWEEP_TARGET): $(SWEEP_OBJS) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(SWEEP_OBJS) $(SWEEP_LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(SWEEP_OBJS) $(SWEEP_LDLIBS)
 
 $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDLIBS)
 
 test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET)
 	$(AP_TARGET)
@@ -152,7 +152,7 @@ test-e2e: $(DEAD_TARGET) $(TARGET)
 	$(DEAD_TARGET)
 
 $(SMOKE_TARGET): $(SMOKE_OBJS)
-	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDFLAGS)
+	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDLIBS)
 
 smoke: $(SMOKE_TARGET)
 

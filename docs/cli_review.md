@@ -365,12 +365,12 @@ Review of the C CLI (`acta_cli/`, ~9k LOC). Conducted in parts:
    `LDFLAGS += ../acta_db/libacta_db.a …` — if the lib is missing/stale you
    get a confusing link failure, and `make` will never rebuild it. Add:
    ```make
-   *Resolved (`787b518`):* the Makefile now builds `../acta_db/libacta_db.a`
-   via a rule keyed on the lib sources and lists it as a prerequisite on the
-   app and all test targets. Residual: the libraries still sit in `LDFLAGS`
-   rather than `LDLIBS` — they only link correctly because `LDFLAGS` happens
-   to expand after the objects; a user-supplied `LDFLAGS` would put them
-   before and break static linking.
+   *Resolved (`787b518` + LDLIBS follow-up):* the Makefile now builds
+   `../acta_db/libacta_db.a` via a rule keyed on the lib sources and lists it
+   as a prerequisite on the app and all test targets. The link libraries now
+   sit in `LDLIBS` (not `LDFLAGS`) in all three C Makefiles, so a
+   user-supplied `LDFLAGS` can no longer displace the static libraries and
+   break the link.
 
 ---
 
