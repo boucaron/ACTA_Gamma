@@ -117,6 +117,7 @@ acta_cli model create --json '{"name":"llama-local","backend":"openai","base_url
 acta_cli skill create --json '{"name":"sentiment","prompt_template":"Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}"}'
 
 # 3. Create an immutable context (the input snapshot)
+# ("hash" is optional here: when omitted it is derived as SHA-256 of the content)
 acta_cli context create --json '{"type":"text","content":"The build system shipped on time and the release went smoothly."}'
 
 # 4. Create an execution binding context + skill revision + model revision
@@ -128,7 +129,7 @@ acta_runner run 1
 
 # 6. Inspect the result and the audit trail
 acta_cli exec get 1
-acta_cli log list
+acta_cli log list 1
 ```
 
 ## Current status
@@ -138,3 +139,12 @@ Early prototype / POC. See [`docs/status.md`](docs/status.md) for what is done a
 ## License
 
 BSD Zero Clause License (BSD-0-Clause).
+
+## Third-party code
+
+The SHA-256 implementation in `acta_cli/src/sha256.c` is taken from
+[Brad Conte's crypto-algorithms](https://github.com/B-Con/crypto-algorithms/tree/master)
+(`sha256.c`). This code is released into the public domain free of any
+restrictions. The author requests acknowledgement if the code is used,
+but does not require it. This code is provided free of any liability and
+without any quality claims by the author.

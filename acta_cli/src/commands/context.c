@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "argparse.h"
 #include "cli_util.h"
+#include "sha256.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,18 +25,19 @@ static void ctx_usage(FILE *f)
 "  help     Show this help\n"
 "\n"
 "== create =========================================================\n"
-"  acta_cli context create --type <T> --content <C> --hash <H>\n"
-"                     [--metadata <M>]\n"
+"  acta_cli context create --type <T> --content <C>\n"
+"                     [--hash <H>] [--metadata <M>]\n"
 "\n"
 "  Or pipe a JSON body from stdin:\n"
-"  echo '{\"type\":\"s\",\"content\":\"hi\",\"content_hash\":\"ab\"}' \\\n"
-"      | acta_cli context create --stdin\n"
+"  echo '{\"type\":\"text\",\"content\":\"hi\"}' | acta_cli context create --stdin\n"
 "\n"
 "  Required (via flags or JSON key):\n"
 "    --type <string>          context type   (JSON key: \"type\")\n"
 "    --content <string>       payload        (JSON key: \"content\")\n"
-"    --hash <string>          content hash   (JSON key: \"content_hash\")\n"
 "  Optional:\n"
+"    --hash <string>          content hash   (JSON key: \"hash\")\n"
+"                            default when omitted: SHA-256 of the\n"
+"                            content, lowercase hex (same rule as the GUI)\n"
 "    --metadata <string>      extra data     (JSON key: \"metadata\")\n"
 "\n"
 "== get ============================================================\n"
@@ -252,12 +254,29 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         VLOG(3, "  ctx=%p json_owned=%d", (const void *)&ctx, json_owned);
 
+        /* ── default hash ────────────────────────────────────────────
+         *  When no hash is supplied, derive it as SHA-256 of the
+         *  content, lowercase hex — the same rule the GUI uses
+         *  (QCryptographicHash::toHex).  An explicitly given hash
+         *  (flag or JSON key) is kept as-is. */
+        if (ctx.content && !ctx.content_hash) {
+            char hex[65];
+            ctx.content_hash = strdup(sha256_hex(ctx.content,
+                                                 strlen(ctx.content), hex));
+            if (!ctx.content_hash) {
+                emit_error("out of memory");
+                ret = EXIT_ALLOC;
+                goto cleanup_create;
+            }
+            VLOG(2, "  hash not supplied → derived SHA-256: %s",
+                 ctx.content_hash);
+        }
+
         /* ── required-field validation (uses ctx, not locals) ── */
         {
             struct { const char *field; const char *val; } reqs[] = {
                 { "type",    ctx.type         },
                 { "content", ctx.content      },
-                { "hash",    ctx.content_hash },
             };
             for (size_t i = 0; i < sizeof reqs / sizeof reqs[0]; i++) {
                 if (!reqs[i].val) {

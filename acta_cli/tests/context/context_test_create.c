@@ -1,4 +1,7 @@
 #include "test_helpers.h"
+#include "sha256.h"
+
+#include <string.h>
 
 #define REF_DB "acta_test_ref.db"
 
@@ -84,16 +87,66 @@ static void test_create_missing_content(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_create_missing_hash(stest_ctx_t *ctx)
+/* Known SHA-256 vectors: FIPS 180-2 ("", "abc") plus block-boundary
+ * lengths (55/56 = single-block padding edges, 64/119 = multi-block,
+ * 1000 = many blocks), checked against Python's hashlib. */
+static void test_sha256_vectors(stest_ctx_t *ctx)
+{
+    char hex[65];
+
+    TEST_EQ(ctx, strcmp(sha256_hex("", 0, hex),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), 0);
+    TEST_EQ(ctx, strcmp(sha256_hex("abc", 3, hex),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"), 0);
+
+    char buf[1024];
+    size_t n;
+
+    for (n = 0; n < 1000; n++)
+        buf[n] = 'a';
+    TEST_EQ(ctx, strcmp(sha256_hex(buf, 55, hex),
+        "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318"), 0);
+    TEST_EQ(ctx, strcmp(sha256_hex(buf, 56, hex),
+        "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a"), 0);
+    TEST_EQ(ctx, strcmp(sha256_hex(buf, 64, hex),
+        "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb"), 0);
+    TEST_EQ(ctx, strcmp(sha256_hex(buf, 119, hex),
+        "31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb"), 0);
+    TEST_EQ(ctx, strcmp(sha256_hex(buf, 1000, hex),
+        "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3"), 0);
+}
+
+/* Omitted --hash must default to SHA-256(content), lowercase hex —
+ * the same rule the GUI applies. */
+static void test_create_missing_hash_defaults_to_sha256(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "type", "text", &g);
     targs_flag(a, "content", "nohash", &g);
-    /* no --hash */
+    /* no --hash → derived */
 
     int rc = do_create(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_EQ(ctx, rc, EXIT_OK);
+
+    /* create prints only {"id":N}; verify the stored hash via get */
+    const char *out = stest_stdout(ctx);
+    const char *p = strstr(out, "\"id\":");
+    TEST_NOT_NULL(ctx, p);
+    int id = (int)atoi(p + 5);
+
+    cmd_args_t *ag = targs_new();
+    char idstr[16];
+    snprintf(idstr, sizeof idstr, "%d", id);
+    targs_pos(ag, idstr, &g);
+    stest_capture_begin(ctx);
+    rc = cmd_context("get", ag, &g, ctx->db);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    /* SHA-256("nohash") */
+    TEST_CONTAINS(ctx, stest_stdout(ctx),
+        "dd3ada42190c728ed157609e9b768eed295bc839ae3bb13db4f33d5850cd40a8");
+    targs_free(ag, &g);
     targs_free(a, &g);
 }
 
@@ -231,7 +284,8 @@ int run_context_test_create(void)
     test_create_id_only(&ctx);
     test_create_missing_type(&ctx);
     test_create_missing_content(&ctx);
-    test_create_missing_hash(&ctx);
+    test_sha256_vectors(&ctx);
+    test_create_missing_hash_defaults_to_sha256(&ctx);
     test_create_all_missing(&ctx);
     test_create_json_invalid(&ctx);
     test_create_src_json_space(&ctx);

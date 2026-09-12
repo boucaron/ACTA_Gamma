@@ -189,8 +189,8 @@ static const tool_flag_t f_log_list[] = {
 
 /* ── JSON-body keys (from json.c parsers; M1/M2 applied) ── */
 
-static const char *const jk_ctx_req[]   = { "type", "content", "hash" };
-static const char *const jk_ctx_opt[]   = { "metadata" };
+static const char *const jk_ctx_req[]   = { "type", "content" };
+static const char *const jk_ctx_opt[]   = { "metadata", "hash" };
 static const char *const jk_model_req[] = { "name", "backend", "model_identifier" };
 static const char *const jk_model_opt[] =
     { "folder_id", "description", "base_url", "configuration" };
@@ -262,9 +262,11 @@ static const tool_entry_t tool_table[] = {
 
     /* ── context ── */
     { "context.create", "context", "create", NULL, 0,
-      "Create a context from flags or a JSON body.",
+      "Create a context from flags or a JSON body. When hash is omitted "
+      "it defaults to the SHA-256 of content (lowercase hex), the same "
+      "rule as the GUI.",
       NULL, 0, f_ctx_create, 4, "flags|json",
-      jk_ctx_req, 3, jk_ctx_opt, 1,
+      jk_ctx_req, 2, jk_ctx_opt, 2,
       "{\"id\":N}" },
 
     { "context.get", "context", "get", NULL, 0,

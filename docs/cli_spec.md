@@ -71,10 +71,12 @@ is `code:-11` with exit `11`.
 
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
-| `context create` | — | `--type*`, `--content*`, `--hash*`, `--metadata` | flags or JSON `{type*, content*, hash*, metadata}` | `{"id":N}` |
+| `context create` | — | `--type*`, `--content*`, `--hash`, `--metadata` | flags or JSON `{type*, content*, hash, metadata}` | `{"id":N}` |
 | `context get <id>` | `id` | — | — | context JSON object |
 | `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `context count` | — | `--type`, `--hash` | — | bare int |
+
+> **`context create` — `hash` default:** when `--hash` (or the JSON key `hash`) is omitted, the hash is derived as the **SHA-256 of `content`, lowercase hex** — the same rule the GUI applies (`QCryptographicHash::toHex` in `contextDialog.cpp`). An explicitly supplied hash is stored as-is. Wire key is `hash` (not `content_hash`).
 
 ## model
 
