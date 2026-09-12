@@ -129,8 +129,7 @@ panel's "Run" button (Plan D, commit 184d574) spawns
 #45: the button no longer spawns a process — `run.c`/`backend.c` are
 compiled into the GUI and run on a worker thread created with `moveToThread()` (see the
 threading contract in `runnerWorker.h`) with their own DB
-connection; the panel's polling is unchanged. See
-`ui_review.md` / `ui_active_action.md`.)*
+connection; the panel's polling is unchanged.)
 
 ## Key observations for the runner
 

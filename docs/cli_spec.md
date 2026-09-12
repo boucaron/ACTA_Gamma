@@ -55,7 +55,7 @@ unknown action, unknown option, bad `--verbose`, too few positionals,
 missing flag value), `11` DB open failed. Errors: single JSON line on
 stderr `{"error":"ACTA_DB_ERR_*"|"ACTA_CLI_ERR","code":<n>,"message":"..."}`
 where the exit code is authoritative and `code` = −exit (the T2
-invariant, restored per [`t2_analysis.md`](t2_analysis.md) Option A);
+invariant, exit code canonical with `code` = −exit everywhere);
 the `error` name keeps per-cause granularity — e.g.
 `ACTA_DB_ERR_DUPLICATE` is `code:-4` with exit `4`, and a DB-open failure
 is `code:-11` with exit `11`.

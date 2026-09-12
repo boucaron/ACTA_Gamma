@@ -1,14 +1,8 @@
-# Active Actions — from `cli_review.md`
+# CLI — live constraints and residuals
 
-Action plan derived from [`cli_review.md`](cli_review.md). **All summary
-items in `cli_review.md` are closed** — item 1 (`--result`/`--error`
-data loss), 2 (DEBUG stdin leak), 3 (`create --json` snippets, S4),
-4 (global parse layer, S2), 5 (`--tools`, T1–T4), 6 (error-contract
-unification, T2), 7 (parse-layer inconsistencies, S4), and 8 (JSON-layer
-residue, J1–J3) — each carrying a *Resolved* note in
-[`cli_review.md`](cli_review.md). The record of each resolution (what
-changed, where, and why) lives in those notes and in the git history;
-this file now only tracks what is still live.
+All items from the `acta_cli` review workstream are closed; the record of
+each resolution lives in the git history. This file now only tracks what
+is still live.
 
 ## Live constraints
 
@@ -34,7 +28,7 @@ keep the canonical message texts.
 `tool_table[].flags` and argparse's `entity_flag_specs` remain two
 hand-synced sources of truth — `make test`'s 69× raw-argv cross-check is
 the drift detector, and for the M4/M5 cells it can only prove acceptance,
-not spec-vs-code agreement (see [`t4_analysis.md`](t4_analysis.md) §4). A
+not spec-vs-code agreement. A
 shared `has_value` header was considered in T3 and is not required.
 
 `--tools --compact` (plain-text, one line per command) is a second
@@ -45,12 +39,16 @@ manually, not yet pinned in `make test`).
 
 ## Closed (for the record)
 
+- **Items:** `--result`/`--error` data loss, DEBUG stdin leak, `create
+  --json` snippets (S4), global parse layer (S2), `--tools` (T1–T4),
+  error-contract unification (T2), parse-layer inconsistencies (S4),
+  JSON-layer residue (J1–J3).
 - **Structural:** S2 (global-parse test suite, `tests/gparse`), S3 (spec
   table, closed via T1), S4 (parse-layer inconsistencies, docs + dead
   `--live` + `--stdin` usage snippets).
 - **`--tools` chain:** T1 (wire-format decisions + spec §11 table in
-  [`cli_spec.md`](cli_spec.md)), T2 (error-contract unification, Option A
-  from [`t2_analysis.md`](t2_analysis.md)), T3 (69-entry schema in
+  [`cli_spec.md`](cli_spec.md)), T2 (error-contract unification, Option A),
+  T3 (69-entry schema in
   `src/tools.c`, `--pretty`), T4 (contract suite, `tests/tools`), M4
   (`--all` on `skill list`/`count`), M5 (optional `skill_folder move
   --parent_id`), M6 (per-entry aliases `["execution"]` /
