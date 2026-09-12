@@ -11,7 +11,7 @@ numbering).
 
 | # | Action | Source | Notes / dependencies |
 |---|--------|--------|----------------------|
-| H2 | **JSON validation** for `output_schema` and model `configuration` — scope settled in `runner_plan.md` (R5): both must be JSON *objects*; context `content` is **excluded** (it may be plain text) | UR #15 | `QJsonDocument::fromJson`, clear "invalid JSON" message (line/column), block save on invalid JSON, in `ModelDialog::ui->configurationTextEdit` and `SkillDialog::ui->outputSchemaTextEdit` (create + edit); empty fields stay allowed. Same work item as R5 in `runner_active_action.md` |
+| H2 | **JSON validation** for `output_schema` — must be a JSON *object*; model `configuration` **excluded** (tuning is handled in the llama.cpp router/server configuration for the time being — owner decision, 2026-07-10) and context `content` **excluded** (it may be plain text). Scope settled in `runner_plan.md` (R5). | UR #15 | `QJsonDocument::fromJson`, clear "invalid JSON" message (line/column), block save on invalid JSON, in `SkillDialog::ui->outputSchemaTextEdit` (create + edit); empty field stays allowed. Same work item as R5 in `runner_active_action.md` |
 
 ## Summary
 

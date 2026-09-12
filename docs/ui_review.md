@@ -35,8 +35,9 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    monospace font; optionally syntax-highlight JSON or at least show line
    numbers — prompts and schemas are the core content of this app.
    *(Partly done: all `QTextEdit` editors are monospace via the
-   `assets/style.qss` rule; syntax highlighting and line numbers are
-   deliberately left out.)*
+   `assets/style.qss` rule. **Closed, owner decision 2026-07-10:**
+   syntax highlighting and line numbers are pointless at the time —
+   keep it simple.)*
 
 ---
 
@@ -59,9 +60,10 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
    - #15 JSON validation
      *(scope settled in [`runner_plan.md`](runner_plan.md) R5 /
      [`ui_active_action.md`](ui_active_action.md) H2: validate skill
-     `output_schema` and model `configuration` as JSON **objects**;
-     context `content` is excluded — it may be plain text)*
-3. **Polish:**
-   - #26 remaining: JSON highlighting / line numbers
+     `output_schema` as a JSON **object**; model `configuration` excluded —
+     tuning is handled in the llama.cpp router/server configuration for the
+     time being (owner decision, 2026-07-10); context `content` is excluded
+     — it may be plain text)*
+3. **Polish:** *(none remaining — #26 closed by owner decision, 2026-07-10)*
 
 (#42 data lifecycle is closed by owner decision, not an open action.)
