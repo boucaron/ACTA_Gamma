@@ -159,8 +159,8 @@ static const tool_flag_t f_exec_create[] = {
     { "model_revision_id", 1, 1 },
     { "prompt", 1, 0 }, { "parent_execution_id", 1, 0 },
 };
-static const tool_flag_t f_exec_complete[] = { { "result", 0, 0 } };
-static const tool_flag_t f_exec_fail[]     = { { "error", 0, 0 } };
+static const tool_flag_t f_exec_complete[] = { { "result", 1, 0 } };
+static const tool_flag_t f_exec_fail[]     = { { "error", 1, 0 } };
 static const tool_flag_t f_raw[]           = { { "raw", 1, 1 } };
 static const tool_flag_t f_exec_list[] = {
     { "status", 1, 0 }, { "context_id", 1, 0 },

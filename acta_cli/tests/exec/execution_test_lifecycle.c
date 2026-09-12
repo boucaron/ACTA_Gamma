@@ -154,6 +154,18 @@ static void test_complete_with_result(stest_ctx_t *ctx)
         TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":3,\"status\":\"completed\"}\n");
         targs_free(a, &g);
     }
+
+    /* H3 regression: the space-separated --result value must be STORED,
+     * not dropped (previously `has_value = 0` → NULL stored, exit 0). */
+    {
+        cmd_args_t *a = targs_new();
+        targs_pos(a, "3", &g);
+        int rc = do_exec(ctx, "get", a, g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        TEST(ctx, strstr(stest_stdout(ctx),
+                         "\"result\":\"done successfully\"") != NULL);
+        targs_free(a, &g);
+    }
 }
 
 
@@ -227,6 +239,18 @@ static void test_fail_with_error(stest_ctx_t *ctx)
         int rc = do_exec(ctx, "fail", a, g);
         TEST_EQ(ctx, rc, EXIT_OK);
         TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":4,\"status\":\"failed\"}\n");
+        targs_free(a, &g);
+    }
+
+    /* H3 regression: the space-separated --error value must be STORED,
+     * not dropped (same root cause as --result). */
+    {
+        cmd_args_t *a = targs_new();
+        targs_pos(a, "4", &g);
+        int rc = do_exec(ctx, "get", a, g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        TEST(ctx, strstr(stest_stdout(ctx),
+                         "\"error\":\"timeout after 30s\"") != NULL);
         targs_free(a, &g);
     }
 }

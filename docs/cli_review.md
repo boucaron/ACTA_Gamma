@@ -430,7 +430,7 @@ contract), but for LLM/script drivers the following are missing:
 
 # Summary (unresolved, by severity)
 
-1. **`--result` / `--error` silently drop their value** — `exec complete 42 --result "text"` stores `NULL` and exits 0; the documented example is the broken form. Data-loss bug. *(P1 #3)*
+1. **`--result` / `--error` silently drop their value** — ✅ *resolved*: `result` and `error` are value-carrying flags now (`argparse.c` `entity_flag_specs` `{ name, 1 }`, `execution.c` `cmd_args_flag(ga, ..., 1)`, `tools.c` `{ "result"|"error", 1, 0 }`), so `exec complete 42 --result "answer"` and `exec fail 42 --error "..."` consume the space-separated value (the `--result=...` form was already working and remains so). Pinned by regression assertions in `tests/exec/execution_test_lifecycle.c` (`exec get` after `complete`/`fail` asserts the value was actually stored). *(P1 #3)*
 2. **DEBUG stdin leak** — ✅ *resolved*: the leftover `DEBUG read_stdin_all` dump in `resolve_input_source` (`include/commands.h`) is removed; `--stdin` no longer leaks the payload to stderr. *(P1 #4)*
 3. **Broken `create --json` usage examples** — ✅ *resolved (S4)*: all 12 snippets show the `--stdin` form; bare `--json` (no value) gives the explicit `missing value for --json` error and is consistently documented as `--json <blob>`. *(P1 nitpick)*
 4. **Global parse layer untested** — ✅ *resolved (S2)*: dedicated suite `tests/gparse/gparse_test_main.c` feeds raw argv through the `main.c` seam (parse_globals → aliases → validate → handler/dispatch); pins too-few positionals, missing flag values, value consumption, unknown options, `--verbose` clamp, the three input sources + exclusion, and unknown entity/action via `commands_dispatch`. Green in `make test`. *(P5 #3)*

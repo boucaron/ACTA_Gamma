@@ -57,6 +57,18 @@ the returned ids.
 `--result=...` as the only working form in `cli_spec.md`), and reconcile
 the open/closed status between the two action docs.
 
+**Resolved:** `result`/`error` are now value-carrying flags: `argparse.c`
+`entity_flag_specs` lists both with `has_value = 1`, `execution.c` calls
+`cmd_args_flag(ga, "result", 1)` / `cmd_args_flag(ga, "error", 1)`, and
+`tools.c` (`f_exec_complete`/`f_exec_fail`) declares `{ "result"|"error",
+1, 0 }`. The space-separated form (`exec complete 42 --result "answer"`)
+now consumes the value; `cli_spec.md` needs no change (it documented the
+value form all along), and `cli_review.md` summary item 1 is marked
+resolved. Pinned by regression assertions in
+`acta_cli/tests/exec/execution_test_lifecycle.c`: after `exec complete`
+`--result "..."` and `exec fail --error "..."` (space-separated), an
+`exec get` asserts the value was actually stored.
+
 ## H4 — DEBUG stdin leak still in code, but treated as closed
 
 - `acta_cli/include/commands.h:200` still has

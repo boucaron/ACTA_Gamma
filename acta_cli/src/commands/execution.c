@@ -668,7 +668,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", usage_complete, "exec complete", &id))
             return EXIT_INVALID;
 
-        const char *f_result = cmd_args_flag(ga, "result", 0);
+        const char *f_result = cmd_args_flag(ga, "result", 1);
 
         VLOG(1, "exec complete: id=%d result=%s",
              id, f_result ? f_result : "(null)");
@@ -692,7 +692,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", usage_fail, "exec fail", &id))
             return EXIT_INVALID;
 
-        const char *f_error = cmd_args_flag(ga, "error", 0);
+        const char *f_error = cmd_args_flag(ga, "error", 1);
 
         VLOG(1, "exec fail: id=%d error=%s",
              id, f_error ? f_error : "(null)");
