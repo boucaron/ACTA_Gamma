@@ -380,11 +380,11 @@ incident
 custom
 ```
 
-The engine does not need to interpret these.
+The engine does not need to interpret these. `type` is free form and is deliberately not enforced (owner decision, 2026-07-10).
 
 `content_hash` gives the content a stable identity (a small check today; it is not used for deduplication).
 
-Later, if large contexts become inconvenient to store directly, the storage implementation can evolve toward content-addressed blobs or external references without changing the conceptual model.
+Large contexts are not a problem: a few GB in SQLite is fine, and in the worst case multiple DB files can be used. The storage implementation may still evolve toward content-addressed blobs or external references if that ever becomes useful (owner decision, 2026-07-10).
 
 
 ```sql
@@ -393,7 +393,7 @@ Later, if large contexts become inconvenient to store directly, the storage impl
 -- ============================================================
 -- immutable
 -- content_hash is not used for dedup, only a small check
--- type is not yet enforced, not a design decision for the moment
+-- type is free form and intentionally not enforced (owner decision, 2026-07-10)
 CREATE TABLE contexts (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     type            TEXT NOT NULL,

@@ -50,17 +50,22 @@ cd ../acta_gui      && qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile
 make
 ```
 
-Or, from the repository root, build the three C targets in dependency order with the top-level wrapper:
+Or, from the repository root, build the C targets in dependency order with the
+ top-level wrapper — the Qt 6 GUI is built too when `qmake6` is on `PATH`:
 
 ```sh
-make all     # acta_db -> acta_cli -> acta_runner
+make all     # acta_db -> acta_cli -> acta_runner, then the GUI
+                                # (GUI skipped with a warning if qmake6 is missing)
+make gui     # GUI only; errors if qmake6 is not installed
 make test    # all three C test suites
 make -C acta_runner test-e2e    # optional: dead-runner end-to-end suite
                                 # (real runner processes; ~10-15 s)
 make clean
 ```
 
-(the GUI still needs its own `qmake6` + `make` step in `acta_gui/`)
+(The GUI can still be built directly in `acta_gui/` with
+ `qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile && make`; `make gui`
+generates that Makefile for you when it is missing.)
 
 ## Tests
 
