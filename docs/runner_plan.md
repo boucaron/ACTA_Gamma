@@ -6,7 +6,7 @@ Concrete, file-level plan for the queued runner work. Scope and status per
 
 ---
 
-## R5 — JSON validation (analysis first, then UI)
+## R5 — JSON validation (analysis first, then UI) — shipped
 
 Goal (H2 / UR #15): validate `output_schema` with clear "invalid JSON"
 feedback.
@@ -39,7 +39,9 @@ feedback.
 
 ## Sequencing and documentation hygiene
 
-1. **R5** → #15 closed in `ui_review.md` / `ui_active_action.md`.
+1. **R5** → shipped (`SkillDialog::validateFields` blocks save on invalid JSON
+   or non-object JSON, line/column feedback, empty field allowed); #15 closed
+   in `ui_review.md` / `ui_active_action.md`.
 2. **R6** — closed (owner decision, 2026-07-10: JSON highlighting /
    line numbers are pointless at the time, keep it simple).
    **R7** (housekeeping: `.gitignore` for build outputs) whenever

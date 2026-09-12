@@ -27,7 +27,7 @@ out/
 build/
 debug/
 release/
-*/Makefile
+**/Makefile
 !acta_cli/Makefile
 Makefile.Debug
 Makefile.Release

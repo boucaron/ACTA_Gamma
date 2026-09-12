@@ -56,14 +56,7 @@ Scope reviewed: `src/main.cpp`, `src/mainWindow.*`, `src/dbhandle.*`,
 ## Priority order
 
 1. **Must-fix:** *(none remaining)*
-2. **High:**
-   - #15 JSON validation
-     *(scope settled in [`runner_plan.md`](runner_plan.md) R5 /
-     [`ui_active_action.md`](ui_active_action.md) H2: validate skill
-     `output_schema` as a JSON **object**; model `configuration` excluded —
-     tuning is handled in the llama.cpp router/server configuration for the
-     time being (owner decision, 2026-07-10); context `content` is excluded
-     — it may be plain text)*
+2. **High:** *(none remaining — #15 shipped, see item 15 above)*
 3. **Polish:** *(none remaining — #26 closed by owner decision, 2026-07-10)*
 
 (#42 data lifecycle is closed by owner decision, not an open action.)

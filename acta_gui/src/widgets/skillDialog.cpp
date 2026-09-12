@@ -2,6 +2,8 @@
 #include "ui_skillDialog.h"
 
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QMessageBox>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -144,6 +146,39 @@ bool SkillDialog::validateFields()
         QMessageBox::warning(this, title(),
                              tr("Name and prompt are required."));
         return false;
+    }
+    const QString schema = ui->outputSchemaTextEdit->toPlainText();
+    if (!schema.isEmpty()) {
+        // R5: output_schema must be a valid JSON object when present.
+        QJsonParseError perr;
+        const QJsonDocument doc =
+            QJsonDocument::fromJson(schema.toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError) {
+            // QJsonParseError only exposes a byte offset; derive the
+            // line/column from the schema text up to that offset.
+            const QByteArray data = schema.toUtf8();
+            int line = 1, col = 1;
+            for (int i = 0; i < perr.offset && i < data.size(); ++i) {
+                if (data[i] == '\n') {
+                    ++line;
+                    col = 1;
+                } else {
+                    ++col;
+                }
+            }
+            QMessageBox::warning(
+                this, title(),
+                tr("Invalid JSON in output schema: %1 (line %2, column %3)")
+                    .arg(perr.errorString())
+                    .arg(line)
+                    .arg(col));
+            return false;
+        }
+        if (!doc.isObject()) {
+            QMessageBox::warning(this, title(),
+                                 tr("Output schema must be a JSON object."));
+            return false;
+        }
     }
     return true;
 }

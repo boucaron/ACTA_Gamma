@@ -769,8 +769,18 @@ Manage skills, models, contexts, and one-shot executions against OpenAI-compatib
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/widgets/skillDialog.cpp" line="145"/>
+        <location filename="../src/widgets/skillDialog.cpp" line="144"/>
         <source>Name and prompt are required.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/widgets/skillDialog.cpp" line="154"/>
+        <source>Invalid JSON in output schema: %1 (line %2, column %3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/widgets/skillDialog.cpp" line="162"/>
+        <source>Output schema must be a JSON object.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

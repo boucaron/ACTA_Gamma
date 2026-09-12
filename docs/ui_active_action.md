@@ -7,15 +7,11 @@ numbering).
 
 ## Queued (from `ui_review.md`)
 
-### High
-
-| # | Action | Source | Notes / dependencies |
-|---|--------|--------|----------------------|
-| H2 | **JSON validation** for `output_schema` — must be a JSON *object*; model `configuration` **excluded** (tuning is handled in the llama.cpp router/server configuration for the time being — owner decision, 2026-07-10) and context `content` **excluded** (it may be plain text). Scope settled in `runner_plan.md` (R5). | UR #15 | `QJsonDocument::fromJson`, clear "invalid JSON" message (line/column), block save on invalid JSON, in `SkillDialog::ui->outputSchemaTextEdit` (create + edit); empty field stays allowed. Same work item as R5 in `runner_active_action.md` |
+*(none — H2, JSON validation of `output_schema`, is shipped: `SkillDialog::validateFields` blocks save on invalid JSON or non-object JSON, with line/column feedback; model `configuration` and context `content` remain excluded per scope in `runner_plan.md` R5)*
 
 ## Summary
 
-- **Now:** H2 (JSON validation; scope settled in `runner_plan.md`).
+- **Now:** *(none — H2 shipped; scope settled in `runner_plan.md`).*
 - (C1 — cancel button — is shipped: the Run button toggles into Cancel,
   cooperative cancellation via the runner's cancel flag, row transitions
   to `cancelled`.)
