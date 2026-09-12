@@ -158,6 +158,7 @@ is `code:-11` with exit `11`.
 | `exec cancel <id>` | `id` | — | — | `{"id":N,"status":"cancelled"}` |
 | `exec complete <id>` | `id` | `--result` | — | `{"id":N,"status":"completed"}` |
 | `exec fail <id>` | `id` | `--error` | — | `{"id":N,"status":"failed"}` |
+| `exec reset <id>` | `id` | — | — | `{"id":N,"status":"pending"}` |
 | `exec set-raw <id>` | `id` | `--raw*` | — | `{"id":N,"status":"<current status, unchanged>"}` |
 | `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `exec count` | — | same filters as `exec list` (minus `--count`/`--table`/`--fields`/`--no_nulls`) | — | bare int |
@@ -170,9 +171,11 @@ Notes on `exec`:
   if the original had one) — plus `--parent_execution_id <id>` to link the
   new row to the one being replayed; the new row is created `pending` and
   runs normally.
-- **Reset** — there is no `exec reset` action: the `failed → pending`
-  reset (`acta_db_execution_reset`) is exposed by the GUI Retry button
-  only.
+- **Reset** — `exec reset <id>` performs the `failed → pending` reset
+  (`acta_db_execution_reset`): it clears `error`, `raw_response`,
+  `started_at` and `completed_at` (the execution_log audit trail of the
+  previous attempt is preserved) and makes the execution re-runnable. The
+  same transition is exposed by the GUI Retry button.
 
 ## log (execution_log)
 

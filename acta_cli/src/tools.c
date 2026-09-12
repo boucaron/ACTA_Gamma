@@ -234,7 +234,7 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 69 entries = 59 actions + 10 help actions              */
+/*  the table: 70 entries = 60 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {
@@ -628,6 +628,15 @@ static const tool_entry_t tool_table[] = {
       p_id, 1, f_exec_fail, 1, "flags",
       NULL, 0, NULL, 0,
       "{\"id\":N,\"status\":\"failed\"}" },
+
+    { "exec.reset", "exec", "reset", alias_execution, 1,
+      "Reset a failed execution to pending (retry); clears error, raw "
+      "response and timing, keeps the execution_log audit trail. "
+      "(Canonical entity name is 'exec'; dispatch rejects the alias "
+      "'execution').",
+      p_id, 1, NULL, 0, "positional",
+      NULL, 0, NULL, 0,
+      "{\"id\":N,\"status\":\"pending\"}" },
 
     { "exec.set-raw", "exec", "set-raw", alias_execution, 1,
       "Set the raw model response on an execution. Status is unchanged; "

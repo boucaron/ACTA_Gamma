@@ -311,7 +311,7 @@ headless/CLI-driven mode later.
 - Streaming (SSE) responses.
 - Automatic retries (a failed execution is retried manually via the
   `failed → pending` reset, `acta_db_execution_reset` — exposed by the
-  GUI Retry button; the CLI has no `exec reset` action).
+  GUI Retry button, and `acta_cli exec reset <id>`).
 - Multimodal, tool calling, embeddings, LoRA, slot caching — anything
   beyond `chat/completions` from the backend (see
   `llamacpp_server_contract.md` §6).

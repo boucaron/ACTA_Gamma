@@ -23,6 +23,7 @@ static void exec_usage(FILE *f)
 "  cancel    Cancel a running execution\n"
 "  complete  Mark an execution as completed\n"
 "  fail      Mark an execution as failed\n"
+"  reset     Reset a failed execution back to pending\n"
 "  set-raw   Attach raw model output to an execution\n"
 "  list      List executions\n"
 "  count     Count executions\n"
@@ -92,6 +93,13 @@ static void exec_usage(FILE *f)
 "\n"
 "  Options:\n"
 "    --error <str>        Error description\n"
+"\n"
+"== reset <id> ===================================================\n"
+"  Transition a 'failed' execution back to 'pending' (retry).\n"
+"  Clears error, raw response, started_at and completed_at;\n"
+"  the execution_log audit trail of the previous attempt is kept.\n"
+"\n"
+"    acta_cli exec reset 42\n"
 "\n"
 "== set-raw <id> ====================================================\n"
 "  Attach the raw model response to an execution.\n"
@@ -239,6 +247,19 @@ static void usage_fail(FILE *f)
 "    --error <str>        Error description\n"
 "\n"
 "  stdout on success: {\"id\":N,\"status\":\"failed\"} (bare N with --id_only)\n", f);
+}
+
+static void usage_reset(FILE *f)
+{
+    fputs(
+"== reset <id> ===================================================\n"
+"  Transition a 'failed' execution back to 'pending' (retry).\n"
+"  Clears error, raw response, started_at and completed_at;\n"
+"  the execution_log audit trail of the previous attempt is kept.\n"
+"\n"
+"    acta_cli exec reset 42\n"
+"\n"
+"  stdout on success: {\"id\":N,\"status\":\"pending\"} (bare N with --id_only)\n", f);
 }
 
 static void usage_set_raw(FILE *f)
@@ -434,6 +455,7 @@ static const action_def_t exec_actions[] = {
     { "cancel",   "cancel a running exec"         },
     { "complete", "mark exec as completed"        },
     { "fail",     "mark exec as failed"           },
+    { "reset",    "reset a failed exec to pending" },
     { "set-raw",  "attach raw output to an exec"  },
     { "list",     "list execs"                    },
     { "count",    "count execs"                   },
@@ -707,6 +729,26 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
         VLOG(1, "  failed id=%d", id);
         emit_ok_transition(gopts, id, ACTA_EXEC_STATUS_FAILED);
+        return EXIT_OK;
+    }
+
+    /* ── reset <id> ──────────────────────────────────────────────── */
+    if (strcmp(action, "reset") == 0) {
+        int id;
+        if (!parse_id_positional(ga, "id", usage_reset, "exec reset", &id))
+            return EXIT_INVALID;
+
+        VLOG(1, "exec reset: id=%d", id);
+
+        int rc = acta_db_execution_reset(db, id);
+        VLOG(3, "  acta_db_execution_reset(%d) → rc=%d", id, rc);
+
+        if (rc != ACTA_DB_OK) {
+            VLOG(1, "  FAILED rc=%d", rc);
+            return finish_op_error(db, rc, "execution reset");
+        }
+        VLOG(1, "  reset id=%d", id);
+        emit_ok_transition(gopts, id, ACTA_EXEC_STATUS_PENDING);
         return EXIT_OK;
     }
 

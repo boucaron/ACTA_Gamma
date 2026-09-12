@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────────────────────────────
  * execution_test_lifecycle.c
- * Unit tests for:  exec start / cancel / complete / fail / set-raw
+ * Unit tests for:  exec start / cancel / complete / fail / reset / set-raw
  * ───────────────────────────────────────────────────────────────────── */
 #include "test_helpers.h"
 
@@ -294,6 +294,82 @@ static void test_fail_nonexistent(stest_ctx_t *ctx)
 
 
 /* ══════════════════════════════════════════════════════════════════ */
+/*  reset                                                            */
+/* ══════════════════════════════════════════════════════════════════ */
+
+static void test_reset_basic(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+
+    /* id=4 is 'failed' at this point (test_fail_with_error) — reset it.
+     * The cleared error must not survive the reset. */
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "4", &g);
+
+    int rc = do_exec(ctx, "reset", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_STREQ(ctx, stest_stdout(ctx), "{\"id\":4,\"status\":\"pending\"}\n");
+    targs_free(a, &g);
+
+    {
+        cmd_args_t *a2 = targs_new();
+        targs_pos(a2, "4", &g);
+        int rc2 = do_exec(ctx, "get", a2, g);
+        TEST_EQ(ctx, rc2, EXIT_OK);
+        TEST(ctx, strstr(stest_stdout(ctx),
+                         "\"error\":null") != NULL);
+        TEST(ctx, strstr(stest_stdout(ctx),
+                         "timeout after 30s") == NULL);
+        targs_free(a2, &g);
+    }
+}
+
+static void test_reset_wrong_status(stest_ctx_t *ctx)
+{
+    /* id=2 is 'cancelled' (terminal) — reset must be rejected. */
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "2", &g);
+
+    int rc = do_exec(ctx, "reset", a, g);
+    TEST(ctx, rc != EXIT_OK);
+    targs_free(a, &g);
+}
+
+static void test_reset_missing_id(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+
+    int rc = do_exec(ctx, "reset", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_reset_id_zero(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "0", &g);
+
+    int rc = do_exec(ctx, "reset", a, g);
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+}
+
+static void test_reset_nonexistent(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "9999", &g);
+
+    int rc = do_exec(ctx, "reset", a, g);
+    TEST(ctx, rc != EXIT_OK);
+    targs_free(a, &g);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════ */
 /*  set-raw                                                          */
 /* ══════════════════════════════════════════════════════════════════ */
 
@@ -379,6 +455,13 @@ int run_execution_test_lifecycle(void)
     test_fail_no_error(&ctx);
     test_fail_missing_id(&ctx);
     test_fail_nonexistent(&ctx);
+
+    /* reset */
+    test_reset_basic(&ctx);
+    test_reset_wrong_status(&ctx);
+    test_reset_missing_id(&ctx);
+    test_reset_id_zero(&ctx);
+    test_reset_nonexistent(&ctx);
 
     /* set-raw */
     test_set_raw_basic(&ctx);
