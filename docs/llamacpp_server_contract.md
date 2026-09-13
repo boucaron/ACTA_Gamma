@@ -120,6 +120,6 @@ the error string; `EXIT_HTTP` for transport failures. Exit codes
 
 `/v1/responses`, `/v1/embeddings`, `/v1/reranking`, multimodal
 (`image_url`/`input_audio`/`input_video` content parts), tool calling /
-function calling, MCP servers, `/slots` cache save/restore, `/metrics`,
-LoRA adapters, speculative decoding. Revisit only if a later feature
-needs them.
+function calling, MCP servers, `/slots` cache save/restore, `/metrics`.
+LoRA adapters and speculative decoding are **not a priority** for ACTA
+Gamma; revisit only if a later feature genuinely needs them.
