@@ -303,7 +303,7 @@ headless/CLI-driven mode later.
   `completed`, 503 → `fail`, model mismatch → `fail`, HTTP error →
   `fail` + `EXIT_HTTP`, timeout.
 
-## Explicitly out of scope
+## Explicitly out of scope (we do not implement these)
 
 - Server manager mode (`--start-server`, process spawn/termination,
   model load/unload, load-timeout handling, vendored llama.cpp build).
