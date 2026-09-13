@@ -14,12 +14,13 @@ Wire-format decisions settled here (T1):
   `{"id":N,"status":"<new-status>"}` via `emit_ok_transition`;
   `set-raw` does not change status and emits `{"id":N}`.
 - **Restore emits `{"id":N,"restored":true}`** everywhere, via the shared
-  `emit_ok_restored` atom (model, skill, model_folder, skill_folder).
+  `emit_ok_restored` atom (model, skill, model_folder, skill_folder,
+  context, exec).
 - **Folder moves use the `parent_id` key** on the wire
   (`emit_ok_parent`), `null` for root; entity moves use `folder_id`
   (`emit_ok_folder`), `null` for root.
 - **Delete emits `{"deleted":true}`** everywhere, via `emit_deleted`
-  (model, skill, model_folder, skill_folder).
+  (model, skill, model_folder, skill_folder, context, exec).
 
 ## Common shapes
 
@@ -72,9 +73,11 @@ is `code:-11` with exit `11`.
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
 | `context create` | — | `--type*`, `--content*`, `--hash`, `--metadata` | flags or JSON `{type*, content*, hash, metadata}` | `{"id":N}` |
-| `context get <id>` | `id` | — | — | context JSON object |
-| `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
-| `context count` | — | `--type`, `--hash` | — | bare int |
+| `context get <id>` | `id` | `--include_deleted` / `--deleted` | — | context JSON object |
+| `context delete <id>` | `id` | — | — | `{"deleted":true}` |
+| `context restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
+| `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `context count` | — | `--type`, `--hash`, `--include_deleted` / `--deleted` | — | bare int |
 
 > **`context create` — `hash` default:** when `--hash` (or the JSON key `hash`) is omitted, the hash is derived as the **SHA-256 of `content`, lowercase hex** — the same rule the GUI applies (`QCryptographicHash::toHex` in `contextDialog.cpp`). An explicitly supplied hash is stored as-is. Wire key is `hash` (not `content_hash`).
 
@@ -153,14 +156,16 @@ is `code:-11` with exit `11`.
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
 | `exec create` | — | `--context_id*`, `--skill_revision_id*`, `--model_revision_id*`, `--prompt`, `--parent_execution_id` | flags or JSON (same keys) | `{"id":N}` (row always created `pending`) |
-| `exec get <id>` | `id` | — | — | execution JSON object |
+| `exec get <id>` | `id` | `--include_deleted` / `--deleted` | — | execution JSON object |
+| `exec delete <id>` | `id` | — | — | `{"deleted":true}` |
+| `exec restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
 | `exec start <id>` | `id` | — | — | `{"id":N,"status":"running"}` |
 | `exec cancel <id>` | `id` | — | — | `{"id":N,"status":"cancelled"}` |
 | `exec complete <id>` | `id` | `--result` | — | `{"id":N,"status":"completed"}` |
 | `exec fail <id>` | `id` | `--error` | — | `{"id":N,"status":"failed"}` |
 | `exec reset <id>` | `id` | — | — | `{"id":N,"status":"pending"}` |
 | `exec set-raw <id>` | `id` | `--raw*` | — | `{"id":N,"status":"<current status, unchanged>"}` |
-| `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--include_deleted` / `--deleted`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `exec count` | — | same filters as `exec list` (minus `--count`/`--table`/`--fields`/`--no_nulls`) | — | bare int |
 
 Notes on `exec`:
@@ -176,6 +181,12 @@ Notes on `exec`:
   `started_at` and `completed_at` (the execution_log audit trail of the
   previous attempt is preserved) and makes the execution re-runnable. The
   same transition is exposed by the GUI Retry button.
+- **Soft delete** — `exec delete <id>` flags a live row (refused from
+  `running` and on already-deleted rows — exit 4 / exit 1); `exec
+  restore <id>` unflags it with the status untouched. `exec get` /
+  `exec list` / `exec count` are live-only by default; `--include_deleted`
+  (`--deleted` alias) includes soft-deleted rows. `exec create
+  --context_id <deleted>` fails with the standard not-found path.
 
 ## log (execution_log)
 

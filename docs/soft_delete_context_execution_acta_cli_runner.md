@@ -10,7 +10,14 @@ remaining consumers:
   `cli_spec.md` rows, `tools.c` (T3), tests.
 - `acta_runner`: the `run --pending` claim and the single-id claim path.
 
-**Status:** analysis only — nothing here is implemented yet.
+**Status:** sections 1, 2 and 4 done — `context.c` and `execution.c`
+have the `delete` / `restore` actions, `--include_deleted` / `--deleted`
+on `get` / `list` / `count`, and `deleted_at` in JSON/table/vlog output
+and the usage text; the `docs/cli_spec.md` rows are in place. The
+test-ref schema was migrated (`deleted_at` added to `contexts` /
+`executions` in `acta_test_ref.sql` / `acta_test_ref.db`). Remaining:
+`tools.c` (T3) rows, the `acta_runner` single-claim guard, and the CLI
+and runner tests (section 6).
 
 ## Reference: the model/skill CLI pattern
 
@@ -237,16 +244,12 @@ Follow the per-module structure of `acta_cli/tests/` (each module
 
 ## 7. Open questions (decisions to confirm)
 
-1. **`exec get` flag.** The spec's table adds
-   `--include_deleted` / `--deleted` to `context get`, `context
-   list/count`, `exec list/count` — but not to `exec get`, while
-   `model get` and `skill get` both have it. Recommendation: **add the
-   flag to `exec get` too** (consistency with the other three entities;
-   a deleted execution must be inspectable, and "deleted → exit 1 by
-   default" matches the spec's visibility rule). If the owner prefers
-   literal spec compliance, `exec get` stays live-only and a deleted
-   execution is only reachable via `exec list --include_deleted` or
-   `exec restore`.
+1. **`exec get` flag.** — **Resolved: added.** The flag is on `exec get`
+   (consistency with `context` / `model` / `skill get`). The execution DB
+   layer has no `get_live`, so the live-only default is enforced in the
+   CLI: without the flag, a deleted row is freed and mapped to the
+   standard not-found path (exit 1); with the flag, deleted rows are
+   returned. `docs/cli_spec.md` carries the row.
 2. **`deleted_at` in create JSON bodies.** `json.c` is table-driven and
    silently ignores unknown keys, so `{"deleted_at": …}` in a
    `context create` / `exec create` body is currently dropped. Options:
