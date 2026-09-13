@@ -16,6 +16,8 @@
  *       --from_file) and their mutual exclusion
  *   G7  commands_dispatch: unknown entity / unknown action → EXIT_CLI,
  *       known (entity, action) → EXIT_OK
+ *   G8  inline "--name=value" extraction (flag_inline_value): the exact
+ *       value each global flag yields, plus the --verbose error paths
  *
  * The per-entity *_test_create.c suites already cover the input-source
  * happy paths; this suite owns the *seam* itself, plus the
@@ -26,6 +28,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>   /* _O_BINARY (MinGW) */
+#ifdef _WIN32
+#include <io.h>   /* _pipe */
+#endif
 
 #define REF_DB "acta_test_ref.db"
 
@@ -74,6 +81,62 @@ static int run_dispatch(stest_ctx_t *ctx, int argc, char **argv)
     return drc;
 }
 
+/*
+ * Run parse_globals with stderr redirected to a pipe; rc gets
+ * parse_globals' return value and the captured stderr is returned in
+ * a heap buffer the caller frees (NULL on plumbing failure). Used by
+ * G8 to pin the error-line text of the --verbose inline branches.
+ */
+#ifdef _WIN32
+#define CAPTURE_FD_DUP   _dup
+#define CAPTURE_FD_DUP2  _dup2
+#define CAPTURE_FD_CLOSE _close
+#define CAPTURE_PIPE(n)  (_pipe(n, 65536, _O_BINARY) != 0)
+#else
+#define CAPTURE_FD_DUP   dup
+#define CAPTURE_FD_DUP2  dup2
+#define CAPTURE_FD_CLOSE close
+#define CAPTURE_PIPE(n)  (pipe(n) != 0)
+#endif
+
+static char *run_parse_capture_stderr(int argc, char **argv,
+                                      global_opts_t *g, int *rc)
+{
+    int saved = CAPTURE_FD_DUP(STDERR_FILENO);
+    int p[2];
+    if (saved < 0 || CAPTURE_PIPE(p)) {
+        if (saved >= 0) CAPTURE_FD_CLOSE(saved);
+        return NULL;
+    }
+    CAPTURE_FD_DUP2(p[1], STDERR_FILENO);
+    CAPTURE_FD_CLOSE(p[1]);
+
+    *rc = parse_globals(argc, argv, g);
+
+    fflush(stderr);
+    CAPTURE_FD_DUP2(saved, STDERR_FILENO);
+    CAPTURE_FD_CLOSE(saved);
+
+    FILE *in = fdopen(p[0], "rb");
+    if (!in) return NULL;
+    char *buf = NULL;
+    size_t len = 0, cap = 0;
+    for (;;) {
+        if (len >= cap) {
+            cap = cap ? cap * 2 : 4096;
+            char *nb = realloc(buf, cap);
+            if (!nb) { fclose(in); free(buf); return NULL; }
+            buf = nb;
+        }
+        size_t n = fread(buf + len, 1, cap - len - 1, in);
+        if (n == 0) break;
+        len += n;
+    }
+    fclose(in);
+    buf[len] = '\0';
+    return buf;
+}
+
 /* ── G1–G5: parse_globals + validation rejections (known entity) ── */
 
 static void test_rejections(stest_ctx_t *ctx)
@@ -112,6 +175,119 @@ static void test_rejections(stest_ctx_t *ctx)
     /* G5: --verbose=99 clamps to 3 (VLOG-only) and the command runs */
     char *vb[] = { "acta_cli", "model", "list", "--verbose=99" };
     TEST_EQ(ctx, stest_run_argv(ctx, cmd_model, 4, vb, NULL), EXIT_OK);
+}
+
+/* ── G8: inline "--name=value" extraction (flag_inline_value) ──────
+ *
+ * Direct parse_globals calls (no dispatch): these pin the exact value
+ * each flag's inline form yields, which the exit-code-only seam tests
+ * never check (a desynced value offset would still pass them, since
+ * run_dispatch never consumes g->db / g->fields).
+ */
+
+static void test_inline_values(stest_ctx_t *ctx)
+{
+    /* --db=<path> */
+    {
+        char *a[] = { "acta_cli", "model", "list", "--db=foo.db" };
+        global_opts_t g;
+        int rc = parse_globals(4, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.db, "foo.db");
+            free(g.argv);
+        }
+    }
+
+    /* --fields=<csv> */
+    {
+        char *a[] = { "acta_cli", "model", "list",
+                      "--fields=name,description" };
+        global_opts_t g;
+        int rc = parse_globals(4, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.fields, "name,description");
+            free(g.argv);
+        }
+    }
+
+    /* --json=<blob> */
+    {
+        char *a[] = { "acta_cli", "model", "create",
+                      "--json={\"name\":\"x\",\"backend\":\"openai\","
+                      "\"model_identifier\":\"m\"}" };
+        global_opts_t g;
+        int rc = parse_globals(4, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.json_input,
+                       "{\"name\":\"x\",\"backend\":\"openai\","
+                       "\"model_identifier\":\"m\"}");
+            free(g.argv);
+        }
+    }
+
+    /* --from_file=<path> */
+    {
+        char *a[] = { "acta_cli", "model", "create", "--from_file=p.json" };
+        global_opts_t g;
+        int rc = parse_globals(4, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.from_file, "p.json");
+            free(g.argv);
+        }
+    }
+
+    /* --verbose boundaries: =0 (low end) and =2 (mid) */
+    {
+        char *a0[] = { "acta_cli", "model", "list", "--verbose=0" };
+        global_opts_t g;
+        int rc = parse_globals(4, a0, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        if (rc == EXIT_OK) {
+            TEST_EQ(ctx, g.verbose, 0);
+            free(g.argv);
+        }
+    }
+    {
+        char *a2[] = { "acta_cli", "model", "list", "--verbose=2" };
+        global_opts_t g;
+        int rc = parse_globals(4, a2, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        if (rc == EXIT_OK) {
+            TEST_EQ(ctx, g.verbose, 2);
+            free(g.argv);
+        }
+    }
+
+    /* --verbose= (empty inline value) → CLI error naming the level */
+    {
+        char *a[] = { "acta_cli", "model", "list", "--verbose=" };
+        global_opts_t g;
+        int rc = 0;
+        char *err = run_parse_capture_stderr(4, a, &g, &rc);
+        TEST_EQ(ctx, rc, EXIT_CLI);
+        if (err) {
+            TEST(ctx, strstr(err, "invalid --verbose level") != NULL);
+            free(err);
+        }
+    }
+
+    /* --verbose=abc → same error, message carries the extracted value */
+    {
+        char *a[] = { "acta_cli", "model", "list", "--verbose=abc" };
+        global_opts_t g;
+        int rc = 0;
+        char *err = run_parse_capture_stderr(4, a, &g, &rc);
+        TEST_EQ(ctx, rc, EXIT_CLI);
+        if (err) {
+            TEST(ctx, strstr(err, "invalid --verbose level") != NULL);
+            TEST(ctx, strstr(err, "'abc'") != NULL);
+            free(err);
+        }
+    }
 }
 
 /* ── G6: the three JSON input sources, end-to-end ────────────────── */
@@ -194,6 +370,7 @@ int run_gparse_test(void)
     stest_init(&ctx, REF_DB);
 
     test_rejections(&ctx);
+    test_inline_values(&ctx);
     test_input_sources(&ctx);
     test_dispatch(&ctx);
 

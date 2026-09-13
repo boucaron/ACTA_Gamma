@@ -20,6 +20,16 @@ static int flag_prefix_match(const char *token, const char *name) {
     return token[2 + len] == 0 || token[2 + len] == '=';
 }
 
+/* Value part of an inline "--name=value" token: pointer just past the
+ * '=', or NULL if the token is not in inline form. The offset is
+ * derived from strlen(name) (2 for "--" + name length), so no magic
+ * number can go stale if a flag is renamed. Only call after
+ * flag_prefix_match(token, name) has succeeded. */
+static const char *flag_inline_value(const char *token, const char *name) {
+    const char *p = token + 2 + strlen(name);
+    return *p == '=' ? p + 1 : NULL;
+}
+
 /* ------------------------------------------------------------------ */
 /*  parse_globals                                                      */
 /* ------------------------------------------------------------------ */
@@ -63,9 +73,9 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         /* ---- --db <path> ---- */
         if (flag_prefix_match(a, "db")) {
-            if (a[4] == '=') {
-                g->db = a + 5;
-            } else {
+            const char *v = flag_inline_value(a, "db");
+            if (v) g->db = v;
+            else {
                 if (i + 1 >= argc) {
                     free(rest);
                     return emit_cli_error("missing value for --db");
@@ -76,7 +86,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         /* ---- --fields <f1,f2> ---- */
         if (flag_prefix_match(a, "fields")) {
-            if (a[8] == '=') g->fields = a + 9;
+            const char *v = flag_inline_value(a, "fields");
+            if (v) g->fields = v;
             else {
                 if (i + 1 >= argc) {
                     free(rest);
@@ -105,18 +116,19 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         if (flag_prefix_match(a, "verbose")) {
             int lvl = 0;
+            const char *v = flag_inline_value(a, "verbose");
             /* Only --verbose=N reaches here (bare --verbose is caught by the
              * strcmp above). Never consume argv[i+1]: a space form would
              * silently eat the entity name. */
-            if (a[9] != '=') {
+            if (!v) {
                 if (g->verbose < 3) g->verbose++;
                 continue;
             }
-            if (a[10] == '\0' || !parse_nonneg_int(a + 10, &lvl)) {
+            if (*v == '\0' || !parse_nonneg_int(v, &lvl)) {
                 char msg[128];
                 snprintf(msg, sizeof msg,
                          "invalid --verbose level: '%s' "
-                         "(expected an integer 0-3)", a + 10);
+                         "(expected an integer 0-3)", v);
                 free(rest);
                 return emit_cli_error(msg);
             }
@@ -132,7 +144,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         }
         /* ---- --json <blob> ---- */
         if (flag_prefix_match(a, "json")) {
-            if (a[6] == '=') g->json_input = a + 7;
+            const char *v = flag_inline_value(a, "json");
+            if (v) g->json_input = v;
             else {
                 if (i + 1 >= argc) {
                     free(rest);
@@ -146,7 +159,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (strcmp(a, "--stdin") == 0)    { g->from_stdin = 1;  continue; }
         /* ---- --from_file <path> ---- */
         if (flag_prefix_match(a, "from_file")) {
-            if (a[11] == '=') g->from_file = a + 12;
+            const char *v = flag_inline_value(a, "from_file");
+            if (v) g->from_file = v;
             else {
                 if (i + 1 >= argc) {
                     free(rest);
