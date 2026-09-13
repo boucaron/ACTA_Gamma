@@ -10,15 +10,25 @@ remaining consumers:
   `cli_spec.md` rows, `tools.c` (T3), tests.
 - `acta_runner`: the `run --pending` claim and the single-id claim path.
 
-**Status:** sections 1, 2 and 4 done — `context.c` and `execution.c`
-have the `delete` / `restore` actions, `--include_deleted` / `--deleted`
-on `get` / `list` / `count`, and `deleted_at` in JSON/table/vlog output
-and the usage text; the `docs/cli_spec.md` rows are in place. The
-test-ref schema was migrated (`deleted_at` added to `contexts` /
-`executions` in `acta_test_ref.sql` / `acta_test_ref.db`). The context part of `tools.c` (T3) and the context expectations in
-`tools_test_main.c` are done (72-entry table; context action set 7).
-Remaining: the exec part of `tools.c`, the `acta_runner` single-claim
-guard, and the CLI and runner tests (section 6).
+**Status:** all sections done. `context.c` and `execution.c` have the
+`delete` / `restore` actions, `--include_deleted` / `--deleted` on
+`get` / `list` / `count`, and `deleted_at` in JSON/table/vlog output and
+the usage text (sections 1, 2); `docs/cli_spec.md` rows in place
+(section 4); `tools.c` (T3) is complete — 74-entry table with
+`context.delete` / `context.restore` / `exec.delete` / `exec.restore`
+and `include_deleted` on the context and exec `get` / `list` /
+`count` rows, `tools_test_main.c` updated to the 74-entry table with
+the exec action set of 12 (section 3); the `acta_runner` single-claim
+guard and the live-only `run --pending` comment are in, with the
+runner soft-delete claim suite wired into `make test` (section 5);
+the CLI deleted suites are in and green (section 6).
+
+The test-ref fixture migration included replacing the old
+`contexts_immutable` trigger with `contexts_soft_delete_only` in
+`acta_test_ref.sql` (and the regenerated `acta_test_ref.db`) —
+without that, every `contexts` UPDATE (including the `deleted_at`
+flag flip) was aborted by the trigger and the context soft-delete
+suite failed with `ACTA_DB_ERR_SQL`.
 
 ## Reference: the model/skill CLI pattern
 
@@ -122,17 +132,16 @@ already do, so no new CLI machinery is needed:
   is added): add `delete` / `restore` sections and the flag notes.
 - `exec_actions[]`: add the two new rows.
 
-## 3. `acta_cli/src/tools.c` (T3) — **partially done** (context part
-done; exec part pending)
+## 3. `acta_cli/src/tools.c` (T3) — **done**
 
-Generated data table — **no logic change**, only new rows/flags.
-**Done (context):** the `context.delete` / `context.restore` entries,
-`include_deleted` on `context get` / `list` / `count` (reusing
-`f_inc_del`), the `context get` description, and the context
-expectations in `tools_test_main.c` (72-entry table, context action
-set 7). **Pending (exec):** the `exec.delete` / `exec.restore` entries,
-`include_deleted` on `f_exec_list` / `f_exec_count` / `f_exec_get`, and
-the `exec get` description.
+Generated data table — **no logic change**, only new rows/flags. The
+`context.delete` / `context.restore` entries, `include_deleted` on
+context `get` / `list` / `count` (reusing `f_inc_del`), the `context
+get` description, the `exec.delete` / `exec.restore` entries,
+`include_deleted` on `f_exec_list` / `f_exec_count` / the `exec get`
+row (`f_inc_del`), and the `exec get` description are all in place;
+`tools_test_main.c` carries the 74-entry table (64 actions + 10
+help) with the exec action set of 12.
 
 - New entries (mirror the model/skill delete/restore entries, lines
   ~321/389/466/536):
@@ -175,9 +184,7 @@ Source of truth for T3 — add:
   (`emit_deleted`, `emit_ok_restored`) — one line extending their list of
   users to context/exec is enough.
 
-## 5. `acta_runner` — **not done** (the `run --pending` path needs no code
-change; the single-claim `deleted_at` guard and the runner tests are
-pending)
+## 5. `acta_runner` — **done**
 
 ### `run --pending` (batch claim)
 
@@ -214,20 +221,25 @@ changes:
   forbidden from `running`), and its query is live-only by default
   anyway.
 
-### Runner tests (`acta_runner/tests/run/`)
+### Runner tests (`acta_runner/tests/run/`) — **done**
 
-Mirror the existing `test_pending.c` / `test_run.c` style:
+`tests/run/test_deleted.c` (wired into `make test` as
+`tests/run/test_deleted[.exe]`, same harness as `test_pending.c` /
+`test_run.c`: scratch `:memory:` DB seeded from
+`acta_gui/db/schema.sql` + in-process stub server, `cmd_run` called
+directly):
 
 - `run <id>` on a deleted `pending` execution → exit 1, row still
   `pending` (not claimed), no runner error other than not-found.
 - `run --pending` with one live + one deleted pending row → runs only
   the live one.
 
-## 6. `acta_cli` tests — **not done** (except the `tools_test_main.c`
-context expectations, which are updated to the 72-entry table)
+## 6. `acta_cli` tests — **done**
 
-Follow the per-module structure of `acta_cli/tests/` (each module
-`*_test_<name>.c` registered in its directory's `*_test_main.c`):
+All suites green on the regenerated fixture DB (14/14 suites, no
+assertion failures). Following the per-module structure of
+`acta_cli/tests/` (each module `*_test_<name>.c` registered in its
+directory's `*_test_main.c`):
 
 - `tests/context/`: new `context_test_deleted.c` (+ entry in
   `context_test_main.c`):
@@ -239,7 +251,7 @@ Follow the per-module structure of `acta_cli/tests/` (each module
     `--deleted` alias).
   - `delete` stdout exactly `{"deleted":true}`; `restore` stdout
     exactly `{"id":N,"restored":true}`.
-- `tests/exec/`: new `execution_test_deleted.c` (+ entry in
+- `tests/exec/`: `execution_test_deleted.c` (+ entry in
   `execution_test_main.c`):
   - `exec delete` from `pending` / `completed` / `failed` /
     `cancelled` → `{"deleted":true}`; from `running` → exit 4
@@ -252,8 +264,8 @@ Follow the per-module structure of `acta_cli/tests/` (each module
 - `tests/tools/tools_test_main.c`: update expectations for the new
   `context.delete` / `context.restore` / `exec.delete` / `exec.restore`
   entries and the new `include_deleted` flags (entry count, compact
-  rendering). Context part done (72 entries, context action set 7);
-  exec entries pending.
+  rendering) — done: the table carries 74 entries (64 actions + 10
+  help), context action set 7, exec action set 12.
 
 ## 7. Open questions (q1 resolved; q2–q3 open)
 
