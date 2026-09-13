@@ -116,6 +116,12 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
          * limit 0 is clamped to ACTA_DB_MAX_PAGE by the lister. */
         execution_query_t q = ACTA_EXEC_QUERY_ANY;
         q.status = ACTA_EXEC_STATUS_PENDING;
+        /* Live-only on purpose: ACTA_EXEC_QUERY_ANY carries
+         * include_deleted = 0, so the DB layer appends the static
+         * `deleted_at IS NULL` clause and soft-deleted pending rows
+         * are skipped by the batch claim.  Set explicitly so the
+         * "deleted rows are skipped" contract is visible here. */
+        q.include_deleted = 0;
 
         int n = 0;
         int err = ACTA_DB_OK;
@@ -365,6 +371,17 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     }
     if (!e)
         return emit_not_found("execution");
+
+    /* acta_db_execution_get returns soft-deleted rows too (no
+     * deleted_at filter), and the DB layer deliberately does not
+     * guard start() on deleted rows — so a deleted execution must
+     * fail here with the standard not-found path, BEFORE the status
+     * check and before any claim (spec: `run <deleted-id>` exits 1
+     * and the row stays pending). */
+    if (e->deleted_at) {
+        acta_db_execution_free(e);
+        return emit_not_found("execution");
+    }
 
     if (e->status && strcmp(e->status, ACTA_EXEC_STATUS_PENDING) != 0) {
         VLOG(1, "run_execution: execution %d is not pending (status: %s)",
