@@ -405,8 +405,7 @@ CREATE TABLE contexts (
 );
 
 -- Contexts are content-immutable: the trigger allows ONLY the deleted_at
--- flag to change (soft-delete lifecycle, see
--- docs/soft_delete_context_execution.md); any other column change
+-- flag to change (soft-delete lifecycle); any other column change
 -- RAISE(ABORT)s.
 DROP TRIGGER IF EXISTS contexts_immutable;
 DROP TRIGGER IF EXISTS contexts_soft_delete_only;
@@ -422,6 +421,21 @@ BEGIN
   SELECT RAISE(ABORT, 'contexts are immutable: only deleted_at may change');
 END;
 ```
+
+### Migrating existing databases (soft-delete columns)
+
+Pre-existing DB files created before the soft-delete lifecycle need the
+two columns and the trigger replacement (already in the schema above):
+
+```sql
+ALTER TABLE contexts   ADD COLUMN deleted_at TEXT;
+ALTER TABLE executions ADD COLUMN deleted_at TEXT;
+-- plus the contexts_soft_delete_only trigger replacement, see above
+```
+
+Existing rows have `deleted_at = NULL`, i.e. they are live. Apply via
+`acta_cli db exec` (or `--file`); idempotent check: `PRAGMA table_info`
+before applying.
 
 ## Executions
 
@@ -463,8 +477,7 @@ pending, running ──cancel()──▶ cancelled   (terminal)
 data (`error`, `raw_response`, `started_at`, `completed_at`) but preserves the
 `execution_log` audit trail. `completed` and `cancelled` are terminal.
 
-Executions carry a `deleted_at` soft-delete lifecycle (see
-docs/soft_delete_context_execution.md): `delete` is allowed from
+Executions carry a `deleted_at` soft-delete lifecycle: `delete` is allowed from
 `pending`/`completed`/`failed`/`cancelled` but not from `running`;
 `restore` clears the flag with the status untouched; a deleted execution is
 inert — `reset` refuses it (restore first). Listers and counts are live-only
@@ -628,7 +641,7 @@ higher-level application built on top of this building block:
 * queues
 * **hard delete** — lifecycle operations are **soft delete only**
   (`deleted_at`) across all entities: skills, models, folders, and now
-  contexts and executions (see docs/soft_delete_context_execution.md).
+  contexts and executions.
   A hard-delete API is out of scope (owner decision, 2026-09-13)
 
 If the POC shows that any of these are actually needed, they can be built
