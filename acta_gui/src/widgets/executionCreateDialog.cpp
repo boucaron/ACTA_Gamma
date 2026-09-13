@@ -226,6 +226,10 @@ void ExecutionCreateDialog::loadContexts()
     if (!m_db)
         return;
 
+    // Live contexts only: acta_db_context_query defaults to
+    // deleted_at IS NULL, so soft-deleted contexts are not offered as
+    // targets for new work (a deleted context is refused at
+    // exec create with NOT_FOUND).
     int n = 0;
     int err = ACTA_DB_OK;
     context_t **contexts =
@@ -385,10 +389,16 @@ void ExecutionCreateDialog::loadParentExecutions()
     if (!m_db)
         return;
 
+    // Include soft-deleted executions: replay with a deleted parent is
+    // allowed (a new live row is created; the parent reference is audit
+    // data and the row physically remains), so the parent picker must
+    // keep offering deleted parents.
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
+    q.include_deleted = 1;
     int n = 0;
     int err = ACTA_DB_OK;
     execution_t **executions =
-        acta_db_execution_query(m_db, nullptr, 0, 0, &n, &err);
+        acta_db_execution_query(m_db, &q, 0, 0, &n, &err);
     if (!executions) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_execution_query failed: %s",
@@ -396,14 +406,17 @@ void ExecutionCreateDialog::loadParentExecutions()
         return;
     }
 
-    for (int i = 0; i < n; ++i)
-        ui->parentExecutionComboBox->addItem(
+    for (int i = 0; i < n; ++i) {
+        QString label =
             tr("execution %1 (%2)")
                 .arg(executions[i]->id)
                 .arg(executions[i]->status
                            ? QString::fromUtf8(executions[i]->status)
-                           : QString()),
-            executions[i]->id);
+                           : QString());
+        if (executions[i]->deleted_at != nullptr)
+            label += tr(" (deleted)");
+        ui->parentExecutionComboBox->addItem(label, executions[i]->id);
+    }
     acta_db_execution_list_free(executions, n);
 }
 

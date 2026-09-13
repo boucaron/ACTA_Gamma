@@ -2,6 +2,8 @@
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -33,6 +35,9 @@ const int RoleExecutionId = Qt::UserRole;
 // Log line id carried by the log table model (first column), used by
 // the Show button / context menu to open the log dialog.
 const int RoleLogId = Qt::UserRole + 1;
+// Soft-deleted marker on the execution list rows (true when the row's
+// deleted_at is set); only present when "Show trash" is checked.
+const int RoleExecutionDeleted = Qt::UserRole + 2;
 
 // Backend timeout for the in-process run, matching the CLI's default
 // (acta_runner help: --timeout, default 300).
@@ -67,6 +72,16 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     filterRow->addWidget(statusFilter);
     lay->addLayout(filterRow);
 
+    // "Show trash" (mirrors the skill/model panels): soft-deleted
+    // executions stay in the database and can be restored, so the
+    // trash label is the accurate (and shorter) one. Unchecked by
+    // default: deleted rows are hidden.
+    showDeletedCheck = new QCheckBox(tr("Show trash"));
+    showDeletedCheck->setToolTip(
+        tr("Show soft-deleted executions (the trash); they stay in the "
+           "database and can be restored."));
+    lay->addWidget(showDeletedCheck);
+
     list = new QTreeWidget;
     // Skill / model / context names next to Date + Status (H5 / UR #23).
     list->setColumnCount(5);
@@ -81,6 +96,7 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
                 showExecutionLogs(cur);
                 emitItemChanged();
                 updateRunBtnState();
+                updateActionBtnStates();
             });
     connect(list, &QTreeWidget::itemDoubleClicked, this,
             &ExecutionPanel::onExecutionDoubleClicked);
@@ -128,6 +144,8 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     // worker (M1 / UR #45) — the in-app "Run" button (Plan D) starts it).
     // "Show" opens the execution dialog for the selected execution row;
     // the context menu and double-click / Enter do the same (UR #33).
+    m_deletedIcon = list->style()->standardIcon(QStyle::SP_TrashIcon);
+
     auto *btnRow = new QHBoxLayout;
     newExecutionBtn = makeActionButton(
         style()->standardIcon(QStyle::SP_DialogYesButton),
@@ -148,6 +166,21 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
            "pending first)"),
         QKeySequence(Qt::ALT | Qt::Key_R));
     btnRow->addWidget(runBtn);
+    // Soft-delete lifecycle for the selected row (mirrors the model/
+    // skill panels): Delete is only enabled for live rows that are not
+    // running (deleting a running row is forbidden at the C layer);
+    // Restore only for deleted rows.
+    deleteBtn = makeActionButton(
+        style()->standardIcon(QStyle::SP_TrashIcon),
+        tr("Soft-delete the selected execution (it stays in the "
+           "database and can be restored)"),
+        QKeySequence(Qt::ALT | Qt::Key_D));
+    btnRow->addWidget(deleteBtn);
+    restoreBtn = makeActionButton(
+        style()->standardIcon(QStyle::SP_ArrowBack),
+        tr("Restore the selected soft-deleted execution"),
+        QKeySequence(Qt::ALT | Qt::Key_T));
+    btnRow->addWidget(restoreBtn);
     // "Show Log": opens the execution log dialog for the selected log
     // line of the inline log list; the log list's context menu does
     // the same (UR #33, mirroring the Show/Show-Log button pair).
@@ -166,6 +199,13 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     });
     connect(runBtn, &QPushButton::clicked, this,
             &ExecutionPanel::onRunBtnClicked);
+    connect(deleteBtn, &QPushButton::clicked, this,
+            &ExecutionPanel::onExecuteDeleteClicked);
+    connect(restoreBtn, &QPushButton::clicked, this,
+            &ExecutionPanel::onExecuteRestoreClicked);
+    connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
+        reload();
+    });
     connect(showLogBtn, &QPushButton::clicked, this, [this] {
         showLogDetails(selectedLogId());
     });
@@ -254,11 +294,33 @@ void ExecutionPanel::updateRunBtnState()
     bool canRun = m_db != nullptr;
     if (canRun) {
         const auto *cur = list->currentItem();
+        // Deleted rows are inert: they must be restored before they can
+        // be run (reset() refuses them at the DB layer).
         canRun = cur != nullptr
+            && !cur->data(0, RoleExecutionDeleted).toBool()
             && (cur->text(1) == QLatin1String(ACTA_EXEC_STATUS_PENDING)
                 || cur->text(1) == QLatin1String(ACTA_EXEC_STATUS_FAILED));
     }
     runBtn->setEnabled(canRun);
+}
+
+void ExecutionPanel::updateActionBtnStates()
+{
+    const auto *cur = list->currentItem();
+    const bool hasRow =
+        cur != nullptr && cur->data(0, RoleExecutionId).toInt() != 0;
+    const bool isDeleted =
+        hasRow && cur->data(0, RoleExecutionDeleted).toBool();
+    // While a run is in flight the status cell shows "running…" (the
+    // progress indicator), so match by prefix, not exact equality.
+    const bool isRunning =
+        hasRow
+        && cur->text(1).startsWith(QLatin1String(ACTA_EXEC_STATUS_RUNNING));
+    // Delete is forbidden from the running state (the runner owns the
+    // row) and on already-deleted rows — the same rule acta_db
+    // enforces (INVALID / NOT_FOUND respectively).
+    deleteBtn->setEnabled(hasRow && !isDeleted && !isRunning);
+    restoreBtn->setEnabled(hasRow && isDeleted);
 }
 
 QTreeWidgetItem *ExecutionPanel::findRow(int executionId) const
@@ -296,14 +358,17 @@ void ExecutionPanel::onRunBtnClicked()
                      executionId, acta_db_strerror(err));
         return;
     }
-    // The runner atomically refuses non-pending rows via start() anyway;
-    // this is a UI convenience (the button is only enabled for pending
-    // and failed rows, but the context menu / shortcut can fire on a
-    // stale selection).
+    // Deleted rows are inert (restore before running): the button is
+    // disabled for them, but the context menu / shortcut can fire on a
+    // stale selection, so guard here as well. The runner atomically
+    // refuses non-pending rows via start() anyway; the status check is
+    // a UI convenience for the same reason.
+    const bool deleted = exec->deleted_at != nullptr;
     const QString status =
         exec->status ? QString::fromUtf8(exec->status) : QString();
     acta_db_execution_free(exec);
-    if (status != QLatin1String(ACTA_EXEC_STATUS_PENDING)
+    if (deleted
+            || status != QLatin1String(ACTA_EXEC_STATUS_PENDING)
             && status != QLatin1String(ACTA_EXEC_STATUS_FAILED))
         return;
 
@@ -374,6 +439,7 @@ void ExecutionPanel::onWorkerFinished(int exitCode, const QString &message)
         refreshRunningLogs();
     }
     stopRunner();
+    updateActionBtnStates();
 
     if (sameDb && exitCode != 0 && exitCode != EXIT_CANCELED) {
         // The execution row already carries the error; this is purely
@@ -480,8 +546,13 @@ void ExecutionPanel::reload()
 
     int n = 0;
     int err = ACTA_DB_OK;
+    // Live rows by default; with "Show trash" the query also returns
+    // soft-deleted rows so they can be restored.
+    execution_query_t q = ACTA_EXEC_QUERY_ANY;
+    q.include_deleted =
+        showDeletedCheck != nullptr && showDeletedCheck->isChecked();
     execution_t **executions =
-        acta_db_execution_query(m_db, nullptr, 0, 0, &n, &err);
+        acta_db_execution_query(m_db, &q, 0, 0, &n, &err);
     if (!executions) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_execution_query failed: %s",
@@ -541,6 +612,18 @@ void ExecutionPanel::reload()
         }
 
         item->setData(0, RoleExecutionId, executions[i]->id);
+
+        // Soft-deleted row (only visible with "Show trash"): trash icon,
+        // gray date and a deleted tooltip, mirroring the skill/model
+        // panel rows. The marker drives the Delete / Restore / Run
+        // button states.
+        if (executions[i]->deleted_at != nullptr) {
+            item->setData(0, RoleExecutionDeleted, true);
+            item->setIcon(0, m_deletedIcon);
+            item->setForeground(0, QColor(Qt::gray));
+            item->setToolTip(
+                0, tr("Deleted %1").arg(createdIso));
+        }
     }
 
     acta_db_execution_list_free(executions, n);
@@ -570,6 +653,7 @@ void ExecutionPanel::reload()
 
     // Re-evaluate the Run button (R1) against the rebuilt list.
     updateRunBtnState();
+    updateActionBtnStates();
 }
 
 void ExecutionPanel::setLogModel(QStandardItemModel *model)
@@ -802,6 +886,23 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
             onRunBtnClicked();
         });
     }
+    // Soft-delete lifecycle entries, enabled exactly like the toolbar
+    // buttons (Delete: live, non-running row; Restore: deleted row).
+    auto *aDelete = menu.addAction(tr("Delete"));
+    aDelete->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+    aDelete->setToolTip(tr("Soft-delete the selected execution (it stays "
+                            "in the database and can be restored)"));
+    aDelete->setEnabled(deleteBtn->isEnabled());
+    connect(aDelete, &QAction::triggered, this, [this] {
+        onExecuteDeleteClicked();
+    });
+    auto *aRestore = menu.addAction(tr("Restore"));
+    aRestore->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    aRestore->setToolTip(tr("Restore the selected soft-deleted execution"));
+    aRestore->setEnabled(restoreBtn->isEnabled());
+    connect(aRestore, &QAction::triggered, this, [this] {
+        onExecuteRestoreClicked();
+    });
     auto *aShow = menu.addAction(tr("Show"));
     aShow->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     aShow->setToolTip(tr("Show the details of this execution"));
@@ -811,6 +912,83 @@ void ExecutionPanel::onListContextMenu(const QPoint &pos)
         onExecutionDoubleClicked(list->currentItem(), 0);
     });
     menu.exec(list->viewport()->mapToGlobal(pos));
+}
+
+void ExecutionPanel::onExecuteDeleteClicked()
+{
+    if (!m_db || !deleteBtn->isEnabled())
+        return;
+    const auto *cur = list->currentItem();
+    const int executionId =
+        cur ? cur->data(0, RoleExecutionId).toInt() : 0;
+    if (executionId == 0)
+        return;
+
+    // Same confirmation style as the skill/model panel delete.
+    if (QMessageBox::question(
+            this, tr("Delete Execution"),
+            tr("Delete execution %1? It stays in the database and can "
+               "be restored.")
+                .arg(executionId))
+        != QMessageBox::Yes)
+        return;
+
+    const int rc = acta_db_execution_delete(m_db, executionId);
+    if (rc != ACTA_DB_OK) {
+        QString msg;
+        switch (rc) {
+        case ACTA_DB_ERR_INVALID:
+            // The row is running: the runner owns it, so it cannot be
+            // deleted mid-run.
+            msg = tr("Cannot delete a running execution.");
+            break;
+        case ACTA_DB_ERR_NOT_FOUND:
+            msg = tr("Execution not found (already deleted?).");
+            break;
+        default:
+            msg = tr("Could not delete the execution: %1")
+                    .arg(QString::fromUtf8(acta_db_strerror(rc)));
+        }
+        QMessageBox::warning(this, tr("Delete Execution"), msg);
+        return;
+    }
+
+    reload();
+}
+
+void ExecutionPanel::onExecuteRestoreClicked()
+{
+    if (!m_db || !restoreBtn->isEnabled())
+        return;
+    const auto *cur = list->currentItem();
+    const int executionId =
+        cur ? cur->data(0, RoleExecutionId).toInt() : 0;
+    if (executionId == 0)
+        return;
+
+    const int rc = acta_db_execution_restore(m_db, executionId);
+    if (rc != ACTA_DB_OK) {
+        QMessageBox::warning(
+            this, tr("Restore Execution"),
+            tr("Could not restore the execution: %1")
+                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+        return;
+    }
+    // Status is untouched by the restore: a restored failed row is
+    // still failed and can be retried with Run.
+    QMessageBox::information(this, tr("Execution"),
+                             tr("Execution %1 restored.").arg(executionId));
+    reload();
+}
+
+void ExecutionPanel::onDeleteKeyPressed()
+{
+    // Same gating as updateActionBtnStates(): Delete soft-deletes a
+    // live, non-running row; Restore undeletes a deleted row.
+    if (deleteBtn->isEnabled())
+        onExecuteDeleteClicked();
+    else if (restoreBtn->isEnabled())
+        onExecuteRestoreClicked();
 }
 
 void ExecutionPanel::onReturnKeyPressed()
@@ -839,11 +1017,18 @@ bool ExecutionPanel::eventFilter(QObject *obj, QEvent *event)
     if ((obj == list || obj == list->viewport())
             && event->type() == QEvent::KeyPress) {
         const auto *key = static_cast<const QKeyEvent *>(event);
-        if (key->modifiers() == Qt::NoModifier
-                && (key->key() == Qt::Key_Return
-                        || key->key() == Qt::Key_Enter)) {
-            onReturnKeyPressed();
-            return true;
+        if (key->modifiers() == Qt::NoModifier) {
+            if (key->key() == Qt::Key_Return
+                    || key->key() == Qt::Key_Enter) {
+                onReturnKeyPressed();
+                return true;
+            }
+            // Delete soft-deletes the selection (or restores a deleted
+            // row), mirroring the skill/model panel's Delete key.
+            if (key->key() == Qt::Key_Delete) {
+                onDeleteKeyPressed();
+                return true;
+            }
         }
     }
     return QWidget::eventFilter(obj, event);

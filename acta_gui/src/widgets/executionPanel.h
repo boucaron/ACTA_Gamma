@@ -11,7 +11,9 @@ class QTableView;
 class QPushButton;
 class QLineEdit;
 class QComboBox;
+class QCheckBox;
 class QLabel;
+class QIcon;
 class RunnerWorker;
 
 #include "acta_db.h"
@@ -24,6 +26,8 @@ public:
     QLabel *emptyLabel; // centered placeholder when the list is empty (P5 / UR #31)
     QLineEdit *filterEdit; // case-insensitive substring filter (H4 / UR #38)
     QComboBox *statusFilter; // "All" + one entry per execution status (H4 / UR #38)
+    QCheckBox *showDeletedCheck; // "Show trash": also lists soft-deleted
+                                 // executions so they can be restored
     QTableView *logList; // flat log table (UR #23; setModel is public, unlike
                          // QTableWidget's)
     QLabel *emptyLogLabel; // centered placeholder when the log list is empty (P5 / UR #31)
@@ -44,6 +48,12 @@ public:
     // inline log list; pairs with the log list's "Show" context menu
     // entry the way showDetailsBtn pairs with the execution list's.
     QPushButton *showLogBtn;
+    // Soft-delete lifecycle for the selected row (mirrors the
+    // model/skill panels): Delete is enabled for live rows that are not
+    // running (deleting a running row is forbidden at the C layer);
+    // Restore is enabled only for deleted rows.
+    QPushButton *deleteBtn;
+    QPushButton *restoreBtn;
 
     // Rebuild the list from the database (no-op if the handle is null,
     // e.g. the db failed to open at startup).
@@ -79,6 +89,8 @@ private:
     // Last id passed to itemChanged; emitItemChanged() suppresses
     // duplicate emissions (UR #19).
     int m_lastEmittedId = 0;
+    // Trash icon marking soft-deleted rows when "Show trash" is on.
+    QIcon m_deletedIcon;
 
     // Set the log table's model and (re)establish the selectionChanged
     // connection that drives the Show button (QItemView replaces the
@@ -135,6 +147,19 @@ private slots:
     void onWorkerFinished(int exitCode, const QString &message);
     void onPollTick();
 
+    // Soft-delete the selected live (non-running) execution, with a
+    // confirmation prompt; the row stays in the database and can be
+    // restored.
+    void onExecuteDeleteClicked();
+
+    // Restore the selected deleted execution (status is untouched).
+    void onExecuteRestoreClicked();
+
+    // Delete-key accelerator (mirrors FolderTreePanel): soft-deletes the
+    // selection when Delete is enabled, otherwise restores it when
+    // Restore is enabled.
+    void onDeleteKeyPressed();
+
 private:
     ~ExecutionPanel() override; // stops the runner worker (see stopRunner)
 
@@ -144,8 +169,13 @@ private:
     void stopRunner();
 
     // Enable state for the Run button / menu entry: db available, a
-    // pending row selected, and no active runner worker.
+    // pending (or failed) live row selected, and no active runner
+    // worker. Deleted rows are inert: restore first.
     void updateRunBtnState();
+
+    // Enable state for the Delete / Restore buttons / menu entries:
+    // Delete for a live, non-running row; Restore for a deleted row.
+    void updateActionBtnStates();
 
     // Targeted refresh of the running row's status cell (no reload):
     // preserves selection, scroll and filters while the runner works.
