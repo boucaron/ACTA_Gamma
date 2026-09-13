@@ -167,6 +167,7 @@ static const tool_flag_t f_raw[]           = { { "raw", 1, 1 } };
 static const tool_flag_t f_exec_list[] = {
     { "status", 1, 0 }, { "context_id", 1, 0 },
     { "skill_revision_id", 1, 0 }, { "model_revision_id", 1, 0 },
+    { "include_deleted", 0, 0 },
     { "parent_execution_id", 1, 0 },
     { "offset", 1, 0 }, { "limit", 1, 0 },
     { "count", 0, 0 }, { "table", 0, 0 },
@@ -176,6 +177,7 @@ static const tool_flag_t f_exec_count[] = {
     { "status", 1, 0 }, { "context_id", 1, 0 },
     { "skill_revision_id", 1, 0 }, { "model_revision_id", 1, 0 },
     { "parent_execution_id", 1, 0 },
+    { "include_deleted", 0, 0 },
 };
 
 static const tool_flag_t f_log_create[] = {
@@ -236,7 +238,7 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 72 entries = 62 actions + 10 help actions              */
+/*  the table: 74 entries = 64 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {
@@ -610,11 +612,28 @@ static const tool_entry_t tool_table[] = {
       "{\"id\":N} (row always created 'pending')" },
 
     { "exec.get", "exec", "get", alias_execution, 1,
-      "Fetch an execution by id. (Canonical entity name is 'exec'; "
+      "Fetch an execution by id (--include_deleted, alias --deleted, "
+      "returns soft-deleted rows). (Canonical entity name is 'exec'; "
       "dispatch rejects the alias 'execution'.)",
-      p_id, 1, NULL, 0, "positional",
+      p_id, 1, f_inc_del, 1, "positional",
       NULL, 0, NULL, 0,
       "execution JSON object" },
+
+    { "exec.delete", "exec", "delete", alias_execution, 1,
+      "Soft-delete an execution. Refused from the 'running' state "
+      "(exit 4) and on already-deleted rows (exit 1). (Canonical "
+      "entity name is 'exec'; dispatch rejects the alias 'execution').",
+      p_id, 1, NULL, 0, "positional",
+      NULL, 0, NULL, 0,
+      "{\"deleted\":true}" },
+
+    { "exec.restore", "exec", "restore", alias_execution, 1,
+      "Restore a soft-deleted execution (the status is untouched). "
+      "(Canonical entity name is 'exec'; dispatch rejects the alias "
+      "'execution').",
+      p_id, 1, NULL, 0, "positional",
+      NULL, 0, NULL, 0,
+      "{\"id\":N,\"restored\":true}" },
 
     { "exec.start", "exec", "start", alias_execution, 1,
       "Start an execution (pending -> running). (Canonical entity name is "
@@ -664,7 +683,7 @@ static const tool_entry_t tool_table[] = {
     { "exec.list", "exec", "list", alias_execution, 1,
       "List executions, optionally filtered by status and refs. (Canonical "
       "entity name is 'exec'; dispatch rejects the alias 'execution'.)",
-      NULL, 0, f_exec_list, 11, "flags",
+      NULL, 0, f_exec_list, 12, "flags",
       NULL, 0, NULL, 0,
       "[ ... ] / []; --count -> bare int" },
 
@@ -672,7 +691,7 @@ static const tool_entry_t tool_table[] = {
       "Count executions, optionally filtered by status and refs. "
       "(Canonical entity name is 'exec'; dispatch rejects the alias "
       "'execution'.)",
-      NULL, 0, f_exec_count, 5, "flags",
+      NULL, 0, f_exec_count, 6, "flags",
       NULL, 0, NULL, 0,
       "bare int" },
 

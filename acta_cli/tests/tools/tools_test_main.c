@@ -8,7 +8,7 @@
  *   2. the top-level global section is intact: name/version/usage,
  *      15 global_flags, entity_aliases, 3 input_sources, 7 exit codes,
  *      error contract with the `code == -exit` invariant;
- *   3. the tools array has exactly 70 entries covering all 10 entities
+ *   3. the tools array has exactly 74 entries covering all 10 entities
  *      and the full action set from cli_spec.md (incl. the 10 help
  *      actions); exactly the 8 JSON-capable commands carry json_keys;
  *   4. cross-check: for every entry, a command generated from the
@@ -16,7 +16,7 @@
  *      is fed through the raw-argv path (stest_run_argv:
  *      parse_globals → apply_flag_aliases → cmd_args_validate →
  *      handler) and must not be rejected (rc != EXIT_CLI).  This pins
- *      the T3 "flags ⊆ entity_flag_specs" invariant for all 72 entries
+ *      the T3 "flags ⊆ entity_flag_specs" invariant for all 74 entries
  *      and exercises the S2 global-parse seam.  The 8 flags|json
  *      entries are additionally run with a --json blob built from their
  *      json_keys.required, and --stdin/--from_file smoke runs pin the
@@ -24,7 +24,7 @@
  *      (M6): exec entries carry ["execution"], log entries carry
  *      ["execution_log"], every other entry carries [].
  *
- * The suite consumes the parsed output as data — the 72-entry table is
+ * The suite consumes the parsed output as data — the 74-entry table is
  * NOT duplicated here; only the small expected sets from cli_spec.md
  * (spec = source of truth for the action inventory) are hardcoded.
  */
@@ -79,8 +79,8 @@ static const char *const EXP_SKILL_FOLDER[] =
 static const char *const EXP_SKILL_REV[]    =
     { "get", "get-latest", "list", "count", "help" };
 static const char *const EXP_EXEC[]         =
-    { "create", "get", "start", "cancel", "complete", "fail",
-      "reset", "set-raw", "list", "count", "help" };
+    { "create", "get", "delete", "restore", "start", "cancel",
+      "complete", "fail", "reset", "set-raw", "list", "count", "help" };
 static const char *const EXP_LOG[]          =
     { "create", "get", "list", "count", "help" };
 
@@ -97,7 +97,7 @@ static const struct {
     { "skill",         EXP_SKILL,        9  },
     { "skill_folder",  EXP_SKILL_FOLDER, 9  },
     { "skill_revision",EXP_SKILL_REV,    5  },
-    { "exec",          EXP_EXEC,         11 },
+    { "exec",          EXP_EXEC,         12 },
     { "log",           EXP_LOG,          5  },
 };
 
@@ -240,7 +240,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     /* ── tools array: count + per-entity action coverage ── */
     cJSON *tools = cJSON_GetObjectItem(root, "tools");
     TEST(ctx, cJSON_IsArray(tools));
-    TEST_EQ(ctx, cJSON_GetArraySize(tools), 72);
+    TEST_EQ(ctx, cJSON_GetArraySize(tools), 74);
 
     for (size_t e = 0; e < sizeof(expected) / sizeof(expected[0]); e++)
         for (size_t a = 0; a < expected[e].n_actions; a++)
@@ -450,7 +450,7 @@ int run_tools_test(void)
         if (root) {
             check_structure(&ctx, root);
             cross_check(&ctx, cJSON_GetObjectItem(root, "tools"));
-            /* raw-argv cross-check (72-entry tools array, not the root) */
+            /* raw-argv cross-check (74-entry tools array, not the root) */
             cJSON_Delete(root);
         }
     }
