@@ -22,7 +22,7 @@ Implementation plan for the DB layer: `soft_delete_context_execution_acta_db.md`
   in the DB, the audit trail is intact. It is compatible with the
   PointOfView "executions are historical artifacts" stance — an artifact
   can be hidden, but it is never destroyed.
-- Hard delete remains out of scope (owner decision, 2026-07-10).
+- Hard delete remains out of scope (owner decision, 2026-09-13).
 
 ## Semantics (apply to both entities)
 
@@ -218,7 +218,7 @@ Mirror the existing delete/restore tool tests (`acta_cli/tests/`,
 
 ## Out of scope
 
-- Hard delete (owner decision, 2026-07-10).
+- Hard delete (owner decision, 2026-09-13).
 - Cascading delete to child executions or executions of a context.
 - Space reclamation (deleted rows still occupy storage).
 - Deletion of model/skill **revisions** themselves (they already carry

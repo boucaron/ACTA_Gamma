@@ -629,7 +629,7 @@ higher-level application built on top of this building block:
 * **hard delete** — lifecycle operations are **soft delete only**
   (`deleted_at`) across all entities: skills, models, folders, and now
   contexts and executions (see docs/soft_delete_context_execution.md).
-  A hard-delete API is out of scope (owner decision, 2026-07-10)
+  A hard-delete API is out of scope (owner decision, 2026-09-13)
 
 If the POC shows that any of these are actually needed, they can be built
 later, on top of the schema — or, in the case of users, permissions, and

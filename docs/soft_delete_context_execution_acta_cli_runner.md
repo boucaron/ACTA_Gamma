@@ -290,10 +290,11 @@ directory's `*_test_main.c`):
 
 - GUI changes (context picker, Retry disable, per-row restore actions) —
   `acta_gui` is its own follow-up.
-- **Hard delete is excluded everywhere in this phase** — contexts and
-  executions are soft-deleted only (`deleted_at` flag flip); there is no
-  hard-delete command in `acta_db`, `acta_cli` or `acta_runner`, no
-  cascades, and no space reclamation.
+- **Hard delete is excluded everywhere in this phase** (owner decision,
+  2026-09-13) — contexts and executions are soft-deleted only
+  (`deleted_at` flag flip); there is no hard-delete command in
+  `acta_db`, `acta_cli` or `acta_runner`, no cascades, and no space
+  reclamation.
 - No new `acta_db` functions needed — the DB layer API is already
   complete; this phase only consumes it.
 - Migration of existing DB files is already done via
