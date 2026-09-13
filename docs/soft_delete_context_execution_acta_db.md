@@ -173,9 +173,18 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
   - `query` default live-only (incl. NULL query ≡ `ACTA_EXEC_QUERY_ANY`);
     `include_deleted = 1` → includes deleted rows; `count` parity.
 
-## 7. Out of scope for this phase (follow-up work)
+## 7. Follow-up work — all done
+
+The consumers listed as follow-ups when this plan was written are now all
+implemented:
 
 - `acta_cli`: `context delete/restore`, `exec delete/restore`,
-  `--include_deleted` / `--deleted` flags, `cli_spec.md` rows, `tools.c` (T3).
-- `acta_runner`: `run --pending` claim query + `AND deleted_at IS NULL`.
-- `acta_gui`: execution/context panels, context pickers, Retry disable.
+  `--include_deleted` / `--deleted` flags, `cli_spec.md` rows, `tools.c`
+  (T3) — **done and tested**, see
+  [`soft_delete_context_execution_acta_cli_runner.md`](soft_delete_context_execution_acta_cli_runner.md).
+- `acta_runner`: `run --pending` claim query + `AND deleted_at IS NULL`
+  — **done and tested**, same doc.
+- `acta_gui`: execution/context panels, context pickers, Retry disable,
+  plus the ContextPanel delete/restore follow-up — **implemented** (not
+  yet compile-verified), see
+  [`soft_delete_context_execution_acta_gui.md`](soft_delete_context_execution_acta_gui.md).
