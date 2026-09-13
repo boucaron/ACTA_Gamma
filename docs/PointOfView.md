@@ -149,7 +149,8 @@ An execution becomes a concrete historical artifact rather than an ephemeral cha
 
 ## Regression testing and benchmarking
 
-Once executions are recorded, regression testing becomes a natural extension.
+This is not part of the current implementation; it is an example of what
+**can be built on top of** the primitive once executions are recorded.
 
 A dataset can contain known contexts and expected observations.
 
@@ -169,7 +170,7 @@ A new skill revision or model can then be run against the same dataset:
 
 A large cloud model can also be used as a reference or evaluator, without making it part of the production execution path.
 
-This makes it possible to measure changes in:
+Such a setup makes it possible to measure changes in:
 
 * detection;
 * false positives;
@@ -182,7 +183,9 @@ This makes it possible to measure changes in:
 
 ## Composition belongs outside the LLM
 
-ACTA Gamma intentionally keeps orchestration outside the model.
+ACTA Gamma intentionally keeps orchestration outside the model. The following
+is likewise an example of what an application **can build on top of** the
+primitive, not something the engine does itself.
 
 If an application wants to perform:
 
