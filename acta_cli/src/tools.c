@@ -80,11 +80,13 @@ static const tool_flag_t f_ctx_create[] = {
 static const tool_flag_t f_ctx_list[] = {
     { "type", 1, 0 }, { "hash", 1, 0 },
     { "offset", 1, 0 }, { "limit", 1, 0 },
+    { "include_deleted", 0, 0 },
     { "count", 0, 0 }, { "table", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_ctx_count[] = {
     { "type", 1, 0 }, { "hash", 1, 0 },
+    { "include_deleted", 0, 0 },
 };
 
 static const tool_flag_t f_model_create[] = {
@@ -234,7 +236,7 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 70 entries = 60 actions + 10 help actions              */
+/*  the table: 72 entries = 62 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {
@@ -270,20 +272,33 @@ static const tool_entry_t tool_table[] = {
       "{\"id\":N}" },
 
     { "context.get", "context", "get", NULL, 0,
-      "Fetch a context by id.",
-      p_id, 1, NULL, 0, "positional",
+      "Fetch a context by id (--include_deleted, alias --deleted, returns "
+      "soft-deleted rows).",
+      p_id, 1, f_inc_del, 1, "positional",
       NULL, 0, NULL, 0,
       "context JSON object" },
 
+    { "context.delete", "context", "delete", NULL, 0,
+      "Soft-delete a context.",
+      p_id, 1, NULL, 0, "positional",
+      NULL, 0, NULL, 0,
+      "{\"deleted\":true}" },
+
+    { "context.restore", "context", "restore", NULL, 0,
+      "Restore a soft-deleted context.",
+      p_id, 1, NULL, 0, "positional",
+      NULL, 0, NULL, 0,
+      "{\"id\":N,\"restored\":true}" },
+
     { "context.list", "context", "list", NULL, 0,
       "List contexts, optionally filtered by type and hash.",
-      NULL, 0, f_ctx_list, 8, "flags",
+      NULL, 0, f_ctx_list, 9, "flags",
       NULL, 0, NULL, 0,
       "[ ... ] / []; --count -> bare int" },
 
     { "context.count", "context", "count", NULL, 0,
       "Count contexts, optionally filtered by type and hash.",
-      NULL, 0, f_ctx_count, 2, "flags",
+      NULL, 0, f_ctx_count, 3, "flags",
       NULL, 0, NULL, 0,
       "bare int" },
 

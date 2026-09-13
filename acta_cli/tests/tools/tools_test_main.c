@@ -16,7 +16,7 @@
  *      is fed through the raw-argv path (stest_run_argv:
  *      parse_globals → apply_flag_aliases → cmd_args_validate →
  *      handler) and must not be rejected (rc != EXIT_CLI).  This pins
- *      the T3 "flags ⊆ entity_flag_specs" invariant for all 70 entries
+ *      the T3 "flags ⊆ entity_flag_specs" invariant for all 72 entries
  *      and exercises the S2 global-parse seam.  The 8 flags|json
  *      entries are additionally run with a --json blob built from their
  *      json_keys.required, and --stdin/--from_file smoke runs pin the
@@ -24,7 +24,7 @@
  *      (M6): exec entries carry ["execution"], log entries carry
  *      ["execution_log"], every other entry carries [].
  *
- * The suite consumes the parsed output as data — the 70-entry table is
+ * The suite consumes the parsed output as data — the 72-entry table is
  * NOT duplicated here; only the small expected sets from cli_spec.md
  * (spec = source of truth for the action inventory) are hardcoded.
  */
@@ -61,7 +61,7 @@ static const struct {
 static const char *const EXP_DB[]           =
     { "exec", "version", "help" };
 static const char *const EXP_CONTEXT[]      =
-    { "create", "get", "list", "count", "help" };
+    { "create", "get", "delete", "restore", "list", "count", "help" };
 static const char *const EXP_MODEL[]        =
     { "create", "get", "update", "delete", "restore", "move",
       "list", "count", "help" };
@@ -90,7 +90,7 @@ static const struct {
     size_t n_actions;
 } expected[] = {
     { "db",            EXP_DB,           3  },
-    { "context",       EXP_CONTEXT,      5  },
+    { "context",       EXP_CONTEXT,      7  },
     { "model",         EXP_MODEL,        9  },
     { "model_folder",  EXP_MODEL_FOLDER, 9  },
     { "model_revision",EXP_MODEL_REV,    5  },
@@ -240,7 +240,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     /* ── tools array: count + per-entity action coverage ── */
     cJSON *tools = cJSON_GetObjectItem(root, "tools");
     TEST(ctx, cJSON_IsArray(tools));
-    TEST_EQ(ctx, cJSON_GetArraySize(tools), 70);
+    TEST_EQ(ctx, cJSON_GetArraySize(tools), 72);
 
     for (size_t e = 0; e < sizeof(expected) / sizeof(expected[0]); e++)
         for (size_t a = 0; a < expected[e].n_actions; a++)
@@ -450,7 +450,7 @@ int run_tools_test(void)
         if (root) {
             check_structure(&ctx, root);
             cross_check(&ctx, cJSON_GetObjectItem(root, "tools"));
-            /* raw-argv cross-check (70-entry tools array, not the root) */
+            /* raw-argv cross-check (72-entry tools array, not the root) */
             cJSON_Delete(root);
         }
     }
