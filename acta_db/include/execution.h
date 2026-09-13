@@ -31,6 +31,7 @@ typedef struct {
     char   *started_at;
     char   *completed_at;
     int     parent_execution_id;   /* 0 = root execution */
+    char   *deleted_at;            /* NULL if live */
 } execution_t;
 
 /* ── Query filter ─────────────────────────────────────────────────── */
@@ -46,6 +47,10 @@ typedef struct {
  *   context_id         – 0 = any;        > 0 → WHERE context_id = ?
  *   skill_revision_id  – 0 = any;        > 0 → WHERE skill_revision_id = ?
  *   model_revision_id  – 0 = any;        > 0 → WHERE model_revision_id = ?
+ *   include_deleted    – 0 (default) = live rows only
+ *                        (deleted_at IS NULL);
+ *                        non-zero = live + soft-deleted rows; callers
+ *                        distinguish them via the deleted_at field.
  *
  * The struct is stack-allocated and read-only; no allocation or
  * ownership is involved. */
@@ -55,13 +60,14 @@ typedef struct {
     int         context_id;      /* 0 = any               */
     int         skill_revision_id;   /* 0 = any           */
     int         model_revision_id;   /* 0 = any           */
+    int         include_deleted;     /* 0 = live only     */
 } execution_query_t;
 
-/* Convenience: a query that matches every row. */
+/* Convenience: a query that matches every LIVE row. */
 #define ACTA_EXEC_QUERY_ANY \
     (execution_query_t){ .status = NULL, .parent_execution_id = 0, \
                           .context_id = 0, .skill_revision_id = 0, \
-                          .model_revision_id = 0 }
+                          .model_revision_id = 0, .include_deleted = 0 }
 
 /* ── State machine ────────────────────────────────────────────────── */
 
@@ -102,9 +108,13 @@ typedef struct {
  *  to return the friendlier ACTA_DB_ERR_INVALID for an illegal
  *  transition; in a race the losing caller simply sees 0 rows changed.
  *
- *  Permanence: execution rows have no delete / restore API (contexts
- *  and executions are referenced by ON DELETE RESTRICT foreign keys),
- *  so a row created here lives for the life of the database.
+ *  Soft-delete lifecycle: execution rows carry a deleted_at flag.
+ *  acta_db_execution_delete flags a live row (forbidden from the
+ *  running state and on already-deleted rows); acta_db_execution_restore
+ *  unflags it (strict: a live or missing row is NOT_FOUND).
+ *  A deleted execution is inert: reset() refuses it (restore first,
+ *  then reset to retry). Query/count default to live-only
+ *  (include_deleted = 0); include_deleted = 1 includes deleted rows.
  * ─────────────────────────────────────────────────────────────────────
  */
 
@@ -148,6 +158,23 @@ int  acta_db_execution_reset(db_t *db, int id);
 
 /* Data update, NOT a state transition. May be called from any state. */
 int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
+
+/* ── Soft-delete lifecycle ────────────────────────────────────────── */
+
+/* Soft-delete a live execution (deleted_at = datetime('now')).
+ * Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_INVALID if the row is running or already deleted.
+ * ACTA_DB_ERR_NOT_FOUND if no row matches id.
+ * ACTA_DB_ERR_SQL on failure. */
+int acta_db_execution_delete(db_t *db, int id);
+
+/* Restore a soft-deleted execution (deleted_at = NULL); status is
+ * untouched (a deleted failed row restores to failed and can then be
+ * reset).  Strict: ACTA_DB_ERR_NOT_FOUND unless a DELETED row matches
+ * id (a live row is an error, like context_restore).
+ * Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_SQL on failure. */
+int acta_db_execution_restore(db_t *db, int id);
 
 /* ── Getter ───────────────────────────────────────────────────────── */
 

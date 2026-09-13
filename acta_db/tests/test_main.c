@@ -26,6 +26,7 @@ int run_context_deleted_tests(void);
 int run_execution_create_tests(void);
 int run_execution_lifecycle_tests(void);
 int run_execution_list_tests(void);
+int run_execution_deleted_tests(void);
 
 int main(void) {
     int failures = 0;
@@ -64,6 +65,7 @@ int main(void) {
     failures += run_execution_create_tests();
     failures += run_execution_lifecycle_tests();
     failures += run_execution_list_tests();
+    failures += run_execution_deleted_tests();
 
     // Execution logs
     failures += run_execution_log_tests();

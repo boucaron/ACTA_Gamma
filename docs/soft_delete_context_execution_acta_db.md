@@ -6,8 +6,8 @@ the design spec. This file is the implementation plan for the **DB layer only**
 `acta_db/src/execution.c`). Schema changes (`acta_gui/db/schema.sql`) are already
 done; CLI/runner/GUI are out of scope here.
 
-**Status:** §1–§2 (context) and the context half of §6 are done and tested;
-§3–§4 (execution) and the execution half of §6 are pending.
+**Status:** all done and tested — §1–§2 (context), §3–§4 (execution),
+and both halves of §6.
 
 ## Reference: the skill pattern
 
@@ -84,7 +84,7 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
 - Legacy listers (`list_all` / `list_by_type` / `list_by_hash`): untouched —
   they wrap `query` and inherit the live-only default.
 
-## 3. `acta_db/include/execution.h`
+## 3. `acta_db/include/execution.h` ✅ done
 
 - `execution_t` gains `char *deleted_at;` (NULL if live).
 - `execution_query_t` gains `int include_deleted;` (0 = live only, the default).
@@ -99,7 +99,7 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
   rows have a soft-delete lifecycle now; `delete` is forbidden from
   `running`; `reset` refuses deleted rows.
 
-## 4. `acta_db/src/execution.c`
+## 4. `acta_db/src/execution.c` ✅ done
 
 - `COL_*` enum + `EXEC_SELECT`: append `deleted_at` as the **last** column
   (keeps existing column indices stable); decode in `row_to_execution`.
@@ -161,15 +161,17 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
     `UPDATE contexts SET deleted_at = …` → OK.
   - (also: `test_context.c` updated to assert `deleted_at == NULL` on live
     rows; all suites pass)
-- `acta_db/tests/test_execution_deleted.c`:
+- ✅ `acta_db/tests/test_execution_deleted.c` (+ `TEST_MODULES` entry in
+  `acta_db/Makefile`):
   - `delete` from `pending` / `completed` / `failed` / `cancelled` → `OK`;
     from `running` → `INVALID`; already deleted → `INVALID`.
   - `restore` preserves status (delete a `failed` row, restore, status still
-    `failed`).
+    `failed`, then resettable).
   - `reset` on a deleted row → `NOT_FOUND`.
   - `create` with a deleted `context_id` → `NOT_FOUND`; with a missing
     `context_id` → `ERR_FK` (unchanged).
-  - `query` default live-only; `include_deleted = 1` → includes deleted rows.
+  - `query` default live-only (incl. NULL query ≡ `ACTA_EXEC_QUERY_ANY`);
+    `include_deleted = 1` → includes deleted rows; `count` parity.
 
 ## 7. Out of scope for this phase (follow-up work)
 
