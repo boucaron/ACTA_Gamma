@@ -23,9 +23,10 @@ guard and the live-only `run --pending` comment are in, with the
 runner soft-delete claim suite wired into `make test` (section 5);
 the CLI deleted suites are in and green (section 6).
 
-The test-ref fixture migration included replacing the old
-`contexts_immutable` trigger with `contexts_soft_delete_only` in
-`acta_test_ref.sql` (and the regenerated `acta_test_ref.db`) —
+All open questions in section 7 are resolved. The test-ref fixture
+migration included replacing the old `contexts_immutable` trigger with
+`contexts_soft_delete_only` in `acta_test_ref.sql` (and the regenerated
+`acta_test_ref.db`) —
 without that, every `contexts` UPDATE (including the `deleted_at`
 flag flip) was aborted by the trigger and the context soft-delete
 suite failed with `ACTA_DB_ERR_SQL`.
@@ -267,7 +268,7 @@ directory's `*_test_main.c`):
   rendering) — done: the table carries 74 entries (64 actions + 10
   help), context action set 7, exec action set 12.
 
-## 7. Open questions (q1 resolved; q2–q3 open)
+## 7. Open questions (all resolved)
 
 1. **`exec get` flag.** — **Resolved: added.** The flag is on `exec get`
    (consistency with `context` / `model` / `skill get`). The execution DB
@@ -275,22 +276,24 @@ directory's `*_test_main.c`):
    CLI: without the flag, a deleted row is freed and mapped to the
    standard not-found path (exit 1); with the flag, deleted rows are
    returned. `docs/cli_spec.md` carries the row.
-2. **`deleted_at` in create JSON bodies.** `json.c` is table-driven and
-   silently ignores unknown keys, so `{"deleted_at": …}` in a
-   `context create` / `exec create` body is currently dropped. Options:
-   leave it (simplest) or reject it explicitly like `status` is rejected
-   by `exec create` (stricter wire contract). Recommendation: leave it
-   unless the owner wants the strictness.
-3. **`--table` column set.** Adding a `DELETED_AT` column to
-   `ctx_table` / `exec_table` changes the plain-text layout; `--fields`
-   already lets callers suppress it. No conflict with existing output —
-   just note it in the usage/help text.
+2. **`deleted_at` in create JSON bodies.** — **Resolved: leave it.**
+   `json.c` is table-driven and silently ignores unknown keys, so
+   `{"deleted_at": …}` in a `context create` / `exec create` body is
+   dropped. Decision: keep the silent drop (no explicit rejection).
+3. **`--table` column set.** — **Resolved: done.** `DELETED_AT` is a
+   column in `ctx_table` / `exec_table`; the plain-text layout change is
+   noted in the usage/help text (the `get` / `list` sections document
+   `--fields` / `--no_nulls`, which suppress the column), and `deleted_at`
+   is present in JSON/table/vlog output.
 
 ## 8. Explicitly out of scope (per the design spec)
 
 - GUI changes (context picker, Retry disable, per-row restore actions) —
   `acta_gui` is its own follow-up.
-- Hard delete, cascades, space reclamation.
+- **Hard delete is excluded everywhere in this phase** — contexts and
+  executions are soft-deleted only (`deleted_at` flag flip); there is no
+  hard-delete command in `acta_db`, `acta_cli` or `acta_runner`, no
+  cascades, and no space reclamation.
 - No new `acta_db` functions needed — the DB layer API is already
   complete; this phase only consumes it.
 - Migration of existing DB files is already done via
