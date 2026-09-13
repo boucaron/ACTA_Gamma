@@ -1,11 +1,15 @@
 #include "contextPanel.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QCheckBox>
+#include <QColor>
 #include <QEvent>
+#include <QIcon>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
 #include <QKeySequence>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -23,6 +27,9 @@ const int RoleContextId = Qt::UserRole;
 // data, so it is stored per row and searched by applyTreeFilter
 // (H4 / UR #38).
 const int RoleContextContent = Qt::UserRole + 1;
+// Marker for soft-deleted rows (visible only with "Show trash" on);
+// drives the Delete / Restore button states.
+const int RoleContextDeleted = Qt::UserRole + 2;
 } // namespace
 
 ContextPanel::ContextPanel(db_t *db, QWidget *parent)
@@ -40,6 +47,16 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     filterEdit->setPlaceholderText(tr("Filter contexts…"));
     lay->addWidget(filterEdit);
 
+    // "Show trash" (mirrors the skill/model panels): soft-deleted
+    // contexts stay in the database and can be restored, so the
+    // trash label is the accurate (and shorter) one. Unchecked by
+    // default: deleted rows are hidden.
+    showDeletedCheck = new QCheckBox(tr("Show trash"));
+    showDeletedCheck->setToolTip(
+        tr("Show soft-deleted contexts (the trash); they stay in the "
+           "database and can be restored."));
+    lay->addWidget(showDeletedCheck);
+
     list = new QTreeWidget;
     list->setColumnCount(2);
     list->setHeaderLabels({tr("Type"), tr("Date")});
@@ -50,6 +67,7 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
                 showBtn->setEnabled(
                     cur && cur->data(0, RoleContextId).toInt() != 0);
                 emitItemChanged();
+                updateActionBtnStates();
             });
     lay->addWidget(list);
 
@@ -67,6 +85,8 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     // (UR #39). The inline editor below is the quick content view; the
     // Show button opens the full read-only details dialog (type, hash,
     // metadata, dates), enabled only while a context row is selected.
+    m_deletedIcon = list->style()->standardIcon(QStyle::SP_TrashIcon);
+
     auto *btnStyle = style();
     auto *btnRow = new QHBoxLayout;
     newBtn = makeActionButton(
@@ -80,6 +100,20 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
         QKeySequence(Qt::ALT | Qt::Key_H));
     showBtn->setEnabled(false);
     btnRow->addWidget(showBtn);
+    // Soft-delete lifecycle for the selected row (mirrors the
+    // model/skill panels): Delete for a live row; Restore only for
+    // deleted rows.
+    deleteBtn = makeActionButton(
+        btnStyle->standardIcon(QStyle::SP_TrashIcon),
+        tr("Soft-delete the selected context (it stays in the "
+           "database and can be restored)"),
+        QKeySequence(Qt::ALT | Qt::Key_D));
+    btnRow->addWidget(deleteBtn);
+    restoreBtn = makeActionButton(
+        btnStyle->standardIcon(QStyle::SP_ArrowBack),
+        tr("Restore the selected soft-deleted context"),
+        QKeySequence(Qt::ALT | Qt::Key_T));
+    btnRow->addWidget(restoreBtn);
     btnRow->addStretch();
     lay->addLayout(btnRow);
 
@@ -87,6 +121,13 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
     connect(newBtn, &QPushButton::clicked, this, &ContextPanel::onNewBtnClicked);
     connect(showBtn, &QPushButton::clicked, this,
             &ContextPanel::onShowBtnClicked);
+    connect(deleteBtn, &QPushButton::clicked, this,
+            &ContextPanel::onContextDeleteClicked);
+    connect(restoreBtn, &QPushButton::clicked, this,
+            &ContextPanel::onContextRestoreClicked);
+    connect(showDeletedCheck, &QCheckBox::toggled, this, [this](bool) {
+        reload();
+    });
     connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
         applyTreeFilter(list, t, RoleContextContent);
     });
@@ -120,12 +161,19 @@ bool ContextPanel::eventFilter(QObject *obj, QEvent *event)
     if ((obj == list || obj == list->viewport())
             && event->type() == QEvent::KeyPress) {
         const auto *key = static_cast<const QKeyEvent *>(event);
-        if (key->modifiers() == Qt::NoModifier
-                && (key->key() == Qt::Key_Return
-                        || key->key() == Qt::Key_Enter)) {
-            if (showBtn->isEnabled())
-                onShowBtnClicked();
-            return true;
+        if (key->modifiers() == Qt::NoModifier) {
+            if (key->key() == Qt::Key_Return
+                    || key->key() == Qt::Key_Enter) {
+                if (showBtn->isEnabled())
+                    onShowBtnClicked();
+                return true;
+            }
+            // Delete soft-deletes the selection (or restores a deleted
+            // row), mirroring the skill/model panel's Delete key.
+            if (key->key() == Qt::Key_Delete) {
+                onDeleteKeyPressed();
+                return true;
+            }
         }
     }
     return QWidget::eventFilter(obj, event);
@@ -161,7 +209,14 @@ void ContextPanel::reload()
 
     int n = 0;
     int err = ACTA_DB_OK;
-    context_t **contexts = acta_db_context_query(m_db, nullptr, 0, 0, &n, &err);
+    // Live rows by default (the DB layer's live-only default); with
+    // "Show trash" the query also returns soft-deleted rows so they
+    // can be restored.
+    context_t **contexts =
+        (showDeletedCheck != nullptr && showDeletedCheck->isChecked())
+            ? acta_db_context_query_with_deleted(m_db, nullptr, 0, 0, &n,
+                                                 &err)
+            : acta_db_context_query(m_db, nullptr, 0, 0, &n, &err);
     if (!contexts) {
         if (err != ACTA_DB_OK)
             qWarning("acta_db_context_query failed: %s",
@@ -189,6 +244,17 @@ void ContextPanel::reload()
                       contexts[i]->content
                           ? QString::fromUtf8(contexts[i]->content)
                           : QString());
+
+        // Soft-deleted row (only visible with "Show trash"): trash
+        // icon, gray date and a deleted tooltip, mirroring the
+        // skill/model/execution panel rows. The marker drives the
+        // Delete / Restore button states.
+        if (contexts[i]->deleted_at != nullptr) {
+            item->setData(0, RoleContextDeleted, true);
+            item->setIcon(0, m_deletedIcon);
+            item->setForeground(1, QColor(Qt::gray));
+            item->setToolTip(1, tr("Deleted %1").arg(createdIso));
+        }
     }
 
     acta_db_context_list_free(contexts, n);
@@ -224,6 +290,11 @@ void ContextPanel::reload()
     // (UR #19); the last-emitted id guard suppresses duplicates when
     // the selection was preserved across the reload.
     emitItemChanged();
+
+    // Re-evaluate the Delete / Restore buttons against the rebuilt list
+    // (also covers the selection vanishing when "Show trash" is turned
+    // off under a deleted row).
+    updateActionBtnStates();
 }
 
 void ContextPanel::showContext(QTreeWidgetItem *item)
@@ -261,6 +332,17 @@ void ContextPanel::onNewBtnClicked()
         reload();
 }
 
+void ContextPanel::updateActionBtnStates()
+{
+    const auto *cur = list->currentItem();
+    const bool hasRow =
+        cur != nullptr && cur->data(0, RoleContextId).toInt() != 0;
+    const bool isDeleted =
+        hasRow && cur->data(0, RoleContextDeleted).toBool();
+    deleteBtn->setEnabled(hasRow && !isDeleted);
+    restoreBtn->setEnabled(hasRow && isDeleted);
+}
+
 void ContextPanel::onShowBtnClicked()
 {
     const auto *cur = list->currentItem();
@@ -276,6 +358,74 @@ void ContextPanel::onShowBtnClicked()
     dlg.exec();
 }
 
+void ContextPanel::onContextDeleteClicked()
+{
+    if (!m_db || !deleteBtn->isEnabled())
+        return;
+    const auto *cur = list->currentItem();
+    const int contextId = cur ? cur->data(0, RoleContextId).toInt() : 0;
+    if (contextId == 0)
+        return;
+
+    // Same confirmation style as the skill/model panel delete.
+    if (QMessageBox::question(
+            this, tr("Delete Context"),
+            tr("Delete context %1? It stays in the database and can "
+               "be restored.")
+                .arg(contextId))
+        != QMessageBox::Yes)
+        return;
+
+    const int rc = acta_db_context_delete(m_db, contextId);
+    if (rc != ACTA_DB_OK) {
+        // A missing row and an already-deleted row are
+        // indistinguishable by design (context.h).
+        QString msg;
+        if (rc == ACTA_DB_ERR_NOT_FOUND)
+            msg = tr("Context not found (already deleted?).");
+        else
+            msg = tr("Could not delete the context: %1")
+                    .arg(QString::fromUtf8(acta_db_strerror(rc)));
+        QMessageBox::warning(this, tr("Delete Context"), msg);
+        return;
+    }
+
+    reload();
+}
+
+void ContextPanel::onContextRestoreClicked()
+{
+    if (!m_db || !restoreBtn->isEnabled())
+        return;
+    const auto *cur = list->currentItem();
+    const int contextId = cur ? cur->data(0, RoleContextId).toInt() : 0;
+    if (contextId == 0)
+        return;
+
+    const int rc = acta_db_context_restore(m_db, contextId);
+    if (rc != ACTA_DB_OK) {
+        QMessageBox::warning(
+            this, tr("Restore Context"),
+            tr("Could not restore the context: %1")
+                .arg(QString::fromUtf8(acta_db_strerror(rc))));
+        return;
+    }
+    // Content is untouched by the restore (contexts are immutable).
+    QMessageBox::information(this, tr("Context"),
+                             tr("Context %1 restored.").arg(contextId));
+    reload();
+}
+
+void ContextPanel::onDeleteKeyPressed()
+{
+    // Same gating as updateActionBtnStates(): Delete soft-deletes a
+    // live row; Restore undeletes a deleted row.
+    if (deleteBtn->isEnabled())
+        onContextDeleteClicked();
+    else if (restoreBtn->isEnabled())
+        onContextRestoreClicked();
+}
+
 void ContextPanel::onListContextMenu(const QPoint &pos)
 {
     QMenu menu(this);
@@ -283,6 +433,23 @@ void ContextPanel::onListContextMenu(const QPoint &pos)
     aNew->setIcon(style()->standardIcon(QStyle::SP_DialogYesButton));
     aNew->setToolTip(tr("Create a new context"));
     connect(aNew, &QAction::triggered, this, [this] { onNewBtnClicked(); });
+    // Soft-delete lifecycle entries, enabled exactly like the toolbar
+    // buttons (Delete: live row; Restore: deleted row).
+    auto *aDelete = menu.addAction(tr("Delete"));
+    aDelete->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+    aDelete->setToolTip(tr("Soft-delete the selected context (it stays "
+                            "in the database and can be restored)"));
+    aDelete->setEnabled(deleteBtn->isEnabled());
+    connect(aDelete, &QAction::triggered, this, [this] {
+        onContextDeleteClicked();
+    });
+    auto *aRestore = menu.addAction(tr("Restore"));
+    aRestore->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    aRestore->setToolTip(tr("Restore the selected soft-deleted context"));
+    aRestore->setEnabled(restoreBtn->isEnabled());
+    connect(aRestore, &QAction::triggered, this, [this] {
+        onContextRestoreClicked();
+    });
     // "Show" operates on the currently selected row, like the Show
     // button of the panel.
     auto *aShow = menu.addAction(tr("Show"));

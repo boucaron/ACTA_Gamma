@@ -15,9 +15,9 @@ last consumer: the GUI, per the spec's GUI section:
 - No delete button for a `running` execution (matches the C-layer rule).
 
 **Status:** implemented (code in place, mirrors the skill/model panel
-pattern; not yet compile-verified). `acta_gui` has no unit-test harness —
-verification is a manual smoke run (`acta_gui/db/smoke_test.sh`) against a
-migrated DB.
+pattern, including the `ContextPanel` delete/restore follow-up; not yet
+compile-verified). `acta_gui` has no unit-test harness — verification is a
+manual smoke run (`acta_gui/db/smoke_test.sh`) against a migrated DB.
 
 No `acta_db` or schema work is needed here: `acta_gui/db/schema.sql`
 already carries `contexts.deleted_at` / `executions.deleted_at` and the
@@ -117,12 +117,28 @@ already carries `contexts.deleted_at` / `executions.deleted_at` and the
 
 ## 3. Explicitly out of scope / follow-ups
 
-- **`ContextPanel` / `ContextDialog`**: no delete/restore UI was added.
-  `acta_db_context_query` is live-only by default, so soft-deleted contexts
-  are hidden from the panel automatically (the intended semantic); there is
-  currently no GUI path to restore them — that remains a possible follow-up
-  (a "Show trash" + Delete/Restore pair exactly like §1). Context deletion
-  itself is available via `acta_cli context delete/restore`.
+### ContextPanel: delete/restore UI — **done** (follow-up, mirrors §1)
+
+- `showDeletedCheck` ("Show trash", unchecked by default) above the list;
+  `reload()` switches between `acta_db_context_query` (live-only, the DB
+  layer default) and `acta_db_context_query_with_deleted` (checked), with
+  deleted rows marked by a `RoleContextDeleted` row role, the trash icon
+  (cached `m_deletedIcon`), a gray date column and a "Deleted <iso>"
+  tooltip — the skill/model/execution row styling.
+- Toolbar **Delete** (Alt+D) / **Restore** (Alt+T) buttons next to Show,
+  with context-menu entries between New and Show, enabled exactly via
+  `updateActionBtnStates()` (Delete: live row; Restore: deleted row).
+  Delete asks a confirmation prompt; `ACTA_DB_ERR_NOT_FOUND` surfaces as
+  "Context not found (already deleted?)" (the DB layer makes a missing row
+  and an already-deleted row indistinguishable); Restore shows an
+  information box, then `reload()`. `acta_db_context_delete` has no
+  INVALID path (contexts have no running state), unlike executions.
+- Delete-key accelerator while the list has focus (same gating as the
+  buttons, mirroring `FolderTreePanel`).
+- `ContextDialog` (read-only details) still opens for deleted rows:
+  `acta_db_context_get` returns them.
+- Context deletion was already available via `acta_cli context
+  delete/restore`; the GUI now offers the same lifecycle.
 - **`ExecutionDialog`**: no `deleted_at` display field (the spec does not
   require it; the list row already marks deleted rows).
 - No hard delete, no cascades, no space reclamation — per the owner
