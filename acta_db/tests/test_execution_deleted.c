@@ -133,15 +133,16 @@ static void test_exec_delete_running_is_invalid(void) {
     env_close(&e);
 }
 
-static void test_exec_delete_already_deleted_is_invalid(void) {
+static void test_exec_delete_already_deleted_is_not_found(void) {
     env_t e = env_open("test/acta_test_execdel_twice.db");
     int eid = env_exec(&e, "D2", 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
-    /* second delete: row exists but is already deleted → INVALID
-     * (contrast with context delete, where both cases are NOT_FOUND) */
+    /* second delete: row exists but is already deleted → NOT_FOUND
+     * (same contract as context delete, where a missing or
+     * already-deleted row both map to NOT_FOUND) */
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid),
-                       ACTA_DB_ERR_INVALID);
+                       ACTA_DB_ERR_NOT_FOUND);
 
     env_close(&e);
 }
@@ -421,7 +422,7 @@ int run_execution_deleted_tests(void) {
     test_exec_delete_failed();
     test_exec_delete_cancelled();
     test_exec_delete_running_is_invalid();
-    test_exec_delete_already_deleted_is_invalid();
+    test_exec_delete_already_deleted_is_not_found();
     test_exec_delete_missing();
     test_exec_delete_null_db();
 

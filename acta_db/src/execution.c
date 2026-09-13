@@ -574,8 +574,9 @@ int acta_db_execution_delete(db_t *db, int id)
 
     /* Pre-check for the friendlier error codes; the guarded UPDATE
      * below is the authoritative check in a race (same pattern as the
-     * transition functions).  A missing row is NOT_FOUND; a running or
-     * already-deleted row is INVALID. */
+     * transition functions).  A missing row or an already-deleted row
+     * is NOT_FOUND (same contract as acta_db_context_delete); only a
+     * `running` row is refused with INVALID. */
     {
         sqlite3_stmt *stmt;
         if (sqlite3_prepare_v2(db->handle,
@@ -587,10 +588,11 @@ int acta_db_execution_delete(db_t *db, int id)
         int rc = ACTA_DB_ERR_NOT_FOUND;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             const unsigned char *s = sqlite3_column_text(stmt, 0);
-            rc = (sqlite3_column_type(stmt, 1) != SQLITE_NULL
-                   || (s && strcmp((const char *)s, ACTA_EXEC_STATUS_RUNNING) == 0))
-                   ? ACTA_DB_ERR_INVALID
-                   : ACTA_DB_OK;
+            int deleted = sqlite3_column_type(stmt, 1) != SQLITE_NULL;
+            int running = s && strcmp((const char *)s, ACTA_EXEC_STATUS_RUNNING) == 0;
+            rc = deleted        ? ACTA_DB_ERR_NOT_FOUND
+                 : running      ? ACTA_DB_ERR_INVALID
+                                : ACTA_DB_OK;
         }
         sqlite3_finalize(stmt);
         if (rc != ACTA_DB_OK) return rc;
