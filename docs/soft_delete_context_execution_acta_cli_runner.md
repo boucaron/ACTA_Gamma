@@ -289,7 +289,8 @@ directory's `*_test_main.c`):
 ## 8. Explicitly out of scope (per the design spec)
 
 - GUI changes (context picker, Retry disable, per-row restore actions) —
-  `acta_gui` is its own follow-up.
+  done in the `acta_gui` follow-up, see
+  [`soft_delete_context_execution_acta_gui.md`](soft_delete_context_execution_acta_gui.md).
 - **Hard delete is excluded everywhere in this phase** (owner decision,
   2026-09-13) — contexts and executions are soft-deleted only
   (`deleted_at` flag flip); there is no hard-delete command in
