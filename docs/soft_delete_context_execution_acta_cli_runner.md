@@ -15,9 +15,10 @@ have the `delete` / `restore` actions, `--include_deleted` / `--deleted`
 on `get` / `list` / `count`, and `deleted_at` in JSON/table/vlog output
 and the usage text; the `docs/cli_spec.md` rows are in place. The
 test-ref schema was migrated (`deleted_at` added to `contexts` /
-`executions` in `acta_test_ref.sql` / `acta_test_ref.db`). Remaining:
-`tools.c` (T3) rows, the `acta_runner` single-claim guard, and the CLI
-and runner tests (section 6).
+`executions` in `acta_test_ref.sql` / `acta_test_ref.db`). The context part of `tools.c` (T3) and the context expectations in
+`tools_test_main.c` are done (72-entry table; context action set 7).
+Remaining: the exec part of `tools.c`, the `acta_runner` single-claim
+guard, and the CLI and runner tests (section 6).
 
 ## Reference: the model/skill CLI pattern
 
@@ -121,9 +122,17 @@ already do, so no new CLI machinery is needed:
   is added): add `delete` / `restore` sections and the flag notes.
 - `exec_actions[]`: add the two new rows.
 
-## 3. `acta_cli/src/tools.c` (T3) — **not done**
+## 3. `acta_cli/src/tools.c` (T3) — **partially done** (context part
+done; exec part pending)
 
-Generated data table — **no logic change**, only new rows/flags:
+Generated data table — **no logic change**, only new rows/flags.
+**Done (context):** the `context.delete` / `context.restore` entries,
+`include_deleted` on `context get` / `list` / `count` (reusing
+`f_inc_del`), the `context get` description, and the context
+expectations in `tools_test_main.c` (72-entry table, context action
+set 7). **Pending (exec):** the `exec.delete` / `exec.restore` entries,
+`include_deleted` on `f_exec_list` / `f_exec_count` / `f_exec_get`, and
+the `exec get` description.
 
 - New entries (mirror the model/skill delete/restore entries, lines
   ~321/389/466/536):
@@ -214,7 +223,8 @@ Mirror the existing `test_pending.c` / `test_run.c` style:
 - `run --pending` with one live + one deleted pending row → runs only
   the live one.
 
-## 6. `acta_cli` tests — **not done**
+## 6. `acta_cli` tests — **not done** (except the `tools_test_main.c`
+context expectations, which are updated to the 72-entry table)
 
 Follow the per-module structure of `acta_cli/tests/` (each module
 `*_test_<name>.c` registered in its directory's `*_test_main.c`):
@@ -242,7 +252,8 @@ Follow the per-module structure of `acta_cli/tests/` (each module
 - `tests/tools/tools_test_main.c`: update expectations for the new
   `context.delete` / `context.restore` / `exec.delete` / `exec.restore`
   entries and the new `include_deleted` flags (entry count, compact
-  rendering).
+  rendering). Context part done (72 entries, context action set 7);
+  exec entries pending.
 
 ## 7. Open questions (q1 resolved; q2–q3 open)
 
