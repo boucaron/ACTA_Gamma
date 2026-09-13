@@ -181,6 +181,9 @@ and `exec` tables, and to the `--tools` schema (T3, generated from
 
 - Execution list: hide deleted rows by default; per-row restore action
   mirroring the model/skill rows; Retry button disabled for deleted rows.
+- Context list (ContextPanel): hide deleted rows by default; "Show trash"
+  checkbox plus per-row Delete/Restore, same pattern (implemented as the
+  GUI follow-up, see the plan doc).
 - Context picker (ExecutionCreateDialog and Run dialog): list live
   contexts only.
 - No delete button for a `running` execution (matches the C-layer rule).
