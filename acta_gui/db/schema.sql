@@ -178,15 +178,23 @@ CREATE TABLE contexts (
     content TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     metadata TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT
 );
 
 
 DROP TRIGGER IF EXISTS contexts_immutable;
-CREATE TRIGGER contexts_immutable 
-BEFORE UPDATE ON contexts 
-BEGIN 
-  SELECT RAISE(ABORT, 'contexts are immutable'); 
+DROP TRIGGER IF EXISTS contexts_soft_delete_only;
+CREATE TRIGGER contexts_soft_delete_only
+BEFORE UPDATE ON contexts
+WHEN (
+    NEW.type IS NOT OLD.type
+    OR NEW.content IS NOT OLD.content
+    OR NEW.content_hash IS NOT OLD.content_hash
+    OR NEW.metadata IS NOT OLD.metadata
+)
+BEGIN
+  SELECT RAISE(ABORT, 'contexts are immutable: only deleted_at may change');
 END;
 
 
@@ -203,6 +211,7 @@ CREATE TABLE executions (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at TEXT,
     completed_at TEXT,
+    deleted_at TEXT,
     parent_execution_id INTEGER,
     FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT,
     FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT,
