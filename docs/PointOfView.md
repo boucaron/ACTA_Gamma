@@ -149,8 +149,8 @@ An execution becomes a concrete historical artifact rather than an ephemeral cha
 
 ## Regression testing and benchmarking
 
-This is not part of the current implementation; it is an example of what
-**can be built on top of** the primitive once executions are recorded.
+This is not our business; it is an example of what **can be built on top of**
+the primitive once executions are recorded.
 
 A dataset can contain known contexts and expected observations.
 
@@ -183,9 +183,10 @@ Such a setup makes it possible to measure changes in:
 
 ## Composition belongs outside the LLM
 
-ACTA Gamma intentionally keeps orchestration outside the model. The following
-is likewise an example of what an application **can build on top of** the
-primitive, not something the engine does itself.
+ACTA Gamma intentionally keeps orchestration outside the model, and workflows
+are not our business. ACTA Gamma is just a building block: one replayable,
+auditable action. The following is an example of how a higher-level program
+could **use that building block** to do what the engine does not do.
 
 If an application wants to perform:
 
@@ -199,16 +200,16 @@ test analysis
 final report
 ```
 
-those are separate executions controlled by the application or a higher-level workflow.
+those are separate executions controlled by an application built on top of ACTA Gamma, not by ACTA Gamma itself.
 
 The individual skills do not delegate to one another.
 
 This keeps each operation small, understandable, testable, and independently replaceable.
 
-Workflow composition is built **on top of** this primitive, not inside it: a
-higher-level program can chain the actions — security → correctness → test
-analysis → final report — using each execution's result as the next context, while
-the engine itself stays a single, replayable, auditable building block.
+Workflow composition is not implemented here: a
+higher-level program can chain the building blocks — security → correctness →
+test analysis → final report — using each execution's result as the next
+context, while ACTA Gamma itself stays a single, replayable, auditable action.
 
 ## The broader idea
 
