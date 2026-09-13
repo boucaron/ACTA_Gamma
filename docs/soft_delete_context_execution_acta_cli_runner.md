@@ -44,7 +44,7 @@ already do, so no new CLI machinery is needed:
 
 ---
 
-## 1. `acta_cli/src/commands/context.c`
+## 1. `acta_cli/src/commands/context.c` — **done**
 
 ### New actions
 
@@ -83,7 +83,7 @@ already do, so no new CLI machinery is needed:
 - `context_actions[]` array: add the two new action_def rows (drives
   `unknown_action` suggestions and help).
 
-## 2. `acta_cli/src/commands/execution.c`
+## 2. `acta_cli/src/commands/execution.c` — **done**
 
 ### New actions
 
@@ -121,7 +121,7 @@ already do, so no new CLI machinery is needed:
   is added): add `delete` / `restore` sections and the flag notes.
 - `exec_actions[]`: add the two new rows.
 
-## 3. `acta_cli/src/tools.c` (T3)
+## 3. `acta_cli/src/tools.c` (T3) — **not done**
 
 Generated data table — **no logic change**, only new rows/flags:
 
@@ -147,7 +147,7 @@ Generated data table — **no logic change**, only new rows/flags:
 The compact one-liner output and the JSON schema both derive from
 `tool_table`, so both update automatically.
 
-## 4. `docs/cli_spec.md`
+## 4. `docs/cli_spec.md` — **done**
 
 Source of truth for T3 — add:
 
@@ -166,7 +166,9 @@ Source of truth for T3 — add:
   (`emit_deleted`, `emit_ok_restored`) — one line extending their list of
   users to context/exec is enough.
 
-## 5. `acta_runner`
+## 5. `acta_runner` — **not done** (the `run --pending` path needs no code
+change; the single-claim `deleted_at` guard and the runner tests are
+pending)
 
 ### `run --pending` (batch claim)
 
@@ -212,7 +214,7 @@ Mirror the existing `test_pending.c` / `test_run.c` style:
 - `run --pending` with one live + one deleted pending row → runs only
   the live one.
 
-## 6. `acta_cli` tests
+## 6. `acta_cli` tests — **not done**
 
 Follow the per-module structure of `acta_cli/tests/` (each module
 `*_test_<name>.c` registered in its directory's `*_test_main.c`):
@@ -242,7 +244,7 @@ Follow the per-module structure of `acta_cli/tests/` (each module
   entries and the new `include_deleted` flags (entry count, compact
   rendering).
 
-## 7. Open questions (decisions to confirm)
+## 7. Open questions (q1 resolved; q2–q3 open)
 
 1. **`exec get` flag.** — **Resolved: added.** The flag is on `exec get`
    (consistency with `context` / `model` / `skill get`). The execution DB
