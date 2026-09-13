@@ -5,6 +5,7 @@ extern int run_context_test_get();
 extern int run_context_test_list();
 extern int run_context_test_count();
 extern int run_context_test_misc();
+extern int run_context_test_deleted();
 
 
 int main(void)
@@ -16,6 +17,7 @@ int main(void)
     f += run_context_test_list();
     f += run_context_test_count();
     f += run_context_test_misc();
+    f += run_context_test_deleted();
 
     if (f == 0) {
         printf("PASS: all context tests passed\n");

@@ -11,6 +11,7 @@ extern int run_execution_test_get();
 extern int run_execution_test_lifecycle();
 extern int run_execution_test_list_count();
 extern int run_execution_test_misc();
+extern int run_execution_test_deleted();
 
 int main(void)
 {
@@ -21,6 +22,7 @@ int main(void)
     f += run_execution_test_lifecycle();
     f += run_execution_test_list_count();
     f += run_execution_test_misc();
+    f += run_execution_test_deleted();
 
     if (f == 0) {
         printf("PASS: all execution tests passed\n");

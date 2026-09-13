@@ -233,10 +233,17 @@ BEGIN
   INSERT INTO skill_revisions(skill_id,revision,folder_id,name,description,prompt_template,output_schema,created_at,updated_at,deleted_at)
   VALUES (NEW.id,COALESCE((SELECT MAX(revision) FROM skill_revisions WHERE skill_id = NEW.id),0)+1,NEW.folder_id,NEW.name,NEW.description,NEW.prompt_template,NEW.output_schema,datetime('now'),datetime('now'),NEW.deleted_at);
 END;
-CREATE TRIGGER contexts_immutable 
-BEFORE UPDATE ON contexts 
-BEGIN 
-  SELECT RAISE(ABORT, 'contexts are immutable'); 
+DROP TRIGGER IF EXISTS contexts_immutable;
+CREATE TRIGGER contexts_soft_delete_only
+BEFORE UPDATE ON contexts
+WHEN (
+    NEW.type IS NOT OLD.type
+    OR NEW.content IS NOT OLD.content
+    OR NEW.content_hash IS NOT OLD.content_hash
+    OR NEW.metadata IS NOT OLD.metadata
+)
+BEGIN
+  SELECT RAISE(ABORT, 'contexts are immutable: only deleted_at may change');
 END;
 CREATE INDEX idx_model_folders_parent ON model_folders(parent_id);
 CREATE INDEX idx_models_folder ON models(folder_id);
