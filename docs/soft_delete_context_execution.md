@@ -8,6 +8,8 @@ This replaces the "Things deliberately missing" note in `DBDesign.md`:
 deletion of contexts/executions, when needed, **is** a `deleted_at` soft
 delete — and it is now needed.
 
+Implementation plan for the DB layer: `soft_delete_context_execution_acta_db.md`.
+
 ## Why
 
 - Folders, models and skills already have `delete` / `restore` /
@@ -25,8 +27,10 @@ delete — and it is now needed.
 ## Semantics (apply to both entities)
 
 - Soft delete is a **flag flip**: set `deleted_at = datetime('now')`;
-  restore sets it back to `NULL`. No data is removed, no space is
-  reclaimed, nothing cascades.
+  restore (aka undelete) sets it back to `NULL`. No data is removed, no
+  space is reclaimed, nothing cascades — restoring a row makes it
+  visible and usable again exactly as before, with the same id, data and
+  status.
 - Foreign keys are never touched (a soft delete is an UPDATE, not a
   physical DELETE), so the existing `ON DELETE RESTRICT` /
   `ON DELETE SET NULL` constraints need no change.
@@ -115,11 +119,16 @@ The **one real decision** of this doc:
 ### Inert rules for deleted executions
 
 - `acta_db_execution_reset` (and the GUI Retry button) refuses deleted
-  rows → `ACTA_DB_ERR_NOT_FOUND`.
+  rows → `ACTA_DB_ERR_NOT_FOUND`: a deleted execution must be **restored
+  first** before it can be reset/retried. Restore only clears the flag
+  and preserves status, so a restored `failed` row is resettable as
+  usual.
 - Runner claim (`acta_runner run --pending`) must skip deleted rows: the
-  pending query gets a `deleted_at IS NULL` guard.
+  pending query gets a `deleted_at IS NULL` guard — the same restore-first
+  rule applies to a deleted `pending` row.
 - Replay (`exec create` with `--parent_execution_id`) is unaffected —
-  replay creates a *new* live row; the parent may be deleted.
+  replay creates a *new* live row, so the work can be re-run **without
+  restoring** the deleted parent.
 - No cascade: children of a deleted parent stay live and readable
   (`parent_execution_id` is audit data, `ON DELETE SET NULL` never fires).
 - `execution_logs` are untouched by soft delete (their FK `CASCADE` only
