@@ -587,9 +587,13 @@ CREATE INDEX IF NOT EXISTS idx_execution_logs_event ON execution_logs(event, exe
 ```
 
 
-## Things deliberately missing
+## What this schema deliberately does not cover
 
-I would **not** add these yet:
+ACTA Gamma takes a serverless, permission-less approach: one private database
+file, no server, no accounts, no authorization layer. Everything that would
+normally live around that is out of scope for this project — not because the
+idea is bad, but because it is not our business. It would belong to a
+higher-level application built on top of this building block:
 
 * datasets
 * benchmark tables
@@ -611,7 +615,9 @@ I would **not** add these yet:
   must be a `deleted_at` soft delete mirroring the skill/model/folder
   pattern; a hard-delete API is out of scope (owner decision, 2026-07-10)
 
-Those can all be built later if the POC demonstrates that they are actually needed.
+If the POC shows that any of these are actually needed, they can be built
+later, on top of the schema — or, in the case of users, permissions, and
+organizations, by the application that embeds ACTA Gamma.
 
 The useful question for the first implementation is simply:
 
