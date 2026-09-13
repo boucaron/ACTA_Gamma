@@ -391,7 +391,7 @@ Large contexts are not a problem: a few GB in SQLite is fine, and in the worst c
 -- ============================================================
 -- Contexts
 -- ============================================================
--- immutable
+-- content-immutable; only the deleted_at flag is mutable (soft delete)
 -- content_hash is not used for dedup, only a small check
 -- type is free form and intentionally not enforced (owner decision, 2026-07-10)
 CREATE TABLE contexts (
@@ -400,15 +400,26 @@ CREATE TABLE contexts (
     content         TEXT NOT NULL,
     content_hash    TEXT NOT NULL,
     metadata        TEXT,
-    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at      TEXT
 );
 
--- Contexts are immutable: no UPDATE (or any other) lifecycle at all.
+-- Contexts are content-immutable: the trigger allows ONLY the deleted_at
+-- flag to change (soft-delete lifecycle, see
+-- docs/soft_delete_context_execution.md); any other column change
+-- RAISE(ABORT)s.
 DROP TRIGGER IF EXISTS contexts_immutable;
-CREATE TRIGGER contexts_immutable
+DROP TRIGGER IF EXISTS contexts_soft_delete_only;
+CREATE TRIGGER contexts_soft_delete_only
 BEFORE UPDATE ON contexts
+WHEN (
+    NEW.type IS NOT OLD.type
+    OR NEW.content IS NOT OLD.content
+    OR NEW.content_hash IS NOT OLD.content_hash
+    OR NEW.metadata IS NOT OLD.metadata
+)
 BEGIN
-  SELECT RAISE(ABORT, 'contexts are immutable');
+  SELECT RAISE(ABORT, 'contexts are immutable: only deleted_at may change');
 END;
 ```
 
@@ -451,6 +462,13 @@ pending, running ──cancel()──▶ cancelled   (terminal)
 `reset()` makes `failed` re-entrant (retry): it clears the failed attempt's
 data (`error`, `raw_response`, `started_at`, `completed_at`) but preserves the
 `execution_log` audit trail. `completed` and `cancelled` are terminal.
+
+Executions carry a `deleted_at` soft-delete lifecycle (see
+docs/soft_delete_context_execution.md): `delete` is allowed from
+`pending`/`completed`/`failed`/`cancelled` but not from `running`;
+`restore` clears the flag with the status untouched; a deleted execution is
+inert — `reset` refuses it (restore first). Listers and counts are live-only
+(`deleted_at IS NULL`) by default.
 
 
 ### Logs
@@ -551,6 +569,7 @@ CREATE TABLE executions (
     created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at          TEXT,
     completed_at        TEXT,
+    deleted_at          TEXT,
     parent_execution_id INTEGER,
     FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT,
     FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT,
@@ -608,12 +627,9 @@ higher-level application built on top of this building block:
 * conversation/session tables
 * queues
 * **hard delete** — lifecycle operations are **soft delete only**
-  (`deleted_at`) where a lifecycle exists at all (skills, models, and
-  folders). Contexts and executions have no delete lifecycle today:
-  contexts are immutable, and executions only transition to the terminal
-  `cancelled` state. If deletion of contexts/executions is ever needed it
-  must be a `deleted_at` soft delete mirroring the skill/model/folder
-  pattern; a hard-delete API is out of scope (owner decision, 2026-07-10)
+  (`deleted_at`) across all entities: skills, models, folders, and now
+  contexts and executions (see docs/soft_delete_context_execution.md).
+  A hard-delete API is out of scope (owner decision, 2026-07-10)
 
 If the POC shows that any of these are actually needed, they can be built
 later, on top of the schema — or, in the case of users, permissions, and
