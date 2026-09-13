@@ -19,6 +19,8 @@ static void exec_usage(FILE *f)
 "Actions:\n"
 "  create    Create a new execution record\n"
 "  get       Fetch an execution by id\n"
+"  delete    Remove an execution (soft delete)\n"
+"  restore   Restore a deleted execution\n"
 "  start     Mark an execution as started\n"
 "  cancel    Cancel a running execution\n"
 "  complete  Mark an execution as completed\n"
@@ -61,12 +63,27 @@ static void exec_usage(FILE *f)
 "  Fetch a single execution by its primary key.\n"
 "\n"
 "    acta_cli exec get 42\n"
+"    acta_cli exec get 42 --include_deleted\n"
 "\n"
 "  Options:\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n"
+"\n"
+"== delete <id> ====================================================\n"
+"  Soft-delete an execution (sets deleted_at).\n"
+"  Refused from the 'running' state and on already-deleted rows.\n"
+"\n"
+"    acta_cli exec delete 42\n"
+"\n"
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted execution (status is\n"
+"  untouched; a deleted 'failed' row restores to 'failed').\n"
+"\n"
+"    acta_cli exec restore 42\n"
 "\n"
 "== start <id> ======================================================\n"
 "  Transition an execution to 'running'.\n"
@@ -114,6 +131,7 @@ static void exec_usage(FILE *f)
 "\n"
 "    acta_cli exec list\n"
 "    acta_cli exec list --status running --offset 10 --limit 25\n"
+"    acta_cli exec list --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
@@ -121,6 +139,8 @@ static void exec_usage(FILE *f)
 "    --skill_revision_id <int>  Filter by skill revision\n"
 "    --model_revision_id <int>  Filter by model revision\n"
 "    --parent_execution_id <int> Filter by parent execution\n"
+"    --include_deleted          Include soft-deleted rows\n"
+"    --deleted                  Alias for --include_deleted\n"
 "    --offset <n>               Skip first N rows (default 0)\n"
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
@@ -133,6 +153,7 @@ static void exec_usage(FILE *f)
 "\n"
 "    acta_cli exec count\n"
 "    acta_cli exec count --status failed --context_id 7\n"
+"    acta_cli exec count --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
@@ -140,6 +161,8 @@ static void exec_usage(FILE *f)
 "    --skill_revision_id <int>  Filter by skill revision\n"
 "    --model_revision_id <int>  Filter by model revision\n"
 "    --parent_execution_id <int> Filter by parent execution\n"
+"    --include_deleted          Include soft-deleted rows\n"
+"    --deleted                  Alias for --include_deleted\n"
 "\n"
 "Global options:\n"
 "  --table            columnar / plain output instead of JSON\n"
@@ -191,12 +214,35 @@ static void usage_get(FILE *f)
 "  Fetch a single execution by its primary key.\n"
 "\n"
 "    acta_cli exec get 42\n"
+"    acta_cli exec get 42 --include_deleted\n"
 "\n"
 "  Options:\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);
+}
+
+static void usage_delete(FILE *f)
+{
+    fputs(
+"== delete <id> ====================================================\n"
+"  Soft-delete an execution (sets deleted_at).\n"
+"  Refused from the 'running' state and on already-deleted rows.\n"
+"\n"
+"    acta_cli exec delete 42\n", f);
+}
+
+static void usage_restore(FILE *f)
+{
+    fputs(
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted execution (status is\n"
+"  untouched; a deleted 'failed' row restores to 'failed').\n"
+"\n"
+"    acta_cli exec restore 42\n", f);
 }
 
 static void usage_start(FILE *f)
@@ -285,6 +331,7 @@ static void usage_list(FILE *f)
 "\n"
 "    acta_cli exec list\n"
 "    acta_cli exec list --status running --offset 10 --limit 25\n"
+"    acta_cli exec list --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
@@ -292,6 +339,8 @@ static void usage_list(FILE *f)
 "    --skill_revision_id <int>  Filter by skill revision\n"
 "    --model_revision_id <int>  Filter by model revision\n"
 "    --parent_execution_id <int> Filter by parent execution\n"
+"    --include_deleted          Include soft-deleted rows\n"
+"    --deleted                  Alias for --include_deleted\n"
 "    --offset <n>               Skip first N rows (default 0)\n"
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
@@ -308,13 +357,16 @@ static void usage_count(FILE *f)
 "\n"
 "    acta_cli exec count\n"
 "    acta_cli exec count --status failed --context_id 7\n"
+"    acta_cli exec count --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --status <str>             Filter by status\n"
 "    --context_id <int>         Filter by context\n"
 "    --skill_revision_id <int>  Filter by skill revision\n"
 "    --model_revision_id <int>  Filter by model revision\n"
-"    --parent_execution_id <int> Filter by parent execution\n", f);
+"    --parent_execution_id <int> Filter by parent execution\n"
+"    --include_deleted          Include soft-deleted rows\n"
+"    --deleted                  Alias for --include_deleted\n", f);
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -322,7 +374,8 @@ static void usage_count(FILE *f)
 static void vlog_exec_fields(const char *tag, const execution_t *e)
 {
     VLOG(2, "%s: id=%d ctx=%d skill_rev=%d model_rev=%d status=%s prompt=%s "
-         "result=%s error=%s started_at=%s completed_at=%s parent=%d",
+         "result=%s error=%s started_at=%s completed_at=%s parent=%d "
+         "deleted_at=%s",
          tag,
          e->id,
          e->context_id,
@@ -334,7 +387,8 @@ static void vlog_exec_fields(const char *tag, const execution_t *e)
          e->error            ? e->error            : "(null)",
          e->started_at       ? e->started_at       : "(null)",
          e->completed_at     ? e->completed_at     : "(null)",
-         e->parent_execution_id);
+         e->parent_execution_id,
+         e->deleted_at       ? e->deleted_at       : "(null)");
 }
 
 static void vlog_exec_raw(const char *tag, const execution_t *e, int rc)
@@ -418,6 +472,11 @@ static void exec_to_json(FILE *f, const execution_t *e, const global_opts_t *gop
         if (shown++) fputs(", ", f);
         fprintf(f, "\"parent_execution_id\":%d", e->parent_execution_id);
     }
+    if ((!fl || fields_has(fl, "deleted_at")) && !(gopts->no_nulls && !e->deleted_at)) {
+        if (shown++) fputs(", ", f);
+        fputs("\"deleted_at\":", f);
+        if (e->deleted_at) json_str(f, e->deleted_at); else fputs("null", f);
+    }
 
     fputc('}', f);
 }
@@ -427,8 +486,9 @@ static void exec_to_json(FILE *f, const execution_t *e, const global_opts_t *gop
 static void exec_table(FILE *f, const execution_t *e, int header)
 {
     if (header) {
-        fprintf(f, " %4s  %4s  %-10s  %-38s  %-22s  %-22s\n",
-                "ID", "CTX", "STATUS", "PROMPT", "STARTED_AT", "COMPLETED_AT");
+        fprintf(f, " %4s  %4s  %-10s  %-38s  %-22s  %-22s  %-19s\n",
+                "ID", "CTX", "STATUS", "PROMPT", "STARTED_AT", "COMPLETED_AT",
+                "DELETED_AT");
         return;
     }
     char idb[16];
@@ -441,6 +501,7 @@ static void exec_table(FILE *f, const execution_t *e, int header)
     tcol(f, e->prompt,      38);
     tcol(f, e->started_at,  22);
     tcol(f, e->completed_at, 22);
+    tcol(f, e->deleted_at,   19);
     fputc('\n', f);
 }
 
@@ -451,6 +512,8 @@ static void exec_table(FILE *f, const execution_t *e, int header)
 static const action_def_t exec_actions[] = {
     { "create",   "create a new exec record"      },
     { "get",      "fetch an exec by id"           },
+    { "delete",   "soft-delete an exec"           },
+    { "restore",  "restore a deleted exec"        },
     { "start",    "mark exec as started"          },
     { "cancel",   "cancel a running exec"         },
     { "complete", "mark exec as completed"        },
@@ -615,13 +678,24 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", usage_get, "exec get", &id))
             return EXIT_INVALID;
 
-        VLOG(1, "exec get: fetching id=%d", id);
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+
+        VLOG(1, "exec get: fetching id=%d include_deleted=%d", id,
+             include_deleted);
 
         int err = 0;
+        /* include_deleted → unfiltered fetch (row even if soft-deleted);
+         * otherwise live rows only. The execution DB layer has no
+         * get_live, so a deleted row is mapped to not-found here. */
         execution_t *e = acta_db_execution_get(db, id, &err);
 
-        VLOG(3, "  acta_db_execution_get(%d) → ptr=%p err=%d",
-             id, (const void *)e, err);
+        VLOG(3, "  acta_db_execution_get(%d, include_deleted=%d) → ptr=%p err=%d",
+             id, include_deleted, (const void *)e, err);
+
+        if (!include_deleted && e && e->deleted_at) {
+            acta_db_execution_free(e);
+            return emit_not_found("execution");
+        }
 
         int rc = load_row_or_notfound(db, err, e, id, execution_free_wrap,
                                       "execution get", "execution");
@@ -641,6 +715,52 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fputc('\n', stdout);
         }
         acta_db_execution_free(e);
+        return EXIT_OK;
+    }
+
+    /* ── delete <id> ──────────────────────────────────────────────── */
+    if (strcmp(action, "delete") == 0) {
+        int id;
+        if (!parse_id_positional(ga, "id", usage_delete, "exec delete", &id))
+            return EXIT_INVALID;
+
+        VLOG(1, "exec delete: id=%d", id);
+        VLOG(3, "  id=%d db=%p", id, (const void *)db);
+
+        int rc = acta_db_execution_delete(db, id);
+
+        VLOG(3, "  acta_db_execution_delete(%d) → rc=%d", id, rc);
+
+        if (rc != ACTA_DB_OK) {
+            VLOG(1, "  FAILED rc=%d → exit mapping", rc);
+            return finish_op_error(db, rc, "execution delete");
+        }
+
+        VLOG(1, "  deleted exec id=%d", id);
+        emit_deleted();
+        return EXIT_OK;
+    }
+
+    /* ── restore <id> ─────────────────────────────────────────────── */
+    if (strcmp(action, "restore") == 0) {
+        int id;
+        if (!parse_id_positional(ga, "id", usage_restore, "exec restore", &id))
+            return EXIT_INVALID;
+
+        VLOG(1, "exec restore: id=%d", id);
+        VLOG(3, "  id=%d db=%p", id, (const void *)db);
+
+        int rc = acta_db_execution_restore(db, id);
+
+        VLOG(3, "  acta_db_execution_restore(%d) → rc=%d", id, rc);
+
+        if (rc != ACTA_DB_OK) {
+            VLOG(1, "  FAILED rc=%d → exit mapping", rc);
+            return finish_op_error(db, rc, "execution restore");
+        }
+
+        VLOG(1, "  restored exec id=%d", id);
+        emit_ok_restored(gopts, id);
         return EXIT_OK;
     }
 
@@ -814,19 +934,22 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                                   usage_list, "exec list") < 0)
             return EXIT_INVALID;
 
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+
         execution_query_t q = {
             .status              = f_status,
             .context_id          = ctx_id,
             .skill_revision_id   = skill_rev_id,
             .model_revision_id   = model_rev_id,
             .parent_execution_id = parent_id,
+            .include_deleted     = include_deleted,
         };
 
         VLOG(1, "exec list: status=%s ctx=%d skill_rev=%d model_rev=%d "
-                "parent=%d offset=%d limit=%d",
+                "parent=%d offset=%d limit=%d include_deleted=%d",
              f_status ? f_status : "(any)",
              q.context_id, q.skill_revision_id, q.model_revision_id,
-             q.parent_execution_id, offset, limit);
+             q.parent_execution_id, offset, limit, include_deleted);
 
         VLOG(2, "  full: status=%s ctx=%s skill_rev=%s model_rev=%s parent=%s "
                 "offset=%d limit=%d no_nulls=%d table=%d fields=%s",
@@ -907,18 +1030,22 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                                   usage_count, "exec count") < 0)
             return EXIT_INVALID;
 
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+
         execution_query_t q = {
             .status              = f_status,
             .context_id          = ctx_id,
             .skill_revision_id   = skill_rev_id,
             .model_revision_id   = model_rev_id,
             .parent_execution_id = parent_id,
+            .include_deleted     = include_deleted,
         };
 
-        VLOG(1, "exec count: status=%s ctx=%d skill_rev=%d model_rev=%d parent=%d",
+        VLOG(1, "exec count: status=%s ctx=%d skill_rev=%d model_rev=%d "
+                "parent=%d include_deleted=%d",
              f_status ? f_status : "(any)",
              q.context_id, q.skill_revision_id,
-             q.model_revision_id, q.parent_execution_id);
+             q.model_revision_id, q.parent_execution_id, include_deleted);
 
         VLOG(2, "  q=%p status=%p ctx=%d skill_rev=%d model_rev=%d parent=%d",
              (const void *)&q, (const void *)q.status,

@@ -126,15 +126,16 @@ CREATE TABLE contexts (
     content TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     metadata TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT
 );
-INSERT INTO contexts VALUES(1,'text','hello world','abc123',NULL,'2026-08-19 08:57:02');
-INSERT INTO contexts VALUES(2,'text','hello world','',NULL,'2026-08-25 09:51:50');
-INSERT INTO contexts VALUES(3,'text','hello world2','',NULL,'2026-08-25 10:12:21');
-INSERT INTO contexts VALUES(4,'test','some content','',NULL,'2026-08-25 18:30:14');
-INSERT INTO contexts VALUES(5,'test','some content 2','',NULL,'2026-08-25 18:30:19');
-INSERT INTO contexts VALUES(6,'system','You are a helpful assistant.','abc123',NULL,'2026-08-25 18:36:29');
-INSERT INTO contexts VALUES(7,'user','lo','x1',NULL,'2026-08-25 18:37:48');
+INSERT INTO contexts VALUES(1,'text','hello world','abc123',NULL,'2026-08-19 08:57:02',NULL);
+INSERT INTO contexts VALUES(2,'text','hello world','',NULL,'2026-08-25 09:51:50',NULL);
+INSERT INTO contexts VALUES(3,'text','hello world2','',NULL,'2026-08-25 10:12:21',NULL);
+INSERT INTO contexts VALUES(4,'test','some content','',NULL,'2026-08-25 18:30:14',NULL);
+INSERT INTO contexts VALUES(5,'test','some content 2','',NULL,'2026-08-25 18:30:19',NULL);
+INSERT INTO contexts VALUES(6,'system','You are a helpful assistant.','abc123',NULL,'2026-08-25 18:36:29',NULL);
+INSERT INTO contexts VALUES(7,'user','lo','x1',NULL,'2026-08-25 18:37:48',NULL);
 CREATE TABLE executions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     context_id INTEGER NOT NULL,
@@ -148,17 +149,18 @@ CREATE TABLE executions (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at TEXT,
     completed_at TEXT,
+    deleted_at TEXT,
     parent_execution_id INTEGER,
     FOREIGN KEY(context_id) REFERENCES contexts(id) ON DELETE RESTRICT,
     FOREIGN KEY(skill_revision_id) REFERENCES skill_revisions(id) ON DELETE RESTRICT,
     FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT,
     FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL
 );
-INSERT INTO executions VALUES(1,1,1,2,NULL,NULL,NULL,'pending',NULL,'2026-08-19 08:57:02',NULL,NULL,NULL);
-INSERT INTO executions VALUES(2,1,1,1,'compiled prompt',NULL,NULL,'pending',NULL,'2026-08-25 20:15:45',NULL,NULL,NULL);
-INSERT INTO executions VALUES(3,1,1,2,'compiled prompt',NULL,NULL,'pending',NULL,'2026-08-25 20:15:48',NULL,NULL,NULL);
-INSERT INTO executions VALUES(4,1,1,2,'Summarize the Q3 revenue report',NULL,NULL,'pending',NULL,'2026-08-25 20:18:06',NULL,NULL,NULL);
-INSERT INTO executions VALUES(5,1,1,2,'Summarize the Q3 revenue report',NULL,NULL,'pending',NULL,'2026-08-25 20:18:44',NULL,NULL,4);
+INSERT INTO executions VALUES(1,1,1,2,NULL,NULL,NULL,'pending',NULL,'2026-08-19 08:57:02',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(2,1,1,1,'compiled prompt',NULL,NULL,'pending',NULL,'2026-08-25 20:15:45',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(3,1,1,2,'compiled prompt',NULL,NULL,'pending',NULL,'2026-08-25 20:15:48',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(4,1,1,2,'Summarize the Q3 revenue report',NULL,NULL,'pending',NULL,'2026-08-25 20:18:06',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(5,1,1,2,'Summarize the Q3 revenue report',NULL,NULL,'pending',NULL,'2026-08-25 20:18:44',NULL,NULL,NULL,4);
 CREATE TABLE execution_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     execution_id INTEGER NOT NULL,

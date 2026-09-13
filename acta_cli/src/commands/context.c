@@ -20,6 +20,8 @@ static void ctx_usage(FILE *f)
 "Actions:\n"
 "  create   Create a new context\n"
 "  get      Fetch a context by id\n"
+"  delete   Remove a context (soft delete)\n"
+"  restore  Restore a deleted context\n"
 "  list     List contexts (filterable, paginated)\n"
 "  count    Count contexts (filterable)\n"
 "  help     Show this help\n"
@@ -44,7 +46,10 @@ static void ctx_usage(FILE *f)
 "  acta_cli context get <positive-integer-id>\n"
 "  Example:\n"
 "    acta_cli context get 42\n"
+"    acta_cli context get 42 --include_deleted\n"
 "  Options:\n"
+"    --include_deleted    Return the row even if soft-deleted\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --table          column output instead of JSON\n"
 "    --id_only        print just the numeric id\n"
 "    --fields <a,b>   restrict output fields (comma-separated)\n"
@@ -53,9 +58,12 @@ static void ctx_usage(FILE *f)
 "== list ============================================================\n"
 "  acta_cli context list [--type <T>] [--hash <H>]\n"
 "                 [--offset <int>] [--limit <int>] [--count]\n"
+"                 [--include_deleted]\n"
 "  Options:\n"
 "    --type <string>      filter by type\n"
 "    --hash <string>      filter by content hash\n"
+"    --include_deleted    include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --offset <int>       skip first N results (default 0)\n"
 "    --limit <int>        max results (0 or omitted = unlimited)\n"
 "    --count              print total match count instead of items\n"
@@ -63,9 +71,23 @@ static void ctx_usage(FILE *f)
 "    --fields <a,b>       restrict output fields\n"
 "    --no_nulls           omit null fields\n"
 "\n"
+"== delete <id> ====================================================\n"
+"  Soft-delete a context (sets deleted_at).\n"
+"\n"
+"    acta_cli context delete 42\n"
+"\n"
+"== restore <id> ===================================================\n"
+"  Restore a previously soft-deleted context.\n"
+"\n"
+"    acta_cli context restore 42\n"
+"\n"
 "== count ===========================================================\n"
-"  acta_cli context count [--type <T>] [--hash <H>]\n"
+"  acta_cli context count [--type <T>] [--hash <H>] [--include_deleted]\n"
 "  Prints a single integer: the number of matching contexts.\n"
+"\n"
+"  Options:\n"
+"    --include_deleted    include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "\n"
 "Global options (apply to every action):\n"
 "  --json <blob>    read input from a JSON object (flag value)\n"
@@ -88,14 +110,15 @@ static void ctx_usage(FILE *f)
 
 static void vlog_ctx_fields(const char *tag, const context_t *c)
 {
-    VLOG(2, "%s: id=%d type=%s content=%s hash=%s metadata=%s created_at=%s",
+    VLOG(2, "%s: id=%d type=%s content=%s hash=%s metadata=%s created_at=%s deleted_at=%s",
          tag,
          c->id,
          c->type         ? c->type         : "(null)",
          c->content      ? c->content      : "(null)",
          c->content_hash ? c->content_hash : "(null)",
          c->metadata     ? c->metadata     : "(null)",
-         c->created_at   ? c->created_at   : "(null)");
+         c->created_at   ? c->created_at   : "(null)",
+         c->deleted_at   ? c->deleted_at   : "(null)");
 }
 
 static void vlog_ctx_raw(const char *tag, const context_t *c, int rc)
@@ -148,6 +171,11 @@ static void ctx_to_json(FILE *f, const context_t *c, const global_opts_t *gopts)
         fputs("\"created_at\":", f);
         if (c->created_at) json_str(f, c->created_at); else fputs("null", f);
     }
+    if ((!fl || fields_has(fl, "deleted_at")) && !(gopts->no_nulls && !c->deleted_at)) {
+        if (shown++) fputs(", ", f);
+        fputs("\"deleted_at\":", f);
+        if (c->deleted_at) json_str(f, c->deleted_at); else fputs("null", f);
+    }
 
     fputc('}', f);
 }
@@ -157,8 +185,9 @@ static void ctx_to_json(FILE *f, const context_t *c, const global_opts_t *gopts)
 static void ctx_table(FILE *f, const context_t *c, int header)
 {
     if (header) {
-        fprintf(f, " %4s  %-10s  %-38s  %-10s  %-38s  %-19s\n",
-                "ID", "TYPE", "CONTENT", "HASH", "METADATA", "CREATED_AT");
+        fprintf(f, " %4s  %-10s  %-38s  %-10s  %-38s  %-19s  %-19s\n",
+                "ID", "TYPE", "CONTENT", "HASH", "METADATA", "CREATED_AT",
+                "DELETED_AT");
         return;
     }
     char idb[16];
@@ -169,6 +198,7 @@ static void ctx_table(FILE *f, const context_t *c, int header)
     tcol(f, c->content_hash, 10);
     tcol(f, c->metadata,     38);
     tcol(f, c->created_at,   19);
+    tcol(f, c->deleted_at,   19);
     fputc('\n', f);
 }
 
@@ -177,11 +207,13 @@ static void ctx_table(FILE *f, const context_t *c, int header)
 /* ══════════════════════════════════════════════════════════════════ */
 
 static const action_def_t context_actions[] = {
-    { "create", "create a new context" },
-    { "get",    "fetch a context by id" },
-    { "list",   "list all contexts" },
-    { "count",  "count contexts" },
-    { "help",   "show this help" }
+    { "create",  "create a new context"      },
+    { "get",     "fetch a context by id"     },
+    { "delete",  "remove a context"          },
+    { "restore", "restore a deleted context" },
+    { "list",    "list all contexts"         },
+    { "count",   "count contexts"            },
+    { "help",    "show this help"            }
 };
 #define CTX_ACTIONS (sizeof(context_actions) / sizeof(context_actions[0]))
 
@@ -328,13 +360,20 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", ctx_usage, "context get", &id))
             return EXIT_INVALID;
 
-        VLOG(1, "context get: fetching id=%d", id);
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+
+        VLOG(1, "context get: fetching id=%d include_deleted=%d", id,
+             include_deleted);
 
         int err = 0;
-        context_t *c = acta_db_context_get(db, id, &err);
+        /* include_deleted → unfiltered fetch (row even if soft-deleted);
+         * otherwise live rows only (get_live returns NULL for deleted). */
+        context_t *c = include_deleted
+            ? acta_db_context_get(db, id, &err)
+            : acta_db_context_get_live(db, id, &err);
 
-        VLOG(3, "  acta_db_context_get(%d) → ptr=%p err=%d",
-             id, (const void *)c, err);
+        VLOG(3, "  acta_db_context_get(%d, include_deleted=%d) → ptr=%p err=%d",
+             id, include_deleted, (const void *)c, err);
 
         int rc = load_row_or_notfound(db, err, c, id, ctx_free_wrap,
                                       "context get", "context");
@@ -367,12 +406,14 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                                ctx_usage, "context list") < 0)
             return EXIT_INVALID;
 
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+
         context_query_t q = { .type = f_type, .hash = f_hash };
 
-        VLOG(1, "context list: type=%s hash=%s offset=%d limit=%d",
+        VLOG(1, "context list: type=%s hash=%s offset=%d limit=%d include_deleted=%d",
              f_type ? f_type : "(any)",
              f_hash ? f_hash : "(any)",
-             offset, limit ? limit : 0);
+             offset, limit ? limit : 0, include_deleted);
 
         VLOG(2, "  full: type=%s hash=%s offset=%d limit=%d "
                 "no_nulls=%d table=%d fields=%s",
@@ -387,7 +428,9 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (gopts->count) {
             int err = 0;
-            int n = acta_db_context_count(db, &q, &err);
+            int n = include_deleted
+                ? acta_db_context_count_with_deleted(db, &q, &err)
+                : acta_db_context_count(db, &q, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
                 return finish_op_error(db, err, "context count");
@@ -398,8 +441,11 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         }
 
         int out_count = 0, err = 0;
-        context_t **items = acta_db_context_query(db, &q, offset, limit,
-                                                  &out_count, &err);
+        context_t **items = include_deleted
+            ? acta_db_context_query_with_deleted(db, &q, offset, limit,
+                                                 &out_count, &err)
+            : acta_db_context_query(db, &q, offset, limit,
+                                    &out_count, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  query FAILED err=%d", err);
             acta_db_context_list_free(items, out_count);
@@ -437,24 +483,73 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     if (strcmp(action, "count") == 0) {
         const char *f_type = cmd_args_flag(ga, "type", 1);
         const char *f_hash = cmd_args_flag(ga, "hash", 1);
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
         context_query_t q = { .type = f_type, .hash = f_hash };
 
-        VLOG(1, "context count: type=%s hash=%s",
+        VLOG(1, "context count: type=%s hash=%s include_deleted=%d",
              f_type ? f_type : "(any)",
-             f_hash ? f_hash : "(any)");
+             f_hash ? f_hash : "(any)", include_deleted);
 
-        VLOG(2, "  q.type=%p q.hash=%p",
-             (const void *)q.type, (const void *)q.hash);
+        VLOG(2, "  q.type=%p q.hash=%p include_deleted=%d",
+             (const void *)q.type, (const void *)q.hash, include_deleted);
 
         int err = 0;
-        int n = acta_db_context_count(db, &q, &err);
+        int n = include_deleted
+            ? acta_db_context_count_with_deleted(db, &q, &err)
+            : acta_db_context_count(db, &q, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
             return finish_op_error(db, err, "context count");
         }
         VLOG(1, "  result: %d", n);
         fprintf(stdout, "%d\n", n);
+        return EXIT_OK;
+    }
+
+    /* ── delete <id> ──────────────────────────────────────────────── */
+    if (strcmp(action, "delete") == 0) {
+        int id;
+        if (!parse_id_positional(ga, "id", ctx_usage, "context delete", &id))
+            return EXIT_INVALID;
+
+        VLOG(1, "context delete: id=%d", id);
+        VLOG(3, "  id=%d db=%p", id, (const void *)db);
+
+        int rc = acta_db_context_delete(db, id);
+
+        VLOG(3, "  acta_db_context_delete(%d) → rc=%d", id, rc);
+
+        if (rc != ACTA_DB_OK) {
+            VLOG(1, "  FAILED rc=%d → exit mapping", rc);
+            return finish_op_error(db, rc, "context delete");
+        }
+
+        VLOG(1, "  deleted context id=%d", id);
+        emit_deleted();
+        return EXIT_OK;
+    }
+
+    /* ── restore <id> ─────────────────────────────────────────────── */
+    if (strcmp(action, "restore") == 0) {
+        int id;
+        if (!parse_id_positional(ga, "id", ctx_usage, "context restore", &id))
+            return EXIT_INVALID;
+
+        VLOG(1, "context restore: id=%d", id);
+        VLOG(3, "  id=%d db=%p", id, (const void *)db);
+
+        int rc = acta_db_context_restore(db, id);
+
+        VLOG(3, "  acta_db_context_restore(%d) → rc=%d", id, rc);
+
+        if (rc != ACTA_DB_OK) {
+            VLOG(1, "  FAILED rc=%d → exit mapping", rc);
+            return finish_op_error(db, rc, "context restore");
+        }
+
+        VLOG(1, "  restored context id=%d", id);
+        emit_ok_restored(gopts, id);
         return EXIT_OK;
     }
 
