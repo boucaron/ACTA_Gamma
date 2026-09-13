@@ -6,6 +6,9 @@ the design spec. This file is the implementation plan for the **DB layer only**
 `acta_db/src/execution.c`). Schema changes (`acta_gui/db/schema.sql`) are already
 done; CLI/runner/GUI are out of scope here.
 
+**Status:** §1–§2 (context) and the context half of §6 are done and tested;
+§3–§4 (execution) and the execution half of §6 are pending.
+
 ## Reference: the skill pattern
 
 Mirrors `acta_db/include/skill.h` / `src/skill.c`:
@@ -33,7 +36,7 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
 - Execution listers: `include_deleted` flag **inside** `execution_query_t`
   (spec explicit).
 
-## 1. `acta_db/include/context.h`
+## 1. `acta_db/include/context.h` ✅ done
 
 - `context_t` gains `char *deleted_at;` (NULL if live).
 - New declarations:
@@ -52,7 +55,7 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
   paragraph with the soft-delete lifecycle documentation (flag flip, restore,
   live-only default for listers).
 
-## 2. `acta_db/src/context.c`
+## 2. `acta_db/src/context.c` ✅ done
 
 - `row_to_context`: decode the new column — SELECT list becomes
   `id, type, content, content_hash, metadata, created_at, deleted_at`
@@ -147,7 +150,7 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
 
 ## 6. New DB-layer tests (mirrors the spec's "Tests" section)
 
-- `acta_db/tests/test_context_deleted.c` (+ `TEST_MODULES` entry in
+- ✅ `acta_db/tests/test_context_deleted.c` (+ `TEST_MODULES` entry in
   `acta_db/Makefile`):
   - delete → restore round trip; delete a deleted context → `NOT_FOUND`;
     restore a live context → `NOT_FOUND`.
@@ -156,6 +159,8 @@ Mirrors `acta_db/include/skill.h` / `src/skill.c`:
     deleted rows.
   - trigger via `acta_db_exec`: `UPDATE contexts SET content = …` → fails;
     `UPDATE contexts SET deleted_at = …` → OK.
+  - (also: `test_context.c` updated to assert `deleted_at == NULL` on live
+    rows; all suites pass)
 - `acta_db/tests/test_execution_deleted.c`:
   - `delete` from `pending` / `completed` / `failed` / `cancelled` → `OK`;
     from `running` → `INVALID`; already deleted → `INVALID`.

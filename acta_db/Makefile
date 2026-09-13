@@ -24,7 +24,8 @@ TEST_MAIN := $(TEST_DIR)/test_main.c
 # Module list: each maps to tests/test_<module>.c with run_<module>_tests()
 TEST_MODULES := db execution execution_log integration \
                 model model_folder model_revision \
-                skill skill_folder skill_revision
+                skill skill_folder skill_revision \
+                context_deleted
 
 .PHONY: all clean test test-build test-%
 

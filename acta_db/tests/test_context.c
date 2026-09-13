@@ -139,6 +139,7 @@ static void test_ctx_get_valid(void)
     TEST_ASSERT(strcmp(c->type, "note") == 0);
     TEST_ASSERT(strcmp(c->content, "alpha") == 0);
     TEST_ASSERT(strcmp(c->content_hash, "h1") == 0);
+    TEST_ASSERT_NULL(c->deleted_at);   /* live row */
     acta_db_context_free(c);
 
     test_db_teardown(db, path);

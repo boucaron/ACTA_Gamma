@@ -16,6 +16,7 @@ typedef struct {
     char   *content_hash;
     char   *metadata;
     char   *created_at;
+    char   *deleted_at;   /* NULL if live */
 } context_t;
 
 /* ── Query / filter ───────────────────────────────────────────────── */
@@ -34,10 +35,25 @@ typedef struct {
 
 /* ── Single-row operations ────────────────────────────────────────── */
 
-/* Immutability: context rows have no update / soft-delete API.  The
- * schema installs a BEFORE UPDATE trigger that RAISE(ABORT)s, so any
- * out-of-band UPDATE fails with "contexts are immutable" (observable
- * via acta_db_last_error).  Treat context rows as append-only. */
+/* Soft-delete lifecycle: context rows are content-immutable but
+ * carry a deleted_at flag.
+ *
+ *   acta_db_context_delete  – flag flip: deleted_at = datetime('now').
+ *     Returns ACTA_DB_ERR_NOT_FOUND when no live row matches the id
+ *     (missing row and already-deleted row are indistinguishable by
+ *     design).
+ *   acta_db_context_restore – strict undelete: deleted_at = NULL.
+ *     Returns ACTA_DB_ERR_NOT_FOUND unless a DELETED row matches the
+ *     id (restoring a live row is an error, unlike skill_restore).
+ *
+ * The schema installs a BEFORE UPDATE trigger (contexts_soft_delete_only)
+ * that allows ONLY deleted_at to change; any other column change
+ * RAISE(ABORT)s with "contexts are immutable: only deleted_at may
+ * change" (observable via acta_db_last_error).
+ *
+ * Listers and counts default to live-only (deleted_at IS NULL).
+ * The _with_deleted variants return live + deleted rows; callers
+ * distinguish them via the deleted_at field. */
 
 /* Insert a context row.
  * Returns ACTA_DB_OK on success; ACTA_DB_ERR_INVALID if required fields
@@ -45,7 +61,8 @@ typedef struct {
  * On success *out_id receives the new row's id. */
 int       acta_db_context_create(db_t *db, const context_t *c, int *out_id);
 
-/* Fetch a single context by id.
+/* Fetch a single context by id (includes soft-deleted rows; the
+ * deleted_at field is populated for them).
  *
  * Returns a heap-allocated context_t (free with acta_db_context_free),
  * or NULL when the row is not found.
@@ -59,9 +76,29 @@ int       acta_db_context_create(db_t *db, const context_t *c, int *out_id);
  * The err parameter may be NULL (caller ignores the code). */
 context_t *acta_db_context_get(db_t *db, int id, int *err);
 
+/* Fetch a single LIVE context (deleted_at IS NULL).
+ * Same contract as acta_db_context_get; returns NULL when the row
+ * is missing or soft-deleted.
+ * Free with acta_db_context_free. */
+context_t *acta_db_context_get_live(db_t *db, int id, int *err);
+
+/* Soft-delete a live context (deleted_at = datetime('now')).
+ * Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_NOT_FOUND if no live row matches id (missing or
+ * already deleted).
+ * ACTA_DB_ERR_SQL on failure. */
+int acta_db_context_delete(db_t *db, int id);
+
+/* Restore a soft-deleted context (deleted_at = NULL).  Strict:
+ * ACTA_DB_ERR_NOT_FOUND unless a deleted row matches id.
+ * Returns ACTA_DB_OK on success.
+ * ACTA_DB_ERR_SQL on failure. */
+int acta_db_context_restore(db_t *db, int id);
+
 /* ── Query (paginated) ────────────────────────────────────────────── */
 
-/* Return a page of contexts matching `q`, ordered by id ASC.
+/* Return a page of LIVE contexts (deleted_at IS NULL) matching `q`,
+ * ordered by id ASC.
  *
  * q      – filter criteria; NULL treats both fields as "match all".
  * offset – skip this many rows before starting (>= 0).
@@ -84,7 +121,25 @@ context_t **acta_db_context_query(db_t *db,
                                   int *out_count,
                                   int *err);
 
-/* Return the total number of context rows matching `q`.
+/* Return a page of contexts matching `q`, ordered by id ASC.
+ * Like acta_db_context_query, but includes soft-deleted rows
+ * (no deleted_at filter).  Callers must check deleted_at to
+ * distinguish live rows from deleted ones.
+ *
+ * q / offset / limit – same contract as acta_db_context_query.
+ *
+ * Returns a heap-allocated array of context_t pointers (free with
+ * acta_db_context_list_free), or NULL on real failure.
+ * *out_count / *err – same out-parameters as acta_db_context_query;
+ * both may be NULL. */
+context_t **acta_db_context_query_with_deleted(db_t *db,
+                                               const context_query_t *q,
+                                               int offset,
+                                               int limit,
+                                               int *out_count,
+                                               int *err);
+
+/* Return the total number of LIVE context rows matching `q`.
  *
  * q – filter criteria; NULL treats both fields as "match all".
  *
@@ -94,6 +149,21 @@ context_t **acta_db_context_query(db_t *db,
 int acta_db_context_count(db_t *db,
                           const context_query_t *q,
                           int *err);
+
+/* Return the total number of context rows matching `q`, including
+ * soft-deleted rows (no deleted_at filter).
+ * Mirrors acta_db_context_query_with_deleted: the count equals the
+ * number of rows you would get from
+ * query_with_deleted(db, q, 0, -1, …).
+ *
+ * q – filter criteria; NULL treats both fields as "match all".
+ *
+ * Returns the row count (>= 0) on success, or -1 on error.
+ * If err is non-NULL it is set to ACTA_DB_OK or a negative
+ * ACTA_DB_ERR_* code. The err parameter may be NULL. */
+int acta_db_context_count_with_deleted(db_t *db,
+                                       const context_query_t *q,
+                                       int *err);
 
 /* ── Ownership / cleanup ──────────────────────────────────────────── */
 

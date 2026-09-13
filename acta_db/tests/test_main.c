@@ -21,6 +21,7 @@ int run_skill_placement_tests(void);
 int run_skill_folder_tests(void);
 int run_skill_revision_tests(void);
 int run_context_tests(void);
+int run_context_deleted_tests(void);
 
 int run_execution_create_tests(void);
 int run_execution_lifecycle_tests(void);
@@ -33,6 +34,7 @@ int main(void) {
 
     // Context
     failures += run_context_tests();
+    failures += run_context_deleted_tests();
 
     // Model folder
     failures += run_model_folder_tests();
