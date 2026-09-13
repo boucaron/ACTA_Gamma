@@ -163,8 +163,9 @@ int  acta_db_execution_set_raw_response(db_t *db, int id, const char *raw);
 
 /* Soft-delete a live execution (deleted_at = datetime('now')).
  * Returns ACTA_DB_OK on success.
- * ACTA_DB_ERR_INVALID if the row is running or already deleted.
- * ACTA_DB_ERR_NOT_FOUND if no row matches id.
+ * ACTA_DB_ERR_INVALID if the row is running.
+ * ACTA_DB_ERR_NOT_FOUND if no row matches id or the row is already
+ * deleted (same contract as acta_db_context_delete).
  * ACTA_DB_ERR_SQL on failure. */
 int acta_db_execution_delete(db_t *db, int id);
 

@@ -244,7 +244,12 @@ headless/CLI-driven mode later.
 5. **Timeouts / retries:** single request, configurable `--timeout` (s),
    no retries — failures are first-class artifacts here.
 6. **Claim semantics:** the runner only acts on `pending`; `start()` is
-   the atomic lock. Stale-`running` cleanup (dead runner) shipped as the
+   the atomic lock. Soft-deleted executions are never claimed: the
+   `run --pending` batch queries live rows only (`include_deleted = 0`,
+   so the DB layer appends the static `deleted_at IS NULL` clause), and
+   `run <id>` on a soft-deleted row fails with the standard not-found
+   path before any claim (tested in `acta_runner/tests/run/test_deleted.c`).
+   Stale-`running` cleanup (dead runner) shipped as the
    `sweep` action: `acta_runner sweep --stale-seconds N` fails `running`
    rows whose last activity (max of latest `execution_log` timestamp and
    `started_at`) is older than N; `--stale-seconds` must be a positive
