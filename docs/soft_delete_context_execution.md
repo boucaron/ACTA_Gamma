@@ -8,7 +8,7 @@ This replaces the "Things deliberately missing" note in `DBDesign.md`:
 deletion of contexts/executions, when needed, **is** a `deleted_at` soft
 delete — and it is now needed.
 
-Implementation plan for the DB layer: `soft_delete_context_execution_acta_db.md` (done and tested); CLI + runner plan: `soft_delete_context_execution_acta_cli_runner.md` (done and tested); GUI follow-up: `soft_delete_context_execution_acta_gui.md` (implemented).
+Implementation is complete for all three consumers — DB layer, CLI + runner, and GUI — and is covered by `status.md`, the API headers (`acta_db/include/context.h`, `execution.h`), `cli_spec.md`, `runner_analysis.md` and the per-component test suites (the per-component implementation plans that accompanied this spec were removed once the work landed).
 
 ## Why
 
