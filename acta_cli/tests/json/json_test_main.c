@@ -516,7 +516,7 @@ static void tier7_edges(void)
     memset(&m, 0, sizeof m);
     TEQ(json_parse_model("{\"name\":\"\"}", &m), 0);
     TNTNULL(m.name);
-    TEQ(strlen(m.name), 0);
+    TEQ(strlen(m.name), (size_t)0);
     fmodel(&m);
 
     /* escapes: quote, backslash, newline, tab */
@@ -542,7 +542,7 @@ static void tier7_edges(void)
         snprintf(json, n + 40, "{\"name\":\"%s\"}", buf);
         memset(&m, 0, sizeof m);
         TEQ(json_parse_model(json, &m), 0);
-        TEQ(m.name ? strlen(m.name) : 0, (int)n);
+        TEQ(m.name ? strlen(m.name) : 0, n);
         if (m.name)
             T(memcmp(m.name, buf, n) == 0);
         fmodel(&m);

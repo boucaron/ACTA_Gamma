@@ -6,6 +6,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* SHA-256 of data → 64 lowercase hex chars + NUL in out (>= 65 bytes).
+ * Same encoding the GUI uses (QCryptographicHash::toHex). */
+static char *sha256_hex(const void *data, size_t len, char out[65])
+{
+    static const char hexd[] = "0123456789abcdef";
+    SHA256_CTX ctx;
+    BYTE digest[SHA256_BLOCK_SIZE];
+    size_t i;
+
+    sha256_init(&ctx);
+    sha256_update(&ctx, (const BYTE *)data, len);
+    sha256_final(&ctx, digest);
+    for (i = 0; i < SHA256_BLOCK_SIZE; i++) {
+        out[i * 2]     = hexd[digest[i] >> 4];
+        out[i * 2 + 1] = hexd[digest[i] & 0x0f];
+    }
+    out[64] = '\0';
+    return out;
+}
+
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */

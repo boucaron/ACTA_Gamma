@@ -10,10 +10,6 @@
               Algorithm specification can be found here:
                * http://csrc.nist.gov/publications/fips/fips180-2/fips180-2withchangenotice.pdf
               This implementation uses little endian byte order.
-* Source: https://github.com/B-Con/crypto-algorithms/tree/master (sha256.c)
-* Released into the public domain free of any restrictions; the author
-* requests acknowledgement if the code is used, but does not require it.
-* Provided free of any liability and without any quality claims by the author.
 *********************************************************************/
 
 /*************************** HEADER FILES ***************************/
@@ -159,32 +155,4 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 		hash[i + 24] = (ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
 		hash[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
 	}
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
- *  Convenience wrappers used by the CLI (context create default hash)
- * ═══════════════════════════════════════════════════════════════════════ */
-
-void sha256(const void *data, size_t len, unsigned char out[32])
-{
-	SHA256_CTX ctx;
-
-	sha256_init(&ctx);
-	sha256_update(&ctx, (const BYTE *)data, len);
-	sha256_final(&ctx, (BYTE *)out);
-}
-
-char *sha256_hex(const void *data, size_t len, char out[65])
-{
-	static const char hexd[] = "0123456789abcdef";
-	BYTE d[32];
-	size_t i;
-
-	sha256(data, len, d);
-	for (i = 0; i < 32; i++) {
-		out[i * 2]     = hexd[d[i] >> 4];
-		out[i * 2 + 1] = hexd[d[i] & 0x0f];
-	}
-	out[64] = '\0';
-	return out;
 }

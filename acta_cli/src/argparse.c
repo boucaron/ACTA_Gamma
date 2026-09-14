@@ -204,15 +204,6 @@ void cmd_args_init(cmd_args_t *it, int argc, char **argv) {
 }
 
 /*
- * Internal: peek at current token.  Returns 0 if out of range.
- */
-static int peek(cmd_args_t *it, const char **tok) {
-    if (it->pos >= it->argc) { *tok = NULL; return 0; }
-    *tok = it->argv[it->pos];
-    return 1;
-}
-
-/*
  * name → has_value table for ENTITY flags (global flags are already
  * consumed in pass 1).  The flag vocabulary is consistent across
  * entities: the same name always takes a value or is always boolean.

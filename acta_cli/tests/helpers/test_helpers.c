@@ -113,6 +113,7 @@ void targs_free(cmd_args_t *a, global_opts_t *opts)
     if (t && t->owned) free(t);
 
     // memleak in opts... not a big deal
+    (void)opts;
 }
 
 /* ══════════════════════════════════════════════════════════════════

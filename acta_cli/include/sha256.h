@@ -1,33 +1,34 @@
+/*********************************************************************
+* Filename:   sha256.h
+* Author:     Brad Conte (brad AT bradconte.com)
+* Copyright:
+* Disclaimer: This code is presented "as is" without any guarantees.
+* Details:    Defines the API for the corresponding SHA1 implementation.
+*********************************************************************/
+
 #ifndef SHA256_H
 #define SHA256_H
 
+/*************************** HEADER FILES ***************************/
 #include <stddef.h>
 
-/* ── Types used by the sha256.c implementation ─────────────────── */
-typedef unsigned char BYTE;
-typedef unsigned int   WORD;
+/****************************** MACROS ******************************/
+#define SHA256_BLOCK_SIZE 32            // SHA256 outputs a 32 byte digest
+
+/**************************** DATA TYPES ****************************/
+typedef unsigned char BYTE;             // 8-bit byte
+typedef unsigned int  WORD;             // 32-bit word, change to "long" for 16-bit machines
 
 typedef struct {
-    WORD  state[8];
-    WORD  bitlen;
-    WORD  datalen;
-    BYTE  data[64];
+	BYTE data[64];
+	WORD datalen;
+	unsigned long long bitlen;
+	WORD state[8];
 } SHA256_CTX;
 
-/* ── SHA-256 (init / update / final, see sha256.c) ──────────────── */
+/*********************** FUNCTION DECLARATIONS **********************/
 void sha256_init(SHA256_CTX *ctx);
 void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len);
-void sha256_final(SHA256_CTX *ctx, BYTE hash[32]);
-void sha256_transform(SHA256_CTX *ctx, const BYTE data[]);
+void sha256_final(SHA256_CTX *ctx, BYTE hash[]);
 
-/* ── Thin convenience wrappers used by the CLI ──────────────────── */
-
-/* SHA-256. Writes the 32 raw digest bytes to out (must be >= 32 bytes). */
-void sha256(const void *data, size_t len, unsigned char out[32]);
-
-/* SHA-256 as 64 lowercase hex chars + NUL.
- * Writes into out (must be >= 65 bytes) and returns out.
- * Same encoding the GUI uses (QCryptographicHash::toHex). */
-char *sha256_hex(const void *data, size_t len, char out[65]);
-
-#endif
+#endif   // SHA256_H
