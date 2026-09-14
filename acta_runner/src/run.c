@@ -66,6 +66,7 @@ static void run_usage(FILE *out)
 
 int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
 {
+    (void)gopts;
     int pending = cmd_args_has_flag(ga, "pending");
     int max = 0;
     int timeout = 300;

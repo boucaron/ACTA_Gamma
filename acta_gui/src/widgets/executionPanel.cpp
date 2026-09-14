@@ -368,8 +368,8 @@ void ExecutionPanel::onRunBtnClicked()
         exec->status ? QString::fromUtf8(exec->status) : QString();
     acta_db_execution_free(exec);
     if (deleted
-            || status != QLatin1String(ACTA_EXEC_STATUS_PENDING)
-            && status != QLatin1String(ACTA_EXEC_STATUS_FAILED))
+            || (status != QLatin1String(ACTA_EXEC_STATUS_PENDING)
+                && status != QLatin1String(ACTA_EXEC_STATUS_FAILED)))
         return;
 
     // A failed row is retried: reset failed -> pending first, so the
