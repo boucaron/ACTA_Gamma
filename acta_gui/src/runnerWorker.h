@@ -21,10 +21,11 @@
 // dispatch into the GUI event loop, freezing the UI for the whole
 // run.) Because the worker is parent-less, the owner must post
 // deleteLater() to the worker's queue before quit() + wait().
-// runInThread() is the thread's only task; quit() + wait() therefore
-// let it run to completion (it cannot be cancelled mid-HTTP — the
-// runner's pipeline has no cancellation hook, and a stuck "running"
-// row must never be left behind).
+// runInThread() is the thread's only task; quit() + wait() let it run
+// to completion or cooperative cancel. A cancel (requestCancel())
+// aborts the in-flight HTTP call (curl abort callback) and the runner
+// pipeline transitions the row pending|running -> cancelled, so a
+// stuck "running" row must never be left behind either way.
 
 #include <QObject>
 #include <QString>

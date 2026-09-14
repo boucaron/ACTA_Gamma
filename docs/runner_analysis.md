@@ -133,6 +133,11 @@ connection; the panel's polling is unchanged.)
 
 ## Key observations for the runner
 
+*(Pre-implementation analysis — points 4 and 5 describe the state
+before Phase 2: the HTTP code now lives in `src/backend.c`, and
+stale-`running` cleanup is handled by the shipped `sweep` action, while
+cancel is handled by the GUI's cooperative cancel path.)*
+
 1. The DB schema + state machine were built for exactly this. A runner
    is just: query pending → claim via start() → fetch skill/model
    revisions + context → HTTP call → set_raw_response → validate →
@@ -257,8 +262,8 @@ headless/CLI-driven mode later.
 7. **Logging granularity:** follow the DBDesign event list exactly
    (execution_started, context_loaded, prompt_resolved, preflight_passed,
    llm_request, llm_response, validation_*,
-   execution_completed/failed) so the UI timeline shows meaningful
-   phases. `preflight_passed` records the server-instance configuration
+   execution_completed/failed, execution_cancelled) so the UI timeline
+   shows meaningful phases. `preflight_passed` records the server-instance configuration
    (R8): the matched model id, `max_context`, and the catalog entry's
    launch `args` + `meta`. Best-effort: a missing catalog logs
    `"catalog":null` and never fails the execution.

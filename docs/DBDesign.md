@@ -501,6 +501,7 @@ validation_started
 validation_failed
 execution_completed
 execution_failed
+execution_cancelled   (UI cancel of a pending/running execution)
 ```
 
 This makes the UI able to display a timeline without parsing application log files.

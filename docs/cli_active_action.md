@@ -26,7 +26,7 @@ keep the canonical message texts.
 ### `--tools` maintenance note
 
 `tool_table[].flags` and argparse's `entity_flag_specs` remain two
-hand-synced sources of truth — `make test`'s 69× raw-argv cross-check is
+hand-synced sources of truth — `make test`'s 74× raw-argv cross-check is
 the drift detector, and for the M4/M5 cells it can only prove acceptance,
 not spec-vs-code agreement. A
 shared `has_value` header was considered in T3 and is not required.
@@ -48,7 +48,7 @@ manually, not yet pinned in `make test`).
   `--live` + `--stdin` usage snippets).
 - **`--tools` chain:** T1 (wire-format decisions + spec §11 table in
   [`cli_spec.md`](cli_spec.md)), T2 (error-contract unification, Option A),
-  T3 (69-entry schema in
+  T3 (74-entry schema in
   `src/tools.c`, `--pretty`), T4 (contract suite, `tests/tools`), M4
   (`--all` on `skill list`/`count`), M5 (optional `skill_folder move
   --parent_id`), M6 (per-entry aliases `["execution"]` /
