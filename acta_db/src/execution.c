@@ -276,7 +276,7 @@ int acta_db_execution_count(db_t *db,
         return -1;
     }
 
-    int idx = exec_bind_where(stmt, eff, 1);
+    exec_bind_where(stmt, eff, 1);
 
     int result = -1;
     if (sqlite3_step(stmt) == SQLITE_ROW)
