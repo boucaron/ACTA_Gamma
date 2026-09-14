@@ -1096,7 +1096,6 @@ static void test_sf_move_to_root(void) {
     TEST_ASSERT_EQ_INT(f->parent_id, 0);
     acta_db_skill_folder_free(f);
 
-    int count = 0;
     TEST_ASSERT_EQ_INT(acta_db_skill_folder_count_children(db, parent_id, &err), 0);
 
     test_db_teardown(db, path);

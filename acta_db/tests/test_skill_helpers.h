@@ -13,9 +13,9 @@
  * or the negative ACTA_DB_ERR_* code on failure.
  */
 static inline int sk_create_skill(db_t *db, int folder_id,
-                                  const char *name,
-                                  const char *prompt,
-                                  const char *schema)
+                                  char *name,
+                                  char *prompt,
+                                  char *schema)
 {
     skill_t s = {0};
     s.name            = name;
@@ -33,10 +33,10 @@ static inline int sk_create_skill(db_t *db, int folder_id,
  * Create a skill with explicit description (may be NULL).
  */
 static inline int sk_create_skill_full(db_t *db, int folder_id,
-                                       const char *name,
-                                       const char *desc,
-                                       const char *prompt,
-                                       const char *schema)
+                                       char *name,
+                                       char *desc,
+                                       char *prompt,
+                                       char *schema)
 {
     skill_t s = {0};
     s.name            = name;

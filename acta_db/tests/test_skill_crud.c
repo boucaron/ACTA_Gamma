@@ -5,8 +5,8 @@
 /* ── helper: build a full skill_t for update calls ──────────────── */
 
 static skill_t mk_skill(int id, int folder_id,
-                        const char *name, const char *desc,
-                        const char *prompt, const char *schema)
+                        char *name, char *desc,
+                        char *prompt, char *schema)
 {
     skill_t s = {0};
     s.id              = id;

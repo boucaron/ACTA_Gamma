@@ -6,8 +6,8 @@
  *  boilerplate that appears in nearly every test below.
  * ================================================================ */
 
-static int make_context(db_t *db, const char *type,
-                        const char *content, const char *hash) {
+static int make_context(db_t *db, char *type,
+                        char *content, char *hash) {
     context_t ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.type         = type;
@@ -20,7 +20,7 @@ static int make_context(db_t *db, const char *type,
     return id;
 }
 
-static int make_model(db_t *db, const char *name) {
+static int make_model(db_t *db, char *name) {
     model_t m;
     memset(&m, 0, sizeof(m));
     m.folder_id        = 0;
@@ -36,7 +36,7 @@ static int make_model(db_t *db, const char *name) {
     return id;
 }
 
-static int make_skill(db_t *db, const char *name) {
+static int make_skill(db_t *db, char *name) {
     skill_t s;
     memset(&s, 0, sizeof(s));
     s.folder_id       = 0;
@@ -66,7 +66,7 @@ static skill_revision_t *get_skill_rev(db_t *db, int skill_id, int rev) {
 
 static int make_execution(db_t *db, int ctx_id,
                           int skill_rev_id, int model_rev_id,
-                          const char *prompt) {
+                          char *prompt) {
     execution_t e;
     memset(&e, 0, sizeof(e));
     e.context_id        = ctx_id;
@@ -89,7 +89,7 @@ typedef struct {
     skill_revision_t *srev;
 } test_set_t;
 
-static test_set_t make_test_set(db_t *db, const char *tag) {
+static test_set_t make_test_set(db_t *db, char *tag) {
     test_set_t ts;
     ts.context_id = make_context(db, tag, "content", tag);
     ts.model_id   = make_model(db, tag);
@@ -696,7 +696,7 @@ static void test_integration_unicode_content(void) {
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
 
-    const char *utf8 = "caf\xc3\xa9 \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e \xf0\x9f\x98\x80";
+    char *utf8 = "caf\xc3\xa9 \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e \xf0\x9f\x98\x80";
     int ctx_id = make_context(db, "unicode", utf8, "unicode_hash");
 
     int err = 0;
@@ -936,9 +936,8 @@ static void test_integration_execution_pagination(void) {
     test_set_t ts = make_test_set(db, "ExecPag");
 
     /* Create 5 pending executions in the same context */
-    int exec_ids[5];
     for (int i = 0; i < 5; i++)
-        exec_ids[i] = make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id, "page_test");
+        make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id, "page_test");
 
     int err = 0, count = 0;
 

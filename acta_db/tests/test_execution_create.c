@@ -38,7 +38,6 @@ static void test_exec_create_happy(void) {
 }
 
 static void test_exec_create_null_db(void) {
-    int ctx_id, sr_id, mr_id;
     execution_t e;
     memset(&e, 0, sizeof(e));
     e.context_id        = 1;
