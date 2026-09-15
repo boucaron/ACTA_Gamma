@@ -1,18 +1,20 @@
 # Runner analysis
 
-The missing "Run" path (UI review #18): a component that connects to the
-database, resolves a pending execution's skill + model + context, calls the
-OpenAI-compatible backend, and records the outcome (raw response, result,
-error, phase logs) back into the database.
+Analysis and spec of the `acta_runner` component (UI review #18): a
+component that connects to the database, resolves a pending execution's
+skill + model + context, calls the OpenAI-compatible backend, and records
+the outcome (raw response, result, error, phase logs) back into the
+database.
 
-## Status: phase 2 shipped, Plan D shipped, R8 shipped
+## Status: phase 2 shipped, in-app Run shipped, R8 shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
 - `src/backend.{h,c}` — curl wrapper exactly as specced: one GET/POST JSON
   request with timeout, optional `Authorization: Bearer`, result codes
-  `BACKEND_OK / ERR_TRANSPORT / ERR_TIMEOUT / ERR_ALLOC` (the timeout
-  `CURLcode` is selected by `LIBCURL_VERSION_NUM` — curl ≥ 8.8 renamed
+  `BACKEND_OK / ERR_TRANSPORT / ERR_TIMEOUT / ERR_ALLOC / ERR_CANCELED`
+  (cooperative UI cancel; the CLI never triggers it — the timeout
+  `CURLcode` is selected by `LIBCURL_VERSION_NUM`, curl ≥ 8.8 renamed
   `CURLE_OPERATION_TIMED` to `CURLE_OPERATION_TIMEDOUT`).
 - `src/run.c` — the full `run_execution` pipeline: claim (`start()`),
   resolve (context / skill revision / model revision), preflight
@@ -32,11 +34,17 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
 - `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
-  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 10
+  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 13
   scenarios (success, health 503, model mismatch, chat 500, timeout,
-  non-pending, not-found, post-hoc validation fail/pass, missing
-  catalog), 58 checks, green under `make test`, on a scratch
-  `:memory:` DB.
+  non-pending, not-found, schema validation fail/pass, missing
+  catalog, unknown config key, malformed config JSON, wrong config
+  key type), check count printed at runtime, green under `make test`,
+  on a scratch `:memory:` DB. Batch/claim/cleanup suites alongside:
+  `tests/run/test_pending.c` (R3: `run --pending` loop, `--max`
+  clamping, worst exit code across mixed outcomes),
+  `tests/run/test_deleted.c` (soft-delete claim: `run <id>` on a
+  deleted row → not-found before claim; `run --pending` is live-only),
+  `tests/run/test_sweep.c` (in-process sweep logic).
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server
@@ -127,94 +135,17 @@ panel's "Run" button runs the pipeline in-process: `run.c`/`backend.c`
 are compiled into the GUI and run on a worker thread created with
 `moveToThread()` (see the threading contract in `runnerWorker.h`) with
 their own DB connection (M1 / UR #45, commit f6efe22; superseding the
-original Plan D spawn-via-`QProcess` variant, commit 184d574); the
+original spawn-via-`QProcess` variant, commit 184d574); the
 panel polls the `execution_log` rows for live status.
-
-## Key observations for the runner
-
-*(Pre-implementation analysis — points 4 and 5 describe the state
-before Phase 2: the HTTP code now lives in `src/backend.c`, and
-stale-`running` cleanup is handled by the shipped `sweep` action, while
-cancel is handled by the GUI's cooperative cancel path.)*
-
-1. The DB schema + state machine were built for exactly this. A runner
-   is just: query pending → claim via start() → fetch skill/model
-   revisions + context → HTTP call → set_raw_response → validate →
-   complete/fail, logging execution_log rows along the way. Nothing new
-   is needed in acta_db.
-2. OpenAI-compatible is a single wire format. Whatever backend says, the
-   endpoint is {base_url}/chat/completions with model =
-   model_identifier. The configuration JSON can carry backend-specific
-   knobs (temperature, max_tokens, api key).
-3. Prompt resolution (decided): system = skill.prompt_template,
-   user = execution.prompt + "\n\n" + context.content (prompt first when
-   present, context appended last). The resolved prompt is NOT stored in
-   the execution row; it is recorded in the `prompt_resolved` log event
-   (`metadata`: system, user, system_bytes, user_bytes).
-4. Concurrency: start() is atomic, so the runner can safely claim a
-   pending execution; a dead runner leaves a row stuck in running (needs
-   a cancel/retry policy).
-5. Dependencies available on the current stack: cURL (MSYS2
-   mingw-w64-x86_64-curl), cJSON already used by the CLI. No HTTP code
-   exists yet, so this is the one genuinely new piece.
-6. Backend reference: the full auto-generated llama.cpp server reference
-   lives in the upstream llama.cpp repository (README.md of
-   `llama-server`); the runner-relevant subset is distilled in
-   `llamacpp_server_contract.md` (startup, /health, /v1/models,
-   /v1/chat/completions, errors).
-
-## Plans
-
-### Plan A — standalone C runner binary acta_runner (selected)
-
-A new top-level acta_runner/ in C, linking libacta_db.a + curl + cJSON,
-run as acta_runner run <execution-id> or acta_runner run --pending. It
-claims the execution with the atomic start() transition, fetches the
-context, skill revision and model revision, POSTs to the model's
-OpenAI-compatible endpoint, and walks the lifecycle back into the DB:
-set_raw_response, optional output_schema validation, complete or fail,
-with execution_log rows for each phase. It is headless and testable
-against a mock OpenAI stub server, matches the repo's C style and CLI
-conventions, and touches no existing component; the only cost is adding
-cURL as a dependency.
-
-### Plan B — runner as a C++/Qt shared library, UI runs it in a QThread
-
-The runner becomes a C++ library using QNetworkAccessManager, called
-from a QThread worker inside the GUI so a "Run" button drives
-executions in-app with live status updates (covering UI review #44
-directly). The upside is native in-app UX with no extra process; the
-price is tying the engine to Qt, which makes it harder to unit-test
-headless, pulls the HTTP stack into the GUI binary, and makes the
-runner harder to reuse from the CLI.
-
-### Plan C — new exec run action inside acta_cli
-
-Add a run action to the existing acta_cli CLI so no new binary is
-needed. It breaks the clean split, though: the CLI is deliberately a
-thin DB client with no HTTP, and bolting network calls, timeouts and
-call failures into a CRUD tool muddles its error contract and scope. Not
-recommended.
-
-### Plan D — Plan A + GUI spawns it (recommended end state)
-
-Keep the standalone runner from A and have the Qt "Run" button simply
-spawn acta_runner run <id> via QProcess, with the execution panel
-polling acta_db_execution_query for status and log rows. The SQLite
-database becomes the message bus/queue between the two — no IPC, no
-sockets, and WAL already supports concurrent readers/writers. This
-satisfies UI review #18 and #44 with the least coupling, keeps the
-runner independently testable, and leaves the door open for a
-headless/CLI-driven mode later.
 
 ## Decisions (finalized)
 
-1. **Plan A is the plan.** Standalone C runner in `acta_runner/`.
-   Plan D (GUI spawns it) shipped in `acta_gui` (commit 184d574).
-   Later refinement (M1 / UR #45, commit f6efe22): the GUI runs the
-   same pipeline in-process (a closer cousin of Plan B, but reusing
-   the C `run.c`/`backend.c` directly instead of a Qt port) — the
-   standalone runner and its CLI remain available. The worker must be
+1. **Runner architecture.** Standalone C runner in `acta_runner/`.
+   The GUI "Run" button shipped first as spawning
+   `acta_runner run <id>` (commit 184d574); later refinement
+   (M1 / UR #45, commit f6efe22) runs the same pipeline in-process,
+   reusing the C `run.c`/`backend.c` directly instead of a Qt port —
+   the standalone runner and its CLI remain available. The worker must be
    `moveToThread()`-ed into its `QThread`; reparenting it to the
    `QThread` (which lives on the GUI thread) would keep the worker's
    affinity on the GUI thread and dispatch the blocking pipeline into
