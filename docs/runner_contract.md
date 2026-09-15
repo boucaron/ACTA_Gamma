@@ -94,50 +94,6 @@ Implementation notes (where the spec left room):
   a missing/unparseable catalog or id miss records `"catalog":null` and
   never fails the execution.
 
-## Codebase analysis
-
-### acta_db (C11, libacta_db)
-
-SQLite wrapper with a disciplined API (uniform getter/lister/mutator
-contracts, ACTA_DB_* error codes, pagination cap 10000):
-
-- model_t / model_revision_t: backend, base_url, model_identifier,
-  configuration — the "connection to the backend" record. Revisions are
-  trigger-managed, immutable snapshots.
-- skill_t / skill_revision_t: prompt_template, output_schema.
-- context_t: immutable, append-only input (type, content).
-- execution_t: full lifecycle already exists — create → start() (pending
-  → running) → complete(result) / fail(error), plus set_raw_response()
-  and cancel(). Transitions are atomic (WHERE id = ? AND status = ?),
-  explicitly designed so an external process can drive them.
-- execution_log_t: level/event/message/metadata per execution — designed
-  for exactly the phase rows in DBDesign.md (execution_started,
-  context_loaded, prompt_resolved, llm_request, llm_response,
-  validation_*, execution_completed/failed).
-
-### acta_cli (C11, acta_cli)
-
-Thin CRUD client over the library (create/get/list/count/start/
-cancel/complete/fail/set-raw for exec). Deliberately DB-only; contains
-no HTTP anywhere. JSON via cJSON, verbose stderr logging, JSON error
-contract. `exec create` takes `--prompt` as an **optional** field
-(context-only is a valid execution; both prompt and context empty
-fails at run time with the runner's clear error) — aligned with the
-UI and runner decision; `--context_id`, `--skill_revision_id` and
-`--model_revision_id` remain required.
-
-### acta_gui (C++ / Qt 6 Widgets)
-
-management GUI. DbHandle is a small RAII wrapper around db_t*.
-ExecutionCreateDialog creates a pending execution (context + skill
-revision + model revision + prompt + optional parent). The Execution
-panel's "Run" button runs the pipeline in-process: `run.c`/`backend.c`
-are compiled into the GUI and run on a worker thread created with
-`moveToThread()` (see the threading contract in `runnerWorker.h`) with
-their own DB connection (M1 / UR #45, commit f6efe22; superseding the
-original spawn-via-`QProcess` variant, commit 184d574); the
-panel polls the `execution_log` rows for live status.
-
 ## Decisions (finalized)
 
 1. **Runner architecture.** Standalone C runner in `acta_runner/`.
@@ -230,18 +186,6 @@ panel polls the `execution_log` rows for live status.
    all pending rows in `id ASC` order, optionally capped by `--max <n>`
    (0 = no limit); the batch continues past a failure and returns the
    worst exit code seen.
-
-## Code shape in `acta_runner/`
-
-- `src/backend.c/h` — small curl wrapper: GET/POST JSON with timeout →
-  (http status, body); optional `Authorization: Bearer` from
-  `configuration` / `--api_key`. Contract: `llamacpp_server_contract.md`.
-- `src/run.c` — the pipeline above, logging every phase to
-  `execution_log`.
-- `tests/` — tiny local stub server (fixed port, echoing `/health`,
-  `/v1/models`, `/v1/chat/completions`) covering: success →
-  `completed`, 503 → `fail`, model mismatch → `fail`, HTTP error →
-  `fail` + `EXIT_HTTP`, timeout.
 
 ## Explicitly out of scope (we do not implement these)
 
