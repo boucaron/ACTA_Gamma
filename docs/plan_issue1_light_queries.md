@@ -1,9 +1,13 @@
 # Plan: light projection variants for high-volume listers (Issue 1)
 
-**Status:** items 1, 2 (DB light listers), 4 (CLI `--full`), 5 (tests) and
-part of 6 (`docs/cli_spec.md`, `docs/status.md`) are done. Outstanding:
-item 3 (GUI panel reloads) and the `docs/known_issues.md` close-out once
-the GUI switch lands.
+**Status: complete.** All scope items are done: DB light listers, GUI
+panel reloads (plus `ExecutionCreateDialog::loadParentExecutions`), CLI
+`--full`, tests, and all doc updates (`docs/known_issues.md` Issue 1 is
+marked resolved). Note the one UI trade-off: the context panel filter no
+longer searches row content (the blob is not materialized in the list); it
+matches the visible columns (Type + Date). The create-dialog context
+toOLTIP still shows content (truncated to 400 chars), so `loadContexts()`
+deliberately keeps the full lister.
 
 Resolves Issue 1 from `docs/known_issues.md`: the highest-volume
 `acta_db` listers return full blob columns for every row, and `limit 0`

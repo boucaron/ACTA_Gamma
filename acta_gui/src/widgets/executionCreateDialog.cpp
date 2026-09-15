@@ -230,6 +230,11 @@ void ExecutionCreateDialog::loadContexts()
     // deleted_at IS NULL, so soft-deleted contexts are not offered as
     // targets for new work (a deleted context is refused at
     // exec create with NOT_FOUND).
+    //
+    // Deliberately the FULL lister (not _light): the combo tooltip
+    // shows the content truncated to 400 chars, so the blob is needed
+    // per row here. The selected row's full content is previewed via
+    // acta_db_context_get in loadContextDataPreview().
     int n = 0;
     int err = ACTA_DB_OK;
     context_t **contexts =
@@ -393,15 +398,19 @@ void ExecutionCreateDialog::loadParentExecutions()
     // allowed (a new live row is created; the parent reference is audit
     // data and the row physically remains), so the parent picker must
     // keep offering deleted parents.
+    //
+    // Light projection: the picker labels only need id / status /
+    // deleted_at, so the blob columns (prompt, raw_response, result,
+    // error) are not materialized here.
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.include_deleted = 1;
     int n = 0;
     int err = ACTA_DB_OK;
     execution_t **executions =
-        acta_db_execution_query(m_db, &q, 0, 0, &n, &err);
+        acta_db_execution_query_light(m_db, &q, 0, 0, &n, &err);
     if (!executions) {
         if (err != ACTA_DB_OK)
-            qWarning("acta_db_execution_query failed: %s",
+            qWarning("acta_db_execution_query_light failed: %s",
                      acta_db_strerror(err));
         return;
     }

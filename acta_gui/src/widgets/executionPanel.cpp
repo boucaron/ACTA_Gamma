@@ -548,14 +548,20 @@ void ExecutionPanel::reload()
     int err = ACTA_DB_OK;
     // Live rows by default; with "Show trash" the query also returns
     // soft-deleted rows so they can be restored.
+    //
+    // Light projection: the list only displays ids / status /
+    // timestamps / revision names, so the blob columns (prompt,
+    // raw_response, result, error) are not materialized here (they
+    // stay NULL in each row). The detail dialog and the in-flight
+    // poll fetch full rows via acta_db_execution_get.
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.include_deleted =
         showDeletedCheck != nullptr && showDeletedCheck->isChecked();
     execution_t **executions =
-        acta_db_execution_query(m_db, &q, 0, 0, &n, &err);
+        acta_db_execution_query_light(m_db, &q, 0, 0, &n, &err);
     if (!executions) {
         if (err != ACTA_DB_OK)
-            qWarning("acta_db_execution_query failed: %s",
+            qWarning("acta_db_execution_query_light failed: %s",
                      acta_db_strerror(err));
         emptyLabel->setVisible(true);
         return;

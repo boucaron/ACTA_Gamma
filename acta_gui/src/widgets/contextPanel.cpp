@@ -22,14 +22,16 @@
 
 namespace {
 const int RoleContextId = Qt::UserRole;
-// Row payload for the search filter: the content is not a visible
-// column (the list shows Type + Date only) but is the main identifying
-// data, so it is stored per row and searched by applyTreeFilter
-// (H4 / UR #38).
-const int RoleContextContent = Qt::UserRole + 1;
 // Marker for soft-deleted rows (visible only with "Show trash" on);
 // drives the Delete / Restore button states.
-const int RoleContextDeleted = Qt::UserRole + 2;
+const int RoleContextDeleted = Qt::UserRole + 1;
+//
+// The list reload uses the light projection
+// (acta_db_context_query_light / _with_deleted_light): the content
+// blob is NOT materialized per row, so the filter matches the visible
+// columns (Type + Date) only. The full content of the selected row is
+// still fetched on demand via acta_db_context_get (inline editor and
+// details dialog).
 } // namespace
 
 ContextPanel::ContextPanel(db_t *db, QWidget *parent)
@@ -44,7 +46,7 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
 
     // Case-insensitive substring filter above the list (H4 / UR #38).
     filterEdit = new QLineEdit;
-    filterEdit->setPlaceholderText(tr("Filter contexts…"));
+    filterEdit->setPlaceholderText(tr("Filter contexts by type…"));
     lay->addWidget(filterEdit);
 
     // "Show trash" (mirrors the skill/model panels): soft-deleted
@@ -129,7 +131,9 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
         reload();
     });
     connect(filterEdit, &QLineEdit::textChanged, this, [this](const QString &t) {
-        applyTreeFilter(list, t, RoleContextContent);
+        // Light projection: no per-row content payload; the filter
+        // matches the visible columns (Type + Date).
+        applyTreeFilter(list, t);
     });
 
     // Right-click context menu on the list: "New…" and "Show" (no
@@ -212,14 +216,19 @@ void ContextPanel::reload()
     // Live rows by default (the DB layer's live-only default); with
     // "Show trash" the query also returns soft-deleted rows so they
     // can be restored.
+    //
+    // Light projection: the content blob is not materialized per row
+    // (content stays NULL); only type / hash / dates are needed for
+    // the list. The selected row's full content is fetched on demand
+    // in showContext() via acta_db_context_get.
     context_t **contexts =
         (showDeletedCheck != nullptr && showDeletedCheck->isChecked())
-            ? acta_db_context_query_with_deleted(m_db, nullptr, 0, 0, &n,
-                                                 &err)
-            : acta_db_context_query(m_db, nullptr, 0, 0, &n, &err);
+            ? acta_db_context_query_with_deleted_light(m_db, nullptr, 0, 0,
+                                                       &n, &err)
+            : acta_db_context_query_light(m_db, nullptr, 0, 0, &n, &err);
     if (!contexts) {
         if (err != ACTA_DB_OK)
-            qWarning("acta_db_context_query failed: %s",
+            qWarning("acta_db_context_query_light failed: %s",
                      acta_db_strerror(err));
         emptyLabel->setVisible(true);
         return;
@@ -240,10 +249,6 @@ void ContextPanel::reload()
         item->setText(1, displayDateTime(contexts[i]->created_at));
         item->setToolTip(1, createdIso);
         item->setData(0, RoleContextId, contexts[i]->id);
-        item->setData(0, RoleContextContent,
-                      contexts[i]->content
-                          ? QString::fromUtf8(contexts[i]->content)
-                          : QString());
 
         // Soft-deleted row (only visible with "Show trash"): trash
         // icon, gray date and a deleted tooltip, mirroring the
@@ -278,9 +283,9 @@ void ContextPanel::reload()
     // unspecified order (the seconds live only in the tooltip).
     list->sortItems(1, Qt::DescendingOrder);
 
-    // Re-apply the filter to the freshly built list (H4 / UR #38).
-    applyTreeFilter(list, filterEdit ? filterEdit->text() : QString(),
-                    RoleContextContent);
+    // Re-apply the filter to the freshly built list (H4 / UR #38);
+    // light projection → the filter matches the visible columns only.
+    applyTreeFilter(list, filterEdit ? filterEdit->text() : QString());
 
     // Empty-state placeholder: only when there are no rows at all
     // (P5 / UR #31).

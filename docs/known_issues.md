@@ -1,14 +1,14 @@
 # Known issues and residual notes
 
-Findings from the `acta_db` review. Issue 1 is mostly resolved (light
-projection listers; GUI switch outstanding); issues 2–3 are low-priority
-residual notes.
+Findings from the `acta_db` review. Issue 1 is resolved (light
+projection listers, adopted by the CLI and the GUI); issues 2–3 are
+low-priority residual notes.
 
 ---
 
 ## Issue 1: listers materialize unbounded blob columns
 
-Status: **mostly resolved** (Option A implemented; GUI switch outstanding).
+Status: **resolved** (Option A fully implemented).
 
 ### Problem
 
@@ -132,15 +132,18 @@ Done:
 - `acta_cli`: `context list` / `exec list` default to the light variants;
   `--full` fetches the blobs (`--full` registered in the argparse flag
   table). Documented in `docs/cli_spec.md`.
+- `acta_gui`: `ContextPanel::reload()` and `ExecutionPanel::reload()` use
+  the light variants; `ExecutionCreateDialog::loadParentExecutions()` does
+  too. Single-row fetches (`acta_db_context_get`, `acta_db_execution_get`)
+  stay full — the context details dialog, the inline content editor, the
+  execution detail dialog, the in-flight poll and the create-dialog
+  context tooltip (content truncated to 400 chars) legitimately need the
+  blobs. One UI trade-off: the context panel filter no longer searches
+  row content (blob not materialized in the list); it matches the visible
+  columns (Type + Date).
 - Tests: `acta_db/tests/test_light_queries.c` (blob fields NULL, ids /
   status correct, pagination identical, `limit 0` clamp, include_deleted,
   count parity).
-
-Outstanding:
-
-- `acta_gui`: `contextPanel.cpp` reload and `executionPanel.cpp` list
-  reload still call the full-blob listers with `limit 0` — switch them to
-  the light variants (keep `acta_db_execution_get` for the detail dialog).
 
 ---
 
