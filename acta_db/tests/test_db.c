@@ -141,6 +141,45 @@ static void test_db_strerror_defined_codes(void) {
 
 
 
+/* ---------- 1.4h: file-backed open — WAL takes effect, no note ----------
+ *
+ * On a regular file WAL is supported and the effective journal_mode is
+ * "wal", so a successful open must leave last_error NULL.
+ */
+static void test_db_open_file_wal_active(void) {
+    const char *path = "test/acta_test_wal_file.db";
+    remove(path);
+
+    int err = 0;
+    db_t *db = acta_db_open(path, &err, ACTA_DB_OPEN_CREATE);
+    TEST_ASSERT_NOT_NULL(db);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NULL(acta_db_last_error(db));
+
+    acta_db_close(db);
+    remove(path);
+}
+
+/* ---------- 1.4i: :memory: open — WAL degraded, informational note ----------
+ *
+ * WAL is unsupported on :memory: databases: the set-pragma returns OK
+ * but the effective mode is "memory". The open must still succeed
+ * (ACTA_DB_OK), and last_error must carry the informational note.
+ */
+static void test_db_open_memory_wal_note(void) {
+    int err = 0;
+    db_t *db = acta_db_open(":memory:", &err, ACTA_DB_OPEN_CREATE);
+    TEST_ASSERT_NOT_NULL(db);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);   /* degraded pragma must not fail the open */
+
+    const char *note = acta_db_last_error(db);
+    TEST_ASSERT_NOT_NULL(note);
+    TEST_ASSERT(strstr(note, "journal_mode") != NULL);
+    TEST_ASSERT(strstr(note, "memory") != NULL);
+
+    acta_db_close(db);
+}
+
 /* ---------- 1.5: acta_db_close — valid handle ---------- */
 static void test_db_close_valid(void) {
     const char *path = "test/acta_test_close.db";
@@ -640,6 +679,8 @@ int run_db_tests(void) {
     test_db_open_createmode0_existing_valid();    
     test_db_open_null_path_null_err();
     test_db_open_success_null_err();
+    test_db_open_file_wal_active();
+    test_db_open_memory_wal_note();
     test_db_strerror_defined_codes();
     test_db_close_valid();
     test_db_close_null();

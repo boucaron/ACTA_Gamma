@@ -119,6 +119,12 @@ int main(int argc, char **argv) {
         return emit_db_open_error(db_err, msg);
     }
 
+    /* Informational pragma note after a successful open (e.g. WAL not
+     * supported by the backend). Not an error. */
+    if (const char *note = acta_db_last_error(db))
+        fprintf(stderr, "[warn] db opened with degraded pragma state: %s\n",
+                note);
+
     /* ---- dispatch (handlers receive the open db handle) ---- */
     rc = commands_dispatch(entity, action, &ga, &gopts, db);
 

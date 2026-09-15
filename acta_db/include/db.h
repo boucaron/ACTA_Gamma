@@ -104,7 +104,15 @@ typedef struct db_t db_t;
  *                           ACTA_DB_ERR_INVALID_DB)
  *   ACTA_DB_OPEN_CREATE   – open the file, creating it if it does not
  *                           exist (the caller applies the schema)
- * Returns NULL on failure; if err is non-NULL it receives the error code. */
+ * Returns NULL on failure; if err is non-NULL it receives the error code.
+ *
+ * On a successful open, acta_db_last_error() may be non-NULL: it then
+ * holds an informational note that a best-effort pragma did not take
+ * effect (WAL unsupported by the backend, e.g. :memory: databases or
+ * some filesystems, or PRAGMA foreign_keys=ON failing). This is NOT
+ * an error — the return code is ACTA_DB_OK and the connection is fully
+ * usable; callers may log the note. Any later acta_db_exec* call
+ * clears it, like any other error string. */
 db_t *acta_db_open(const char *path, int *err, int creationMode);
 
 /* Close the database and free the handle.
@@ -155,8 +163,21 @@ int acta_db_force_close(db_t *db);
 
 
 
-/* Execute a SQL statement (or script). Returns ACTA_DB_OK on success,
- * a negative error code on failure. Use for running DDL / migrations. */
+/* Execute a SQL statement (or script) directly on the connection,
+ * without parameterization.  Returns ACTA_DB_OK on success, a negative
+ * error code on failure (details via acta_db_last_error).
+ *
+ * Constraint: sql must be static or developer-supplied (DDL, migrations,
+ * pragmas, schema scripts).  It must never be composed from user-supplied
+ * input (e.g. snprintf/concatenation of CLI, GUI, or API-provided
+ * strings) — that would reintroduce SQL injection into an otherwise fully
+ * parameterized library.  For data-dependent queries use the
+ * prepared-statement APIs (acta_db_*_query, acta_db_*_create, ...), not
+ * this function.
+ *
+ * Intended callers today: schema application at first GUI launch
+ * (acta_gui/db/schema.sql) and the acta_cli `db exec` raw-SQL command,
+ * both of which pass through operator-supplied SQL by design. */
 int acta_db_exec(db_t *db, const char *sql);
 
 /* Returns the last error message for this connection. */

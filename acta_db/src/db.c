@@ -50,6 +50,17 @@ static int vlog_count_rows(void *ctx, int ncol, char **vals, char **names)
     return 0;
 }
 
+/* ── tiny callback: capture the first column of the first row ───── */
+/* *ctx receives a sqlite3_mprintf'd copy (free with sqlite3_free);   */
+/* NULL if there is no value. Used to read the effective journal_mode. */
+static int pragma_capture_first(void *ctx, int ncol, char **vals, char **names)
+{
+    (void)names;
+    if (ncol > 0 && vals && vals[0])
+        *(char **)ctx = sqlite3_mprintf("%s", vals[0]);
+    return 0;
+}
+
 /* ── Open a database ───────────────────────────────────────────────
  *
  *  ACTA_DB_OPEN_EXISTING: verify the file is a non-empty SQLite DB
@@ -74,11 +85,35 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
     }
 
     /*
-     * PRAGMAs are best-effort.  WAL is not supported on :memory: or
-     * some network filesystems; the DB still opens without it.
+     * PRAGMAs are best-effort: check-and-report, never fail the open.
+     * WAL is not supported on :memory: databases or some filesystems;
+     * the set-pragma then returns SQLITE_OK while the effective mode is
+     * not "wal", so the effective mode is queried and, when degraded,
+     * an informational note is stored in last_error (see below).
+     * PRAGMA foreign_keys=ON cannot fail at this point (no active
+     * transaction); its rc is captured anyway as future-proofing.
+     * A non-NULL last_error after a successful open is NOT an error:
+     * the return code is ACTA_DB_OK and the connection is fully usable;
+     * any later acta_db_exec* call clears it like any other error string.
      */
-    sqlite3_exec(handle, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL);
-    sqlite3_exec(handle, "PRAGMA foreign_keys=ON;",  NULL, NULL, NULL);
+    int rc_wal = sqlite3_exec(handle, "PRAGMA journal_mode=WAL;",
+                              NULL, NULL, NULL);
+    int rc_fk  = sqlite3_exec(handle, "PRAGMA foreign_keys=ON;",
+                              NULL, NULL, NULL);
+
+    /* The mode query is the authoritative check: the set-pragma can
+     * return SQLITE_OK while the mode silently stays "memory"/"delete".
+     * (rc_wal is only secondary evidence; a non-OK rc implies
+     * !wal_active via the mode query either way.) */
+    char *mode = NULL;
+    int mode_rc = sqlite3_exec(handle, "PRAGMA journal_mode;",
+                               pragma_capture_first, &mode, NULL);
+    int wal_active = (mode_rc == SQLITE_OK && mode &&
+                      strcmp(mode, "wal") == 0);
+    /* mode_str aliases mode (or the static "(unknown)"); mode is freed
+     * later, after the informational note has been built. */
+    const char *mode_str = (mode_rc == SQLITE_OK && mode) ? mode : "(unknown)";
+    (void)rc_wal;
 
     /*
      * Enable extended result codes so that constraint violations
@@ -125,6 +160,31 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
     db->handle          = handle;
     db->last_error      = NULL;
     db->in_transaction  = 0;
+
+    /* Informational pragma note (not an error). If both degradation
+     * notes ever fired, the foreign-key note wins: it is the rarer and
+     * more severe condition (FK enforcement off ⇒ ACTA_DB_ERR_FK
+     * mapping unreliable), so it is set last. */
+    char *note = NULL;
+    if (!wal_active) {
+        note = sqlite3_mprintf(
+            "PRAGMA journal_mode=WAL did not take effect (effective "
+            "journal_mode: %s; WAL is unsupported on :memory: databases "
+            "and some filesystems). Informational note, not an error: "
+            "the connection is fully usable.", mode_str);
+        sqlite3_free(mode);   /* mode_str is no longer needed */
+    }
+    if (rc_fk != SQLITE_OK) {
+        sqlite3_free(note);
+        if (wal_active)
+            sqlite3_free(mode);   /* not yet freed (wal-branch skips it) */
+        note = sqlite3_mprintf(
+            "PRAGMA foreign_keys=ON failed at open (rc=%d); FK enforcement "
+            "may be off on this connection, making ACTA_DB_ERR_FK mapping "
+            "unreliable. Informational note, not an error.", rc_fk);
+    }
+    db->last_error = note;   /* NULL when both pragmas took effect */
+
     if (err) *err = ACTA_DB_OK;
     return db;
 }

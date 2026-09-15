@@ -64,6 +64,11 @@ bool DbHandle::open(const QString &path,
         return false;
     }
 
+    /* Informational pragma note after a successful open (e.g. WAL not
+     * supported by the backend). Not an error. */
+    if (const char *note = acta_db_last_error(db))
+        qWarning("db opened with degraded pragma state: %s", note);
+
     m_db = db;
     return true;
 }

@@ -1,8 +1,8 @@
 # Known issues and residual notes
 
-Findings from the `acta_db` review. Issue 1 is resolved (light
-projection listers, adopted by the CLI and the GUI); issues 2–3 are
-low-priority residual notes.
+Findings from the `acta_db` review. Issues 1 and 3 are resolved (light
+projection listers, adopted by the CLI and the GUI; `acta_db_exec`
+doc-comment contract); issue 2 is a low-priority residual note.
 
 ---
 
@@ -171,6 +171,17 @@ least log/warn. Whether to fail the open is a design choice — the code
 comment today says "best-effort", so the minimal honest change is
 check-and-report, not fail.
 
+Status: **resolved** — `acta_db_open` now captures both pragma results
+and, because the WAL set-pragma can return OK while silently staying
+non-WAL (e.g. `:memory:`), queries the effective `PRAGMA journal_mode;`.
+On degradation it stores an informational note in `last_error` (the open
+still returns `ACTA_DB_OK`; the note is cleared by the next
+`acta_db_exec*` call). Documented in the `acta_db_open` header comment;
+the GUI (`DbHandle::open`), CLI, and runner warn on it after a
+successful open. Tests: `test_db_open_file_wal_active` (file-backed:
+WAL active, no note) and `test_db_open_memory_wal_note` (`:memory:`:
+open succeeds, note present) in `acta_db/tests/test_db.c`.
+
 ## Issue 3: `acta_db_exec` is a public raw-SQL escape hatch
 
 `acta_db_exec(db, sql)` runs arbitrary SQL on the connection. Correctly
@@ -183,6 +194,11 @@ unparameterized path.
 Fix (cheap): keep the API (DDL genuinely needs it) and add a doc comment
 stating that `sql` must be static/developer-supplied, never composed
 from user input. No code change required beyond the comment.
+
+Status: **resolved** — the doc comment now states the static/developer-supplied
+constraint and lists the intended callers (`acta_db/include/db.h`,
+`acta_db_exec`); the constraint is also documented in `docs/DBDesign.md`
+(Scope and assumptions). No code change.
 
 1. `acta_db`: `acta_db_context_query_light` / `_with_deleted_light` and
    `acta_db_execution_query_light` (+ matching doc comments in the headers).
