@@ -23,20 +23,6 @@ is still live.
 These blocks are accepted as-is; a future edit that touches one should
 keep the canonical message texts.
 
-### `--tools` maintenance note
-
-`tool_table[].flags` and argparse's `entity_flag_specs` remain two
-hand-synced sources of truth — `make test`'s 74× raw-argv cross-check is
-the drift detector, and for the M4/M5 cells it can only prove acceptance,
-not spec-vs-code agreement. A
-shared `has_value` header was considered in T3 and is not required.
-
-`--tools --compact` (plain-text, one line per command) is a second
-renderer over the same `tool_table` — no new source of truth and no new
-drift surface; both renderers live in `src/tools.c` and the T4 suite's
-schema walk still pins the full JSON (the compact mode is exercised
-manually, not yet pinned in `make test`).
-
 ## Closed (for the record)
 
 - **Items:** `--result`/`--error` data loss, DEBUG stdin leak, `create
@@ -58,12 +44,15 @@ manually, not yet pinned in `make test`).
   absent-vs-OOM distinction, error-offset VLOG — pinned in
   `tests/json/json_test_main.c`), J2 (`model get --live` — stale item, no
   code change), J3 (nine `*_usage` made `static`).
-
-Low-priority nitpicks intentionally left as-is (no action taken):
-the redundant `gopts.argc < 2` re-check in `main.c`; the
-`--from_file` / `db exec --file` naming drift; and the `"hash"` →
-`content_hash` wire-key mapping (kept — it is the documented contract in
-`cli_spec.md`).
+- **Accepted as-is (no action taken):** the hand-synchronized
+  `tool_table[].flags` / `entity_flag_specs` pair (the 74× raw-argv
+  cross-check remains the drift detector; a shared `has_value` header was
+  considered in T3 and is not required); `--tools --compact` (second
+  renderer over `tool_table` in `src/tools.c`; the T4 schema walk pins
+  the full JSON, compact mode exercised manually); the redundant
+  `gopts.argc < 2` re-check in `main.c`; the `--from_file` / `db exec
+  --file` naming drift; and the `"hash"` → `content_hash` wire-key
+  mapping (kept — it is the documented contract in `cli_spec.md`).
 
 The former hard-coded offsets in `parse_globals` (`a[4]`, `a[8]`, `a[6]`,
 `a[11]`) are gone: they are now derived via `flag_inline_value()`
