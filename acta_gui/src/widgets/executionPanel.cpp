@@ -127,6 +127,21 @@ ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
     logList->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(logList, &QTableView::customContextMenuRequested, this,
             &ExecutionPanel::onLogListContextMenu);
+    // Double-click on a log line opens the read-only execution log
+    // dialog (same as the Show Log button / context menu). The log id
+    // lives in column 0, the same convention as selectedLogId().
+    // QTableView (QItemView) exposes doubleClicked, not itemDoubleClicked
+    // (that signal belongs to QTreeView/QTreeWidget).
+    connect(logList, &QTableView::doubleClicked, this,
+            [this](const QModelIndex &idx) {
+                const int logId = logList->model()
+                    ? logList->model()->data(
+                          logList->model()->index(idx.row(), 0),
+                          RoleLogId).toInt()
+                    : 0;
+                if (logId != 0)
+                    showLogDetails(logId);
+            });
     // Selection drives the Show button's enabled state; the
     // selectionChanged connection is (re)established in setLogModel()
     // after every model swap, because QItemView replaces the

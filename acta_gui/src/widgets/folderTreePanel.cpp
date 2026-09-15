@@ -169,6 +169,16 @@ FolderTreePanel::FolderTreePanel(FolderTreeDao dao, QWidget *parent)
                 updateButtonStates();
                 emitItemChanged();
             });
+    // Double-click on an entity row opens the read-only detail dialog
+    // (same as the Show button / Enter / context menu). Folder rows
+    // keep the default Qt expansion toggle — folders have no detail
+    // dialog. The clicked row is current when the signal fires, so
+    // the shared handler works unchanged.
+    connect(tree, &QTreeWidget::itemDoubleClicked, this,
+            [this](QTreeWidgetItem *item, int) {
+                if (item && item->data(0, RoleEntityId).toInt() != 0)
+                    onShowBtnClicked();
+            });
     connect(tree, &QTreeWidget::customContextMenuRequested, this,
             &FolderTreePanel::onListContextMenu);
 

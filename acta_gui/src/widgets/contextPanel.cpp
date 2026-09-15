@@ -71,6 +71,12 @@ ContextPanel::ContextPanel(db_t *db, QWidget *parent)
                 emitItemChanged();
                 updateActionBtnStates();
             });
+    // Double-click opens the read-only Show dialog, the same as the
+    // Show button / Enter / context menu. The clicked row is current
+    // by the time the signal fires, so the shared handler works
+    // unchanged (parity with the execution panel's double-click).
+    connect(list, &QTreeWidget::itemDoubleClicked, this,
+            [this](QTreeWidgetItem *, int) { onShowBtnClicked(); });
     lay->addWidget(list);
 
     // Centered placeholder over the blank list when the db is empty
