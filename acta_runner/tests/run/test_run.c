@@ -2,7 +2,7 @@
  * test_run.c — phase-2 pipeline tests against the in-process stub
  * OpenAI-compatible server (tests/stub_server.c).
  *
- * Covers (docs/runner_analysis.md, "Code shape in acta_runner/"):
+ * Covers (docs/runner_contract.md, "Code shape in acta_runner/"):
  *   1. success            -> completed + full phase log
  *   2. /health 503        -> failed ("model still loading") + EXIT_HTTP
  *   3. model mismatch     -> failed + EXIT_HTTP

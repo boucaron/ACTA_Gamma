@@ -1,7 +1,7 @@
 /*
  * acta_runner — "run" action (phase 2: full execution pipeline)
  *
- * Pipeline per docs/runner_analysis.md:
+ * Pipeline per docs/runner_contract.md:
  *
  *   1. Claim     — fetch execution; must be pending; start() -> running;
  *                   log execution_started.

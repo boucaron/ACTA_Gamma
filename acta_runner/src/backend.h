@@ -6,7 +6,7 @@
  * (GET with no body, or POST with a JSON body) against an arbitrary
  * URL, with a hard timeout and an optional
  * `Authorization: Bearer <key>` header. No retries, no streaming —
- * failures are first-class artifacts (docs/runner_analysis.md,
+ * failures are first-class artifacts (docs/runner_contract.md,
  * decisions 4/5).
  *
  * Result contract:
