@@ -40,7 +40,7 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server
-  (`make smoke`). Run with `make test` in `acta_runner/`.
+  (`make smoke`).
   `make -C acta_runner test-e2e`: dead-runner end-to-end suite — spawns
   real `acta_runner` processes against the stub server (~10–15 s),
   separate from `make test` (see `building.md`).
@@ -123,13 +123,12 @@ UI and runner decision; `--context_id`, `--skill_revision_id` and
 management GUI. DbHandle is a small RAII wrapper around db_t*.
 ExecutionCreateDialog creates a pending execution (context + skill
 revision + model revision + prompt + optional parent). The Execution
-panel's "Run" button (Plan D, commit 184d574) spawns
-`acta_runner run <id> --db <path>` via `QProcess` and polls the
-`execution_log` rows for live status. *(Since commit f6efe22, M1 / UR
-#45: the button no longer spawns a process — `run.c`/`backend.c` are
-compiled into the GUI and run on a worker thread created with `moveToThread()` (see the
-threading contract in `runnerWorker.h`) with their own DB
-connection; the panel's polling is unchanged.)
+panel's "Run" button runs the pipeline in-process: `run.c`/`backend.c`
+are compiled into the GUI and run on a worker thread created with
+`moveToThread()` (see the threading contract in `runnerWorker.h`) with
+their own DB connection (M1 / UR #45, commit f6efe22; superseding the
+original Plan D spawn-via-`QProcess` variant, commit 184d574); the
+panel polls the `execution_log` rows for live status.
 
 ## Key observations for the runner
 
@@ -324,6 +323,3 @@ headless/CLI-driven mode later.
 - Multimodal, tool calling, embeddings, LoRA, slot caching — anything
   beyond `chat/completions` from the backend (see
   `llamacpp_server_contract.md` §6).
-
-Stale-`running` cleanup used to be listed here; it is now shipped as the
-`sweep` action (decision 6).
