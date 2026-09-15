@@ -5,7 +5,8 @@ Follow-up to `cli_help_analysis.md`. All work is in `acta_cli/`
 split in `cli_spec.md`). No DB behavior changes; only help/discoverability.
 
 Status: **P0 verified** in the rebuilt binary (source `0d17c710`),
-**P1 done in source** (pending: rebuild + `test_tools` run), P2 pending.
+**P1 committed** (`1bb0466`), pending: rebuild + `test_tools` run,
+P2 pending.
 
 ## P0 — Per-action help (done, commit `108e7ce`)
 
@@ -47,7 +48,7 @@ Status: **P0 verified** in the rebuilt binary (source `0d17c710`),
   fields; keep the spec table in `cli_spec.md` updated to match.
 - Bump the schema `version` field; test with `test_tools.exe`.
 
-Done in source (2025-07): `success` is now a structured object per
+Done in source (commit `1bb0466`): `success` is now a structured object per
 entry (`tool_success_t` + `suc_*` constants + `jf_success` renderer in
 `src/tools.c`); kinds: `json` (with `keys`), `json_object`, `json_array`,
 `bare_int`, `plain_text`; optional `note` carries the `--table` / `--count`
