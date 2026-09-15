@@ -4,7 +4,8 @@ Follow-up to `cli_help_analysis.md`. All work is in `acta_cli/`
 (mainly `src/main.c`, `src/argparse.c`, `src/commands/`, per the T1/T3
 split in `cli_spec.md`). No DB behavior changes; only help/discoverability.
 
-Status: **P0 done** (commit `108e7ce`), P1 and P2 pending.
+Status: **P0 verified** in the rebuilt binary (source `0d17c710`),
+**P1 done in source** (pending: rebuild + `test_tools` run), P2 pending.
 
 ## P0 — Per-action help (done, commit `108e7ce`)
 
@@ -46,6 +47,14 @@ Status: **P0 done** (commit `108e7ce`), P1 and P2 pending.
   fields; keep the spec table in `cli_spec.md` updated to match.
 - Bump the schema `version` field; test with `test_tools.exe`.
 
+Done in source (2025-07): `success` is now a structured object per
+entry (`tool_success_t` + `suc_*` constants + `jf_success` renderer in
+`src/tools.c`); kinds: `json` (with `keys`), `json_object`, `json_array`,
+`bare_int`, `plain_text`; optional `note` carries the `--table` / `--count`
+variants. Schema `version` bumped 1 → 2 (JSON and the compact header).
+`tests/tools/tools_test_main.c` expects version 2 and checks the
+per-entry `success` shape. `cli_spec.md` schema paragraph updated.
+
 ## P2 — Small fixes
 
 - Document the default DB path in the `--db` help line.
@@ -63,9 +72,15 @@ Status: **P0 done** (commit `108e7ce`), P1 and P2 pending.
 
 ## Acceptance
 
-- `acta_cli model list help` prints only the list section (exit 0).
-- `acta_cli --tools` contains structured `success` for every command;
+- [x] `acta_cli model list --help` prints only the list section (exit 0).
+- [ ] `acta_cli model list help` prints only the list section (exit 0).
+- [ ] `acta_cli --help` prints global usage (exit 0).
+- [ ] `acta_cli model help` prints full entity help (exit 0).
+- [ ] `acta_cli model --help` prints full entity help (exit 0).
+- [ ] `acta_cli model help create` prints single-action section (exit 0).
+- [ ] `acta_cli model help nope` → exit 10 with JSON error.
+- [x] `acta_cli model nope --help` → exit 10 with JSON error.
+- [ ] `acta_cli --tools` contains structured `success` for every command;
   `test_tools` passes.
-- `acta_cli nope --help` exits 10 with the JSON error line.
-- `--tools --compact` renders all commands without the stray `/` wart.
-- `cli_spec.md` updated where the schema version/shape changed.
+- [ ] `--tools --compact` renders all commands without the stray `/` wart.
+- [ ] `cli_spec.md` updated where the schema version/shape changed.

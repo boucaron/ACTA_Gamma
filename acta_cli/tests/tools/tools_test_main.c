@@ -192,7 +192,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     TEST_STREQ(ctx, cj_str(root, "name"), "acta_cli");
     cJSON *ver = cJSON_GetObjectItem(root, "version");
     TEST(ctx, ver && cJSON_IsNumber(ver));
-    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 1);
+    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 2);   /* P1: structured success */
     TEST_NOT_NULL(ctx, cj_str(root, "usage"));
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");
@@ -285,6 +285,24 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
         TEST(ctx, (strcmp(action, "help") == 0 ||
                    strcmp(action, "version") == 0) ==
                (input != NULL && strcmp(input, "none") == 0));
+
+        /* P1: structured success (schema v2) — object with a known
+         * kind; kind "json" carries a non-empty keys array. */
+        cJSON *sc = cJSON_GetObjectItem(e, "success");
+        TEST(ctx, cJSON_IsObject(sc));
+        const char *kind = sc ? cj_str(sc, "kind") : NULL;
+        TEST(ctx, kind != NULL &&
+             contains((const char *const[5]){"json", "json_object",
+                "json_array", "bare_int", "plain_text"}, 5, kind) == 1);
+        if (kind != NULL && strcmp(kind, "json") == 0) {
+            cJSON *keys = cJSON_GetObjectItem(sc, "keys");
+            TEST(ctx, cJSON_IsArray(keys) && cJSON_GetArraySize(keys) > 0);
+            for (int q = 0; q < cJSON_GetArraySize(keys); q++) {
+                cJSON *k = cJSON_GetArrayItem(keys, q);
+                TEST_NOT_NULL(ctx,
+                             (k && cJSON_IsString(k)) ? k->valuestring : NULL);
+            }
+        }
 
         cJSON *pos = cJSON_GetObjectItem(e, "positionals");
         TEST(ctx, cJSON_IsArray(pos));

@@ -10,6 +10,12 @@
  *   M3  skill_folder list/count filter by an optional positional
  *       <parent_id | all>, not a --parent_id flag
  *
+ * Success shapes are structured (P1, schema v2): `success` is a JSON
+ * object `{"kind":"json"|"json_object"|"json_array"|"bare_int"|
+ * "plain_text"(,"keys":[...])(,"note":"...")}`; kind "json" carries
+ * the exact wire keys, the optional note carries the --table/--count
+ * variants.
+ *
  * Flag vocabulary: every flag listed per action is a subset of
  * entity_flag_specs (argparse.c), so commands built from this table
  * pass cmd_args_validate.  Global flags (--db, --fields, ..., --pretty)
@@ -38,6 +44,13 @@
 /*  schema data                                                        */
 /* ------------------------------------------------------------------ */
 
+typedef struct {
+    const char *kind;    /* "json" | "json_object" | "json_array" |
+                          "bare_int" | "plain_text" */
+    const char *const *keys;  size_t n_keys;  /* wire keys (kind "json") */
+    const char *note;    /* optional prose (e.g. the --table variant) */
+} tool_success_t;
+
 typedef struct { const char *name; int required; const char *type; } tool_pos_t;
 typedef struct { const char *name; int has_value; int required; } tool_flag_t;
 
@@ -53,7 +66,7 @@ typedef struct {
                            | "positional" | "none" */
     const char *const *json_req;  size_t n_json_req;
     const char *const *json_opt;  size_t n_json_opt;
-    const char *success;  /* stdout on success, cli_spec.md verbatim */
+    const tool_success_t *success;  /* stdout on success, structured (P1) */
 } tool_entry_t;
 
 /* ── positionals ── */
@@ -211,6 +224,54 @@ static const char *const jk_exec_opt[]   = { "prompt", "parent_execution_id" };
 static const char *const jk_log_req[]    = { "execution_id", "level", "event" };
 static const char *const jk_log_opt[]    = { "message", "metadata" };
 
+/* ── success shapes (P1: structured) ── */
+
+static const char *const ks_id[]          = { "id" };
+static const char *const ks_id_folder[]   = { "id", "folder_id" };
+static const char *const ks_id_parent[]   = { "id", "parent_id" };
+static const char *const ks_id_restored[] = { "id", "restored" };
+static const char *const ks_id_status[]   = { "id", "status" };
+static const char *const ks_deleted[]     = { "deleted" };
+static const char *const ks_status[]      = { "status" };
+static const char *const ks_version[]     = { "version" };
+
+static const tool_success_t suc_id             =
+    { "json", ks_id, 1, NULL };
+static const tool_success_t suc_id_folder      =
+    { "json", ks_id_folder, 2, NULL };
+static const tool_success_t suc_id_parent      =
+    { "json", ks_id_parent, 2, NULL };
+static const tool_success_t suc_id_restored    =
+    { "json", ks_id_restored, 2, NULL };
+static const tool_success_t suc_deleted        =
+    { "json", ks_deleted, 1, NULL };
+static const tool_success_t suc_obj            =
+    { "json_object", NULL, 0, NULL };
+static const tool_success_t suc_arr            =
+    { "json_array", NULL, 0, "--count -> bare int" };
+static const tool_success_t suc_int            =
+    { "bare_int", NULL, 0, NULL };
+static const tool_success_t suc_plain          =
+    { "plain_text", NULL, 0, NULL };
+static const tool_success_t suc_db_exec        =
+    { "json", ks_status, 1, "--table -> ok" };
+static const tool_success_t suc_db_version     =
+    { "json", ks_version, 1, "--table -> SQLite <ver>" };
+static const tool_success_t suc_exec_create    =
+    { "json", ks_id, 1, "row always created 'pending'" };
+static const tool_success_t suc_status_running =
+    { "json", ks_id_status, 2, "status is always 'running'" };
+static const tool_success_t suc_status_cancelled =
+    { "json", ks_id_status, 2, "status is always 'cancelled'" };
+static const tool_success_t suc_status_completed =
+    { "json", ks_id_status, 2, "status is always 'completed'" };
+static const tool_success_t suc_status_failed  =
+    { "json", ks_id_status, 2, "status is always 'failed'" };
+static const tool_success_t suc_status_pending =
+    { "json", ks_id_status, 2, "status is always 'pending'" };
+static const tool_success_t suc_set_raw        =
+    { "json", ks_id_status, 2, "status echoes the unchanged current status" };
+
 /* ── global section data ── */
 
 static const tool_flag_t global_flags[] = {
@@ -250,19 +311,19 @@ static const tool_entry_t tool_table[] = {
       "JSON; the global --stdin is rejected (use --sql_stdin).",
       p_sql, 1, f_db_exec, 3, "positional|flags",
       NULL, 0, NULL, 0,
-      "{\"status\":\"ok\"} (--table -> ok)" },
+      &suc_db_exec },
 
     { "db.version", "db", "version", NULL, 0,
       "Print the SQLite library version.",
       NULL, 0, f_table, 1, "none",
       NULL, 0, NULL, 0,
-      "{\"version\":\"<ver>\"} (--table -> SQLite <ver>)" },
+      &suc_db_version },
 
     { "db.help", "db", "help", NULL, 0,
       "Show the db usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── context ── */
     { "context.create", "context", "create", NULL, 0,
@@ -271,101 +332,101 @@ static const tool_entry_t tool_table[] = {
       "rule as the GUI.",
       NULL, 0, f_ctx_create, 4, "flags|json",
       jk_ctx_req, 2, jk_ctx_opt, 2,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "context.get", "context", "get", NULL, 0,
       "Fetch a context by id (--include_deleted, alias --deleted, returns "
       "soft-deleted rows).",
       p_id, 1, f_inc_del, 1, "positional",
       NULL, 0, NULL, 0,
-      "context JSON object" },
+      &suc_obj },
 
     { "context.delete", "context", "delete", NULL, 0,
       "Soft-delete a context.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"deleted\":true}" },
+      &suc_deleted },
 
     { "context.restore", "context", "restore", NULL, 0,
       "Restore a soft-deleted context.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"restored\":true}" },
+      &suc_id_restored },
 
     { "context.list", "context", "list", NULL, 0,
       "List contexts, optionally filtered by type and hash.",
       NULL, 0, f_ctx_list, 9, "flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "context.count", "context", "count", NULL, 0,
       "Count contexts, optionally filtered by type and hash.",
       NULL, 0, f_ctx_count, 3, "flags",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "context.help", "context", "help", NULL, 0,
       "Show the context usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── model ── */
     { "model.create", "model", "create", NULL, 0,
       "Create a model from flags or a JSON body.",
       NULL, 0, f_model_create, 7, "flags|json",
       jk_model_req, 3, jk_model_opt, 4,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "model.get", "model", "get", NULL, 0,
       "Fetch a model by id (--include_deleted, alias --deleted, returns "
       "soft-deleted rows).",
       p_id, 1, f_inc_del, 1, "positional",
       NULL, 0, NULL, 0,
-      "model JSON object" },
+      &suc_obj },
 
     { "model.update", "model", "update", NULL, 0,
       "Update one or more model fields; at least one of the listed flags "
       "is required. Flags only (no JSON input).",
       p_id, 1, f_model_update, 7, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "model.delete", "model", "delete", NULL, 0,
       "Soft-delete a model.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"deleted\":true}" },
+      &suc_deleted },
 
     { "model.restore", "model", "restore", NULL, 0,
       "Restore a soft-deleted model.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"restored\":true}" },
+      &suc_id_restored },
 
     { "model.move", "model", "move", NULL, 0,
       "Move a model to a folder (0 = root).",
       p_id, 1, f_folder_id, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"folder_id\":null|M}" },
+      &suc_id_folder },
 
     { "model.list", "model", "list", NULL, 0,
       "List models, optionally filtered by folder.",
       NULL, 0, f_model_list, 8, "flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "model.count", "model", "count", NULL, 0,
       "Count models, optionally filtered by folder.",
       NULL, 0, f_model_count, 2, "flags",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "model.help", "model", "help", NULL, 0,
       "Show the model usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── model_folder ── */
     { "model_folder.create", "model_folder", "create", NULL, 0,
@@ -373,100 +434,100 @@ static const tool_entry_t tool_table[] = {
       "(parent_id 0 or omitted = root).",
       NULL, 0, f_folder_create, 2, "flags|json",
       jk_folder_req, 1, jk_folder_opt, 1,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "model_folder.get", "model_folder", "get", NULL, 0,
       "Fetch a model folder by id.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "folder JSON object" },
+      &suc_obj },
 
     { "model_folder.list", "model_folder", "list", NULL, 0,
       "List model folders, optionally filtered by --parent_id.",
       NULL, 0, f_mf_list, 7, "flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "model_folder.count", "model_folder", "count", NULL, 0,
       "Count model folders, optionally filtered by --parent_id.",
       NULL, 0, f_parent_id, 1, "flags",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "model_folder.rename", "model_folder", "rename", NULL, 0,
       "Rename a model folder.",
       p_id, 1, f_name, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "model_folder.delete", "model_folder", "delete", NULL, 0,
       "Soft-delete a model folder.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"deleted\":true}" },
+      &suc_deleted },
 
     { "model_folder.restore", "model_folder", "restore", NULL, 0,
       "Restore a soft-deleted model folder.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"restored\":true}" },
+      &suc_id_restored },
 
     { "model_folder.move", "model_folder", "move", NULL, 0,
       "Move a model folder to a parent (0 = root).",
       p_id, 1, f_parent_id_req, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"parent_id\":null|M}" },
+      &suc_id_parent },
 
     { "model_folder.help", "model_folder", "help", NULL, 0,
       "Show the model_folder usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── model_revision ── */
     { "model_revision.get", "model_revision", "get", NULL, 0,
       "Fetch a model revision by id.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "revision JSON object" },
+      &suc_obj },
 
     { "model_revision.get-latest", "model_revision", "get-latest", NULL, 0,
       "Fetch the latest revision of a model.",
       p_model_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "revision JSON object" },
+      &suc_obj },
 
     { "model_revision.list", "model_revision", "list", NULL, 0,
       "List revisions of a model.",
       p_model_id, 1, f_rev_list, 6, "positional|flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "model_revision.count", "model_revision", "count", NULL, 0,
       "Count revisions of a model.",
       p_model_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "model_revision.help", "model_revision", "help", NULL, 0,
       "Show the model_revision usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── skill ── */
     { "skill.create", "skill", "create", NULL, 0,
       "Create a skill from flags or a JSON body.",
       NULL, 0, f_skill_create, 5, "flags|json",
       jk_skill_req, 2, jk_skill_opt, 3,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "skill.get", "skill", "get", NULL, 0,
       "Fetch a skill by id (--include_deleted, alias --deleted, returns "
       "soft-deleted rows).",
       p_id, 1, f_inc_del, 1, "positional",
       NULL, 0, NULL, 0,
-      "skill JSON object" },
+      &suc_obj },
 
     { "skill.update", "skill", "update", NULL, 0,
       "Update one or more skill fields; at least one field is required "
@@ -474,43 +535,43 @@ static const tool_entry_t tool_table[] = {
       "(use 'skill move <id> --folder_id 0').",
       p_id, 1, f_skill_update, 5, "flags|json",
       NULL, 0, jk_skill_upd, 5,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "skill.delete", "skill", "delete", NULL, 0,
       "Soft-delete a skill.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"deleted\":true}" },
+      &suc_deleted },
 
     { "skill.restore", "skill", "restore", NULL, 0,
       "Restore a soft-deleted skill.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"restored\":true}" },
+      &suc_id_restored },
 
     { "skill.move", "skill", "move", NULL, 0,
       "Move a skill to a folder (0 = root).",
       p_id, 1, f_folder_id, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"folder_id\":null|M}" },
+      &suc_id_folder },
 
     { "skill.list", "skill", "list", NULL, 0,
       "List skills, optionally filtered by folder.",
       NULL, 0, f_skill_list, 9, "flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "skill.count", "skill", "count", NULL, 0,
       "Count skills, optionally filtered by folder.",
       NULL, 0, f_skill_count, 3, "flags",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "skill.help", "skill", "help", NULL, 0,
       "Show the skill usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── skill_folder ── */
     { "skill_folder.create", "skill_folder", "create", NULL, 0,
@@ -518,88 +579,88 @@ static const tool_entry_t tool_table[] = {
       "(parent_id 0 or omitted = root).",
       NULL, 0, f_folder_create, 2, "flags|json",
       jk_folder_req, 1, jk_folder_opt, 1,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "skill_folder.get", "skill_folder", "get", NULL, 0,
       "Fetch a skill folder by id.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "folder JSON object" },
+      &suc_obj },
 
     { "skill_folder.list", "skill_folder", "list", NULL, 0,
       "List skill folders; the parent filter is the optional positional "
       "<parent_id> ('all' = all folders), not a --parent_id flag.",
       p_sf_parent, 1, f_sf_list, 6, "positional|flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "skill_folder.count", "skill_folder", "count", NULL, 0,
       "Count skill folders; the parent filter is the optional positional "
       "<parent_id> ('all' = all folders), not a --parent_id flag.",
       p_sf_parent, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "skill_folder.rename", "skill_folder", "rename", NULL, 0,
       "Rename a skill folder.",
       p_id, 1, f_name, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "skill_folder.delete", "skill_folder", "delete", NULL, 0,
       "Soft-delete a skill folder.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"deleted\":true}" },
+      &suc_deleted },
 
     { "skill_folder.restore", "skill_folder", "restore", NULL, 0,
       "Restore a soft-deleted skill folder.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"restored\":true}" },
+      &suc_id_restored },
 
     { "skill_folder.move", "skill_folder", "move", NULL, 0,
       "Move a skill folder to a parent (0 = root).",
       p_id, 1, f_parent_id, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"parent_id\":null|M}" },
+      &suc_id_parent },
 
     { "skill_folder.help", "skill_folder", "help", NULL, 0,
       "Show the skill_folder usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── skill_revision ── */
     { "skill_revision.get", "skill_revision", "get", NULL, 0,
       "Fetch a skill revision by id.",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "revision JSON object" },
+      &suc_obj },
 
     { "skill_revision.get-latest", "skill_revision", "get-latest", NULL, 0,
       "Fetch the latest revision of a skill.",
       p_skill_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "revision JSON object" },
+      &suc_obj },
 
     { "skill_revision.list", "skill_revision", "list", NULL, 0,
       "List revisions of a skill.",
       p_skill_id, 1, f_rev_list, 6, "positional|flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "skill_revision.count", "skill_revision", "count", NULL, 0,
       "Count revisions of a skill.",
       p_skill_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "skill_revision.help", "skill_revision", "help", NULL, 0,
       "Show the skill_revision usage text.",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── exec ── */
     { "exec.create", "exec", "create", alias_execution, 1,
@@ -609,7 +670,7 @@ static const tool_entry_t tool_table[] = {
       "entity name is 'exec' (dispatch rejects the alias 'execution').",
       NULL, 0, f_exec_create, 5, "flags|json",
       jk_exec_req, 3, jk_exec_opt, 2,
-      "{\"id\":N} (row always created 'pending')" },
+      &suc_exec_create },
 
     { "exec.get", "exec", "get", alias_execution, 1,
       "Fetch an execution by id (--include_deleted, alias --deleted, "
@@ -617,7 +678,7 @@ static const tool_entry_t tool_table[] = {
       "dispatch rejects the alias 'execution'.)",
       p_id, 1, f_inc_del, 1, "positional",
       NULL, 0, NULL, 0,
-      "execution JSON object" },
+      &suc_obj },
 
     { "exec.delete", "exec", "delete", alias_execution, 1,
       "Soft-delete an execution. Refused from the 'running' state "
@@ -625,7 +686,7 @@ static const tool_entry_t tool_table[] = {
       "entity name is 'exec'; dispatch rejects the alias 'execution').",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"deleted\":true}" },
+      &suc_deleted },
 
     { "exec.restore", "exec", "restore", alias_execution, 1,
       "Restore a soft-deleted execution (the status is untouched). "
@@ -633,35 +694,35 @@ static const tool_entry_t tool_table[] = {
       "'execution').",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"restored\":true}" },
+      &suc_id_restored },
 
     { "exec.start", "exec", "start", alias_execution, 1,
       "Start an execution (pending -> running). (Canonical entity name is "
       "'exec'; dispatch rejects the alias 'execution'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"status\":\"running\"}" },
+      &suc_status_running },
 
     { "exec.cancel", "exec", "cancel", alias_execution, 1,
       "Cancel an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"status\":\"cancelled\"}" },
+      &suc_status_cancelled },
 
     { "exec.complete", "exec", "complete", alias_execution, 1,
       "Complete an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
       p_id, 1, f_exec_complete, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"status\":\"completed\"}" },
+      &suc_status_completed },
 
     { "exec.fail", "exec", "fail", alias_execution, 1,
       "Fail an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
       p_id, 1, f_exec_fail, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"status\":\"failed\"}" },
+      &suc_status_failed },
 
     { "exec.reset", "exec", "reset", alias_execution, 1,
       "Reset a failed execution to pending (retry); clears error, raw "
@@ -670,7 +731,7 @@ static const tool_entry_t tool_table[] = {
       "'execution').",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"status\":\"pending\"}" },
+      &suc_status_pending },
 
     { "exec.set-raw", "exec", "set-raw", alias_execution, 1,
       "Set the raw model response on an execution. Status is unchanged; "
@@ -678,14 +739,14 @@ static const tool_entry_t tool_table[] = {
       "is 'exec'; dispatch rejects the alias 'execution'.)",
       p_id, 1, f_raw, 1, "flags",
       NULL, 0, NULL, 0,
-      "{\"id\":N,\"status\":\"<current status, unchanged>\"}" },
+      &suc_set_raw },
 
     { "exec.list", "exec", "list", alias_execution, 1,
       "List executions, optionally filtered by status and refs. (Canonical "
       "entity name is 'exec'; dispatch rejects the alias 'execution'.)",
       NULL, 0, f_exec_list, 12, "flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "exec.count", "exec", "count", alias_execution, 1,
       "Count executions, optionally filtered by status and refs. "
@@ -693,14 +754,14 @@ static const tool_entry_t tool_table[] = {
       "'execution'.)",
       NULL, 0, f_exec_count, 6, "flags",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "exec.help", "exec", "help", alias_execution, 1,
       "Show the exec usage text. (Canonical entity name is 'exec'; "
       "dispatch rejects the alias 'execution'.)",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 
     /* ── log ── */
     { "log.create", "log", "create", alias_execution_log, 1,
@@ -709,14 +770,14 @@ static const tool_entry_t tool_table[] = {
       "is 'log' (dispatch rejects the alias 'execution_log').",
       NULL, 0, f_log_create, 5, "flags|json",
       jk_log_req, 3, jk_log_opt, 2,
-      "{\"id\":N}" },
+      &suc_id },
 
     { "log.get", "log", "get", alias_execution_log, 1,
       "Fetch a log entry by id. (Canonical entity name is 'log'; dispatch "
       "rejects the alias 'execution_log'.)",
       p_id, 1, NULL, 0, "positional",
       NULL, 0, NULL, 0,
-      "log JSON object" },
+      &suc_obj },
 
     { "log.list", "log", "list", alias_execution_log, 1,
       "List log entries of an execution, optionally filtered by level. "
@@ -724,7 +785,7 @@ static const tool_entry_t tool_table[] = {
       "'execution_log'.)",
       p_exec_id, 1, f_log_list, 7, "positional|flags",
       NULL, 0, NULL, 0,
-      "[ ... ] / []; --count -> bare int" },
+      &suc_arr },
 
     { "log.count", "log", "count", alias_execution_log, 1,
       "Count log entries of an execution, optionally filtered by level. "
@@ -732,14 +793,14 @@ static const tool_entry_t tool_table[] = {
       "'execution_log'.)",
       p_exec_id, 1, f_level, 1, "positional|flags",
       NULL, 0, NULL, 0,
-      "bare int" },
+      &suc_int },
 
     { "log.help", "log", "help", alias_execution_log, 1,
       "Show the log usage text. (Canonical entity name is 'log'; dispatch "
       "rejects the alias 'execution_log'.)",
       NULL, 0, NULL, 0, "none",
       NULL, 0, NULL, 0,
-      "usage text (plain, not JSON)" },
+      &suc_plain },
 };
 
 #define TOOL_COUNT (sizeof(tool_table) / sizeof(tool_table[0]))
@@ -825,6 +886,48 @@ static void jf_strarr(FILE *f, const char *k, const char *const *a, size_t n,
 }
 
 /* [ {"name":"x","has_value":true,"required":false}, ... ] */
+/* {"kind":"...","keys":[...](,"note":"...")} — structured success */
+static void jf_success(FILE *f, const tool_success_t *s,
+                       int pretty, int level, int *i, int n)
+{
+    jsep(f, pretty, level, *i, n);
+    fputs("\"success\":", f);
+    if (!pretty) {
+        fputs("{\"kind\":", f);
+        js(f, s->kind);
+        if (s->n_keys) {
+            fputs(",\"keys\":", f);
+            jstrarr(f, s->keys, s->n_keys, 0, 0);
+        }
+        if (s->note) {
+            fputs(",\"note\":", f);
+            js(f, s->note);
+        }
+        fputs("}", f);
+    } else {
+        fputs("{\n", f);
+        indent_line(f, level + 1);
+        fputs("\"kind\":", f);
+        js(f, s->kind);
+        if (s->n_keys) {
+            fputs(",\n", f);
+            indent_line(f, level + 1);
+            fputs("\"keys\":", f);
+            jstrarr(f, s->keys, s->n_keys, 1, level + 2);
+        }
+        if (s->note) {
+            fputs(",\n", f);
+            indent_line(f, level + 1);
+            fputs("\"note\":", f);
+            js(f, s->note);
+        }
+        fputs("\n", f);
+        indent_line(f, level);
+        fputc('}', f);
+    }
+    (*i)++;
+}
+
 static void jflagarr(FILE *f, const tool_flag_t *fl, size_t n,
                      int pretty, int level)
 {
@@ -1058,7 +1161,7 @@ static void emit_entry(FILE *f, const tool_entry_t *e, int pretty,
     jf_str(f, "input", e->input, pretty, 3, &k, ef);
     if (has_keys)
         jf_jsonkeys(f, e, pretty, 3, &k, ef);
-    jf_str(f, "success", e->success, pretty, 3, &k, ef);
+    jf_success(f, e->success, pretty, 3, &k, ef);
 
     if (!pretty) {
         fputc('}', f);
@@ -1099,7 +1202,7 @@ static void compact_pos(FILE *f, const tool_pos_t *p, size_t n)
 
 int tools_print_compact(FILE *out)
 {
-    fputs("# acta_cli tools v1 (compact); full JSON: --tools\n", out);
+    fputs("# acta_cli tools v2 (compact); full JSON: --tools\n", out);
     fputs("usage: acta_cli [global flags] <entity> <action> [args]\n", out);
     fputs("globals: --db --fields --no_nulls --id_only --count --table "
           "--pretty --json --stdin --from_file --version --help --tools "
@@ -1164,7 +1267,7 @@ int tools_print(FILE *out, int pretty)
     fputs(pretty ? "{\n" : "{", out);
 
     jf_str(out, "name", "acta_cli", pretty, 1, &i, top_n);
-    jf_num(out, "version", 1, pretty, 1, &i, top_n);
+    jf_num(out, "version", 2, pretty, 1, &i, top_n);
     jf_str(out, "usage",
            "acta_cli [global flags] <entity> <action> [args]",
            pretty, 1, &i, top_n);

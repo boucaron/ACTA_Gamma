@@ -49,6 +49,14 @@ rendering (~7 KB) of the same static table — positionals, flags (with `*`
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
+`success` is structured (schema version 2, P1): a JSON object
+`{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
+(`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
+per-action table above; `,"note": "…"` optional, carrying the
+`--table` / `--count` variants). The Common-shapes table remains the
+wire-format source of truth; `--tools` renders it structurally, not as a
+prose string.
+
 Exit codes: `0` ok, `1` not found, `2` SQL error, `3` OOM, `4` invalid
 argument / missing flag / missing required field / duplicate / FK
 violation / invalid DB file, `10` CLI usage error (unknown entity,
