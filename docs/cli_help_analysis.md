@@ -29,15 +29,14 @@ absence of per-action help.
 
 ## Missing / improvable (priority order)
 
-1. **Per-action help** — e.g. `acta_cli model list help` or
-   `acta_cli model list --help` returning only that action's section.
-   Currently an agent must read the whole entity dump (≈10 actions).
-   Biggest win.
+1. ~~**Per-action help**~~ — **done** (commit `108e7ce`): `X help
+   <action>` and `X <action> --help` print a single action's section for
+   every entity; plan in `cli_help_plan.md` (P0).
 2. **Structured `success` in `--tools`** — e.g.
    `{"type":"json","keys":["id"]}` / `{"type":"bare_int"}` /
    `{"type":"json_array"}` instead of a prose string.
 3. **Document the default DB path** in the `--db` help line.
-4. **Unknown entity + `--help`** should still exit 10 (or emit the JSON
-   error), so agents detect bad entities even when passing help.
+4. ~~**Unknown entity + `--help` should still exit 10**~~ — **done**
+   (commit `108e7ce`, side effect of the P0 `entity_help` routing).
 5. Optional: **per-command exit-code notes** in the schema (e.g.
    delete-refused → 4); currently only the global table.
