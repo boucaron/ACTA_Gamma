@@ -4,8 +4,8 @@ Follow-up to `cli_help_analysis.md`. All work is in `acta_cli/`
 (mainly `src/main.c`, `src/argparse.c`, `src/commands/`, per the T1/T3
 split in `cli_spec.md`). No DB behavior changes; only help/discoverability.
 
-Status: **P0 verified** in the rebuilt binary (source `0d17c710`),
-**P1 committed** (`1bb0466`), pending: rebuild + `test_tools` run,
+Status: **P0 verified** in the rebuilt binary, **P1 verified**
+(committed `1bb0466`; rebuild + `test_tools` run, all tests passed),
 P2 pending.
 
 ## P0 — Per-action help (done, commit `108e7ce`)
@@ -81,7 +81,7 @@ per-entry `success` shape. `cli_spec.md` schema paragraph updated.
 - [ ] `acta_cli model help create` prints single-action section (exit 0).
 - [ ] `acta_cli model help nope` → exit 10 with JSON error.
 - [x] `acta_cli model nope --help` → exit 10 with JSON error.
-- [ ] `acta_cli --tools` contains structured `success` for every command;
+- [x] `acta_cli --tools` contains structured `success` for every command;
   `test_tools` passes.
 - [ ] `--tools --compact` renders all commands without the stray `/` wart.
 - [ ] `cli_spec.md` updated where the schema version/shape changed.

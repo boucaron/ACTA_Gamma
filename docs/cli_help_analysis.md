@@ -28,7 +28,7 @@ binary; only `<entity> <action> --help` works.
 | `<entity> help <action>` (e.g. `model help create`) | **Broken in running binary**: exit 11 DB open error. Source routes through `entity_help()`. | Gap — stale binary |
 | `<entity> <action> --help` (e.g. `model list --help`) | **Works**: prints single-action section, exit 0. Confirmed for `model list`, `model create`, `exec list`, `db exec`. | Good |
 | `<entity> help nope` / `<entity> nope --help` | `nope --help` → exit 10 `ACTA_CLI_ERR` "unknown action: nope" + human hint. Correct. | Good |
-| `--tools` JSON (~32 KB) | Per command: `description`, typed `positionals`, `flags`, `input` mode, `aliases`, `success` (string), plus top-level `exit_codes` and `error` contract. Works, exit 0. | Good; `success` is a prose string in the running binary; structured in source (P1, commit `1bb0466`), pending rebuild |
+| `--tools` JSON (~32 KB) | Per command: `description`, typed `positionals`, `flags`, `input` mode, `aliases`, `success` (string), plus top-level `exit_codes` and `error` contract. Works, exit 0. | Good; `success` is structured in the rebuilt binary (P1, commit `1bb0466`) |
 | `--tools --compact` (~7 KB) | One line per command, `*` = required, exits + error line in the header. Works, exit 0. | Good for LLM in-context use; minor wart: `skill.update` renders `json: / name,…` (empty required-list slot) |
 | Error paths | Unknown entity/action/option → exit 10, single JSON line on stderr (`{"error":"ACTA_CLI_ERR","code":-10,"message":…}`) + human hint "Run `acta_cli <entity> help`". T2 invariant holds. | Good |
 | `--db` default | `--db` without value → exit 10 "missing value for --db". Default path (`./acta.db`, or `$ACTA_DB`) is not documented in help or `--tools`. | Gap |
@@ -46,7 +46,7 @@ binary; only `<entity> <action> --help` works.
    (commit `1bb0466`): `success` is a JSON object
    `{"kind":"json"|"json_object"|"json_array"|"bare_int"|"plain_text"}`
    (`"keys"` for kind `"json"`, optional `"note"`), schema `version`
-   bumped 1 → 2; pending: rebuild + `test_tools` run.
+   bumped 1 → 2; verified in the rebuilt binary (`test_tools` passes).
 3. **Document the default DB path** in the `--db` help line.
 4. ~~**Unknown entity + `--help` should still exit 10**~~ — **done in source**
    (commit `108e7ce`, side effect of the P0 `entity_help` routing).
