@@ -1233,7 +1233,7 @@ int tools_print_compact(FILE *out)
                 fputc('*', out);   /* JSON keys are required by definition */
             }
             if (e->n_json_opt) {
-                fputs(" / ", out);
+                if (e->n_json_req) fputs(" / ", out);
                 for (size_t k = 0; k < e->n_json_opt; k++) {
                     if (k) fputc(',', out);
                     fputs(e->json_opt[k], out);

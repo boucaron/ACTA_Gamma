@@ -6,7 +6,7 @@ split in `cli_spec.md`). No DB behavior changes; only help/discoverability.
 
 Status: **P0 verified** in the rebuilt binary, **P1 verified**
 (committed `1bb0466`; rebuild + `test_tools` run, all tests passed),
-P2 pending.
+**P2 done in source** (pending: test coverage for the compact renderer).
 
 ## P0 — Per-action help (done, commit `108e7ce`)
 
@@ -58,13 +58,17 @@ per-entry `success` shape. `cli_spec.md` schema paragraph updated.
 
 ## P2 — Small fixes
 
-- Document the default DB path in the `--db` help line.
+- ~~Document the default DB path in the `--db` help line.~~ — done:
+  `help_print` in `src/commands.c` now reads
+  `database file (default: $ACTA_DB, else ./acta.db)`.
 - ~~`nope --help` (unknown entity + help): emit the exit-10 JSON error
   instead of plain help with exit 0.~~ — already resolved as a side
   effect of P0 (`entity_help` routing in `main.c`).
-- Fix the `skill.update` compact line: empty required-JSON list renders
-  as `json: / name,…`; render as `json:name,prompt_template,…` or
-  `json:<optional>`.
+- ~~Fix the `skill.update` compact line: empty required-JSON list
+  renders as `json: / name,…`.~~ — done: `tools_print_compact` in
+  `src/tools.c` emits the ` / ` separator only when the required-JSON
+  list is non-empty, so `skill.update` renders
+  `json:name,prompt_template,folder_id,description,output_schema`.
 
 ## Out of scope
 

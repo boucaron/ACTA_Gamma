@@ -31,7 +31,7 @@ binary; only `<entity> <action> --help` works.
 | `--tools` JSON (~32 KB) | Per command: `description`, typed `positionals`, `flags`, `input` mode, `aliases`, `success` (string), plus top-level `exit_codes` and `error` contract. Works, exit 0. | Good; `success` is structured in the rebuilt binary (P1, commit `1bb0466`) |
 | `--tools --compact` (~7 KB) | One line per command, `*` = required, exits + error line in the header. Works, exit 0. | Good for LLM in-context use; minor wart: `skill.update` renders `json: / name,…` (empty required-list slot) |
 | Error paths | Unknown entity/action/option → exit 10, single JSON line on stderr (`{"error":"ACTA_CLI_ERR","code":-10,"message":…}`) + human hint "Run `acta_cli <entity> help`". T2 invariant holds. | Good |
-| `--db` default | `--db` without value → exit 10 "missing value for --db". Default path (`./acta.db`, or `$ACTA_DB`) is not documented in help or `--tools`. | Gap |
+| `--db` default | `--db` without value → exit 10 "missing value for --db". Default path (`./acta.db`, or `$ACTA_DB`) is documented in the `--db` help line (P2). | Resolved |
 | `--version` | `acta_cli 0.1.0 (bcafe9e6-dirty \| libacta_db, sqlite 3.53.4)` — reflects stale binary. | Fine (format) |
 
 ## Missing / improvable (priority order)
@@ -47,7 +47,9 @@ binary; only `<entity> <action> --help` works.
    `{"kind":"json"|"json_object"|"json_array"|"bare_int"|"plain_text"}`
    (`"keys"` for kind `"json"`, optional `"note"`), schema `version`
    bumped 1 → 2; verified in the rebuilt binary (`test_tools` passes).
-3. **Document the default DB path** in the `--db` help line.
+3. ~~**Document the default DB path**~~ — **done** (P2): the `--db`
+   help line now reads `database file (default: $ACTA_DB, else
+   ./acta.db)`.
 4. ~~**Unknown entity + `--help` should still exit 10**~~ — **done in source**
    (commit `108e7ce`, side effect of the P0 `entity_help` routing).
 5. Optional: **per-command exit-code notes** in the schema (e.g.
