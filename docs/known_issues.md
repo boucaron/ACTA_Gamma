@@ -1,13 +1,14 @@
 # Known issues and residual notes
 
-Findings from the `acta_db` review. Issue 1 is an open problem with a
-self-contained fix plan; issues 2–3 are low-priority residual notes.
+Findings from the `acta_db` review. Issue 1 is mostly resolved (light
+projection listers; GUI switch outstanding); issues 2–3 are low-priority
+residual notes.
 
 ---
 
 ## Issue 1: listers materialize unbounded blob columns
 
-Status: **open problem**.
+Status: **mostly resolved** (Option A implemented; GUI switch outstanding).
 
 ### Problem
 
@@ -119,6 +120,27 @@ page is at most 10 000 full rows of full-blob content, and that callers
 should paginate or use light variants. Does not fix the GUI reload path.
 
 ### Suggested scope (do A)
+
+### Status (Option A, in progress)
+
+Done:
+
+- `acta_db`: `acta_db_context_query_light` / `_with_deleted_light` and
+  `acta_db_execution_query_light` (+ doc comments in the headers; NOTEs in
+  the full listers' doc comments). Blob fields are `NULL` in returned rows;
+  struct shapes, count queries, and pagination unchanged.
+- `acta_cli`: `context list` / `exec list` default to the light variants;
+  `--full` fetches the blobs (`--full` registered in the argparse flag
+  table). Documented in `docs/cli_spec.md`.
+- Tests: `acta_db/tests/test_light_queries.c` (blob fields NULL, ids /
+  status correct, pagination identical, `limit 0` clamp, include_deleted,
+  count parity).
+
+Outstanding:
+
+- `acta_gui`: `contextPanel.cpp` reload and `executionPanel.cpp` list
+  reload still call the full-blob listers with `limit 0` — switch them to
+  the light variants (keep `acta_db_execution_get` for the detail dialog).
 
 ---
 

@@ -227,6 +227,7 @@ static const flag_spec_t entity_flag_specs[] = {
     { "event", 1 },
     { "execution_id", 1 },
     { "file", 1 },
+    { "full", 0 },
     { "folder_id", 1 },
     { "hash", 1 },
     { "include_deleted", 0 },

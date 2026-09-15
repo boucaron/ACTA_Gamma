@@ -78,7 +78,7 @@ static void ctx_usage(FILE *f)
 "== list ============================================================\n"
 "  acta_cli context list [--type <T>] [--hash <H>]\n"
 "                 [--offset <int>] [--limit <int>] [--count]\n"
-"                 [--include_deleted]\n"
+"                 [--include_deleted] [--full]\n"
 "  Options:\n"
 "    --type <string>      filter by type\n"
 "    --hash <string>      filter by content hash\n"
@@ -87,6 +87,7 @@ static void ctx_usage(FILE *f)
 "    --offset <int>       skip first N results (default 0)\n"
 "    --limit <int>        max results (0 or omitted = unlimited)\n"
 "    --count              print total match count instead of items\n"
+"    --full               include the content blob column (default: omitted)\n"
 "    --table              column output\n"
 "    --fields <a,b>       restrict output fields\n"
 "    --no_nulls           omit null fields\n"
@@ -427,13 +428,14 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
 
         int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+        int full = cmd_args_has_flag(ga, "full");
 
         context_query_t q = { .type = f_type, .hash = f_hash };
 
-        VLOG(1, "context list: type=%s hash=%s offset=%d limit=%d include_deleted=%d",
+        VLOG(1, "context list: type=%s hash=%s offset=%d limit=%d include_deleted=%d full=%d",
              f_type ? f_type : "(any)",
              f_hash ? f_hash : "(any)",
-             offset, limit ? limit : 0, include_deleted);
+             offset, limit ? limit : 0, include_deleted, full);
 
         VLOG(2, "  full: type=%s hash=%s offset=%d limit=%d "
                 "no_nulls=%d table=%d fields=%s",
@@ -460,12 +462,22 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_OK;
         }
 
+        /* Default: light projection (no content blob); --full fetches it. */
         int out_count = 0, err = 0;
-        context_t **items = include_deleted
-            ? acta_db_context_query_with_deleted(db, &q, offset, limit,
-                                                 &out_count, &err)
-            : acta_db_context_query(db, &q, offset, limit,
-                                    &out_count, &err);
+        context_t **items;
+        if (include_deleted)
+            items = full
+                ? acta_db_context_query_with_deleted(db, &q, offset, limit,
+                                                     &out_count, &err)
+                : acta_db_context_query_with_deleted_light(db, &q, offset,
+                                                           limit, &out_count,
+                                                           &err);
+        else
+            items = full
+                ? acta_db_context_query(db, &q, offset, limit,
+                                        &out_count, &err)
+                : acta_db_context_query_light(db, &q, offset, limit,
+                                              &out_count, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  query FAILED err=%d", err);
             acta_db_context_list_free(items, out_count);

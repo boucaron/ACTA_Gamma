@@ -1,5 +1,10 @@
 # Plan: light projection variants for high-volume listers (Issue 1)
 
+**Status:** items 1, 2 (DB light listers), 4 (CLI `--full`), 5 (tests) and
+part of 6 (`docs/cli_spec.md`, `docs/status.md`) are done. Outstanding:
+item 3 (GUI panel reloads) and the `docs/known_issues.md` close-out once
+the GUI switch lands.
+
 Resolves Issue 1 from `docs/known_issues.md`: the highest-volume
 `acta_db` listers return full blob columns for every row, and `limit 0`
 clamps to `ACTA_DB_MAX_PAGE` = 10 000, so one call can materialize a

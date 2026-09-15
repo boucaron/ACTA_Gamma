@@ -144,6 +144,9 @@ static void exec_usage(FILE *f)
 "    --offset <n>               Skip first N rows (default 0)\n"
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
+"    --full                     Include blob columns\n"
+"                               (prompt, raw_response, result, error)\n"
+"                               (default: omitted)\n"
 "    --table                    Columnar output instead of JSON\n"
 "    --fields <csv>             Comma-separated field filter\n"
 "    --no_nulls                 Omit null-valued fields from JSON\n"
@@ -344,6 +347,9 @@ static void usage_list(FILE *f)
 "    --offset <n>               Skip first N rows (default 0)\n"
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
+"    --full                     Include blob columns\n"
+"                               (prompt, raw_response, result, error)\n"
+"                               (default: omitted)\n"
 "    --table                    Columnar output instead of JSON\n"
 "    --fields <csv>             Comma-separated field filter\n"
 "    --no_nulls                 Omit null-valued fields from JSON\n", f);
@@ -935,6 +941,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_INVALID;
 
         int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+        int full = cmd_args_has_flag(ga, "full");
 
         execution_query_t q = {
             .status              = f_status,
@@ -946,10 +953,10 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         };
 
         VLOG(1, "exec list: status=%s ctx=%d skill_rev=%d model_rev=%d "
-                "parent=%d offset=%d limit=%d include_deleted=%d",
+                "parent=%d offset=%d limit=%d include_deleted=%d full=%d",
              f_status ? f_status : "(any)",
              q.context_id, q.skill_revision_id, q.model_revision_id,
-             q.parent_execution_id, offset, limit, include_deleted);
+             q.parent_execution_id, offset, limit, include_deleted, full);
 
         VLOG(2, "  full: status=%s ctx=%s skill_rev=%s model_rev=%s parent=%s "
                 "offset=%d limit=%d no_nulls=%d table=%d fields=%s",
@@ -979,9 +986,14 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_OK;
         }
 
+        /* Default: light projection (no prompt/raw_response/result/error
+         * blobs); --full fetches them. */
         int out_count = 0, err = 0;
-        execution_t **items = acta_db_execution_query(db, &q, offset, limit,
-                                                      &out_count, &err);
+        execution_t **items = full
+            ? acta_db_execution_query(db, &q, offset, limit,
+                                      &out_count, &err)
+            : acta_db_execution_query_light(db, &q, offset, limit,
+                                            &out_count, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  query FAILED err=%d", err);
             acta_db_execution_list_free(items, out_count);

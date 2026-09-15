@@ -76,10 +76,12 @@ is `code:-11` with exit `11`.
 | `context get <id>` | `id` | `--include_deleted` / `--deleted` | — | context JSON object |
 | `context delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `context restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
-| `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--full`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `context count` | — | `--type`, `--hash`, `--include_deleted` / `--deleted` | — | bare int |
 
 > **`context create` — `hash` default:** when `--hash` (or the JSON key `hash`) is omitted, the hash is derived as the **SHA-256 of `content`, lowercase hex** — the same rule the GUI applies (`QCryptographicHash::toHex` in `contextDialog.cpp`). An explicitly supplied hash is stored as-is. Wire key is `hash` (not `content_hash`).
+
+> **`context list` — light by default:** without `--full`, the lister uses the light projection (`acta_db_context_query_light` / `_with_deleted_light`): the `content` blob column is not fetched and `content` is `null` in every row. `--full` switches to the full lister and returns `content`. `context get` always returns the full row.
 
 ## model
 
@@ -165,7 +167,7 @@ is `code:-11` with exit `11`.
 | `exec fail <id>` | `id` | `--error` | — | `{"id":N,"status":"failed"}` |
 | `exec reset <id>` | `id` | — | — | `{"id":N,"status":"pending"}` |
 | `exec set-raw <id>` | `id` | `--raw*` | — | `{"id":N,"status":"<current status, unchanged>"}` |
-| `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--include_deleted` / `--deleted`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--include_deleted` / `--deleted`, `--full`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `exec count` | — | same filters as `exec list` (minus `--count`/`--table`/`--fields`/`--no_nulls`) | — | bare int |
 
 Notes on `exec`:
@@ -187,6 +189,11 @@ Notes on `exec`:
   `exec list` / `exec count` are live-only by default; `--include_deleted`
   (`--deleted` alias) includes soft-deleted rows. `exec create
   --context_id <deleted>` fails with the standard not-found path.
+- **Light by default** — without `--full`, `exec list` uses the light
+  projection (`acta_db_execution_query_light`): `prompt`, `raw_response`,
+  `result` and `error` are not fetched and are `null` in every row.
+  `--full` switches to the full lister and returns them. `exec get`
+  always returns the full row.
 
 ## log (execution_log)
 
