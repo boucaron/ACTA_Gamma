@@ -13,7 +13,7 @@
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli skill_revision --help
  */
-static void skill_rev_usage(FILE *f)
+void skill_rev_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli skill_revision <action> [options]\n"
@@ -23,7 +23,7 @@ static void skill_rev_usage(FILE *f)
 "  get-latest  Fetch the most recent revision for a skill\n"
 "  list        List revisions for a skill\n"
 "  count       Count revisions for a skill\n"
-"  help        Show this help\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
 "\n"
 "== get <id> ========================================================\n"
 "  Fetch a single skill revision by its primary key.\n"
@@ -275,11 +275,30 @@ static const action_def_t skill_rev_actions[] = {
 };
 #define SR_ACTIONS (sizeof(skill_rev_actions) / sizeof(skill_rev_actions[0]))
 
+/* P0: print the help section for one skill_revision action.
+ * 0 = printed, -1 = unknown action. */
+int skill_revision_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "get")        == 0) usage_sr_get(out);
+    else if (strcmp(action, "get-latest") == 0) usage_sr_latest(out);
+    else if (strcmp(action, "list")     == 0) usage_sr_list(out);
+    else if (strcmp(action, "count")    == 0) usage_sr_count(out);
+    else return -1;
+    return 0;
+}
+
 int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                  db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    /* ── help: whole entity, or one action via `skill_revision help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (skill_revision_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("skill_revision", sub, "acta_cli skill_revision help",
+                                  skill_rev_actions, SR_ACTIONS);
+        }
         skill_rev_usage(stdout);
         return EXIT_OK;
     }

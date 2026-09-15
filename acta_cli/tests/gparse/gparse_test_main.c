@@ -362,6 +362,107 @@ static void test_dispatch(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_OK);
 }
 
+/* ── P0: --help keeps the entity/action for scoped help ────────────
+ *
+ * parse_globals no longer short-circuits on --help: the entity/action
+ * tokens after it are collected so main.c can route to entity or
+ * single-action help. These tests pin that seam plus entity_help
+ * itself (the function main.c calls for `X --help` / `X A --help`).
+ */
+
+static void test_help_routing(stest_ctx_t *ctx)
+{
+    /* `model list --help` → show_help with entity+action collected */
+    {
+        char *a[] = { "acta_cli", "model", "list", "--help" };
+        global_opts_t g;
+        int rc = parse_globals(4, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        TEST_EQ(ctx, g.show_help, 1);
+        TEST_EQ(ctx, g.argc, 2);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.argv[0], "model");
+            TEST_STREQ(ctx, g.argv[1], "list");
+            free(g.argv);
+        }
+    }
+
+    /* `model --help` → show_help, entity only */
+    {
+        char *a[] = { "acta_cli", "model", "--help" };
+        global_opts_t g;
+        int rc = parse_globals(3, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        TEST_EQ(ctx, g.show_help, 1);
+        TEST_EQ(ctx, g.argc, 1);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.argv[0], "model");
+            free(g.argv);
+        }
+    }
+
+    /* bare `--help` → nothing collected (global help) */
+    {
+        char *a[] = { "acta_cli", "--help" };
+        global_opts_t g;
+        int rc = parse_globals(2, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        TEST_EQ(ctx, g.show_help, 1);
+        TEST_EQ(ctx, g.argc, 0);
+        free(g.argv);
+    }
+
+    /* `--help` after other globals still collects the command */
+    {
+        char *a[] = { "acta_cli", "-h", "exec", "set-raw" };
+        global_opts_t g;
+        int rc = parse_globals(4, a, &g);
+        TEST_EQ(ctx, rc, EXIT_OK);
+        TEST_EQ(ctx, g.show_help, 1);
+        TEST_EQ(ctx, g.argc, 2);
+        if (rc == EXIT_OK) {
+            TEST_STREQ(ctx, g.argv[0], "exec");
+            TEST_STREQ(ctx, g.argv[1], "set-raw");
+            free(g.argv);
+        }
+    }
+
+    /* entity_help: single action section */
+    stest_capture_begin(ctx);
+    int rc = entity_help("model", "list", stdout);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "== list");
+    TEST(ctx, strstr(stest_stdout(ctx), "Actions:") == NULL);
+
+    /* entity_help: whole entity (action NULL, as for `model --help`) */
+    stest_capture_begin(ctx);
+    rc = entity_help("exec", NULL, stdout);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "Actions:");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "== set-raw");
+
+    /* entity_help: action "help" == whole entity */
+    stest_capture_begin(ctx);
+    rc = entity_help("db", "help", stdout);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "Actions:");
+
+    /* entity_help: unknown action → EXIT_CLI */
+    stest_capture_begin(ctx);
+    rc = entity_help("model", "nosuch", stdout);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_CLI);
+
+    /* entity_help: unknown entity → EXIT_CLI */
+    stest_capture_begin(ctx);
+    rc = entity_help("nosuch", "list", stdout);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_CLI);
+}
+
 /* ── suite entry point ───────────────────────────────────────────── */
 
 int run_gparse_test(void)
@@ -373,6 +474,7 @@ int run_gparse_test(void)
     test_inline_values(&ctx);
     test_input_sources(&ctx);
     test_dispatch(&ctx);
+    test_help_routing(&ctx);
 
     stest_teardown(&ctx);
     return ctx.failures;

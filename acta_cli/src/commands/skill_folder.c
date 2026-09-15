@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli skill_folder --help                                     */
-static void skill_folder_usage(FILE *f)
+void skill_folder_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli skill_folder <action> [options]\n"
@@ -25,7 +25,7 @@ static void skill_folder_usage(FILE *f)
 "  move      Move a skill_folder to a new parent\n"
 "  delete    Soft-delete a skill_folder\n"
 "  restore   Restore a soft-deleted skill_folder\n"
-"  help      Show this help\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
 "\n"
 "== create ===========================================================\n"
 "  Create a new skill_folder.\n"
@@ -354,11 +354,34 @@ static const action_def_t skill_folder_actions[] = {
 };
 #define SF_ACTIONS (sizeof(skill_folder_actions) / sizeof(skill_folder_actions[0]))
 
+/* P0: print the help section for one skill_folder action.
+ * 0 = printed, -1 = unknown action. */
+int skill_folder_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "create")  == 0) usage_sf_create(out);
+    else if (strcmp(action, "get")     == 0) usage_sf_get(out);
+    else if (strcmp(action, "list")    == 0) usage_sf_list(out);
+    else if (strcmp(action, "count")   == 0) usage_sf_count(out);
+    else if (strcmp(action, "rename")  == 0) usage_sf_rename(out);
+    else if (strcmp(action, "move")    == 0) usage_sf_move(out);
+    else if (strcmp(action, "delete")  == 0) usage_sf_delete(out);
+    else if (strcmp(action, "restore") == 0) usage_sf_restore(out);
+    else return -1;
+    return 0;
+}
+
 int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                      db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    /* ── help: whole entity, or one action via `skill_folder help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (skill_folder_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("skill_folder", sub, "acta_cli skill_folder help",
+                                  skill_folder_actions, SF_ACTIONS);
+        }
         skill_folder_usage(stdout);
         return EXIT_OK;
     }

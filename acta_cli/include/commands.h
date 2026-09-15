@@ -25,6 +25,40 @@ int tools_print(FILE *out, int pretty);
  * line per command, ~7 KB.  Static data, no DB. */
 int tools_print_compact(FILE *out);
 
+/*
+ * P0: entity/action help router (no DB needed).
+ *   - action == NULL or "help"   → the whole entity help
+ *   - action == known action     → that action's section only
+ * Unknown entity or unknown action: emits the canonical single-line
+ * JSON error (ACTA_CLI_ERR, code -10) and returns EXIT_CLI.
+ */
+int entity_help(const char *entity, const char *action, FILE *out);
+
+/* P0: per-entity action→help-section lookup. Prints the section for
+ * `action` to `out`; returns 0 if printed, -1 if the action is unknown. */
+int db_help_for_action(const char *action, FILE *out);
+int context_help_for_action(const char *action, FILE *out);
+int model_help_for_action(const char *action, FILE *out);
+int model_folder_help_for_action(const char *action, FILE *out);
+int model_revision_help_for_action(const char *action, FILE *out);
+int skill_help_for_action(const char *action, FILE *out);
+int skill_folder_help_for_action(const char *action, FILE *out);
+int skill_revision_help_for_action(const char *action, FILE *out);
+int exec_help_for_action(const char *action, FILE *out);
+int log_help_for_action(const char *action, FILE *out);
+
+/* P0: whole-entity help printers (shared by commands.c's entity table). */
+void db_usage(FILE *out);
+void ctx_usage(FILE *out);
+void model_usage(FILE *out);
+void model_folder_usage(FILE *out);
+void model_revision_usage(FILE *out);
+void skill_usage(FILE *out);
+void skill_folder_usage(FILE *out);
+void skill_rev_usage(FILE *out);
+void exec_usage(FILE *out);
+void execution_log_usage(FILE *out);
+
 /**
  * Dispatch a parsed (entity, action) pair to its handler.
  *

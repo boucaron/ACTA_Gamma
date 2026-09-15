@@ -6,8 +6,10 @@ static void test_help(stest_ctx_t *ctx)
 {
     stest_capture_begin(ctx);
     global_opts_t g = gopts_default();
-    int rc = cmd_skill("help", NULL, &g, ctx->db);
+    cmd_args_t *a = targs_new();
+    int rc = cmd_skill("help", a, &g, ctx->db);
     stest_capture_end(ctx);
+    targs_free(a, &g);
 
     TEST_EQ(ctx, rc, EXIT_OK);
     const char *out = stest_stdout(ctx);
@@ -26,8 +28,10 @@ static void test_unknown_action(stest_ctx_t *ctx)
 {
     stest_capture_begin(ctx);
     global_opts_t g = gopts_default();
-    int rc = cmd_skill("frobnicate", NULL, &g, ctx->db);
+    cmd_args_t *a = targs_new();
+    int rc = cmd_skill("frobnicate", a, &g, ctx->db);
     stest_capture_end(ctx);
+    targs_free(a, &g);
 
     TEST_EQ(ctx, rc, EXIT_CLI);
 }

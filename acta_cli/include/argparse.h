@@ -19,8 +19,10 @@
 /*
  * Returns EXIT_OK (0) on success.  --version / --help / --tools set the
  * corresponding g->show_* flag and still return 0; the caller (main.c)
- * checks those flags and exits early.  On failure the single-line JSON
- * error is already on stderr and the function returns:
+ * checks those flags and exits early.  --version short-circuits the
+ * scan; --help and --tools keep collecting the entity/action tokens
+ * (help routing needs them; --tools ignores them).  On failure the
+ * single-line JSON error is already on stderr and the function returns:
  *   - EXIT_ALLOC  OOM building the rest buffer
  *   - EXIT_CLI    missing value for a value-taking global flag, or
  *                 fewer than two positionals (entity + action)

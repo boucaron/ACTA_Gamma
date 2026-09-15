@@ -30,22 +30,16 @@ static char *sha256_hex(const void *data, size_t len, char out[65])
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
 
-/* Non-static: the global dispatch layer can call this to handle
- *   acta_cli context --help   without re-parsing the subcommand.          */
-static void ctx_usage(FILE *f)
+/*
+ * P0: the per-action sections below are the single source of truth
+ * for the context help text — ctx_usage() composes them, and
+ * context_help_for_action() prints one of them. `context help
+ * <action>` and `context <action> --help` therefore cannot drift.
+ */
+
+static void usage_ctx_create(FILE *f)
 {
     fputs(
-"Usage: acta_cli context <action> [options]\n"
-"\n"
-"Actions:\n"
-"  create   Create a new context\n"
-"  get      Fetch a context by id\n"
-"  delete   Remove a context (soft delete)\n"
-"  restore  Restore a deleted context\n"
-"  list     List contexts (filterable, paginated)\n"
-"  count    Count contexts (filterable)\n"
-"  help     Show this help\n"
-"\n"
 "== create =========================================================\n"
 "  acta_cli context create --type <T> --content <C>\n"
 "                     [--hash <H>] [--metadata <M>]\n"
@@ -61,7 +55,12 @@ static void ctx_usage(FILE *f)
 "                            default when omitted: SHA-256 of the\n"
 "                            content, lowercase hex (same rule as the GUI)\n"
 "    --metadata <string>      extra data     (JSON key: \"metadata\")\n"
-"\n"
+"\n", f);
+}
+
+static void usage_ctx_get(FILE *f)
+{
+    fputs(
 "== get ============================================================\n"
 "  acta_cli context get <positive-integer-id>\n"
 "  Example:\n"
@@ -74,7 +73,12 @@ static void ctx_usage(FILE *f)
 "    --id_only        print just the numeric id\n"
 "    --fields <a,b>   restrict output fields (comma-separated)\n"
 "    --no_nulls       omit fields that are null\n"
-"\n"
+"\n", f);
+}
+
+static void usage_ctx_list(FILE *f)
+{
+    fputs(
 "== list ============================================================\n"
 "  acta_cli context list [--type <T>] [--hash <H>]\n"
 "                 [--offset <int>] [--limit <int>] [--count]\n"
@@ -91,17 +95,32 @@ static void ctx_usage(FILE *f)
 "    --table              column output\n"
 "    --fields <a,b>       restrict output fields\n"
 "    --no_nulls           omit null fields\n"
-"\n"
+"\n", f);
+}
+
+static void usage_ctx_delete(FILE *f)
+{
+    fputs(
 "== delete <id> ====================================================\n"
 "  Soft-delete a context (sets deleted_at).\n"
 "\n"
 "    acta_cli context delete 42\n"
-"\n"
+"\n", f);
+}
+
+static void usage_ctx_restore(FILE *f)
+{
+    fputs(
 "== restore <id> ===================================================\n"
 "  Restore a previously soft-deleted context.\n"
 "\n"
 "    acta_cli context restore 42\n"
-"\n"
+"\n", f);
+}
+
+static void usage_ctx_count(FILE *f)
+{
+    fputs(
 "== count ===========================================================\n"
 "  acta_cli context count [--type <T>] [--hash <H>] [--include_deleted]\n"
 "  Prints a single integer: the number of matching contexts.\n"
@@ -109,7 +128,30 @@ static void ctx_usage(FILE *f)
 "  Options:\n"
 "    --include_deleted    include soft-deleted rows\n"
 "    --deleted            Alias for --include_deleted\n"
+"\n", f);
+}
+
+void ctx_usage(FILE *f)
+{
+    fputs(
+"Usage: acta_cli context <action> [options]\n"
 "\n"
+"Actions:\n"
+"  create   Create a new context\n"
+"  get      Fetch a context by id\n"
+"  delete   Remove a context (soft delete)\n"
+"  restore  Restore a deleted context\n"
+"  list     List contexts (filterable, paginated)\n"
+"  count    Count contexts (filterable)\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
+"\n", f);
+    usage_ctx_create(f);
+    usage_ctx_get(f);
+    usage_ctx_list(f);
+    usage_ctx_delete(f);
+    usage_ctx_restore(f);
+    usage_ctx_count(f);
+    fputs(
 "Global options (apply to every action):\n"
 "  --json <blob>    read input from a JSON object (flag value)\n"
 "  --stdin          read input from stdin as JSON\n"
@@ -120,7 +162,20 @@ static void ctx_usage(FILE *f)
 "  --table          columnar output instead of JSON\n"
 "  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
 "\n", f);
+}
 
+/* P0: print the help section for one context action.
+ * 0 = printed, -1 = unknown action. */
+int context_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "create")  == 0) usage_ctx_create(out);
+    else if (strcmp(action, "get")  == 0) usage_ctx_get(out);
+    else if (strcmp(action, "list")  == 0) usage_ctx_list(out);
+    else if (strcmp(action, "delete")  == 0) usage_ctx_delete(out);
+    else if (strcmp(action, "restore") == 0) usage_ctx_restore(out);
+    else if (strcmp(action, "count")  == 0) usage_ctx_count(out);
+    else return -1;
+    return 0;
 }
 
 
@@ -241,8 +296,15 @@ static const action_def_t context_actions[] = {
 int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ─────── */
+    /* ── help: whole entity, or one action via `context help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (context_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("context", sub, "acta_cli context help",
+                                  context_actions, CTX_ACTIONS);
+        }
         ctx_usage(stdout);
         return EXIT_OK;
     }

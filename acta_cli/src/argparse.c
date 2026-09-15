@@ -55,13 +55,14 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             g->argv = NULL;
             return 0;
         }
-        /* ---- --help ---- */
+        /* ---- --help ----
+         * Do NOT return here (P0): the entity/action tokens still have
+         * to be collected, so `model list --help` can route to the
+         * single-action help. main() sees show_help + the collected
+         * argv and picks global / entity / action help accordingly. */
         if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
-            free(rest);
             g->show_help = 1;
-            g->argc = 0;
-            g->argv = NULL;
-            return 0;
+            continue;
         }
         /* ---- --tools ----
          * Do NOT return here: a global flag placed after --tools
@@ -187,8 +188,10 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
     g->argv = rest;   /* caller frees via free(g->argv) */
 
     /* need at least entity + action (T2: JSON error line emitted here,
-     * so main() can just return the code) */
-    if (rest_n < 2)
+     * so main() can just return the code).  --help is exempt: the P0
+     * help router accepts bare `--help`, `entity --help`, and
+     * `entity action --help`. */
+    if (rest_n < 2 && !g->show_help)
         return emit_cli_error("missing entity and/or action. See --help.");
     return 0;
 }

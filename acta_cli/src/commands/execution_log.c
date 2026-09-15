@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli log --help                                          */
-static void execution_log_usage(FILE *f)
+void execution_log_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli log <action> [options]\n"
@@ -21,7 +21,7 @@ static void execution_log_usage(FILE *f)
 "  get       Fetch a log entry by id\n"
 "  list      List log entries for an execution\n"
 "  count     Count log entries for an execution\n"
-"  help      Show this help\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
 "\n"
 "== create ===========================================================\n"
 "  Create a new execution log entry.\n"
@@ -287,6 +287,18 @@ static const action_def_t execution_log_actions[] = {
 };
 #define EL_ACTIONS (sizeof(execution_log_actions) / sizeof(execution_log_actions[0]))
 
+/* P0: print the help section for one log action.
+ * 0 = printed, -1 = unknown action. */
+int log_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "create")  == 0) usage_create(out);
+    else if (strcmp(action, "get")     == 0) usage_get(out);
+    else if (strcmp(action, "list")    == 0) usage_list(out);
+    else if (strcmp(action, "count")   == 0) usage_count(out);
+    else return -1;
+    return 0;
+}
+
 static int valid_level(const char *lvl)
 {
     return lvl &&
@@ -300,8 +312,15 @@ static int valid_level(const char *lvl)
 int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                       db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    /* ── help: whole entity, or one action via `log help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (log_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("log", sub, "acta_cli log help",
+                                  execution_log_actions, EL_ACTIONS);
+        }
         execution_log_usage(stdout);
         return EXIT_OK;
     }

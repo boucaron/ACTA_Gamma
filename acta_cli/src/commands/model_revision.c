@@ -12,7 +12,7 @@
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli model_revision --help
  */
-static void model_revision_usage(FILE *f)
+void model_revision_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli model_revision <action> [options]\n"
@@ -22,7 +22,7 @@ static void model_revision_usage(FILE *f)
 "  get-latest <model_id>  Fetch the latest revision for a model\n"
 "  list <model_id>  List revisions for a model\n"
 "  count <model_id> Count revisions for a model\n"
-"  help             Show this help\n"
+"  help <action>    Show help for a single action (no arg = full help)\n"
 "\n"
 "== get <id> ========================================================\n"
 "  Fetch a single model revision by its primary key.\n"
@@ -287,11 +287,30 @@ static const action_def_t model_revision_actions[] = {
 };
 #define REV_ACTIONS (sizeof(model_revision_actions) / sizeof(model_revision_actions[0]))
 
+/* P0: print the help section for one model_revision action.
+ * 0 = printed, -1 = unknown action. */
+int model_revision_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "get")        == 0) usage_get(out);
+    else if (strcmp(action, "get-latest") == 0) usage_get_latest(out);
+    else if (strcmp(action, "list")     == 0) usage_list(out);
+    else if (strcmp(action, "count")    == 0) usage_count(out);
+    else return -1;
+    return 0;
+}
+
 int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                        db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    /* ── help: whole entity, or one action via `model_revision help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (model_revision_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("model_revision", sub, "acta_cli model_revision help",
+                                  model_revision_actions, REV_ACTIONS);
+        }
         model_revision_usage(stdout);
         return EXIT_OK;
     }

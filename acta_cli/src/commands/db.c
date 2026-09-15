@@ -10,17 +10,16 @@
 /*  Usage / help                                                       */
 /* ══════════════════════════════════════════════════════════════════ */
 
-/* Static: only cmd_db (via the "help" action) calls this. */
-static void db_usage(FILE *f)
+/*
+ * P0: the per-action sections below are the single source of truth
+ * for the db help text — db_usage() composes them, and
+ * db_help_for_action() prints one of them. `db help <action>` and
+ * `db <action> --help` therefore cannot drift.
+ */
+
+static void usage_exec(FILE *f)
 {
     fputs(
-"Usage: acta_cli db <action> [options]\n"
-"\n"
-"Actions:\n"
-"  exec      Execute mutating SQL (INSERT, UPDATE, DELETE, DDL, etc.)\n"
-"  version   Print SQLite library version\n"
-"  help      Show this help\n"
-"\n"
 "== exec =========================================================\n"
 "  Execute a single mutating statement (no SELECT / query support).\n"
 "  Supported: INSERT, UPDATE, DELETE, CREATE, DROP, ALTER,\n"
@@ -51,7 +50,12 @@ static void db_usage(FILE *f)
 "  stdout on success: {\"status\":\"ok\"}\n"
 "  stderr on failure: single-line JSON {\"error\":\"ACTA_DB_ERR_*\",\n"
 "  \"code\":<rc>,\"message\":\"...\"} (exit code mapped from rc)\n"
-"\n"
+"\n", f);
+}
+
+static void usage_version(FILE *f)
+{
+    fputs(
 "== version ======================================================\n"
 "  acta_cli db version\n"
 "  Prints the SQLite library version.\n"
@@ -59,11 +63,35 @@ static void db_usage(FILE *f)
 "    --table          print 'SQLite <ver>' instead of JSON\n"
 "\n"
 "  stdout: {\"version\":\"<version>\"}\n"
+"\n", f);
+}
+
+void db_usage(FILE *f)
+{
+    fputs(
+"Usage: acta_cli db <action> [options]\n"
 "\n"
+"Actions:\n"
+"  exec      Execute mutating SQL (INSERT, UPDATE, DELETE, DDL, etc.)\n"
+"  version   Print SQLite library version\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
+"\n", f);
+    usage_exec(f);
+    usage_version(f);
+    fputs(
 "Global options:\n"
 "  --table          columnar / plain output instead of JSON\n"
 "  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
 "\n", f);
+}
+
+/* P0: print the help section for one db action. 0 = printed, -1 = unknown. */
+int db_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "exec") == 0)      usage_exec(out);
+    else if (strcmp(action, "version") == 0) usage_version(out);
+    else return -1;
+    return 0;
 }
 
 
@@ -93,8 +121,15 @@ static const action_def_t db_actions[] = {
 int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
            db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ─────── */
+    /* ── help: whole entity, or one action via `db help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (db_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("db", sub, "acta_cli db help",
+                                  db_actions, DB_ACTIONS);
+        }
         db_usage(stdout);
         return EXIT_OK;
     }

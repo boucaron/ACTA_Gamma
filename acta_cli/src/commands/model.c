@@ -13,7 +13,7 @@
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli model --help
  */
-static void model_usage(FILE *f)
+void model_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli model <action> [options]\n"
@@ -27,7 +27,7 @@ static void model_usage(FILE *f)
 "  move      Move a model to another folder\n"
 "  list      List models\n"
 "  count     Count models\n"
-"  help      Show this help\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
 "\n"
 "== create ===========================================================\n"
 "  Create a new model entry.\n"
@@ -447,11 +447,34 @@ static const action_def_t model_actions[] = {
 };
 #define MODEL_ACTIONS (sizeof(model_actions) / sizeof(model_actions[0]))
 
+/* P0: print the help section for one model action.
+ * 0 = printed, -1 = unknown action. */
+int model_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "create")  == 0) usage_create(out);
+    else if (strcmp(action, "get")     == 0) usage_get(out);
+    else if (strcmp(action, "update")  == 0) usage_update(out);
+    else if (strcmp(action, "delete")  == 0) usage_delete(out);
+    else if (strcmp(action, "restore") == 0) usage_restore(out);
+    else if (strcmp(action, "move")    == 0) usage_move(out);
+    else if (strcmp(action, "list")    == 0) usage_list(out);
+    else if (strcmp(action, "count")   == 0) usage_count(out);
+    else return -1;
+    return 0;
+}
+
 int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
               db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    /* ── help: whole entity, or one action via `model help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (model_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("model", sub, "acta_cli model help",
+                                  model_actions, MODEL_ACTIONS);
+        }
         model_usage(stdout);
         return EXIT_OK;
     }

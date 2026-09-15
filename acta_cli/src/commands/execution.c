@@ -11,7 +11,7 @@
 
 /* Non-static: the global dispatch layer can call this for
  *   acta_cli exec --help                                          */
-static void exec_usage(FILE *f)
+void exec_usage(FILE *f)
 {
     fputs(
 "Usage: acta_cli exec <action> [options]\n"
@@ -29,7 +29,7 @@ static void exec_usage(FILE *f)
 "  set-raw   Attach raw model output to an execution\n"
 "  list      List executions\n"
 "  count     Count executions\n"
-"  help      Show this help\n"
+"  help <action>  Show help for a single action (no arg = full help)\n"
 "\n"
 "== create ===========================================================\n"
 "  Create a new execution record.\n"
@@ -532,11 +532,38 @@ static const action_def_t exec_actions[] = {
 };
 #define EXEC_ACTIONS (sizeof(exec_actions) / sizeof(exec_actions[0]))
 
+/* P0: print the help section for one exec action.
+ * 0 = printed, -1 = unknown action. */
+int exec_help_for_action(const char *action, FILE *out)
+{
+    if (strcmp(action, "create")  == 0) usage_create(out);
+    else if (strcmp(action, "get")     == 0) usage_get(out);
+    else if (strcmp(action, "delete")  == 0) usage_delete(out);
+    else if (strcmp(action, "restore") == 0) usage_restore(out);
+    else if (strcmp(action, "start")   == 0) usage_start(out);
+    else if (strcmp(action, "cancel")  == 0) usage_cancel(out);
+    else if (strcmp(action, "complete") == 0) usage_complete(out);
+    else if (strcmp(action, "fail")    == 0) usage_fail(out);
+    else if (strcmp(action, "reset")   == 0) usage_reset(out);
+    else if (strcmp(action, "set-raw") == 0) usage_set_raw(out);
+    else if (strcmp(action, "list")    == 0) usage_list(out);
+    else if (strcmp(action, "count")   == 0) usage_count(out);
+    else return -1;
+    return 0;
+}
+
 int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              db_t *db)
 {
-    /* ── help (subcommand-level; only the bare word "help") ──────── */
+    /* ── help: whole entity, or one action via `exec help <action>` ── */
     if (strcmp(action, "help") == 0) {
+        const char *sub = cmd_args_next_positional(ga);
+        if (sub && strcmp(sub, "help") != 0) {
+            if (exec_help_for_action(sub, stdout) == 0)
+                return EXIT_OK;
+            return unknown_action("exec", sub, "acta_cli exec help",
+                                  exec_actions, EXEC_ACTIONS);
+        }
         exec_usage(stdout);
         return EXIT_OK;
     }

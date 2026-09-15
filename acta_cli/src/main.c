@@ -68,7 +68,22 @@ int main(int argc, char **argv) {
 
     /* ---- early exits (no DB needed) ---- */
     if (gopts.show_version) { version_print(stdout);  return EXIT_OK; }
-    if (gopts.show_help)    { help_print(stdout);     return EXIT_OK; }
+    if (gopts.show_help) {
+        if (gopts.argc == 0) {
+            /* bare `--help`: the global usage */
+            help_print(stdout);
+            free(gopts.argv);
+            return EXIT_OK;
+        }
+        /* P0: scoped help.
+         *   `entity --help`          → whole entity help
+         *   `entity action --help`   → single-action section
+         * Unknown entity or action → canonical exit-10 JSON error. */
+        const char *action = (gopts.argc >= 2) ? gopts.argv[1] : NULL;
+        int rc = entity_help(gopts.argv[0], action, stdout);
+        free(gopts.argv);
+        return rc;
+    }
     if (gopts.show_tools)   { if (gopts.compact)
                                  tools_print_compact(stdout);
                               else
