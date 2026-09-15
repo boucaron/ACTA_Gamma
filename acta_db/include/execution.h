@@ -233,12 +233,34 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
  *           .status = "running",
  *           .context_id = 7
  *       }, 0, 50, &n, &err);
+ *
+ * NOTE: this lister materializes the blob columns (prompt,
+ * raw_response, result, error) for every row; a full page is clamped
+ * to ACTA_DB_MAX_PAGE rows of full-blob content.  List views that
+ * only need ids/status/timestamps should prefer
+ * acta_db_execution_query_light.
  * ────────────────────────────────────────────────────────────────────
  */
 execution_t **acta_db_execution_query(db_t *db,
                                       const execution_query_t *q,
                                       int offset, int limit,
                                       int *out_count, int *err);
+
+
+/* Return a page of executions matching `q`, ordered by id ASC,
+ * using the LIGHT projection: the blob columns (prompt, raw_response,
+ * result, error) are NOT fetched, so those fields are NULL in every
+ * returned row.  All other fields (ids, status, timestamps, parent,
+ * deleted_at) are populated as usual.
+ *
+ * Same signature and same contract as acta_db_execution_query (q,
+ * offset, limit, pagination, out_count, err, ordering, include_deleted
+ * semantics).  Use acta_db_execution_get when you need the blobs of a
+ * specific row.  Free with acta_db_execution_list_free. */
+execution_t **acta_db_execution_query_light(db_t *db,
+                                            const execution_query_t *q,
+                                            int offset, int limit,
+                                            int *out_count, int *err);
 
 
 /* ── Count ────────────────────────────────────────────────────────── */

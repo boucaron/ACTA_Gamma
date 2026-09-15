@@ -113,13 +113,33 @@ int acta_db_context_restore(db_t *db, int id);
  * returned (may be less than limit if the result set is exhausted).
  * If err is non-NULL it is set to ACTA_DB_OK on success (including an
  * empty result set) or a negative ACTA_DB_ERR_* code on failure.
- * Either out_count or err (or both) may be NULL. */
+ * Either out_count or err (or both) may be NULL.
+ *
+ * NOTE: this lister materializes the `content` blob for every row; a
+ * full page is clamped to ACTA_DB_MAX_PAGE rows of full-blob content.
+ * List views that only need ids/hash/timestamps should prefer
+ * acta_db_context_query_light. */
 context_t **acta_db_context_query(db_t *db,
                                   const context_query_t *q,
                                   int offset,
                                   int limit,
                                   int *out_count,
                                   int *err);
+
+/* Return a page of LIVE contexts matching `q`, ordered by id ASC,
+ * using the LIGHT projection: the `content` blob column is NOT
+ * fetched, so c->content is NULL in every returned row.
+ *
+ * Same signature and same contract as acta_db_context_query (q,
+ * offset, limit, pagination, out_count, err, ordering, live-only
+ * filter).  Use acta_db_context_get when you need the content of a
+ * specific row.  Free with acta_db_context_list_free. */
+context_t **acta_db_context_query_light(db_t *db,
+                                        const context_query_t *q,
+                                        int offset,
+                                        int limit,
+                                        int *out_count,
+                                        int *err);
 
 /* Return a page of contexts matching `q`, ordered by id ASC.
  * Like acta_db_context_query, but includes soft-deleted rows
@@ -131,13 +151,33 @@ context_t **acta_db_context_query(db_t *db,
  * Returns a heap-allocated array of context_t pointers (free with
  * acta_db_context_list_free), or NULL on real failure.
  * *out_count / *err – same out-parameters as acta_db_context_query;
- * both may be NULL. */
+ * both may be NULL.
+ *
+ * As with acta_db_context_query, this lister materializes the
+ * `content` blob for every row; list views should prefer
+ * acta_db_context_query_with_deleted_light. */
 context_t **acta_db_context_query_with_deleted(db_t *db,
                                                const context_query_t *q,
                                                int offset,
                                                int limit,
                                                int *out_count,
                                                int *err);
+
+/* Return a page of contexts matching `q`, ordered by id ASC, using
+ * the LIGHT projection (no `content` blob; c->content is NULL in
+ * every row).  Includes soft-deleted rows, exactly like
+ * acta_db_context_query_with_deleted; callers check deleted_at to
+ * distinguish live rows from deleted ones.
+ *
+ * Same signature and contract as acta_db_context_query_with_deleted.
+ * Use acta_db_context_get when you need the content of a specific row.
+ * Free with acta_db_context_list_free. */
+context_t **acta_db_context_query_with_deleted_light(db_t *db,
+                                                     const context_query_t *q,
+                                                     int offset,
+                                                     int limit,
+                                                     int *out_count,
+                                                     int *err);
 
 /* Return the total number of LIVE context rows matching `q`.
  *

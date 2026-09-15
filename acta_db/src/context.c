@@ -6,9 +6,18 @@
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Row decoder
- * ═══════════════════════════════════════════════════════════════════ */
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ *  light – 0: full projection, column order
+ *              [id, type, content, content_hash, metadata, created_at,
+ *               deleted_at]
+ *          1: light projection (blob column omitted), column order
+ *              [id, type, content_hash, metadata, created_at, deleted_at]
+ *            c->content is left NULL (the struct is calloc'd and the
+ *            free functions are NULL-safe).
+ */
 
-static context_t *row_to_context(sqlite3_stmt *stmt, int *err) {
+static context_t *row_to_context(sqlite3_stmt *stmt, int *err, int light) {
     context_t *c = calloc(1, sizeof(context_t));
     if (!c) {
         if (err) *err = ACTA_DB_ERR_ALLOC;
@@ -18,11 +27,12 @@ static context_t *row_to_context(sqlite3_stmt *stmt, int *err) {
     int alloc_err = ACTA_DB_OK;
     c->id           = db_col_int(stmt, 0);
     c->type         = db_col_text(stmt, 1, &alloc_err);
-    c->content      = db_col_text(stmt, 2, &alloc_err);
-    c->content_hash = db_col_text(stmt, 3, &alloc_err);
-    c->metadata     = db_col_text(stmt, 4, &alloc_err);
-    c->created_at   = db_col_text(stmt, 5, &alloc_err);
-    c->deleted_at   = db_col_text(stmt, 6, &alloc_err);
+    if (!light)               /* light projection: content column omitted */
+        c->content      = db_col_text(stmt, 2, &alloc_err);
+    c->content_hash = db_col_text(stmt, light ? 2 : 3, &alloc_err);
+    c->metadata     = db_col_text(stmt, light ? 3 : 4, &alloc_err);
+    c->created_at   = db_col_text(stmt, light ? 4 : 5, &alloc_err);
+    c->deleted_at   = db_col_text(stmt, light ? 5 : 6, &alloc_err);
 
     if (alloc_err) {
         acta_db_context_free(c);
@@ -37,13 +47,13 @@ static context_t *row_to_context(sqlite3_stmt *stmt, int *err) {
  * ═══════════════════════════════════════════════════════════════════ */
 
 static context_t **collect_rows(sqlite3_stmt *stmt,
-                                int *out_count, int *err) {
+                                int *out_count, int *err, int light) {
     int  count = 0;
     context_t **items = NULL;
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         int row_err = ACTA_DB_OK;
-        context_t *item = row_to_context(stmt, &row_err);
+        context_t *item = row_to_context(stmt, &row_err, light);
         if (!item) {
             sqlite3_finalize(stmt);
             acta_db_context_list_free(items, count);
@@ -135,7 +145,7 @@ static int build_where(char *buf, size_t sz, const context_query_t *q,
 static int build_select_sql(char *buf, size_t sz,
                             const context_query_t *q,
                             int offset, int limit,
-                            int live_only)
+                            int live_only, int light)
 {
     size_t pos;
     int    rc;
@@ -143,9 +153,14 @@ static int build_select_sql(char *buf, size_t sz,
     /* limit is guaranteed > 0 by db_clamp_limit at the call site. */
     (void)limit;   /* silence unused-param warning if compiler inlines */
 
+    /* Light projection omits the content blob column; the column order
+     * must match row_to_context(light). */
     rc = snprintf(buf, sz,
-                  "SELECT id, type, content, content_hash, metadata, "
-                  "created_at, deleted_at FROM contexts");
+                  light
+                      ? "SELECT id, type, content_hash, metadata, "
+                        "created_at, deleted_at FROM contexts"
+                      : "SELECT id, type, content, content_hash, metadata, "
+                        "created_at, deleted_at FROM contexts");
     if (rc < 0 || (size_t)rc >= sz) return -1;
     pos = (size_t)rc;
 
@@ -277,7 +292,7 @@ context_t *acta_db_context_get(db_t *db, int id, int *err) {
 
     context_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW)
-        result = row_to_context(stmt, err);
+        result = row_to_context(stmt, err, 0);
 
     sqlite3_finalize(stmt);
     return result;
@@ -309,7 +324,7 @@ context_t *acta_db_context_get_live(db_t *db, int id, int *err) {
 
     context_t *result = NULL;
     if (sqlite3_step(stmt) == SQLITE_ROW)
-        result = row_to_context(stmt, err);
+        result = row_to_context(stmt, err, 0);
 
     sqlite3_finalize(stmt);
     return result;
@@ -366,14 +381,19 @@ int acta_db_context_restore(db_t *db, int id)
 
 /* ═══════════════════════════════════════════════════════════════════
  *  query  (paginated fetch)
+ *
+ *  All four lister entry points (live/light × with-deleted/light)
+ *  share this implementation; only live_only and light differ.
  * ═══════════════════════════════════════════════════════════════════ */
 
-context_t **acta_db_context_query(db_t *db,
-                                  const context_query_t *q,
-                                  int offset,
-                                  int limit,
-                                  int *out_count,
-                                  int *err)
+static context_t **context_query_impl(db_t *db,
+                                      const context_query_t *q,
+                                      int offset,
+                                      int limit,
+                                      int *out_count,
+                                      int *err,
+                                      int live_only,
+                                      int light)
 {
     if (err)       *err       = ACTA_DB_OK;
     if (out_count) *out_count = 0;
@@ -391,7 +411,8 @@ context_t **acta_db_context_query(db_t *db,
     limit = db_clamp_limit(limit);
 
     char sql[512];
-    if (build_select_sql(sql, sizeof(sql), q, offset, limit, 1) < 0) {
+    if (build_select_sql(sql, sizeof(sql), q, offset, limit,
+                         live_only, light) < 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
@@ -423,7 +444,29 @@ context_t **acta_db_context_query(db_t *db,
         }
     }
 
-    return collect_rows(stmt, out_count, err);
+    return collect_rows(stmt, out_count, err, light);
+}
+
+context_t **acta_db_context_query(db_t *db,
+                                  const context_query_t *q,
+                                  int offset,
+                                  int limit,
+                                  int *out_count,
+                                  int *err)
+{
+    return context_query_impl(db, q, offset, limit, out_count, err,
+                              /*live_only*/1, /*light*/0);
+}
+
+context_t **acta_db_context_query_light(db_t *db,
+                                         const context_query_t *q,
+                                         int offset,
+                                         int limit,
+                                         int *out_count,
+                                         int *err)
+{
+    return context_query_impl(db, q, offset, limit, out_count, err,
+                              /*live_only*/1, /*light*/1);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -479,55 +522,19 @@ context_t **acta_db_context_query_with_deleted(db_t *db,
                                                int *out_count,
                                                int *err)
 {
-    if (err)       *err       = ACTA_DB_OK;
-    if (out_count) *out_count = 0;
+    return context_query_impl(db, q, offset, limit, out_count, err,
+                              /*live_only*/0, /*light*/0);
+}
 
-    if (!db) {
-        if (err) *err = ACTA_DB_ERR_INVALID;
-        return NULL;
-    }
-    if (offset < 0) {
-        if (err) *err = ACTA_DB_ERR_INVALID;
-        return NULL;
-    }
-
-    /* Enforce the hard page cap. */
-    limit = db_clamp_limit(limit);
-
-    char sql[512];
-    if (build_select_sql(sql, sizeof(sql), q, offset, limit, 0) < 0) {
-        if (err) *err = ACTA_DB_ERR_INVALID;
-        return NULL;
-    }
-
-    sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        if (err) *err = ACTA_DB_ERR_SQL;
-        return NULL;
-    }
-
-    int bind = 1;
-    if (bind_where(stmt, q, &bind) != ACTA_DB_OK) {
-        sqlite3_finalize(stmt);
-        if (err) *err = ACTA_DB_ERR_SQL;
-        return NULL;
-    }
-
-    /* limit is always > 0 after the clamp – bind unconditionally. */
-    if (sqlite3_bind_int(stmt, bind++, limit) != SQLITE_OK) {
-        sqlite3_finalize(stmt);
-        if (err) *err = ACTA_DB_ERR_SQL;
-        return NULL;
-    }
-    if (offset > 0) {
-        if (sqlite3_bind_int(stmt, bind++, offset) != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            if (err) *err = ACTA_DB_ERR_SQL;
-            return NULL;
-        }
-    }
-
-    return collect_rows(stmt, out_count, err);
+context_t **acta_db_context_query_with_deleted_light(db_t *db,
+                                                     const context_query_t *q,
+                                                     int offset,
+                                                     int limit,
+                                                     int *out_count,
+                                                     int *err)
+{
+    return context_query_impl(db, q, offset, limit, out_count, err,
+                              /*live_only*/0, /*light*/1);
 }
 
 int acta_db_context_count_with_deleted(db_t *db,

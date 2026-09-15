@@ -21,6 +21,13 @@ enum {
     "raw_response, result, status, error, created_at, started_at, " \
     "completed_at, parent_execution_id, deleted_at FROM executions"
 
+/* Light projection: the blob columns (prompt, raw_response, result,
+ * error) are omitted.  Column order must match row_to_execution_light. */
+#define EXEC_SELECT_LIGHT \
+    "SELECT id, context_id, skill_revision_id, model_revision_id, status, " \
+    "created_at, started_at, completed_at, parent_execution_id, " \
+    "deleted_at FROM executions"
+
 /* ------------------------------------------------------------------ */
 /*  Row decoding (allocation-error aware)                             */
 /* ------------------------------------------------------------------ */
@@ -48,6 +55,40 @@ static execution_t *row_to_execution(sqlite3_stmt *stmt, int *err)
     e->completed_at        = db_col_text(stmt, COL_COMPLETED_AT, &alloc_err);
     e->parent_execution_id = db_col_int_or_zero(stmt, COL_PARENT_ID);
     e->deleted_at          = db_col_text(stmt, COL_DELETED_AT, &alloc_err);
+
+    if (alloc_err) {
+        acta_db_execution_free(e);
+        if (err) *err = alloc_err;
+        return NULL;
+    }
+    return e;
+}
+
+/*
+ * Light-projection row decoder (EXEC_SELECT_LIGHT column order).
+ * prompt / raw_response / result / error are intentionally left NULL
+ * (the struct is calloc'd and acta_db_execution_free is NULL-safe).
+ * Allocation-error handling is identical to row_to_execution.
+ */
+static execution_t *row_to_execution_light(sqlite3_stmt *stmt, int *err)
+{
+    execution_t *e = calloc(1, sizeof(execution_t));
+    if (!e) {
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
+
+    int alloc_err = ACTA_DB_OK;
+    e->id                  = db_col_int(stmt, 0);
+    e->context_id          = db_col_int(stmt, 1);
+    e->skill_revision_id   = db_col_int(stmt, 2);
+    e->model_revision_id   = db_col_int(stmt, 3);
+    e->status              = db_col_text(stmt, 4, &alloc_err);
+    e->created_at          = db_col_text(stmt, 5, &alloc_err);
+    e->started_at          = db_col_text(stmt, 6, &alloc_err);
+    e->completed_at        = db_col_text(stmt, 7, &alloc_err);
+    e->parent_execution_id = db_col_int_or_zero(stmt, 8);
+    e->deleted_at          = db_col_text(stmt, 9, &alloc_err);
 
     if (alloc_err) {
         acta_db_execution_free(e);
@@ -147,12 +188,17 @@ static int exec_verify_status(db_t *db, int id, const char *expected)
 
 /* ------------------------------------------------------------------ */
 /*  Unified query (paginated lister)                                  */
+/*                                                                     */
+/*  acta_db_execution_query (full blobs) and acta_db_execution_query_  */
+/*  light (blob columns omitted) share this implementation; only the  */
+/*  SELECT column list and the row decoder differ.                    */
 /* ------------------------------------------------------------------ */
 
-execution_t **acta_db_execution_query(db_t *db,
-                                      const execution_query_t *q,
-                                      int offset, int limit,
-                                      int *out_count, int *err)
+static execution_t **execution_query_impl(db_t *db,
+                                          const execution_query_t *q,
+                                          int offset, int limit,
+                                          int *out_count, int *err,
+                                          int light)
 {
     if (!db) {
         if (err) *err = ACTA_DB_ERR_INVALID;
@@ -180,8 +226,8 @@ execution_t **acta_db_execution_query(db_t *db,
 
     char sql[600];
     int slen = snprintf(sql, sizeof(sql),
-             EXEC_SELECT "%s ORDER BY id ASC LIMIT ? OFFSET ?;",
-             where_clause);
+             "%s%s ORDER BY id ASC LIMIT ? OFFSET ?;",
+             light ? EXEC_SELECT_LIGHT : EXEC_SELECT, where_clause);
     if (slen < 0 || (size_t)slen >= sizeof(sql)) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
@@ -219,7 +265,9 @@ execution_t **acta_db_execution_query(db_t *db,
         }
 
         int row_err = ACTA_DB_OK;
-        execution_t *item = row_to_execution(stmt, &row_err);
+        execution_t *item = light
+            ? row_to_execution_light(stmt, &row_err)
+            : row_to_execution(stmt, &row_err);
         if (!item) {
             acta_db_execution_list_free(items, count);
             sqlite3_finalize(stmt);
@@ -235,6 +283,24 @@ execution_t **acta_db_execution_query(db_t *db,
     if (err)       *err       = ACTA_DB_OK;
 
     return items;   /* NULL when count == 0 — same as before, just explicit */
+}
+
+execution_t **acta_db_execution_query(db_t *db,
+                                      const execution_query_t *q,
+                                      int offset, int limit,
+                                      int *out_count, int *err)
+{
+    return execution_query_impl(db, q, offset, limit, out_count, err,
+                                /*light*/0);
+}
+
+execution_t **acta_db_execution_query_light(db_t *db,
+                                            const execution_query_t *q,
+                                            int offset, int limit,
+                                            int *out_count, int *err)
+{
+    return execution_query_impl(db, q, offset, limit, out_count, err,
+                                /*light*/1);
 }
 
 /* ------------------------------------------------------------------ */

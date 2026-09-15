@@ -25,7 +25,8 @@ TEST_MAIN := $(TEST_DIR)/test_main.c
 TEST_MODULES := db execution execution_log integration \
                 model model_folder model_revision \
                 skill skill_folder skill_revision \
-                context_deleted execution_deleted
+                context_deleted execution_deleted \
+                light_queries
 
 .PHONY: all clean test test-build test-%
 
