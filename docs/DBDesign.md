@@ -4,6 +4,14 @@ This is a deliberately small first-pass schema. The goal is to model the core ex
 
 The canonical, executable copy of this schema is `acta_gui/db/schema.sql` (the same DDL is embedded in `acta_cli/acta_test_ref.sql` and seeded by the runner tests); the SQL blocks below mirror it.
 
+## Scope and assumptions (PoC)
+
+This is a PoC in progress, not a product. Three deliberate non-goals are baked into `acta_db`:
+
+- **No schema versioning or migration framework.** The schema is a first pass applied once at creation (`acta_gui/db/schema.sql`). Existing DB files are opened as-is (`ACTA_DB_OPEN_EXISTING`); if the schema changes, there is no built-in migration path. Manual `ALTER TABLE` recipes (e.g. the soft-delete columns above) are the supported way to move a file forward.
+- **No purge / hard delete, by design.** Rows are soft-deleted (`deleted_at`) and never physically removed. If a clean state is genuinely needed, create a new database file rather than purging the existing one.
+- **Not thread-safe by design.** One `db_t` is one SQLite connection, owned by a single thread. Concurrency is not shared through the library: the runner uses its own connection, the GUI uses its own connection (the in-app runner thread opens its own handle), and the CLI opens its own. WAL makes cross-process read/write work, but simultaneous writers on the same file are out of scope; there is no `busy_timeout` or retry logic in `acta_db`.
+
 ## The core model
 
 The important relationship is deliberately small:
@@ -643,7 +651,9 @@ higher-level application built on top of this building block:
 * **hard delete** — lifecycle operations are **soft delete only**
   (`deleted_at`) across all entities: skills, models, folders, and now
   contexts and executions.
-  A hard-delete API is out of scope (owner decision, 2026-09-13)
+  A hard-delete API is out of scope (owner decision, 2026-09-13).
+  There is no purge either: deleted rows stay in the file forever.
+  If a clean state is genuinely needed, create a new database file.
 
 If the POC shows that any of these are actually needed, they can be built
 later, on top of the schema — or, in the case of users, permissions, and

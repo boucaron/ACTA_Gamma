@@ -1,6 +1,6 @@
 # Current status
 
-Early prototype / POC.
+Early prototype / POC — not a product. By design (see `docs/DBDesign.md`, "Scope and assumptions"): no schema versioning or migration framework, no purge/hard-delete of rows (create a new DB file if a clean state is needed), and `acta_db` is not thread-safe — each consumer (CLI, runner, GUI) owns its own single connection, and simultaneous writers on one file are out of scope.
 
 **Done:**
 
