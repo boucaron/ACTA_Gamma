@@ -76,6 +76,12 @@ OBJS    := $(patsubst %.c, %.o, $(SRCS))
 APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS))
 TARGET  := acta_cli$(EXEEXT)
 
+# ---- default goal ----
+# `all` must be the FIRST target in the file, or a bare `make` would build
+# the first expanded test-suite binary (test_cli_util) instead of $(TARGET).
+.PHONY: all
+all: $(TARGET)
+
 # ---- test binaries (one per tests/<suite>/ directory) --------------
 # One binary per suite, generated from TEST_DIRS above: each links the
 # suite's objects + the shared test framework + the app objects (minus
@@ -93,9 +99,7 @@ test_$(1)$(EXEEXT): $(patsubst %.c,%.o,$(wildcard tests/$(1)/*.c)) \
 endef
 $(foreach s,$(TEST_SUITES),$(eval $(call TEST_SUITE,$(s))))
 
-.PHONY: all clean test
-
-all: $(TARGET)
+.PHONY: clean test
 
 # Rebuild the lib when missing or when any of its sources changed.
 # (Must stay below `all` or it would become the default goal.)
