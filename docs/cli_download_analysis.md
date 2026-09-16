@@ -5,8 +5,7 @@ execution blobs `prompt` / `raw_response` / `result` / `error`) can be
 retrieved through `acta_cli`, in the context of the recently added **light
 listers** (`acta_db_context_query_light`, `acta_db_execution_query_light`).
 Companion to `cli_spec.md` (T1 stdout contract). Findings verified against
-the running binary; fixes are proposed, only P1 applied (source only, not
-compiled, not committed).
+the running binary; P1 and P2 applied in source.
 
 ## How you can download the data today
 
@@ -75,12 +74,15 @@ gap.
   - Not compiled, not committed; `cli_spec.md` already documents
     `--full`, so no spec change needed. **Pending: rebuild + run
     `test_tools`.**
-- **P2 — Warn on the silent-null trap (not applied).** In the list paths
-  of `cmd_context` / `cmd_execution`: if `--fields` names a light-omitted
-  field (`content` / `prompt, raw_response, result, error`) and `--full`
-  is absent, print a one-line stderr warning (exit code unchanged).
-  Warning-only, not auto-upgrade — auto-upgrading would change the cost
-  semantics the light projection was designed around.
+- **P2 — Warn on the silent-null trap (APPLIED, source only).** In the
+  list paths of `cmd_context` / `cmd_execution`: if `--fields` names a
+  light-omitted field (`content` / `prompt, raw_response, result,
+  error`) and `--full` is absent, a one-line stderr warning is printed
+  (exit code unchanged). Warning-only, not auto-upgrade — auto-upgrading
+  would change the cost semantics the light projection was designed
+  around. **Pending: rebuild + a run of
+  `context list --fields content` / `exec list --fields raw_response`
+  to observe the warning.**
 - **P3 — Download ergonomics (not applied).** Global `--out <path>`
   writing the exact stdout payload to a file, and a raw single-field
   mode (e.g. `context get 5 --raw_out content > out.txt`) printing the

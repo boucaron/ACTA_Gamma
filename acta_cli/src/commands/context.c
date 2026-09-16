@@ -492,6 +492,14 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int include_deleted = cmd_args_has_flag(ga, "include_deleted");
         int full = cmd_args_has_flag(ga, "full");
 
+        /* P2: silent-null trap — warn (stderr, exit code unchanged) when
+         * --fields names the light-omitted field without --full. */
+        if (!full && gopts->fields && fields_has(gopts->fields, "content")) {
+            fprintf(stderr,
+                "warning: --fields requests 'content' but context list is "
+                "light by default; add --full to fetch it\n");
+        }
+
         context_query_t q = { .type = f_type, .hash = f_hash };
 
         VLOG(1, "context list: type=%s hash=%s offset=%d limit=%d include_deleted=%d full=%d",

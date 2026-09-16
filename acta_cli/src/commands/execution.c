@@ -970,6 +970,19 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int include_deleted = cmd_args_has_flag(ga, "include_deleted");
         int full = cmd_args_has_flag(ga, "full");
 
+        /* P2: silent-null trap — warn (stderr, exit code unchanged) when
+         * --fields names a light-omitted field without --full. */
+        if (!full && gopts->fields &&
+            (fields_has(gopts->fields, "prompt") ||
+             fields_has(gopts->fields, "raw_response") ||
+             fields_has(gopts->fields, "result") ||
+             fields_has(gopts->fields, "error"))) {
+            fprintf(stderr,
+                "warning: --fields requests prompt/raw_response/result/"
+                "error but exec list is light by default; add --full to "
+                "fetch them\n");
+        }
+
         execution_query_t q = {
             .status              = f_status,
             .context_id          = ctx_id,
