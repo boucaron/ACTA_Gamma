@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <io.h>        /* dup, dup2, fileno, close — --out fd redirect */
 #include <stdarg.h>
 
 #include "cli.h"        /* global_opts_t, cmd_args_t, EXIT_* codes */
@@ -116,6 +117,42 @@ int main(int argc, char **argv) {
         return vrc;
     }
 
+    /* P3: --raw_out is only meaningful for 'context get' / 'exec get'.
+     * Any other use is a CLI usage error (fail fast, not silent). */
+    if (gopts.raw_out &&
+        !(((strcmp(entity, "context") == 0) ||
+           (strcmp(entity, "exec") == 0)) &&
+          strcmp(action, "get") == 0)) {
+        free(gopts.argv);
+        return emit_cli_error(
+            "--raw_out only supported by 'context get' and 'exec get'");
+    }
+
+    /* P3: --out <path> — write the whole stdout payload to the file.
+     * Implemented by redirecting fd 1 around the dispatch; stderr
+     * (errors, warnings, VLOG) is untouched. */
+    FILE *payload_out = NULL;
+    int saved_stdout = -1;
+    if (gopts.out_path) {
+        payload_out = fopen(gopts.out_path, "w");
+        if (!payload_out) {
+            char msg[256];
+            snprintf(msg, sizeof msg,
+                     "cannot open output file '%s'", gopts.out_path);
+            free(gopts.argv);
+            return emit_cli_error(msg);
+        }
+        saved_stdout = dup(STDOUT_FILENO);
+        if (dup2(fileno(payload_out), STDOUT_FILENO) < 0) {
+            char msg[256];
+            snprintf(msg, sizeof msg,
+                     "cannot redirect stdout to '%s'", gopts.out_path);
+            fclose(payload_out);
+            free(gopts.argv);
+            return emit_cli_error(msg);
+        }
+    }
+
     /* ---- resolve DB path ---- */
     const char *db_path = resolve_db_path(gopts.db);
 
@@ -142,6 +179,16 @@ int main(int argc, char **argv) {
 
     /* ---- dispatch (handlers receive the open db handle) ---- */
     rc = commands_dispatch(entity, action, &ga, &gopts, db);
+
+    /* P3: restore stdout before anything else prints (db close warn). */
+    if (payload_out) {
+        fflush(stdout);
+        if (saved_stdout >= 0) {
+            dup2(saved_stdout, STDOUT_FILENO);
+            close(saved_stdout);
+        }
+        fclose(payload_out);
+    }
 
     /* ---- close database ---- */
     int close_rc = acta_db_close(db);

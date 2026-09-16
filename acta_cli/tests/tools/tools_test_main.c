@@ -6,7 +6,7 @@
  *      JSON — checked with the project's own json layer (json_validate)
  *      and walked with cJSON (the layer json.c is built on);
  *   2. the top-level global section is intact: name/version/usage,
- *      15 global_flags, entity_aliases, 3 input_sources, 7 exit codes,
+ *      17 global_flags, entity_aliases, 3 input_sources, 7 exit codes,
  *      error contract with the `code == -exit` invariant;
  *   3. the tools array has exactly 74 entries covering all 10 entities
  *      and the full action set from cli_spec.md (incl. the 10 help
@@ -197,7 +197,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");
     TEST(ctx, cJSON_IsArray(gf));
-    TEST_EQ(ctx, cJSON_GetArraySize(gf), 15);
+    TEST_EQ(ctx, cJSON_GetArraySize(gf), 17);
 
     cJSON *al = cJSON_GetObjectItem(root, "entity_aliases");
     TEST(ctx, cJSON_IsObject(al));

@@ -42,6 +42,14 @@ Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--no_nulls`. `get`/`get-latest` return the full entity JSON object
 (subject to those modifiers).
 
+Output destinations (P3): `--out <path>` writes the entire stdout
+payload to `<path>` instead of stdout (errors/warnings stay on
+stderr; the flag is ignored with `--version` / `--help` / `--tools`).
+`--raw_out <field>` prints one field's raw (unescaped) value with no
+JSON wrapper — `context get` / `exec get` only; it takes precedence
+over `--id_only` / `--table` / `--fields`, null values produce no
+output, and an unknown field is a CLI usage error (exit 10).
+
 Schema flags: `--tools` emits the machine-readable JSON schema (T3,
 `src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
 rendering (~7 KB) of the same static table — positionals, flags (with `*`

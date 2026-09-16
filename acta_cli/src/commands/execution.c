@@ -225,7 +225,15 @@ static void usage_get(FILE *f)
 "    --id_only            Print only the id\n"
 "    --table              Columnar output instead of JSON\n"
 "    --fields <csv>       Comma-separated field filter\n"
-"    --no_nulls           Omit null-valued fields from JSON\n", f);
+"    --no_nulls           Omit null-valued fields from JSON\n"
+"    --raw_out <field>    Print one field's raw (unescaped) value, no\n"
+"                         JSON wrapper (id, context_id, skill_revision_id,\n"
+"                         model_revision_id, parent_execution_id, prompt,\n"
+"                         raw_response, result, status, error,\n"
+"                         created_at, started_at, completed_at,\n"
+"                         deleted_at); takes precedence over\n"
+"                         --id_only/--table/--fields; null values\n"
+"                         produce no output\n", f);
 }
 
 static void usage_delete(FILE *f)
@@ -737,6 +745,77 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         vlog_exec_fields("  result", e);
         vlog_exec_raw("  raw", e, 0);
+
+        /* P3: --raw_out <field> — print one field's raw (unescaped)
+         * value, no JSON wrapper; takes precedence over --id_only /
+         * --table / --fields.  Null values produce no output. */
+        if (gopts->raw_out) {
+            const char *v = NULL;
+            int is_id = 0;
+            if (strcmp(gopts->raw_out, "id") == 0)
+                is_id = 1;
+            else if (strcmp(gopts->raw_out, "context_id") == 0)
+                is_id = 1;
+            else if (strcmp(gopts->raw_out, "skill_revision_id") == 0)
+                is_id = 1;
+            else if (strcmp(gopts->raw_out, "model_revision_id") == 0)
+                is_id = 1;
+            else if (strcmp(gopts->raw_out, "parent_execution_id") == 0)
+                is_id = 1;
+            else if (strcmp(gopts->raw_out, "prompt") == 0)
+                v = e->prompt;
+            else if (strcmp(gopts->raw_out, "raw_response") == 0)
+                v = e->raw_response;
+            else if (strcmp(gopts->raw_out, "result") == 0)
+                v = e->result;
+            else if (strcmp(gopts->raw_out, "status") == 0)
+                v = e->status;
+            else if (strcmp(gopts->raw_out, "error") == 0)
+                v = e->error;
+            else if (strcmp(gopts->raw_out, "created_at") == 0)
+                v = e->created_at;
+            else if (strcmp(gopts->raw_out, "started_at") == 0)
+                v = e->started_at;
+            else if (strcmp(gopts->raw_out, "completed_at") == 0)
+                v = e->completed_at;
+            else if (strcmp(gopts->raw_out, "deleted_at") == 0)
+                v = e->deleted_at;
+
+            if (is_id) {
+                int iv = e->id;
+                if (strcmp(gopts->raw_out, "context_id") == 0)
+                    iv = e->context_id;
+                else if (strcmp(gopts->raw_out,
+                               "skill_revision_id") == 0)
+                    iv = e->skill_revision_id;
+                else if (strcmp(gopts->raw_out,
+                               "model_revision_id") == 0)
+                    iv = e->model_revision_id;
+                else if (strcmp(gopts->raw_out,
+                               "parent_execution_id") == 0)
+                    iv = e->parent_execution_id;
+                char idb[16];
+                snprintf(idb, sizeof idb, "%d", iv);
+                fputs(idb, stdout);
+                fputc('\n', stdout);
+            } else if (v) {
+                fputs(v, stdout);
+                fputc('\n', stdout);
+            } else {
+                char msg[256];
+                snprintf(msg, sizeof msg,
+                         "unknown --raw_out field: '%s' (supported: "
+                         "id, context_id, skill_revision_id, "
+                         "model_revision_id, parent_execution_id, prompt, "
+                         "raw_response, result, status, error, created_at, "
+                         "started_at, completed_at, deleted_at)",
+                         gopts->raw_out);
+                acta_db_execution_free(e);
+                return emit_cli_error(msg);
+            }
+            acta_db_execution_free(e);
+            return EXIT_OK;
+        }
 
         if (gopts->id_only) {
             fprintf(stdout, "%d\n", e->id);

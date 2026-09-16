@@ -171,6 +171,33 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
             }
             continue;
         }
+        /* ---- --out <path> (P3: payload → file instead of stdout) ---- */
+        if (flag_prefix_match(a, "out")) {
+            const char *v = flag_inline_value(a, "out");
+            if (v) g->out_path = v;
+            else {
+                if (i + 1 >= argc) {
+                    free(rest);
+                    return emit_cli_error("missing value for --out");
+                }
+                g->out_path = argv[++i];
+            }
+            continue;
+        }
+        /* ---- --raw_out <field> (P3: raw single-field output,
+         * context get / exec get) ---- */
+        if (flag_prefix_match(a, "raw_out")) {
+            const char *v = flag_inline_value(a, "raw_out");
+            if (v) g->raw_out = v;
+            else {
+                if (i + 1 >= argc) {
+                    free(rest);
+                    return emit_cli_error("missing value for --raw_out");
+                }
+                g->raw_out = argv[++i];
+            }
+            continue;
+        }
         /* not a recognised global → keep as entity/action/positional */
         rest[rest_n++] = a;
     }

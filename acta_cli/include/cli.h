@@ -26,6 +26,12 @@ typedef struct {
     int         from_stdin;  /* --stdin */
     const char *from_file;   /* --from_file */
 
+    /* output destination (P3) */
+    const char *out_path;    /* --out <path>: payload → file instead of
+                               stdout (errors/warnings stay on stderr) */
+    const char *raw_out;     /* --raw_out <field>: raw (unescaped) single-
+                               field output; context get / exec get only */
+
     /* output shaping */
     int         no_nulls;    /* --no_nulls */
     int         id_only;     /* --id_only */

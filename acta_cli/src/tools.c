@@ -289,7 +289,8 @@ static const tool_flag_t global_flags[] = {
     { "db", 1, 0 }, { "fields", 1, 0 }, { "no_nulls", 0, 0 },
     { "id_only", 0, 0 }, { "count", 0, 0 }, { "table", 0, 0 },
     { "pretty", 0, 0 }, { "json", 1, 0 }, { "stdin", 0, 0 },
-    { "from_file", 1, 0 }, { "version", 0, 0 }, { "help", 0, 0 },
+    { "from_file", 1, 0 }, { "out", 1, 0 }, { "raw_out", 1, 0 },
+    { "version", 0, 0 }, { "help", 0, 0 },
     { "tools", 0, 0 }, { "compact", 0, 0 }, { "verbose", 0, 0 },
 };
 
@@ -1216,8 +1217,8 @@ int tools_print_compact(FILE *out)
     fputs("# acta_cli tools v2 (compact); full JSON: --tools\n", out);
     fputs("usage: acta_cli [global flags] <entity> <action> [args]\n", out);
     fputs("globals: --db --fields --no_nulls --id_only --count --table "
-          "--pretty --json --stdin --from_file --version --help --tools "
-          "--compact --verbose\n", out);
+          "--pretty --json --stdin --from_file --out --raw_out "
+          "--version --help --tools --compact --verbose\n", out);
     fputs("input_sources: json,stdin,from_file (mutually exclusive)\n", out);
     fputs("error: stderr {\"error\":\"ACTA_DB_ERR_*\"|\"ACTA_CLI_ERR\","
           "\"code\":-<exit>,\"message\":\"...\"} (code == -exit)\n", out);

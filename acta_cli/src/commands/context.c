@@ -73,6 +73,11 @@ static void usage_ctx_get(FILE *f)
 "    --id_only        print just the numeric id\n"
 "    --fields <a,b>   restrict output fields (comma-separated)\n"
 "    --no_nulls       omit fields that are null\n"
+"    --raw_out <field>  print one field's raw (unescaped) value, no\n"
+"                        JSON wrapper (id, type, content, content_hash,\n"
+"                        metadata, created_at, deleted_at); takes\n"
+"                        precedence over --id_only/--table/--fields;\n"
+"                        null values produce no output\n"
 "\n", f);
 }
 
@@ -465,6 +470,49 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         vlog_ctx_fields("  result", c);
         vlog_ctx_raw("  raw", c, 0);
+
+        /* P3: --raw_out <field> — print one field's raw (unescaped)
+         * value, no JSON wrapper; takes precedence over --id_only /
+         * --table / --fields.  Null values produce no output. */
+        if (gopts->raw_out) {
+            const char *v = NULL;
+            int is_id = 0;
+            if (strcmp(gopts->raw_out, "id") == 0)
+                is_id = 1;
+            else if (strcmp(gopts->raw_out, "type") == 0)
+                v = c->type;
+            else if (strcmp(gopts->raw_out, "content") == 0)
+                v = c->content;
+            else if (strcmp(gopts->raw_out, "content_hash") == 0)
+                v = c->content_hash;
+            else if (strcmp(gopts->raw_out, "metadata") == 0)
+                v = c->metadata;
+            else if (strcmp(gopts->raw_out, "created_at") == 0)
+                v = c->created_at;
+            else if (strcmp(gopts->raw_out, "deleted_at") == 0)
+                v = c->deleted_at;
+
+            if (is_id) {
+                char idb[16];
+                snprintf(idb, sizeof idb, "%d", c->id);
+                fputs(idb, stdout);
+                fputc('\n', stdout);
+            } else if (v) {
+                fputs(v, stdout);
+                fputc('\n', stdout);
+            } else {
+                char msg[192];
+                snprintf(msg, sizeof msg,
+                         "unknown --raw_out field: '%s' (supported: "
+                         "id, type, content, content_hash, metadata, "
+                         "created_at, deleted_at)",
+                         gopts->raw_out);
+                acta_db_context_free(c);
+                return emit_cli_error(msg);
+            }
+            acta_db_context_free(c);
+            return EXIT_OK;
+        }
 
         if (gopts->id_only) {
             fprintf(stdout, "%d\n", c->id);

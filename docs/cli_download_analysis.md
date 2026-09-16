@@ -5,7 +5,7 @@ execution blobs `prompt` / `raw_response` / `result` / `error`) can be
 retrieved through `acta_cli`, in the context of the recently added **light
 listers** (`acta_db_context_query_light`, `acta_db_execution_query_light`).
 Companion to `cli_spec.md` (T1 stdout contract). Findings verified against
-the running binary; P1 and P2 applied in source.
+the running binary; P1–P3 applied in source.
 
 ## How you can download the data today
 
@@ -83,10 +83,32 @@ gap.
   around. **Pending: rebuild + a run of
   `context list --fields content` / `exec list --fields raw_response`
   to observe the warning.**
-- **P3 — Download ergonomics (not applied).** Global `--out <path>`
-  writing the exact stdout payload to a file, and a raw single-field
-  mode (e.g. `context get 5 --raw_out content > out.txt`) printing the
-  value unescaped — a true "download" without `jq`.
+- **P3 — Download ergonomics (APPLIED, source only).**
+  - `--out <path>` (global): the entire stdout payload is written to
+    `<path>` instead of stdout. Implemented in `main.c` by redirecting
+    fd 1 around `commands_dispatch` (`dup`/`dup2`), so every entity's
+    emit path is covered without touching the handlers; stderr
+    (errors, warnings, VLOG) is untouched. Ignored with
+    `--version` / `--help` / `--tools`. Unopenable path → exit-10
+    `ACTA_CLI_ERR`.
+  - `--raw_out <field>` (global, `context get` / `exec get` only):
+    prints one field's raw (unescaped) value, no JSON wrapper; takes
+    precedence over `--id_only` / `--table` / `--fields`; null values
+    produce no output; unknown field → exit-10 `ACTA_CLI_ERR` listing
+    the supported fields. Context fields: `id, type, content,
+    content_hash, metadata, created_at, deleted_at`; exec fields:
+    `id, context_id, skill_revision_id, model_revision_id,
+    parent_execution_id, prompt, raw_response, result, status, error,
+    created_at, started_at, completed_at, deleted_at`. Any other
+    entity/action using `--raw_out` → exit-10 (checked in `main.c` before
+    dispatch).
+  - Registered in `parse_globals` (pass 1, value-taking),
+    `global_opts_t`, `help_print`, per-action help (`context get`,
+    `exec get`), and the `--tools` schema (`global_flags`: 15 → 17,
+    compact header line). `tools_test` expected count updated 15 → 17.
+  - `cli_spec.md` extended with an "Output destinations (P3)"
+    paragraph. **Pending: rebuild + manual runs (see test list in
+    commit conversation).**
 - **P4 — Large-payload input (not applied).** `--content_file <path>`
   for `context create` (and symmetrically `--raw_file` for
   `exec set-raw`, `--result_file` for `exec complete`) to bypass the
