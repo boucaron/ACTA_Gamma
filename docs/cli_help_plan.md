@@ -6,7 +6,9 @@ split in `cli_spec.md`). No DB behavior changes; only help/discoverability.
 
 Status: **P0 verified** in the rebuilt binary, **P1 verified**
 (committed `1bb0466`; rebuild + `test_tools` run, all tests passed),
-**P2 done in source** (pending: test coverage for the compact renderer).
+**P2 done** (committed `32f4b3e`; the compact renderer is covered by the
+`tools` suite, which checks the compact output is well-formed and
+structurally correct).
 
 ## P0 — Per-action help (done, commit `108e7ce`)
 
@@ -78,14 +80,14 @@ per-entry `success` shape. `cli_spec.md` schema paragraph updated.
 ## Acceptance
 
 - [x] `acta_cli model list --help` prints only the list section (exit 0).
-- [ ] `acta_cli model list help` prints only the list section (exit 0).
-- [ ] `acta_cli --help` prints global usage (exit 0).
-- [ ] `acta_cli model help` prints full entity help (exit 0).
-- [ ] `acta_cli model --help` prints full entity help (exit 0).
-- [ ] `acta_cli model help create` prints single-action section (exit 0).
-- [ ] `acta_cli model help nope` → exit 10 with JSON error.
+- [x] `acta_cli model list help` prints only the list section (exit 0).
+- [x] `acta_cli --help` prints global usage (exit 0).
+- [x] `acta_cli model help` prints full entity help (exit 0).
+- [x] `acta_cli model --help` prints full entity help (exit 0).
+- [x] `acta_cli model help create` prints single-action section (exit 0).
+- [x] `acta_cli model help nope` → exit 10 with JSON error.
 - [x] `acta_cli model nope --help` → exit 10 with JSON error.
 - [x] `acta_cli --tools` contains structured `success` for every command;
   `test_tools` passes.
-- [ ] `--tools --compact` renders all commands without the stray `/` wart.
-- [ ] `cli_spec.md` updated where the schema version/shape changed.
+- [x] `--tools --compact` renders all commands without the stray `/` wart.
+- [x] `cli_spec.md` updated where the schema version/shape changed.

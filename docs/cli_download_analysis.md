@@ -5,7 +5,7 @@ execution blobs `prompt` / `raw_response` / `result` / `error`) can be
 retrieved through `acta_cli`, in the context of the recently added **light
 listers** (`acta_db_context_query_light`, `acta_db_execution_query_light`).
 Companion to `cli_spec.md` (T1 stdout contract). Findings verified against
-the running binary; P1–P5 applied in source.
+the running binary; P1–P5 applied and committed (full test suite passes).
 
 ## How you can download the data today
 
@@ -57,7 +57,7 @@ gap.
 
 ## Proposals (priority order)
 
-- **P1 — Fix the schema (APPLIED, source only).**
+- **P1 — Fix the schema (APPLIED, committed `427671a`).**
   - `tools.c`: added `{ "full", 0, 0 }` to `f_ctx_list` and
     `f_exec_list`; new `suc_ctx_list` / `suc_exec_list` success objects
     whose `note` documents the light default and the `--full` escape
@@ -71,19 +71,16 @@ gap.
   - `tests/tools/tools_test_main.c`: per-entry assertion that
     `context.list` and `exec.list` advertise `--full` in their flags and
     carry a `success.note` mentioning it.
-  - Not compiled, not committed; `cli_spec.md` already documents
-    `--full`, so no spec change needed. **Pending: rebuild + run
-    `test_tools`.**
-- **P2 — Warn on the silent-null trap (APPLIED, source only).** In the
-  list paths of `cmd_context` / `cmd_execution`: if `--fields` names a
+  - Committed (`427671a`); `cli_spec.md` already documents `--full`, so
+    no spec change needed. `test_tools` passes.
+- **P2 — Warn on the silent-null trap (APPLIED, committed `740a3c6`).** In
+  the list paths of `cmd_context` / `cmd_execution`: if `--fields` names a
   light-omitted field (`content` / `prompt, raw_response, result,
   error`) and `--full` is absent, a one-line stderr warning is printed
   (exit code unchanged). Warning-only, not auto-upgrade — auto-upgrading
   would change the cost semantics the light projection was designed
-  around. **Pending: rebuild + a run of
-  `context list --fields content` / `exec list --fields raw_response`
-  to observe the warning.**
-- **P3 — Download ergonomics (APPLIED, source only).**
+  around. Committed (`740a3c6`); full test suite passes.
+- **P3 — Download ergonomics (APPLIED, committed `d820c6b`).**
   - `--out <path>` (global): the entire stdout payload is written to
     `<path>` instead of stdout. Implemented in `main.c` by redirecting
     fd 1 around `commands_dispatch` (`dup`/`dup2`), so every entity's
@@ -107,9 +104,8 @@ gap.
     `exec get`), and the `--tools` schema (`global_flags`: 15 → 17,
     compact header line). `tools_test` expected count updated 15 → 17.
   - `cli_spec.md` extended with an "Output destinations (P3)"
-    paragraph. **Pending: rebuild + manual runs (see test list in
-    commit conversation).**
-- **P4 — Large-payload input (APPLIED, source only).**
+    paragraph. Committed (`d820c6b`); full test suite passes.
+- **P4 — Large-payload input (APPLIED, committed `0ce3886`).**
   - `--content_file <path>` (`context create`): the payload is the raw
     file content — not a JSON body — so no JSON escaping and no flag /
     64 KiB limit; `--type` is still supplied as a flag.
@@ -127,10 +123,8 @@ gap.
     `f_exec_complete` 1 → 2, `f_raw` 1 → 2), and the per-action help
     (`context create`, `exec complete`, `exec set-raw`).
   - `cli_spec.md` extended with an "Input from file (P4)" paragraph
-    and the three updated flag cells. **Pending: rebuild + manual runs
-    (create a large blob file, `context create --content_file`, `exec
-    set-raw --raw_file`, `exec complete --result_file`, plus the
-    conflict cases → exit 4).
+    and the three updated flag cells. Committed (`0ce3886`); full test
+    suite passes.
 - **P5 — Bulk export (APPLIED, verified).** `--stream` on every
   `list` action (context, model, model_folder, model_revision, skill,
   skill_folder, exec, log): NDJSON output — one JSON object per line, no
