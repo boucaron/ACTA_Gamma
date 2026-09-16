@@ -322,6 +322,22 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
             TEST(ctx, cJSON_IsBool(cJSON_GetObjectItem(fe, "required")));
         }
 
+        /* light-projection lists must advertise --full in the schema so
+         * agents know how to fetch the blob columns (context: content;
+         * exec: prompt, raw_response, result, error). */
+        if ((strcmp(entity, "context") == 0 && strcmp(action, "list") == 0) ||
+            (strcmp(entity, "exec") == 0 && strcmp(action, "list") == 0)) {
+            int has_full = 0;
+            for (int f = 0; f < cJSON_GetArraySize(fl); f++) {
+                if (strcmp(cj_str(cJSON_GetArrayItem(fl, f), "name"),
+                          "full") == 0)
+                    has_full = 1;
+            }
+            TEST(ctx, has_full == 1);
+            const char *note = sc ? cj_str(sc, "note") : NULL;
+            TEST(ctx, note != NULL && strstr(note, "--full") != NULL);
+        }
+
         /* aliases (M6): exec entries carry ["execution"], log entries
          * carry ["execution_log"], every other entry carries [] */
         cJSON *aliases = cJSON_GetObjectItem(e, "aliases");

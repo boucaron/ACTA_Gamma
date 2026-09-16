@@ -94,6 +94,7 @@ static const tool_flag_t f_ctx_list[] = {
     { "type", 1, 0 }, { "hash", 1, 0 },
     { "offset", 1, 0 }, { "limit", 1, 0 },
     { "include_deleted", 0, 0 },
+    { "full", 0, 0 },
     { "count", 0, 0 }, { "table", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
@@ -181,6 +182,7 @@ static const tool_flag_t f_exec_list[] = {
     { "status", 1, 0 }, { "context_id", 1, 0 },
     { "skill_revision_id", 1, 0 }, { "model_revision_id", 1, 0 },
     { "include_deleted", 0, 0 },
+    { "full", 0, 0 },
     { "parent_execution_id", 1, 0 },
     { "offset", 1, 0 }, { "limit", 1, 0 },
     { "count", 0, 0 }, { "table", 0, 0 },
@@ -249,6 +251,15 @@ static const tool_success_t suc_obj            =
     { "json_object", NULL, 0, NULL };
 static const tool_success_t suc_arr            =
     { "json_array", NULL, 0, "--count -> bare int" };
+static const tool_success_t suc_ctx_list       =
+    { "json_array", NULL, 0,
+      "light projection by default: 'content' is null in every row; "
+      "--full fetches the content blob; --count -> bare int" };
+static const tool_success_t suc_exec_list      =
+    { "json_array", NULL, 0,
+      "light projection by default: 'prompt','raw_response','result', "
+      "'error' are null in every row; --full fetches them; "
+      "--count -> bare int" };
 static const tool_success_t suc_int            =
     { "bare_int", NULL, 0, NULL };
 static const tool_success_t suc_plain          =
@@ -355,9 +366,9 @@ static const tool_entry_t tool_table[] = {
 
     { "context.list", "context", "list", NULL, 0,
       "List contexts, optionally filtered by type and hash.",
-      NULL, 0, f_ctx_list, 9, "flags",
+      NULL, 0, f_ctx_list, 10, "flags",
       NULL, 0, NULL, 0,
-      &suc_arr },
+      &suc_ctx_list },
 
     { "context.count", "context", "count", NULL, 0,
       "Count contexts, optionally filtered by type and hash.",
@@ -744,9 +755,9 @@ static const tool_entry_t tool_table[] = {
     { "exec.list", "exec", "list", alias_execution, 1,
       "List executions, optionally filtered by status and refs. (Canonical "
       "entity name is 'exec'; dispatch rejects the alias 'execution'.)",
-      NULL, 0, f_exec_list, 12, "flags",
+      NULL, 0, f_exec_list, 13, "flags",
       NULL, 0, NULL, 0,
-      &suc_arr },
+      &suc_exec_list },
 
     { "exec.count", "exec", "count", alias_execution, 1,
       "Count executions, optionally filtered by status and refs. "
