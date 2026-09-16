@@ -55,6 +55,8 @@ static void usage_ctx_create(FILE *f)
 "                            default when omitted: SHA-256 of the\n"
 "                            content, lowercase hex (same rule as the GUI)\n"
 "    --metadata <string>      extra data     (JSON key: \"metadata\")\n"
+"    --content_file <path>    read the payload from a file (raw, no JSON\n"
+"                            escaping); mutually exclusive with --content\n"
 "\n", f);
 }
 
@@ -327,6 +329,18 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             ctx_usage(stderr);
             return EXIT_INVALID;   /* error line already on stderr */
         }
+
+        /* P4: --content_file <path> — content from a raw file (no JSON
+         * escaping); mutually exclusive with the JSON sources. */
+        const char *cf = cmd_args_flag(ga, "content_file", 1);
+        if (cf && src) {
+            emit_error("conflicting input sources: --content_file and "
+                       "--json/--stdin/--from_file are mutually exclusive");
+            ctx_usage(stderr);
+            free(blob);
+            return EXIT_INVALID;
+        }
+
         if (src) {
             VLOG(1, "context create: JSON input (%zu bytes)", strlen(blob));
 
@@ -344,6 +358,24 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             ctx.content      = (char *)cmd_args_flag(ga, "content", 1);
             ctx.content_hash = (char *)cmd_args_flag(ga, "hash", 1);
             ctx.metadata     = (char *)cmd_args_flag(ga, "metadata", 1);
+
+            if (cf) {
+                if (ctx.content) {
+                    emit_error("conflicting input sources: --content and "
+                               "--content_file are mutually exclusive");
+                    ctx_usage(stderr);
+                    return EXIT_INVALID;
+                }
+                char *buf = read_file_all(cf);
+                if (!buf) {
+                    emit_error("cannot read content file");
+                    ctx_usage(stderr);
+                    return EXIT_INVALID;
+                }
+                ctx.content = buf;
+                VLOG(1, "context create: content from file '%s' (%zu bytes)",
+                     cf, strlen(ctx.content));
+            }
 
             /* All four NULL → likely a typo in a flag name.  Nudge
                before the per-field errors below. */

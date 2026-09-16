@@ -288,6 +288,8 @@ static void usage_complete(FILE *f)
 "\n"
 "  Options:\n"
 "    --result <str>       Final result / answer text\n"
+"    --result_file <path> read the result from a file (raw, no JSON\n"
+"                         escaping); mutually exclusive with --result\n"
 "\n"
 "  stdout on success: {\"id\":N,\"status\":\"completed\"} (bare N with --id_only)\n", f);
 }
@@ -328,7 +330,9 @@ static void usage_set_raw(FILE *f)
 "    acta_cli exec set-raw 42 --raw '<full raw output>'\n"
 "\n"
 "  Options:\n"
-"    --raw <str>          Raw response text (required)\n"
+"    --raw <str>          Raw response text (required, unless --raw_file)\n"
+"    --raw_file <path>    read the raw response from a file (raw, no JSON\n"
+"                         escaping); mutually exclusive with --raw\n"
 "\n"
 "  stdout on success: {\"id\":N,\"status\":\"<current status, unchanged>\"}\n"
 "  (bare N with --id_only)\n", f);
@@ -922,7 +926,26 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", usage_complete, "exec complete", &id))
             return EXIT_INVALID;
 
+        /* P4: --result_file <path> — result from a raw file (no JSON
+         * escaping); mutually exclusive with --result. */
         const char *f_result = cmd_args_flag(ga, "result", 1);
+        const char *rf = cmd_args_flag(ga, "result_file", 1);
+        char *result_owned = NULL;
+        if (rf) {
+            if (f_result) {
+                emit_error("conflicting input sources: --result and "
+                           "--result_file are mutually exclusive");
+                usage_complete(stderr);
+                return EXIT_INVALID;
+            }
+            result_owned = read_file_all(rf);
+            if (!result_owned) {
+                emit_error("cannot read result file");
+                usage_complete(stderr);
+                return EXIT_INVALID;
+            }
+            f_result = result_owned;
+        }
 
         VLOG(1, "exec complete: id=%d result=%s",
              id, f_result ? f_result : "(null)");
@@ -930,6 +953,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         int rc = acta_db_execution_complete(db, id, f_result);
         VLOG(3, "  acta_db_execution_complete(%d, %p) → rc=%d",
              id, (const void *)f_result, rc);
+        free(result_owned);   /* P4: file buffer consumed */
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);
@@ -990,21 +1014,43 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (!parse_id_positional(ga, "id", usage_set_raw, "exec set-raw", &id))
             return EXIT_INVALID;
 
+        /* P4: --raw_file <path> — raw response from a file (no JSON
+         * escaping); mutually exclusive with --raw. One of the two is
+         * required. */
         const char *f_raw = NULL;
-        if (require_flag(ga, "raw", &f_raw, usage_set_raw, "exec set-raw") < 0)
+        const char *rf = cmd_args_flag(ga, "raw_file", 1);
+        char *raw_owned = NULL;
+        if (rf) {
+            if (cmd_args_has_flag(ga, "raw")) {
+                emit_error("conflicting input sources: --raw and "
+                           "--raw_file are mutually exclusive");
+                usage_set_raw(stderr);
+                return EXIT_INVALID;
+            }
+            raw_owned = read_file_all(rf);
+            if (!raw_owned) {
+                emit_error("cannot read raw file");
+                usage_set_raw(stderr);
+                return EXIT_INVALID;
+            }
+        } else if (require_flag(ga, "raw", &f_raw,
+                                usage_set_raw, "exec set-raw") < 0) {
             return EXIT_INVALID;
-        if (!f_raw) {
+        }
+        if (!rf && !f_raw) {
             VLOG(1, "exec set-raw: ERROR missing required --raw");
             emit_error("missing required flag: --raw");
             usage_set_raw(stderr);
             return EXIT_INVALID;
         }
+        f_raw = rf ? raw_owned : f_raw;
 
         VLOG(1, "exec set-raw: id=%d", id);
 
         int rc = acta_db_execution_set_raw_response(db, id, f_raw);
         VLOG(3, "  acta_db_execution_set_raw_response(%d, %p) → rc=%d",
              id, (const void *)f_raw, rc);
+        free(raw_owned);   /* P4: file buffer consumed */
 
         if (rc != ACTA_DB_OK) {
             VLOG(1, "  FAILED rc=%d", rc);

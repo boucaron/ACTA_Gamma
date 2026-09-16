@@ -5,7 +5,7 @@ execution blobs `prompt` / `raw_response` / `result` / `error`) can be
 retrieved through `acta_cli`, in the context of the recently added **light
 listers** (`acta_db_context_query_light`, `acta_db_execution_query_light`).
 Companion to `cli_spec.md` (T1 stdout contract). Findings verified against
-the running binary; P1–P3 applied in source.
+the running binary; P1–P4 applied in source.
 
 ## How you can download the data today
 
@@ -53,7 +53,7 @@ gap.
    flag / JSON stdin / `--from_file` (64 KiB cap on `--file` /
    `--sql_stdin`); there is no `--content_file <path>` to ingest a large
    file directly. Same story for `exec set-raw --raw` /
-   `exec complete --result` with large payloads.
+   `exec complete --result` with large payloads (resolved by P4).
 
 ## Proposals (priority order)
 
@@ -109,10 +109,28 @@ gap.
   - `cli_spec.md` extended with an "Output destinations (P3)"
     paragraph. **Pending: rebuild + manual runs (see test list in
     commit conversation).**
-- **P4 — Large-payload input (not applied).** `--content_file <path>`
-  for `context create` (and symmetrically `--raw_file` for
-  `exec set-raw`, `--result_file` for `exec complete`) to bypass the
-  flag / 64 KiB limits for big blobs.
+- **P4 — Large-payload input (APPLIED, source only).**
+  - `--content_file <path>` (`context create`): the payload is the raw
+    file content — not a JSON body — so no JSON escaping and no flag /
+    64 KiB limit; `--type` is still supplied as a flag.
+  - `--raw_file <path>` (`exec set-raw`) and `--result_file <path>`
+    (`exec complete`): same semantics for the raw response / result
+    field.
+  - Each flag is mutually exclusive with its inline counterpart
+    (`--content` / `--raw` / `--result`; `--content_file` is also
+    exclusive with `--json` / `--stdin` / `--from_file`): combining them
+    → exit-4 `ACTA_DB_ERR_INVALID`; unreadable file → exit-4.
+    `set-raw` still requires one of `--raw` / `--raw_file`.
+  - Implemented on top of the existing `read_file_all` helper
+    (`include/commands.h`); registered in `entity_flag_specs`
+    (argparse.c), the `--tools` schema (`f_ctx_create` 4 → 5 flags,
+    `f_exec_complete` 1 → 2, `f_raw` 1 → 2), and the per-action help
+    (`context create`, `exec complete`, `exec set-raw`).
+  - `cli_spec.md` extended with an "Input from file (P4)" paragraph
+    and the three updated flag cells. **Pending: rebuild + manual runs
+    (create a large blob file, `context create --content_file`, `exec
+    set-raw --raw_file`, `exec complete --result_file`, plus the
+    conflict cases → exit 4).
 - **P5 — Bulk export (optional).** A `list --stream` NDJSON mode or an
   `export` action to avoid the `--offset` loop; only worth it if bulk
   export becomes a real workflow.

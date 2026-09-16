@@ -87,7 +87,7 @@ static const tool_flag_t f_db_exec[] = {
 static const tool_flag_t f_table[]   = { { "table", 0, 0 } };
 
 static const tool_flag_t f_ctx_create[] = {
-    { "type", 1, 1 }, { "content", 1, 1 },
+    { "type", 1, 1 }, { "content", 1, 1 }, { "content_file", 1, 0 },
     { "hash", 1, 0 }, { "metadata", 1, 0 },
 };
 static const tool_flag_t f_ctx_list[] = {
@@ -175,9 +175,11 @@ static const tool_flag_t f_exec_create[] = {
     { "model_revision_id", 1, 1 },
     { "prompt", 1, 0 }, { "parent_execution_id", 1, 0 },
 };
-static const tool_flag_t f_exec_complete[] = { { "result", 1, 0 } };
+static const tool_flag_t f_exec_complete[] = {
+    { "result", 1, 0 }, { "result_file", 1, 0 },
+};
 static const tool_flag_t f_exec_fail[]     = { { "error", 1, 0 } };
-static const tool_flag_t f_raw[]           = { { "raw", 1, 1 } };
+static const tool_flag_t f_raw[] = { { "raw", 1, 1 }, { "raw_file", 1, 0 } };
 static const tool_flag_t f_exec_list[] = {
     { "status", 1, 0 }, { "context_id", 1, 0 },
     { "skill_revision_id", 1, 0 }, { "model_revision_id", 1, 0 },
@@ -342,7 +344,7 @@ static const tool_entry_t tool_table[] = {
       "Create a context from flags or a JSON body. When hash is omitted "
       "it defaults to the SHA-256 of content (lowercase hex), the same "
       "rule as the GUI.",
-      NULL, 0, f_ctx_create, 4, "flags|json",
+      NULL, 0, f_ctx_create, 5, "flags|json",
       jk_ctx_req, 2, jk_ctx_opt, 2,
       &suc_id },
 
@@ -725,7 +727,7 @@ static const tool_entry_t tool_table[] = {
     { "exec.complete", "exec", "complete", alias_execution, 1,
       "Complete an execution. (Canonical entity name is 'exec'; dispatch "
       "rejects the alias 'execution'.)",
-      p_id, 1, f_exec_complete, 1, "flags",
+      p_id, 1, f_exec_complete, 2, "flags",
       NULL, 0, NULL, 0,
       &suc_status_completed },
 
@@ -749,7 +751,7 @@ static const tool_entry_t tool_table[] = {
       "Set the raw model response on an execution. Status is unchanged; "
       "the success line echoes the current status. (Canonical entity name "
       "is 'exec'; dispatch rejects the alias 'execution'.)",
-      p_id, 1, f_raw, 1, "flags",
+      p_id, 1, f_raw, 2, "flags",
       NULL, 0, NULL, 0,
       &suc_set_raw },
 

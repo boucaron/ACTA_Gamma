@@ -50,6 +50,16 @@ JSON wrapper — `context get` / `exec get` only; it takes precedence
 over `--id_only` / `--table` / `--fields`, null values produce no
 output, and an unknown field is a CLI usage error (exit 10).
 
+Input from file (P4): `--content_file <path>` (`context create`) reads
+the payload as raw file content, no JSON escaping; `--result_file
+<path>` (`exec complete`) and `--raw_file <path>` (`exec set-raw`) are
+the same for their respective fields. Each is mutually exclusive with
+the corresponding inline flag (`--content` / `--result` / `--raw`) —
+combining them is an invalid-argument error (exit 4) — and an
+unreadable file is likewise an error (exit 4). Unlike `--from_file` /
+`--json`, the file content is **not** a JSON body: it is the field
+value itself, so arbitrarily large payloads work without escaping.
+
 Schema flags: `--tools` emits the machine-readable JSON schema (T3,
 `src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
 rendering (~7 KB) of the same static table — positionals, flags (with `*`
@@ -88,7 +98,7 @@ is `code:-11` with exit `11`.
 
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
-| `context create` | — | `--type*`, `--content*`, `--hash`, `--metadata` | flags or JSON `{type*, content*, hash, metadata}` | `{"id":N}` |
+| `context create` | — | `--type*`, `--content*` / `--content_file*` (exactly one), `--hash`, `--metadata` | flags or JSON `{type*, content*, hash, metadata}` (`--content_file` is flag-only) | `{"id":N}` |
 | `context get <id>` | `id` | `--include_deleted` / `--deleted` | — | context JSON object |
 | `context delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `context restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
@@ -179,10 +189,10 @@ is `code:-11` with exit `11`.
 | `exec restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
 | `exec start <id>` | `id` | — | — | `{"id":N,"status":"running"}` |
 | `exec cancel <id>` | `id` | — | — | `{"id":N,"status":"cancelled"}` |
-| `exec complete <id>` | `id` | `--result` | — | `{"id":N,"status":"completed"}` |
+| `exec complete <id>` | `id` | `--result` / `--result_file` (mutually exclusive) | — | `{"id":N,"status":"completed"}` |
 | `exec fail <id>` | `id` | `--error` | — | `{"id":N,"status":"failed"}` |
 | `exec reset <id>` | `id` | — | — | `{"id":N,"status":"pending"}` |
-| `exec set-raw <id>` | `id` | `--raw*` | — | `{"id":N,"status":"<current status, unchanged>"}` |
+| `exec set-raw <id>` | `id` | `--raw*` / `--raw_file*` (exactly one) | — | `{"id":N,"status":"<current status, unchanged>"}` |
 | `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--include_deleted` / `--deleted`, `--full`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
 | `exec count` | — | same filters as `exec list` (minus `--count`/`--table`/`--fields`/`--no_nulls`) | — | bare int |
 
