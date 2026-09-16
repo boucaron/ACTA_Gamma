@@ -153,6 +153,8 @@ void help_print(FILE *out)
         "  --id_only          print only the id\n"
         "  --count            print only the row count\n"
         "  --table            columnar output\n"
+        "  --stream           NDJSON: one JSON object per line (list "
+        "actions; pages internally, P5)\n"
         "  --pretty           2-space indent JSON (applies to --tools\n"
         "                     output)\n"
         "  --json <blob>      input JSON object\n"

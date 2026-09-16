@@ -39,8 +39,19 @@ Wire-format decisions settled here (T1):
 
 Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--table` (columnar / plain instead of JSON), `--fields <csv>`,
-`--no_nulls`. `get`/`get-latest` return the full entity JSON object
-(subject to those modifiers).
+`--no_nulls`, and on every `list` action `--stream` (P5). `get`/
+`get-latest` return the full entity JSON object (subject to those
+modifiers).
+
+Stream output (P5): `--stream` turns any `list` action's array output
+into NDJSON — one JSON object per line, no array wrapper, empty result
+emits nothing. The lister pages internally (chunks of at most
+`ACTA_DB_MAX_PAGE` rows) until the filter is exhausted, so bulk export
+needs no manual `--offset` loop; a user `--offset` is still honoured as
+the starting point and `--limit` caps the total emitted. `--fields` /
+`--no_nulls` apply per row. `--stream` is mutually exclusive with
+`--count`, `--table` and `--id_only` (conflict → exit 4).
+`exec list --stream` keeps the light/full projection choice (`--full`).
 
 Output destinations (P3): `--out <path>` writes the entire stdout
 payload to `<path>` instead of stdout (errors/warnings stay on
@@ -102,7 +113,7 @@ is `code:-11` with exit `11`.
 | `context get <id>` | `id` | `--include_deleted` / `--deleted` | — | context JSON object |
 | `context delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `context restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
-| `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--full`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `context list` | — | `--type`, `--hash`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--full`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `context count` | — | `--type`, `--hash`, `--include_deleted` / `--deleted` | — | bare int |
 
 > **`context create` — `hash` default:** when `--hash` (or the JSON key `hash`) is omitted, the hash is derived as the **SHA-256 of `content`, lowercase hex** — the same rule the GUI applies (`QCryptographicHash::toHex` in `contextDialog.cpp`). An explicitly supplied hash is stored as-is. Wire key is `hash` (not `content_hash`).
@@ -119,7 +130,7 @@ is `code:-11` with exit `11`.
 | `model delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `model restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
 | `model move <id>` | `id` | `--folder_id*` (0 = root) | — | `{"id":N,"folder_id":null\|M}` |
-| `model list` | — | `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `model list` | — | `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `model count` | — | `--folder_id`, `--include_deleted` / `--deleted` | — | bare int |
 
 ## model_folder
@@ -128,7 +139,7 @@ is `code:-11` with exit `11`.
 |---------|-------------|-------|-------|-------------------|
 | `model_folder create` | — | `--name*`, `--parent_id` (0/omitted = root) | flags or JSON `{name*, parent_id}` | `{"id":N}` |
 | `model_folder get <id>` | `id` | — | — | folder JSON object |
-| `model_folder list` | — | `--parent_id`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `model_folder list` | — | `--parent_id`, `--offset`, `--limit`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `model_folder count` | — | `--parent_id` | — | bare int |
 | `model_folder rename <id>` | `id` | `--name*` | — | `{"id":N}` |
 | `model_folder delete <id>` | `id` | — | — | `{"deleted":true}` |
@@ -141,7 +152,7 @@ is `code:-11` with exit `11`.
 |---------|-------------|-------|-------|-------------------|
 | `model_revision get <id>` | `id` | — | — | revision JSON object |
 | `model_revision get-latest <model_id>` | `model_id` | — | — | revision JSON object |
-| `model_revision list <model_id>` | `model_id` | `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `model_revision list <model_id>` | `model_id` | `--offset`, `--limit`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `model_revision count <model_id>` | `model_id` | — | — | bare int |
 
 ## skill
@@ -154,7 +165,7 @@ is `code:-11` with exit `11`.
 | `skill delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `skill restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
 | `skill move <id>` | `id` | `--folder_id*` (0 = root) | — | `{"id":N,"folder_id":null\|M}` |
-| `skill list` | — | `--all` (all folders), `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `skill list` | — | `--all` (all folders), `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `skill count` | — | `--all` (all folders), `--folder_id`, `--include_deleted` / `--deleted` | — | bare int |
 
 ## skill_folder
@@ -163,7 +174,7 @@ is `code:-11` with exit `11`.
 |---------|-------------|-------|-------|-------------------|
 | `skill_folder create` | — | `--name*`, `--parent_id` (0/omitted = root) | flags or JSON `{name*, parent_id}` | `{"id":N}` |
 | `skill_folder get <id>` | `id` | — | — | folder JSON object |
-| `skill_folder list` | `parent_id` (optional; `all` = all folders) | `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | positional / flag | `[ … ]` / `[]`; `--count` → bare int |
+| `skill_folder list` | `parent_id` (optional; `all` = all folders) | `--offset`, `--limit`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | positional / flag | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `skill_folder count` | `parent_id` (optional; `all` = all folders) | — | positional | bare int |
 | `skill_folder rename <id>` | `id` | `--name*` | — | `{"id":N}` |
 | `skill_folder delete <id>` | `id` | — | — | `{"deleted":true}` |
@@ -193,7 +204,7 @@ is `code:-11` with exit `11`.
 | `exec fail <id>` | `id` | `--error` | — | `{"id":N,"status":"failed"}` |
 | `exec reset <id>` | `id` | — | — | `{"id":N,"status":"pending"}` |
 | `exec set-raw <id>` | `id` | `--raw*` / `--raw_file*` (exactly one) | — | `{"id":N,"status":"<current status, unchanged>"}` |
-| `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--include_deleted` / `--deleted`, `--full`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `exec list` | — | `--status`, `--context_id`, `--skill_revision_id`, `--model_revision_id`, `--parent_execution_id`, `--include_deleted` / `--deleted`, `--full`, `--offset`, `--limit`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `exec count` | — | same filters as `exec list` (minus `--count`/`--table`/`--fields`/`--no_nulls`) | — | bare int |
 
 Notes on `exec`:
@@ -227,7 +238,7 @@ Notes on `exec`:
 |---------|-------------|-------|-------|-------------------|
 | `log create` | — | `--execution_id*`, `--level*` (debug\|info\|warn\|error), `--event*`, `--message`, `--metadata` | flags or JSON (same keys) | `{"id":N}` |
 | `log get <id>` | `id` | — | — | log JSON object |
-| `log list <execution_id>` | `execution_id` | `--level`, `--offset`, `--limit`, `--count`, `--table`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int |
+| `log list <execution_id>` | `execution_id` | `--level`, `--offset`, `--limit`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `log count <execution_id>` | `execution_id` | `--level` | — | bare int |
 
 Every entity also has a bare-word `help` action (usage text, no JSON

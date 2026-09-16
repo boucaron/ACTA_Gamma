@@ -184,6 +184,8 @@ static void usage_sf_list(FILE *f)
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
 "    --count              Return only the row count (no rows)\n"
 "    --table              Columnar output instead of JSON\n"
+"    --stream             NDJSON: one JSON object per line; pages\n"
+"                         internally until exhausted (P5)\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);
 }
@@ -564,6 +566,42 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
             }
             VLOG(1, "  count=%d", n);
             fprintf(stdout, "%d\n", n);
+            return EXIT_OK;
+        }
+
+        /* P5: --stream — NDJSON (one JSON object per line), paging
+         * internally until exhausted: no manual --offset loop needed
+         * for bulk export. */
+        if (gopts->stream) {
+            if (gopts->count || gopts->table || gopts->id_only) {
+                emit_error("conflicting output modes: --stream is "
+                           "incompatible with --count, --table and --id_only");
+                skill_folder_usage(stderr);
+                return EXIT_INVALID;
+            }
+            int emitted = 0;
+            for (;;) {
+                int want = (limit > 0) ? limit - emitted : 0;
+                int o = offset + emitted;
+                int n = 0, e2 = 0;
+                skill_folder_t **items = has_parent
+                    ? acta_db_skill_folder_list_children(db, parent_id,
+                                                         o, want, &n, &e2)
+                    : acta_db_skill_folder_list_all(db, o, want, &n, &e2);
+                if (e2 != ACTA_DB_OK) {
+                    acta_db_skill_folder_list_free(items, n);
+                    return finish_op_error(db, e2, "skill_folder list");
+                }
+                for (int i = 0; i < n; i++) {
+                    sf_to_json(stdout, items[i], gopts);
+                    fputc('\n', stdout);
+                }
+                acta_db_skill_folder_list_free(items, n);
+                emitted += n;
+                if ((limit > 0 && emitted >= limit) || n == 0 || n < want)
+                    break;
+            }
+            VLOG(1, "  stream: %d item(s) emitted", emitted);
             return EXIT_OK;
         }
 

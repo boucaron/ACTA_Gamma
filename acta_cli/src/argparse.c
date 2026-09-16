@@ -106,6 +106,8 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
         if (strcmp(a, "--count") == 0)    { g->count = 1;    continue; }
         /* ---- --table ---- */
         if (strcmp(a, "--table") == 0)    { g->table = 1;    continue; }
+        /* ---- --stream ---- */
+        if (strcmp(a, "--stream") == 0)   { g->stream = 1;   continue; }
         /* ---- --pretty ---- */
         if (strcmp(a, "--pretty") == 0)   { g->pretty = 1;   continue; }
         /* ---- --compact (meaningful with --tools) ---- */
@@ -283,6 +285,7 @@ static const flag_spec_t entity_flag_specs[] = {
     { "sql", 1 },
     { "sql_stdin", 0 },
     { "status", 1 },
+    { "stream", 0 },
     { "type", 1 },
 };
 

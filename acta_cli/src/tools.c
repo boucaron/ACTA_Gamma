@@ -95,7 +95,7 @@ static const tool_flag_t f_ctx_list[] = {
     { "offset", 1, 0 }, { "limit", 1, 0 },
     { "include_deleted", 0, 0 },
     { "full", 0, 0 },
-    { "count", 0, 0 }, { "table", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_ctx_count[] = {
@@ -118,7 +118,7 @@ static const tool_flag_t f_folder_id[] = { { "folder_id", 1, 1 } };
 static const tool_flag_t f_model_list[] = {
     { "folder_id", 1, 0 }, { "offset", 1, 0 }, { "limit", 1, 0 },
     { "include_deleted", 0, 0 }, { "count", 0, 0 }, { "table", 0, 0 },
-    { "fields", 1, 0 }, { "no_nulls", 0, 0 },
+    { "stream", 0, 0 }, { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_model_count[] = {
     { "folder_id", 1, 0 }, { "include_deleted", 0, 0 },
@@ -129,7 +129,7 @@ static const tool_flag_t f_folder_create[] = {
 };
 static const tool_flag_t f_mf_list[] = {
     { "parent_id", 1, 0 }, { "offset", 1, 0 }, { "limit", 1, 0 },
-    { "count", 0, 0 }, { "table", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_parent_id[]   = { { "parent_id", 1, 0 } };
@@ -143,7 +143,7 @@ static const char *const alias_execution_log[] = { "execution_log" };
 
 static const tool_flag_t f_rev_list[] = {
     { "offset", 1, 0 }, { "limit", 1, 0 },
-    { "count", 0, 0 }, { "table", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 
@@ -158,7 +158,7 @@ static const tool_flag_t f_skill_update[] = {
 static const tool_flag_t f_skill_list[] = {
     { "all", 0, 0 }, { "folder_id", 1, 0 }, { "offset", 1, 0 }, { "limit", 1, 0 },
     { "include_deleted", 0, 0 }, { "count", 0, 0 }, { "table", 0, 0 },
-    { "fields", 1, 0 }, { "no_nulls", 0, 0 },
+    { "stream", 0, 0 }, { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_skill_count[] = {
     { "all", 0, 0 }, { "folder_id", 1, 0 }, { "include_deleted", 0, 0 },
@@ -166,7 +166,7 @@ static const tool_flag_t f_skill_count[] = {
 
 static const tool_flag_t f_sf_list[] = {
     { "offset", 1, 0 }, { "limit", 1, 0 },
-    { "count", 0, 0 }, { "table", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 
@@ -187,7 +187,7 @@ static const tool_flag_t f_exec_list[] = {
     { "full", 0, 0 },
     { "parent_execution_id", 1, 0 },
     { "offset", 1, 0 }, { "limit", 1, 0 },
-    { "count", 0, 0 }, { "table", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 static const tool_flag_t f_exec_count[] = {
@@ -204,7 +204,7 @@ static const tool_flag_t f_log_create[] = {
 static const tool_flag_t f_level[]  = { { "level", 1, 0 } };
 static const tool_flag_t f_log_list[] = {
     { "level", 1, 0 }, { "offset", 1, 0 }, { "limit", 1, 0 },
-    { "count", 0, 0 }, { "table", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
 
@@ -290,7 +290,7 @@ static const tool_success_t suc_set_raw        =
 static const tool_flag_t global_flags[] = {
     { "db", 1, 0 }, { "fields", 1, 0 }, { "no_nulls", 0, 0 },
     { "id_only", 0, 0 }, { "count", 0, 0 }, { "table", 0, 0 },
-    { "pretty", 0, 0 }, { "json", 1, 0 }, { "stdin", 0, 0 },
+    { "stream", 0, 0 }, { "pretty", 0, 0 }, { "json", 1, 0 }, { "stdin", 0, 0 },
     { "from_file", 1, 0 }, { "out", 1, 0 }, { "raw_out", 1, 0 },
     { "version", 0, 0 }, { "help", 0, 0 },
     { "tools", 0, 0 }, { "compact", 0, 0 }, { "verbose", 0, 0 },
@@ -369,7 +369,7 @@ static const tool_entry_t tool_table[] = {
 
     { "context.list", "context", "list", NULL, 0,
       "List contexts, optionally filtered by type and hash.",
-      NULL, 0, f_ctx_list, 10, "flags",
+      NULL, 0, f_ctx_list, 11, "flags",
       NULL, 0, NULL, 0,
       &suc_ctx_list },
 
@@ -426,7 +426,7 @@ static const tool_entry_t tool_table[] = {
 
     { "model.list", "model", "list", NULL, 0,
       "List models, optionally filtered by folder.",
-      NULL, 0, f_model_list, 8, "flags",
+      NULL, 0, f_model_list, 9, "flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
@@ -458,7 +458,7 @@ static const tool_entry_t tool_table[] = {
 
     { "model_folder.list", "model_folder", "list", NULL, 0,
       "List model folders, optionally filtered by --parent_id.",
-      NULL, 0, f_mf_list, 7, "flags",
+      NULL, 0, f_mf_list, 8, "flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
@@ -513,7 +513,7 @@ static const tool_entry_t tool_table[] = {
 
     { "model_revision.list", "model_revision", "list", NULL, 0,
       "List revisions of a model.",
-      p_model_id, 1, f_rev_list, 6, "positional|flags",
+      p_model_id, 1, f_rev_list, 7, "positional|flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
@@ -571,7 +571,7 @@ static const tool_entry_t tool_table[] = {
 
     { "skill.list", "skill", "list", NULL, 0,
       "List skills, optionally filtered by folder.",
-      NULL, 0, f_skill_list, 9, "flags",
+      NULL, 0, f_skill_list, 10, "flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
@@ -604,7 +604,7 @@ static const tool_entry_t tool_table[] = {
     { "skill_folder.list", "skill_folder", "list", NULL, 0,
       "List skill folders; the parent filter is the optional positional "
       "<parent_id> ('all' = all folders), not a --parent_id flag.",
-      p_sf_parent, 1, f_sf_list, 6, "positional|flags",
+      p_sf_parent, 1, f_sf_list, 7, "positional|flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
@@ -758,7 +758,7 @@ static const tool_entry_t tool_table[] = {
     { "exec.list", "exec", "list", alias_execution, 1,
       "List executions, optionally filtered by status and refs. (Canonical "
       "entity name is 'exec'; dispatch rejects the alias 'execution'.)",
-      NULL, 0, f_exec_list, 13, "flags",
+      NULL, 0, f_exec_list, 14, "flags",
       NULL, 0, NULL, 0,
       &suc_exec_list },
 
@@ -797,7 +797,7 @@ static const tool_entry_t tool_table[] = {
       "List log entries of an execution, optionally filtered by level. "
       "(Canonical entity name is 'log'; dispatch rejects the alias "
       "'execution_log'.)",
-      p_exec_id, 1, f_log_list, 7, "positional|flags",
+      p_exec_id, 1, f_log_list, 8, "positional|flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 

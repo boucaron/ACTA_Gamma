@@ -102,6 +102,8 @@ static void usage_ctx_list(FILE *f)
 "    --table              column output\n"
 "    --fields <a,b>       restrict output fields\n"
 "    --no_nulls           omit null fields\n"
+"    --stream             NDJSON: one JSON object per line; pages\n"
+"                         internally until exhausted (P5)\n"
 "\n", f);
 }
 
@@ -299,6 +301,24 @@ static const action_def_t context_actions[] = {
     { "help",    "show this help"            }
 };
 #define CTX_ACTIONS (sizeof(context_actions) / sizeof(context_actions[0]))
+
+/* Pick the context lister variant (include_deleted × full) and run one
+ * page of it.  Shared by the array output and the --stream pager (P5). */
+static context_t **ctx_list_pick(db_t *db, const context_query_t *q,
+                                 int include_deleted, int full,
+                                 int offset, int limit,
+                                 int *out_count, int *err)
+{
+    if (include_deleted)
+        return full
+            ? acta_db_context_query_with_deleted(db, q, offset, limit,
+                                                 out_count, err)
+            : acta_db_context_query_with_deleted_light(db, q, offset, limit,
+                                                       out_count, err);
+    return full
+        ? acta_db_context_query(db, q, offset, limit, out_count, err)
+        : acta_db_context_query_light(db, q, offset, limit, out_count, err);
+}
 
 int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 db_t *db)
@@ -598,6 +618,40 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         VLOG(3, "  q=%p q.type=%p q.hash=%p",
              (const void *)&q, (const void *)q.type, (const void *)q.hash);
 
+        /* P5: --stream — NDJSON (one JSON object per line), paging
+         * internally until exhausted: no manual --offset loop needed
+         * for bulk export. */
+        if (gopts->stream) {
+            if (gopts->count || gopts->table || gopts->id_only) {
+                emit_error("conflicting output modes: --stream is "
+                           "incompatible with --count, --table and --id_only");
+                ctx_usage(stderr);
+                return EXIT_INVALID;
+            }
+            int emitted = 0;
+            for (;;) {
+                int want = (limit > 0) ? limit - emitted : 0;
+                int n = 0, e2 = 0;
+                context_t **items = ctx_list_pick(db, &q, include_deleted, full,
+                                                 offset + emitted, want,
+                                                 &n, &e2);
+                if (e2 != ACTA_DB_OK) {
+                    acta_db_context_list_free(items, n);
+                    return finish_op_error(db, e2, "context list");
+                }
+                for (int i = 0; i < n; i++) {
+                    ctx_to_json(stdout, items[i], gopts);
+                    fputc('\n', stdout);
+                }
+                acta_db_context_list_free(items, n);
+                emitted += n;
+                if ((limit > 0 && emitted >= limit) || n == 0 || n < want)
+                    break;
+            }
+            VLOG(1, "  stream: %d item(s) emitted", emitted);
+            return EXIT_OK;
+        }
+
         if (gopts->count) {
             int err = 0;
             int n = include_deleted
@@ -614,20 +668,8 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         /* Default: light projection (no content blob); --full fetches it. */
         int out_count = 0, err = 0;
-        context_t **items;
-        if (include_deleted)
-            items = full
-                ? acta_db_context_query_with_deleted(db, &q, offset, limit,
-                                                     &out_count, &err)
-                : acta_db_context_query_with_deleted_light(db, &q, offset,
-                                                           limit, &out_count,
-                                                           &err);
-        else
-            items = full
-                ? acta_db_context_query(db, &q, offset, limit,
-                                        &out_count, &err)
-                : acta_db_context_query_light(db, &q, offset, limit,
-                                              &out_count, &err);
+        context_t **items = ctx_list_pick(db, &q, include_deleted, full,
+                                          offset, limit, &out_count, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  query FAILED err=%d", err);
             acta_db_context_list_free(items, out_count);

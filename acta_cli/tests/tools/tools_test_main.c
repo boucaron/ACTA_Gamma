@@ -6,7 +6,7 @@
  *      JSON — checked with the project's own json layer (json_validate)
  *      and walked with cJSON (the layer json.c is built on);
  *   2. the top-level global section is intact: name/version/usage,
- *      17 global_flags, entity_aliases, 3 input_sources, 7 exit codes,
+ *      18 global_flags, entity_aliases, 3 input_sources, 7 exit codes,
  *      error contract with the `code == -exit` invariant;
  *   3. the tools array has exactly 74 entries covering all 10 entities
  *      and the full action set from cli_spec.md (incl. the 10 help
@@ -197,7 +197,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");
     TEST(ctx, cJSON_IsArray(gf));
-    TEST_EQ(ctx, cJSON_GetArraySize(gf), 17);
+    TEST_EQ(ctx, cJSON_GetArraySize(gf), 18);
 
     cJSON *al = cJSON_GetObjectItem(root, "entity_aliases");
     TEST(ctx, cJSON_IsObject(al));
@@ -336,6 +336,18 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
             TEST(ctx, has_full == 1);
             const char *note = sc ? cj_str(sc, "note") : NULL;
             TEST(ctx, note != NULL && strstr(note, "--full") != NULL);
+        }
+
+        /* P5: every list entry advertises --stream (NDJSON output with
+         * internal paging). */
+        if (strcmp(action, "list") == 0) {
+            int has_stream = 0;
+            for (int f = 0; f < cJSON_GetArraySize(fl); f++) {
+                if (strcmp(cj_str(cJSON_GetArrayItem(fl, f), "name"),
+                          "stream") == 0)
+                    has_stream = 1;
+            }
+            TEST(ctx, has_stream == 1);
         }
 
         /* aliases (M6): exec entries carry ["execution"], log entries

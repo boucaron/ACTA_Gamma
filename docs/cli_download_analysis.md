@@ -5,7 +5,7 @@ execution blobs `prompt` / `raw_response` / `result` / `error`) can be
 retrieved through `acta_cli`, in the context of the recently added **light
 listers** (`acta_db_context_query_light`, `acta_db_execution_query_light`).
 Companion to `cli_spec.md` (T1 stdout contract). Findings verified against
-the running binary; P1–P4 applied in source.
+the running binary; P1–P5 applied in source.
 
 ## How you can download the data today
 
@@ -131,6 +131,26 @@ gap.
     (create a large blob file, `context create --content_file`, `exec
     set-raw --raw_file`, `exec complete --result_file`, plus the
     conflict cases → exit 4).
-- **P5 — Bulk export (optional).** A `list --stream` NDJSON mode or an
-  `export` action to avoid the `--offset` loop; only worth it if bulk
-  export becomes a real workflow.
+- **P5 — Bulk export (APPLIED, verified).** `--stream` on every
+  `list` action (context, model, model_folder, model_revision, skill,
+  skill_folder, exec, log): NDJSON output — one JSON object per line, no
+  array wrapper, empty result emits nothing. The lister pages internally
+  (chunks of at most `ACTA_DB_MAX_PAGE`) until the filter is exhausted, so
+  bulk export needs no manual `--offset` loop; a user `--offset` is still
+  the starting point and `--limit` caps the total emitted. `--fields` /
+  `--no_nulls` apply per row; the light/full projection choice is
+  unchanged (`exec list --stream --full`).
+  - Implemented as a global flag (`global_opts_t.stream`, `parse_globals`
+    pass 1, `entity_flag_specs`, `help_print`), with a per-list
+    stream-paging branch in all eight `list` handlers (context factored
+    through a `ctx_list_pick` variant selector; the others inline the
+    same variant selection). `--stream` is mutually exclusive with
+    `--count` / `--table` / `--id_only` → exit-4 `ACTA_DB_ERR_INVALID`.
+  - Registered in the `--tools` schema: `global_flags` 17 → 18 and `--stream`
+    added to all eight list flag arrays (per-entry counts 10→11, 8→9,
+    7→8, 6→7, 9→10, 6→7, 13→14, 7→8). `tools_test` expects 18 globals and
+    asserts every `list` entry advertises `--stream`.
+  - `cli_spec.md` extended: output-modifier line, "Stream output (P5)"
+    paragraph, and `--stream` in all eight list rows. Verified: full test
+    suite passes (incl. `tools_test`, which now asserts every `list` entry
+    advertises `--stream` and the 18 global flags).

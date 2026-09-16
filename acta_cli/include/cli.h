@@ -37,6 +37,9 @@ typedef struct {
     int         id_only;     /* --id_only */
     int         count;       /* --count */
     int         table;       /* --table */
+    int         stream;      /* --stream: NDJSON, one object per line;
+                                list actions page internally until
+                                exhausted (P5) */
     int         pretty;      /* --pretty */
     int         compact;     /* --compact (with --tools: compact schema) */
 
