@@ -148,3 +148,46 @@ gap.
     paragraph, and `--stream` in all eight list rows. Verified: full test
     suite passes (incl. `tools_test`, which now asserts every `list` entry
     advertises `--stream` and the 18 global flags).
+
+## Output-destination verification (2025-07-25)
+
+Re-ran the P2/P3 output paths and remaining modifiers against the
+running binary on a test DB (`acta_cli/tmp/acta.db`). Exploration-only,
+no source changes.
+
+Verified working:
+
+- `--out <path>`: entire payload to the file, stdout empty; unopenable
+  path → exit 10 `"cannot open output file '<path>'"` (path included).
+- P2 silent-null warning: one stderr line
+  (`warning: --fields requests 'content' but context list is light by
+  default; add --full to fetch it`; exec analog naming `prompt,
+  raw_response, result, error`), exit code unchanged.
+- `--full` light→full projection on `context list` (content) and
+  `exec list` (prompt/raw_response/result).
+- `--raw_out`: raw unescaped value, precedence over `--table`/
+  `--fields`; wrong entity/action → exit 10
+  `"--raw_out only supported by 'context get' and 'exec get'"`.
+- `--id_only` on `get` → bare `N`; combined with `--table`, `--id_only`
+  wins without a conflict error.
+
+Bugs found:
+
+1. **`--raw_out` on a NULL field → exit 10 "unknown field" instead of
+   no output.** `context get 8 --raw_out metadata` (null) and
+   `exec get 1 --raw_out result` (null) fail with
+   `"unknown --raw_out field: 'metadata' (supported: id, type, content,
+   content_hash, metadata, …)"` — the field is listed as supported in
+   its own error message yet rejected. The spec says "null values
+   produce no output"; only unknown fields are exit 10. Root cause in
+   `src/commands/context.c` (~line 545, same pattern in
+   `execution.c`): `else if (v) { print } else { unknown-field error }`
+   conflates *valid field, NULL value* with *unknown field*. Fix: check
+   field-name validity first, then `if (v) print; else return EXIT_OK`
+   (no output). Add a regression test for a NULL-valued field.
+
+2. **`--id_only` is silently ignored on `list` actions.** `model list
+   --id_only` / `model_folder list --id_only` emit the full JSON array,
+   exit 0. Either apply it, or reject it (consistent with the `--stream`
+   conflict policy, exit 4) — a silent no-op is worse than both, since a
+   caller expecting ids gets full objects.
