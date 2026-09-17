@@ -54,3 +54,31 @@ binary; only `<entity> <action> --help` works.
    (commit `108e7ce`, side effect of the P0 `entity_help` routing).
 5. Optional: **per-command exit-code notes** in the schema (e.g.
    delete-refused → 4); currently only the global table.
+
+## Live re-verification of help edge paths (2025-07-25)
+
+Re-ran the help edge cases against the current binary on a test DB
+(`acta_cli/tmp/acta.db`); no source changes.
+
+Verified working (exit 0, single-action section):
+
+- `X help <action>` (`model help list`, `exec help set-raw` — dash
+  action names work).
+- `X help help` → full entity help (matches the documented behavior).
+- `X help nope` / `X nope --help` → exit 10
+  `{"error":"ACTA_CLI_ERR","code":-10,"message":"unknown action: nope"}`.
+- bare `acta_cli help` → exit 10
+  `"missing entity and/or action. See --help."`.
+
+New finding:
+
+- **`X <action> help` (help as trailing positional) is not a valid
+  form — and it does not error.** `model list help` silently executes
+  `model list` and returns the full list, exit 0: the extra `help`
+  token is swallowed as an unexpected positional. This is the same
+  positional-swallowing bug as `cli_creation_analysis.md` finding 5,
+  in a particularly misleading spot (an agent typing the "obvious"
+  help form gets data, not help). The documented forms remain
+  `X help <action>` and `X <action> --help`; the positional-rejection
+  fix (unexpected positional → exit 10) would also turn this case
+  into a proper error.

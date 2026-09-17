@@ -76,6 +76,33 @@ them), verified against the running binary on a test DB
    routing (with tests) or drop it from `tool_table`; add an aliases
    note to `cli_spec.md`.
 
+7. **File-input read-failure messages omit the path (minor).**
+   `--content_file` / `--raw_file` / `--result_file` on a missing file →
+   exit 4 with a message without the path (`"cannot read content
+   file"`), while `--from_file` includes it (`"cannot read file
+   '<path>'"`). An agent cannot tell which file failed; add the path
+   to the three raw-file messages.
+
+## File-input verification (2025-07-25)
+
+The P3/P4 file inputs were exercised on the test DB; everything works
+as documented (T2 invariant holds, messages descriptive):
+
+- `--from_file` JSON input works; malformed file → exit 4
+  `"invalid JSON body"`; missing file → exit 4 with the path.
+- All mutual exclusions → exit 4 naming the conflicting flags
+  (`--json`/`--stdin`/`--from_file` pair; `--content`+`--content_file`;
+  `--json`+`--content_file`; `--raw`+`--raw_file`; `--result`+
+  `--result_file`).
+- `--content_file` stores content byte-exact, no JSON escaping
+  (quotes/newlines/braces preserved); a 266 KB file (≈4× the 64 KiB
+  `db exec --file` cap) works → the raw-file path is genuinely
+  uncapped.
+- `--raw_file` (`exec set-raw`) stores raw bytes, status echoed
+  unchanged; `--result_file` (`exec complete`) stores the file content
+  as the `result` string value (escaped in output, not parsed as
+  JSON) — matches the spec.
+
 ## Notes
 
 - `execution_logs` seed data contains a row with `event = ''` (empty
