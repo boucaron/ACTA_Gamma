@@ -120,10 +120,13 @@ static int sql_first_statement_is_select(const char *sql)
         }
         break;
     }
+    /* SELECT is six letters: S E L E C T — the terminator test is on
+     * p[6], the first byte after the keyword. */
     return (p[0] == 'S' || p[0] == 's') &&
            p[1] == 'E' && p[2] == 'L' && p[3] == 'E' && p[4] == 'C' &&
-           (p[5] == '\0' || p[5] == ' ' || p[5] == '\t' ||
-            p[5] == '\r' || p[5] == '\n');
+           p[5] == 'T' &&
+           (p[6] == '\0' || p[6] == ' ' || p[6] == '\t' ||
+            p[6] == '\r' || p[6] == '\n');
 }
 
 static void exec_output(const global_opts_t *gopts)
