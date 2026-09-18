@@ -133,7 +133,8 @@ model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id, int 
 
     char sql[REV_SQL_BUF];
     if (rev_build_sql(sql, sizeof(sql),
-                      "WHERE model_id = ? ORDER BY revision DESC LIMIT 1") != 0) {
+                      "WHERE model_id = ? AND deleted_at IS NULL "
+                      "ORDER BY revision DESC LIMIT 1") != 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }

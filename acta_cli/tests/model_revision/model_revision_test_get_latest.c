@@ -35,8 +35,10 @@ static void test_get_latest_multiple(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_OK);
     const char *out = stest_stdout(ctx);
     TEST_CONTAINS(ctx, out, "\"model_id\":1");
-    /* latest should be rev 2 (non-deleted) or rev 3 — assert ≥ 2 */
-    TEST(ctx, strstr(out, "\"revision\":2") || strstr(out, "\"revision\":3"));
+    /* KI-2 regression: ref DB model 1 has revs 1,2,3 but rev 3 (id 3)
+     * is soft-deleted → latest LIVE revision must be rev 2. */
+    TEST_CONTAINS(ctx, out, "\"revision\":2");
+    TEST(ctx, !strstr(out, "\"deleted_at\":\""));
     targs_free(a, &g);
 }
 

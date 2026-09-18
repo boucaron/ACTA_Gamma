@@ -218,6 +218,32 @@ static void test_mr_get_latest_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
+/* KI-2: get_latest must skip soft-deleted revisions — latest live rev
+ * of a model with revs 1,2,3 where rev 3 is a soft-delete snapshot
+ * is rev 2. */
+static void test_mr_get_latest_skips_deleted(void) {
+    const char *path = "test/acta_test_mr_latest_deleted.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_with_revs(db, "RevModel521", 1);  /* revs 1,2 */
+    TEST_ASSERT(model_id > 0);
+    TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), ACTA_DB_OK);
+    /* soft-delete is an UPDATE → rev 3 carries deleted_at */
+
+    int err = 0;
+    model_revision_t *latest = acta_db_model_revision_get_latest(db, model_id, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_NOT_NULL(latest);
+    TEST_ASSERT_EQ_INT(latest->revision, 2);
+    TEST_ASSERT(latest->deleted_at == NULL);
+
+    acta_db_model_revision_free(latest);
+
+    test_db_teardown(db, path);
+}
+
 /* ── lister ────────────────────────────────────────────────────────── */
 
 static void test_mr_list_multiple(void) {
@@ -616,6 +642,7 @@ int run_model_revision_tests(void) {
     test_mr_get_latest_multi();
     test_mr_get_latest_single();
     test_mr_get_latest_nonexistent();
+    test_mr_get_latest_skips_deleted();
 
     /* lister */
     test_mr_list_multiple();
