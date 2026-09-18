@@ -146,6 +146,15 @@ static const tool_flag_t f_rev_list[] = {
     { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
     { "fields", 1, 0 }, { "no_nulls", 0, 0 },
 };
+static const tool_flag_t f_rev_list_inc[] = {
+    { "offset", 1, 0 }, { "limit", 1, 0 },
+    { "include_deleted", 0, 0 },
+    { "count", 0, 0 }, { "table", 0, 0 }, { "stream", 0, 0 },
+    { "fields", 1, 0 }, { "no_nulls", 0, 0 },
+};
+static const tool_flag_t f_rev_count_inc[] = {
+    { "include_deleted", 0, 0 },
+};
 
 static const tool_flag_t f_skill_create[] = {
     { "name", 1, 1 }, { "prompt_template", 1, 1 },
@@ -513,13 +522,13 @@ static const tool_entry_t tool_table[] = {
 
     { "model_revision.list", "model_revision", "list", NULL, 0,
       "List revisions of a model.",
-      p_model_id, 1, f_rev_list, 7, "positional|flags",
+      p_model_id, 1, f_rev_list_inc, 8, "positional|flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
     { "model_revision.count", "model_revision", "count", NULL, 0,
       "Count revisions of a model.",
-      p_model_id, 1, NULL, 0, "positional",
+      p_model_id, 1, f_rev_count_inc, 1, "positional|flags",
       NULL, 0, NULL, 0,
       &suc_int },
 

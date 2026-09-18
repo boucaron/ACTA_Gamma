@@ -358,9 +358,10 @@ static void test_model_update_deleted(void) {
     int rc = acta_db_model_update(db, &update);
     TEST_ASSERT_EQ_INT(rc, ACTA_DB_ERR_NOT_FOUND);
 
-    /* create=rev1, soft_delete=rev2, failed update=no new rev */
+    /* create=rev1 (live), soft_delete=rev2 (deleted_at), failed update=
+     * no new rev → with-deleted lister sees 2, live-only lister sees 1 */
     int count = 0;
-    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, 0, -1, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model_with_deleted(db, id, 0, -1, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     acta_db_model_revision_list_free(revs, count);
     test_db_teardown(db, path);
@@ -455,8 +456,10 @@ static void test_model_soft_delete_revision(void) {
     acta_db_model_create(db, &m, &id);
     acta_db_model_soft_delete(db, id);
 
+    /* create=rev1 (live), soft_delete=rev2 (deleted_at) → the
+     * with-deleted lister sees both */
     int count = 0;
-    model_revision_t **revs = acta_db_model_revision_list_by_model(db, id, 0, -1, &count, NULL);
+    model_revision_t **revs = acta_db_model_revision_list_by_model_with_deleted(db, id, 0, -1, &count, NULL);
     TEST_ASSERT_EQ_INT(count, 2);
     if (count >= 2) {
         TEST_ASSERT_NOT_NULL(revs[1]->deleted_at);

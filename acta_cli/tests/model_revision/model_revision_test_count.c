@@ -15,11 +15,11 @@ static void test_count_basic(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_pos(a, "1", &g);   /* model 1 → 3 revisions */
+    targs_pos(a, "1", &g);   /* model 1 → 2 live revisions (rev 3 deleted) */
 
     int rc = do_rev(ctx, "count", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_STREQ(ctx, stest_stdout(ctx), "3\n");
+    TEST_STREQ(ctx, stest_stdout(ctx), "2\n");
     targs_free(a, &g);
 }
 

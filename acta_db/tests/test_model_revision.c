@@ -316,7 +316,9 @@ static void test_mr_list_ordering(void) {
     test_db_teardown(db, path);
 }
 
-static void test_mr_list_includes_deleted(void) {
+/* KI-4: default lister is live-only; the _with_deleted variant
+ * includes soft-deleted rows.  revs: 1=create, 2=update, 3=soft-delete. */
+static void test_mr_list_with_deleted_includes_deleted(void) {
     const char *path = "test/acta_test_mr_list_del.db";
     remove(path);
     db_t *db = test_db_open(path);
@@ -325,14 +327,36 @@ static void test_mr_list_includes_deleted(void) {
     int model_id = mr_create_with_revs(db, "RevModel58", 1);  /* revs 1,2 */
     TEST_ASSERT(model_id > 0);
     TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), ACTA_DB_OK);
-    /* now 3 revs: 1=create, 2=update, 3=soft-delete */
+
+    int count = 0, err = 0;
+    model_revision_t **items = acta_db_model_revision_list_by_model_with_deleted(
+        db, model_id, 0, 0, &count, &err);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(count, 3);
+    TEST_ASSERT_NOT_NULL(items[2]->deleted_at);
+    acta_db_model_revision_list_free(items, count);
+
+    test_db_teardown(db, path);
+}
+
+static void test_mr_list_excludes_deleted(void) {
+    const char *path = "test/acta_test_mr_list_livedel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_with_revs(db, "RevModel527", 1);  /* revs 1,2 */
+    TEST_ASSERT(model_id > 0);
+    TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), ACTA_DB_OK);
+    /* rev 3 carries deleted_at → default lister must skip it */
 
     int count = 0, err = 0;
     model_revision_t **items = acta_db_model_revision_list_by_model(
         db, model_id, 0, 0, &count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
-    TEST_ASSERT_EQ_INT(count, 3);
-    TEST_ASSERT_NOT_NULL(items[2]->deleted_at);
+    TEST_ASSERT_EQ_INT(count, 2);
+    for (int i = 0; i < count; i++)
+        TEST_ASSERT(items[i]->deleted_at == NULL);
     acta_db_model_revision_list_free(items, count);
 
     test_db_teardown(db, path);
@@ -525,7 +549,9 @@ static void test_mr_count_nonexistent(void) {
     test_db_teardown(db, path);
 }
 
-static void test_mr_count_includes_deleted(void) {
+/* KI-4: default counter is live-only; count_with_deleted includes
+ * soft-deleted rows.  revs: 1=create, 2=update, 3=soft-delete. */
+static void test_mr_count_with_deleted_includes_deleted(void) {
     const char *path = "test/acta_test_mr_count_del.db";
     remove(path);
     db_t *db = test_db_open(path);
@@ -534,10 +560,27 @@ static void test_mr_count_includes_deleted(void) {
     int model_id = mr_create_with_revs(db, "RevModel526", 1);  /* revs 1,2 */
     TEST_ASSERT(model_id > 0);
     TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), ACTA_DB_OK);
-    /* soft-delete is an UPDATE → rev 3 */
 
     int err = ACTA_DB_OK;
-    TEST_ASSERT_EQ_INT(acta_db_model_revision_count(db, model_id, &err), 3);
+    TEST_ASSERT_EQ_INT(
+        acta_db_model_revision_count_with_deleted(db, model_id, &err), 3);
+
+    test_db_teardown(db, path);
+}
+
+static void test_mr_count_excludes_deleted(void) {
+    const char *path = "test/acta_test_mr_count_livedel.db";
+    remove(path);
+    db_t *db = test_db_open(path);
+    TEST_ASSERT_NOT_NULL(db);
+
+    int model_id = mr_create_with_revs(db, "RevModel528", 1);  /* revs 1,2 */
+    TEST_ASSERT(model_id > 0);
+    TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), ACTA_DB_OK);
+    /* rev 3 carries deleted_at → default counter must skip it */
+
+    int err = ACTA_DB_OK;
+    TEST_ASSERT_EQ_INT(acta_db_model_revision_count(db, model_id, &err), 2);
 
     test_db_teardown(db, path);
 }
@@ -599,9 +642,22 @@ static void test_mr_list_negative_offset(void) {
     test_db_teardown(db, path);
 }
 
+static void test_mr_list_with_deleted_null_db(void) {
+    int count = 0, err = ACTA_DB_OK;
+    TEST_ASSERT_NULL(
+        acta_db_model_revision_list_by_model_with_deleted(NULL, 1, 0, 0, &count, &err));
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
 static void test_mr_count_null_db(void) {
     int err = ACTA_DB_OK;
     TEST_ASSERT_EQ_INT(acta_db_model_revision_count(NULL, 1, &err), -1);
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
+}
+
+static void test_mr_count_with_deleted_null_db(void) {
+    int err = ACTA_DB_OK;
+    TEST_ASSERT_EQ_INT(acta_db_model_revision_count_with_deleted(NULL, 1, &err), -1);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_ERR_INVALID);
 }
 
@@ -675,7 +731,8 @@ int run_model_revision_tests(void) {
     /* lister */
     test_mr_list_multiple();
     test_mr_list_ordering();
-    test_mr_list_includes_deleted();
+    test_mr_list_with_deleted_includes_deleted();
+    test_mr_list_excludes_deleted();
     test_mr_list_cross_model_isolation();
 
     /* pagination */
@@ -689,7 +746,8 @@ int run_model_revision_tests(void) {
     test_mr_count_multi();
     test_mr_count_single();
     test_mr_count_nonexistent();
-    test_mr_count_includes_deleted();
+    test_mr_count_with_deleted_includes_deleted();
+    test_mr_count_excludes_deleted();
 
     /* invalid-argument guards */
     test_mr_get_null_db();
@@ -697,8 +755,10 @@ int run_model_revision_tests(void) {
     test_mr_get_by_model_rev_null_db();
     test_mr_get_latest_null_db();
     test_mr_list_null_db();
+    test_mr_list_with_deleted_null_db();
     test_mr_list_negative_offset();
     test_mr_count_null_db();
+    test_mr_count_with_deleted_null_db();
 
     /* free / list_free */
     test_mr_free_valid();

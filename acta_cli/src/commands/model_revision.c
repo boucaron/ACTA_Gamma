@@ -51,12 +51,15 @@ void model_revision_usage(FILE *f)
 "\n"
 "    acta_cli model_revision list 7\n"
 "    acta_cli model_revision list 7 --offset 10 --limit 25\n"
+"    acta_cli model_revision list 7 --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
 "    --limit <n>          Max rows to return (default 0 = unlimited)\n"
 "    --count              Return only the row count (no rows)\n"
 "    --table              Columnar output instead of JSON\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n"
 "\n"
@@ -64,6 +67,11 @@ void model_revision_usage(FILE *f)
 "  Count model revisions for a model.\n"
 "\n"
 "    acta_cli model_revision count 7\n"
+"    acta_cli model_revision count 7 --include_deleted\n"
+"\n"
+"  Options:\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "\n"
 "Global options:\n"
 "  --table              columnar / plain output instead of JSON\n"
@@ -114,6 +122,7 @@ static void usage_list(FILE *f)
 "\n"
 "    acta_cli model_revision list 7\n"
 "    acta_cli model_revision list 7 --offset 10 --limit 25\n"
+"    acta_cli model_revision list 7 --include_deleted\n"
 "\n"
 "  Options:\n"
 "    --offset <n>         Skip first N rows (default 0)\n"
@@ -122,6 +131,8 @@ static void usage_list(FILE *f)
 "    --table              Columnar output instead of JSON\n"
 "    --stream             NDJSON: one JSON object per line; pages\n"
 "                         internally until exhausted (P5)\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n"
 "    --fields <csv>       Comma-separated field filter\n"
 "    --no_nulls           Omit null-valued fields from JSON\n", f);
 }
@@ -132,7 +143,12 @@ static void usage_count(FILE *f)
 "== count <model_id> ================================================\n"
 "  Count model revisions for a model.\n"
 "\n"
-"    acta_cli model_revision count 7\n", f);
+"    acta_cli model_revision count 7\n"
+"    acta_cli model_revision count 7 --include_deleted\n"
+"\n"
+"  Options:\n"
+"    --include_deleted    Include soft-deleted rows\n"
+"    --deleted            Alias for --include_deleted\n", f);
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -172,6 +188,28 @@ static void vlog_rev_raw(const char *tag, const model_revision_t *r, int rc)
 static void model_revision_free_wrap(void *r)
 {
     acta_db_model_revision_free((model_revision_t *)r);
+}
+
+/* Pick the lister / counter variant from --include_deleted.
+ * Default: live rows only (deleted_at IS NULL). */
+static model_revision_t **rev_list_pick(db_t *db, int model_id,
+                                        int include_deleted,
+                                        int offset, int limit,
+                                        int *out_count, int *err)
+{
+    return include_deleted
+        ? acta_db_model_revision_list_by_model_with_deleted(
+              db, model_id, offset, limit, out_count, err)
+        : acta_db_model_revision_list_by_model(
+              db, model_id, offset, limit, out_count, err);
+}
+
+static int rev_count_pick(db_t *db, int model_id,
+                          int include_deleted, int *err)
+{
+    return include_deleted
+        ? acta_db_model_revision_count_with_deleted(db, model_id, err)
+        : acta_db_model_revision_count(db, model_id, err);
 }
 
 /* ── model_revision_t → JSON object ───────────────────────────────── */
@@ -409,20 +447,24 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
                                usage_list, "model_revision list") < 0)
             return EXIT_INVALID;
 
-        VLOG(1, "model_revision list: model_id=%d offset=%d limit=%d",
-             model_id, offset, limit);
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
+
+        VLOG(1, "model_revision list: model_id=%d offset=%d limit=%d "
+                "include_deleted=%d",
+             model_id, offset, limit, include_deleted);
 
         VLOG(2, "  full: model_id=%d offset=%d limit=%d "
-                "no_nulls=%d table=%d fields=%s",
-             model_id, offset, limit,
+                "include_deleted=%d no_nulls=%d table=%d fields=%s",
+             model_id, offset, limit, include_deleted,
              gopts->no_nulls, gopts->table,
              gopts->fields ? gopts->fields : "(all)");
 
-        VLOG(3, "  model_id=%d offset=%d limit=%d", model_id, offset, limit);
+        VLOG(3, "  model_id=%d offset=%d limit=%d include_deleted=%d",
+             model_id, offset, limit, include_deleted);
 
         if (gopts->count) {
             int err = 0;
-            int n = acta_db_model_revision_count(db, model_id, &err);
+            int n = rev_count_pick(db, model_id, include_deleted, &err);
             if (err != ACTA_DB_OK) {
                 VLOG(1, "  count FAILED err=%d", err);
                 return finish_op_error(db, err, "model_revision count");
@@ -447,8 +489,8 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
                 int want = (limit > 0) ? limit - emitted : 0;
                 int n = 0, e2 = 0;
                 model_revision_t **items =
-                    acta_db_model_revision_list_by_model(
-                        db, model_id, offset + emitted, want, &n, &e2);
+                    rev_list_pick(db, model_id, include_deleted,
+                                  offset + emitted, want, &n, &e2);
                 if (e2 != ACTA_DB_OK) {
                     acta_db_model_revision_list_free(items, n);
                     return finish_op_error(db, e2, "model_revision list");
@@ -467,8 +509,8 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
         }
 
         int out_count = 0, err = 0;
-        model_revision_t **items = acta_db_model_revision_list_by_model(
-            db, model_id, offset, limit, &out_count, &err);
+        model_revision_t **items = rev_list_pick(
+            db, model_id, include_deleted, offset, limit, &out_count, &err);
 
         if (err != ACTA_DB_OK) {
             VLOG(1, "  list FAILED err=%d", err);
@@ -510,12 +552,16 @@ int cmd_model_revision(const char *action, cmd_args_t *ga, const global_opts_t *
                                  "model_revision count", &model_id))
             return EXIT_INVALID;
 
-        VLOG(1, "model_revision count: model_id=%d", model_id);
+        int include_deleted = cmd_args_has_flag(ga, "include_deleted");
 
-        VLOG(2, "  model_id=%d", model_id);
+        VLOG(1, "model_revision count: model_id=%d include_deleted=%d",
+             model_id, include_deleted);
+
+        VLOG(2, "  model_id=%d include_deleted=%d",
+             model_id, include_deleted);
 
         int err = 0;
-        int n = acta_db_model_revision_count(db, model_id, &err);
+        int n = rev_count_pick(db, model_id, include_deleted, &err);
         if (err != ACTA_DB_OK) {
             VLOG(1, "  FAILED err=%d", err);
             return finish_op_error(db, err, "model_revision count");

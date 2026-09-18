@@ -181,8 +181,9 @@ static void test_integration_model_lifecycle(void) {
     /* Soft-delete → revision 3 with deleted_at */
     TEST_ASSERT_EQ_INT(acta_db_model_soft_delete(db, model_id), 0);
 
+    /* with-deleted lister sees all 3 revs; the default lister is live-only */
     rev_count = 0; err = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 0, -1, &rev_count, &err);
+    revs = acta_db_model_revision_list_by_model_with_deleted(db, model_id, 0, -1, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 3);
     TEST_ASSERT(revs[2]->deleted_at != NULL);
@@ -201,14 +202,15 @@ static void test_integration_model_lifecycle(void) {
         acta_db_model_revision_free(single);
     }
 
-    /* acta_db_model_revision_get_latest returns the most recent revision */
+    /* acta_db_model_revision_get_latest returns the latest LIVE
+     * revision (skips the soft-deleted rev 3) */
     {
         err = 0;
         model_revision_t *latest = acta_db_model_revision_get_latest(db, model_id, &err);
         TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
         TEST_ASSERT_NOT_NULL(latest);
-        TEST_ASSERT_EQ_INT(latest->revision, 3);
-        TEST_ASSERT(latest->deleted_at != NULL);
+        TEST_ASSERT_EQ_INT(latest->revision, 2);
+        TEST_ASSERT(latest->deleted_at == NULL);
         acta_db_model_revision_free(latest);
     }
 
@@ -220,18 +222,18 @@ static void test_integration_model_lifecycle(void) {
     TEST_ASSERT_EQ_INT(revs[0]->revision, 1);
     acta_db_model_revision_list_free(revs, rev_count);
 
-    /* Pagination: limit=1 offset=2 → only rev 3 */
+    /* Pagination (with-deleted lister): limit=1 offset=2 → only rev 3 */
     rev_count = 0; err = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 2, 1, &rev_count, &err);
+    revs = acta_db_model_revision_list_by_model_with_deleted(db, model_id, 2, 1, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 1);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 3);
     TEST_ASSERT(revs[0]->deleted_at != NULL);
     acta_db_model_revision_list_free(revs, rev_count);
 
-    /* Pagination: limit=2 offset=1 → rev 2, rev 3 */
+    /* Pagination (with-deleted lister): limit=2 offset=1 → rev 2, rev 3 */
     rev_count = 0; err = 0;
-    revs = acta_db_model_revision_list_by_model(db, model_id, 1, 2, &rev_count, &err);
+    revs = acta_db_model_revision_list_by_model_with_deleted(db, model_id, 1, 2, &rev_count, &err);
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(rev_count, 2);
     TEST_ASSERT_EQ_INT(revs[0]->revision, 2);

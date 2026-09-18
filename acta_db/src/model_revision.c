@@ -160,10 +160,12 @@ model_revision_t *acta_db_model_revision_get_latest(db_t *db, int model_id, int 
 
 /* ── paginated lister ──────────────────────────────────────────────── */
 
-model_revision_t **acta_db_model_revision_list_by_model(
-        db_t *db, int model_id,
-        int offset, int limit,
-        int *out_count, int *err)
+/* Shared pagination loop for the live-only and with-deleted listers.
+ * `suffix` is the full WHERE/ORDER/LIMIT/OFFSET tail of the query. */
+static model_revision_t **rev_list_run(db_t *db, const char *suffix,
+                                       int model_id,
+                                       int offset, int limit,
+                                       int *out_count, int *err)
 {
     if (err)       *err       = ACTA_DB_OK;
     if (out_count) *out_count = 0;
@@ -179,9 +181,7 @@ model_revision_t **acta_db_model_revision_list_by_model(
     int effective_limit = db_clamp_limit(limit);   /* ← was: limit > 0 ? limit : -1 */
 
     char sql[REV_SQL_BUF];
-    if (rev_build_sql(sql, sizeof(sql),
-                      "WHERE model_id = ? ORDER BY revision LIMIT ? OFFSET ?")
-        != 0) {
+    if (rev_build_sql(sql, sizeof(sql), suffix) != 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
@@ -240,9 +240,33 @@ model_revision_t **acta_db_model_revision_list_by_model(
     return items;
 }
 
+model_revision_t **acta_db_model_revision_list_by_model(
+        db_t *db, int model_id,
+        int offset, int limit,
+        int *out_count, int *err)
+{
+    return rev_list_run(
+        db,
+        "WHERE model_id = ? AND deleted_at IS NULL "
+        "ORDER BY revision LIMIT ? OFFSET ?",
+        model_id, offset, limit, out_count, err);
+}
+
+model_revision_t **acta_db_model_revision_list_by_model_with_deleted(
+        db_t *db, int model_id,
+        int offset, int limit,
+        int *out_count, int *err)
+{
+    return rev_list_run(
+        db,
+        "WHERE model_id = ? ORDER BY revision LIMIT ? OFFSET ?",
+        model_id, offset, limit, out_count, err);
+}
+
 /* ── count ─────────────────────────────────────────────────────────── */
 
-int acta_db_model_revision_count(db_t *db, int model_id, int *err)
+/* Shared COUNT runner; `suffix` is the WHERE tail of the query. */
+static int rev_count_run(db_t *db, const char *suffix, int model_id, int *err)
 {
     if (err) *err = ACTA_DB_OK;
     if (!db || model_id <= 0) {
@@ -250,10 +274,12 @@ int acta_db_model_revision_count(db_t *db, int model_id, int *err)
         return -1;
     }
 
+    char sql[REV_SQL_BUF];
+    snprintf(sql, sizeof(sql),
+             "SELECT COUNT(*) FROM model_revisions %s;", suffix);
+
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db->handle,
-            "SELECT COUNT(*) FROM model_revisions WHERE model_id = ?;",
-            -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
         if (err) *err = ACTA_DB_ERR_SQL;
         return -1;
     }
@@ -268,6 +294,17 @@ int acta_db_model_revision_count(db_t *db, int model_id, int *err)
     }
     sqlite3_finalize(stmt);
     return count;
+}
+
+int acta_db_model_revision_count(db_t *db, int model_id, int *err)
+{
+    return rev_count_run(db, "WHERE model_id = ? AND deleted_at IS NULL",
+                         model_id, err);
+}
+
+int acta_db_model_revision_count_with_deleted(db_t *db, int model_id, int *err)
+{
+    return rev_count_run(db, "WHERE model_id = ?", model_id, err);
 }
 
 /* ── destructors ───────────────────────────────────────────────────── */

@@ -209,8 +209,8 @@ changed) snapshots nothing. Revision rows are read via the
 |---------|-------------|-------|-------|-------------------|
 | `model_revision get <id>` | `id` | — | — | revision JSON object |
 | `model_revision get-latest <model_id>` | `model_id` | — | — | revision JSON object |
-| `model_revision list <model_id>` | `model_id` | `--offset`, `--limit`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
-| `model_revision count <model_id>` | `model_id` | — | — | bare int |
+| `model_revision list <model_id>` | `model_id` | `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
+| `model_revision count <model_id>` | `model_id` | `--include_deleted` / `--deleted` | — | bare int |
 
 ## skill
 

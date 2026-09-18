@@ -15,7 +15,7 @@ static void test_list_basic(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_pos(a, "1", &g);   /* 3 revisions */
+    targs_pos(a, "1", &g);   /* 2 live revisions (rev 3 is soft-deleted) */
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -48,11 +48,11 @@ static void test_list_with_offset(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "1", &g);
-    targs_flag(a, "offset", "2", &g);
+    targs_flag(a, "offset", "1", &g);
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    /* 3 revs - 2 offset = 1 remaining */
+    /* 2 live revs - 1 offset = 1 remaining (rev 2) */
     const char *out = stest_stdout(ctx);
     const char *first = strchr(out, '{');
     const char *second = first ? strchr(first + 1, '{') : NULL;
@@ -102,7 +102,7 @@ static void test_list_count_flag(stest_ctx_t *ctx)
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_STREQ(ctx, stest_stdout(ctx), "3\n");
+    TEST_STREQ(ctx, stest_stdout(ctx), "2\n");  /* live only */
     targs_free(a, &g);
 }
 
@@ -115,7 +115,7 @@ static void test_list_count_global(stest_ctx_t *ctx)
 
     int rc = do_rev(ctx, "list", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_STREQ(ctx, stest_stdout(ctx), "3\n");
+    TEST_STREQ(ctx, stest_stdout(ctx), "2\n");  /* live only */
     targs_free(a, &g);
 }
 

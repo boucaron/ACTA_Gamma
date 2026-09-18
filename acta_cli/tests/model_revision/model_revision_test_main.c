@@ -6,6 +6,7 @@ extern int run_model_revision_test_get_latest();
 extern int run_model_revision_test_list();
 extern int run_model_revision_test_count();
 extern int run_model_revision_test_misc();
+extern int run_model_revision_test_deleted();
 
 int main(void)
 {
@@ -16,6 +17,7 @@ int main(void)
     f += run_model_revision_test_list();
     f += run_model_revision_test_count();
     f += run_model_revision_test_misc();
+    f += run_model_revision_test_deleted();
 
 
     if (f == 0) {

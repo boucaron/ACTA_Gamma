@@ -56,8 +56,8 @@ model_revision_t *acta_db_model_revision_get_latest(
 /* --- Lister --- */
 
 /*
- * Paginated listing of revisions belonging to `model_id`,
- * ordered by revision ASC.
+ * Paginated listing of LIVE revisions (deleted_at IS NULL) belonging
+ * to `model_id`, ordered by revision ASC.
  *
  *   offset – number of rows to skip (0-based; 0 = first page).
  *   limit  – maximum number of rows to return.
@@ -71,8 +71,16 @@ model_revision_t *acta_db_model_revision_get_latest(
  * returned.  If err is non-NULL it is set to ACTA_DB_OK on success
  * (including an empty result) or a negative ACTA_DB_ERR_* code.
  * Either out_count or err (or both) may be NULL.
+ *
+ * acta_db_model_revision_list_by_model_with_deleted is identical but
+ * without the deleted_at filter (soft-deleted rows included).
  */
 model_revision_t **acta_db_model_revision_list_by_model(
+        db_t *db, int model_id,
+        int offset, int limit,
+        int *out_count, int *err);
+
+model_revision_t **acta_db_model_revision_list_by_model_with_deleted(
         db_t *db, int model_id,
         int offset, int limit,
         int *out_count, int *err);
@@ -80,14 +88,22 @@ model_revision_t **acta_db_model_revision_list_by_model(
 /* --- Count --- */
 
 /*
- * Return the total number of revision rows for the given model.
+ * Return the total number of LIVE revision rows (deleted_at IS NULL)
+ * for the given model.
  *
  * Returns >= 0 on success (the row count), or -1 on failure
  * (*err set to a negative ACTA_DB_ERR_* code).
  *
  * err may be NULL if the caller does not need the error code.
+ *
+ * acta_db_model_revision_count_with_deleted is identical but without
+ * the deleted_at filter (soft-deleted rows counted).
  */
 int acta_db_model_revision_count(
+        db_t *db, int model_id,
+        int *err);
+
+int acta_db_model_revision_count_with_deleted(
         db_t *db, int model_id,
         int *err);
 
