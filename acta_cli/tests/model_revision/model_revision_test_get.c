@@ -161,14 +161,16 @@ static void test_get_missing_positional(stest_ctx_t *ctx)
 
 static void test_get_deleted_revision(stest_ctx_t *ctx)
 {
-    /* id=3 has deleted_at set; DB layer decides visibility */
+    /* KI-3 regression: ref DB id=3 has deleted_at set → treated as
+     * not found (consistent with context get / exec get), rc 1. */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "3", &g);
 
     int rc = do_rev(ctx, "get", a, g);
-    /* either found (rc=OK, output present) or filtered (rc=OK, empty) */
-    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
+    const char *out = stest_stdout(ctx);
+    TEST(ctx, out[0] == '\0' || !strstr(out, "\"id\""));
     targs_free(a, &g);
 }
 

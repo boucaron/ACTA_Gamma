@@ -65,7 +65,8 @@ model_revision_t *acta_db_model_revision_get(db_t *db, int id, int *err)
     }
 
     char sql[REV_SQL_BUF];
-    if (rev_build_sql(sql, sizeof(sql), "WHERE id = ?") != 0) {
+    if (rev_build_sql(sql, sizeof(sql),
+                      "WHERE id = ? AND deleted_at IS NULL") != 0) {
         if (err) *err = ACTA_DB_ERR_INVALID;
         return NULL;
     }
