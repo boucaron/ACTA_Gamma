@@ -82,3 +82,9 @@ New finding:
   `X help <action>` and `X <action> --help`; the positional-rejection
   fix (unexpected positional → exit 10) would also turn this case
   into a proper error.
+
+  *Resolved* (cf03616): `commands_dispatch` now rejects any positional
+  left unconsumed by a successful handler with exit 10
+  `unexpected argument: '<tok>'`, so `context list help` errors
+  instead of running the list. Pinned by `test_trailing_help_rejected`
+  (routed via `stest_run_dispatch`); see `docs/known_issues.md` KI-4.

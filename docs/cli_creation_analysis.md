@@ -69,6 +69,13 @@ them), verified against the running binary on a test DB
    `ACTA_CLI_ERR` ("unexpected positional"), with tests; document in
    `cli_spec.md`.
 
+   *Resolved* (cf03616): `commands_dispatch` rejects any positional left
+   unconsumed by a successful handler with exit 10 `unexpected
+   argument: '<tok>'` (all entities/actions). Pinned by
+   `test_trailing_help_rejected` via `stest_run_dispatch`; see
+   `docs/known_issues.md` KI-4; documented in `cli_spec.md` (exit-code
+   paragraph).
+
 6. **`--tools` advertises aliases the binary rejects.** The compact/JSON
    schema lists `aliases:execution` / `aliases:execution_log` for every
    exec/log action, but `execution list` / `execution_log count 1` →

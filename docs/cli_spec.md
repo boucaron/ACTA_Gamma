@@ -71,6 +71,12 @@ unreadable file is likewise an error (exit 4). Unlike `--from_file` /
 `--json`, the file content is **not** a JSON body: it is the field
 value itself, so arbitrarily large payloads work without escaping.
 
+Unknown JSON keys: the JSON sources (`--json` / `--stdin` / `--from_file`)
+are parsed against exactly the documented per-action input keys;
+any top-level key outside that set — including a misspelling with the
+wrong case — is rejected with exit 4 (`invalid JSON body`), not
+silently ignored.
+
 Schema flags: `--tools` emits the machine-readable JSON schema (T3,
 `src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
 rendering (~7 KB) of the same static table — positionals, flags (with `*`
@@ -90,7 +96,9 @@ Exit codes: `0` ok, `1` not found, `2` SQL error, `3` OOM, `4` invalid
 argument / missing flag / missing required field / duplicate / FK
 violation / invalid DB file, `10` CLI usage error (unknown entity,
 unknown action, unknown option, bad `--verbose`, too few positionals,
-missing flag value), `11` DB open failed. Errors: single JSON line on
+missing flag value, unexpected positional — an extra positional left
+unconsumed by a successful action, e.g. `context list help`, is
+rejected with `unexpected argument: '<tok>'`), `11` DB open failed. Errors: single JSON line on
 stderr `{"error":"ACTA_DB_ERR_*"|"ACTA_CLI_ERR","code":<n>,"message":"..."}`
 where the exit code is authoritative and `code` = −exit (the T2
 invariant, exit code canonical with `code` = −exit everywhere);
