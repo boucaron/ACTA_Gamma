@@ -22,7 +22,7 @@ Conventions:
 | KI-4 | Trailing `help` form **silently executed** the action: `context list help` ran the list ("help" swallowed as an unconsumed positional). **Fixed**: `commands_dispatch` rejects any positional left unconsumed by a successful handler → exit 10 `unexpected argument` (covers all entities/actions, per the documented positional-rejection decision in `docs/cli_help_analysis.md`). | **fixed** | regression | `acta_cli context list help` → rc 10. |
 | KI-5 | Help / `--tools` say `db exec` is "no SELECT", but `db exec "SELECT 1;"` **succeeds** (rc 0, `{"status":"ok"}`). **Fixed**: `db.c` rejects any statement whose first keyword is `SELECT` (skipping leading whitespace, stray `;`, and `--` / `/* */` comments) before executing → rc 4; the help text is now true by construction. **Follow-up**: the first fix had an off-by-one — the keyword check matched only `S,E,L,E,C` and tested `p[5]` as the terminator, so real `SELECT ...` statements (where `p[5]` is the `T`) slipped through and executed; the check now covers the full six-letter keyword with the terminator test on `p[6]`. | **fixed** | regression | `acta_cli db exec "SELECT 1;"` → rc 4, `db exec does not support SELECT / query statements`. |
 | KI-6 | `--id_only` **silently ignored** on `list` actions (prints full JSON rows). **Fixed**: all nine `list` actions (context, exec, log, model, model_folder, model_revision, skill, skill_folder, skill_revision) reject `--id_only` → rc 4; it is a single-row modifier for `create` / `get`-style actions. | **fixed** | regression | `acta_cli context list --id_only` → rc 4, `context list: --id_only is not supported`. |
-| KI-7 | FK-violation error message is `execution create failed: (no detail)` — `sqlite3_errmsg` is not surfaced (`db.c:264` pattern `msg ? msg : "(no detail)"`; same in entity handlers). Note: the error JSON goes to **stderr** (`emit_cli_error`), which the unit harness does not capture, so the test can only assert the rc. | open | **rc-pinned** | `echo '{"prompt":"p","context_id":999999,...}' \| acta_cli exec create --stdin` → stderr message contains `FOREIGN KEY` (actual: `(no detail)`). |
+| KI-7 | FK-violation error message is `execution create failed: (no detail)` — `sqlite3_errmsg` is not surfaced (`db.c:264` pattern `msg ? msg : "(no detail)"`; same in entity handlers). Note: the error JSON goes to **stderr** (`emit_cli_error`), which the unit harness does not capture, so the test can only assert the rc. **Fixed**: `acta_db` exposes `acta_db_errmsg(db)` (the connection's `sqlite3_errmsg`); `finish_op_error` (the single choke point of every entity handler's failure path) and the `db exec` error path fall back to it when `acta_db_last_error` is NULL — entity mutators fail inside prepared statements and never store `last_error`, which is why the detail was missing (e.g. `execution create failed: FOREIGN KEY constraint failed: executions.context_id` for the SQL-constraint FKs). Additionally, `acta_db_execution_create`'s C-level context pre-check returns `ACTA_DB_ERR_FK` / `ACTA_DB_ERR_NOT_FOUND` without any SQL error ever occurring, so it now records the detail in `last_error` via `db_set_error` (`FOREIGN KEY violation: context <id> does not exist` / `context <id> is soft-deleted`). The test harness also gained stderr capture (`stest_stderr`, in `stest_run_argv` / `stest_run_dispatch`), so the message itself is pinned. | **fixed** | regression | `echo '{"prompt":"p","context_id":999999,...}' \| acta_cli exec create --stdin` → stderr message contains `FOREIGN KEY` (was: `(no detail)`). |
 | KI-8 | `skill list --all` is accepted as a **no-op** (default already lists all folders); identical output with or without the flag. | open | **pin** | `acta_cli skill list --all` → same rc + same output as `skill list`; test pins until documented or rejected. |
 
 Fixed since the analysis docs recorded it (no open item): `--stream --count`
@@ -41,8 +41,9 @@ is now correctly rejected with rc 4 (`context list --stream --count`); the
   `test_create_unknown_json_key` (KI-2, regression — now green),
   `test_list_id_only_pinned` (KI-6, regression pin — now green).
 - `tests/exec/execution_test_create.c`: `test_create_fk_error_has_detail`
-  (KI-7, rc-pinned; the message check needs stderr capture, which the
-  harness lacks).
+  (KI-7, regression — now green; the harness captures stderr via
+  `stest_stderr`, so the message is asserted to contain `FOREIGN KEY`
+  and not `(no detail)`, alongside the rc).
 - KI-2 also flips two pre-existing json-layer tests
   (`tests/json/json_test_main.c`): the case-sensitivity and unknown-key
   cases now expect `-1` (struct left fully zeroed, per the json.h
@@ -51,6 +52,6 @@ is now correctly rejected with rc 4 (`context list --stream --count`); the
   (`tests/skill/skill_test_list_count.c`): `--all` is asserted to be
   identical to the default listing.
 
-Run: `make -C acta_cli test`. Currently red: **none** — KI-1…KI-6 are
-fixed and pinned as regression tests; KI-7/8 remain open *decisions*
-behind passing pins.
+Run: `make -C acta_cli test`. Currently red: **none** — KI-1…KI-7 are
+fixed and pinned as regression tests; KI-8 remains an open
+*decision* (`--all` doc-or-reject) behind its passing pin.

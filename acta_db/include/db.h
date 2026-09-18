@@ -183,6 +183,15 @@ int acta_db_exec(db_t *db, const char *sql);
 /* Returns the last error message for this connection. */
 const char *acta_db_last_error(db_t *db);
 
+/* Returns the most recent SQLite error message for this connection
+ * (sqlite3_errmsg on the underlying handle).  Unlike acta_db_last_error,
+ * this is non-NULL for every open database — SQLite returns the string
+ * "not an error" when no error is pending.  Intended as a detail
+ * fallback for entity mutator failure paths that run prepared
+ * statements and therefore never store last_error (KI-7): callers
+ * treat "not an error" as "no detail". */
+const char *acta_db_errmsg(db_t *db);
+
 /* Run a transaction: begins, runs the callback, commits (or rolls back).
  * The callback receives the db handle and user_data.
  * Returns ACTA_DB_OK on success, a negative error code if the callback

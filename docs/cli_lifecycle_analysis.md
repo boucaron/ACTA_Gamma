@@ -63,6 +63,14 @@ lists actions and success shapes but not the transition rules.
    The cycle guard deserves its own message ("cannot move folder into
    its own subtree") — it is a real protection whose reason is
    invisible to the caller.
+   **Partial (KI-7):** the create paths and every SQL-error-based
+   failure now surface the detail (`acta_db_errmsg` fallback in
+   `finish_op_error` + `db_set_error` at C-level FK checks); the
+   C-level state-check refusals (illegal transitions, delete-
+   from-`running`, cycle-guarded `move`) still return
+   `<action> failed: (no detail)` because they decide the error in C
+   code without any SQL error — they need their own `db_set_error`
+   messages to close this out.
 4. **`move` on a soft-deleted row → exit 1 (live-only), no
    `--include_deleted`.** Consistent with get/list live-only defaults,
    but easy to misread as "row gone" — the error could say "row is

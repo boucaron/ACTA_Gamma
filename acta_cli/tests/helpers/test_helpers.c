@@ -246,6 +246,11 @@ void stest_teardown(stest_ctx_t *ctx)
         free(ctx->out_buf);
         ctx->out_buf = NULL;
     }
+    if (ctx->err_buf) {
+        free(ctx->err_buf);
+        ctx->err_buf = NULL;
+    }
+    ctx->err_len = ctx->err_cap = 0;
     unlink(ctx->db_path);
     ctx->db_path[0] = '\0';
     if (ctx->input_path[0]) {
@@ -320,6 +325,11 @@ const char *stest_stdout(stest_ctx_t *ctx)
     return ctx->out_buf ? ctx->out_buf : "";
 }
 
+const char *stest_stderr(stest_ctx_t *ctx)
+{
+    return ctx->err_buf ? ctx->err_buf : "";
+}
+
 /* ══════════════════════════════════════════════════════════════════
  *  argv-level runner (parse_globals + handler, like main.c)
  * ══════════════════════════════════════════════════════════════════ */
@@ -343,29 +353,40 @@ static int stest_run_main_path(stest_ctx_t *ctx, stest_cmd_fn_t fn,
         return prc;
 
 #ifdef _WIN32
-    int saved_in  = _dup(STDIN_FILENO);
-    int saved_out = _dup(STDOUT_FILENO);
-    int in_p[2], out_p[2];
-    if (saved_in < 0 || saved_out < 0 ||
+    int saved_in   = _dup(STDIN_FILENO);
+    int saved_out  = _dup(STDOUT_FILENO);
+    int saved_err  = _dup(STDERR_FILENO);
+    int in_p[2], out_p[2], err_p[2];
+    if (saved_in < 0 || saved_out < 0 || saved_err < 0 ||
         _pipe(in_p,  65536, _O_BINARY) != 0 ||
-        _pipe(out_p, 65536, _O_BINARY) != 0) {
+        _pipe(out_p, 65536, _O_BINARY) != 0 ||
+        _pipe(err_p, 65536, _O_BINARY) != 0) {
         if (saved_in  >= 0) _close(saved_in);
         if (saved_out >= 0) _close(saved_out);
+        if (saved_err >= 0) _close(saved_err);
         free(g.argv);
         return EXIT_CLI;
     }
 #else
-    int saved_in  = dup(STDIN_FILENO);
-    int saved_out = dup(STDOUT_FILENO);
-    int in_p[2], out_p[2];
-    if (saved_in < 0 || saved_out < 0 ||
-        pipe(in_p) != 0 || pipe(out_p) != 0) {
+    int saved_in   = dup(STDIN_FILENO);
+    int saved_out  = dup(STDOUT_FILENO);
+    int saved_err  = dup(STDERR_FILENO);
+    int in_p[2], out_p[2], err_p[2];
+    if (saved_in < 0 || saved_out < 0 || saved_err < 0 ||
+        pipe(in_p) != 0 || pipe(out_p) != 0 || pipe(err_p) != 0) {
         if (saved_in  >= 0) close(saved_in);
         if (saved_out >= 0) close(saved_out);
+        if (saved_err >= 0) close(saved_err);
         free(g.argv);
         return EXIT_CLI;
     }
 #endif
+
+    /* KI-7: capture the handler's stderr too (error JSON from
+     * finish_db_error / emit_cli_error), so tests can assert on the
+     * failure message, not just the rc. */
+    dup2(err_p[1], STDERR_FILENO);
+    close(err_p[1]);
 
     /* feed stdin_blob to the handler; "" → immediate EOF */
     const char *data = stdin_blob ? stdin_blob : "";
@@ -404,10 +425,13 @@ static int stest_run_main_path(stest_ctx_t *ctx, stest_cmd_fn_t fn,
         : fn(g.argv[1], &ga, &g, ctx->db);
 
     fflush(stdout);
+    fflush(stderr);                     /* drain stdio → pipes */
     dup2(saved_out, STDOUT_FILENO);
+    dup2(saved_err, STDERR_FILENO);
     dup2(saved_in, STDIN_FILENO);
     close(saved_in);
     close(saved_out);
+    close(saved_err);
 
     /* slurp captured stdout → stest_stdout(ctx) */
     free(ctx->out_buf);
@@ -427,6 +451,25 @@ static int stest_run_main_path(stest_ctx_t *ctx, stest_cmd_fn_t fn,
     }
     close(out_p[0]);
     if (ctx->out_buf) ctx->out_buf[ctx->out_len] = '\0';
+
+    /* slurp captured stderr → stest_stderr(ctx) */
+    free(ctx->err_buf);
+    ctx->err_buf  = NULL;
+    ctx->err_len  = 0;
+    ctx->err_cap  = 0;
+    for (;;) {
+        if (ctx->err_len >= ctx->err_cap) {
+            ctx->err_cap = ctx->err_cap ? ctx->err_cap * 2 : 4096;
+            ctx->err_buf = realloc(ctx->err_buf, ctx->err_cap);
+            if (!ctx->err_buf) break;
+        }
+        ssize_t n = read(err_p[0], ctx->err_buf + ctx->err_len,
+                         ctx->err_cap - ctx->err_len - 1);
+        if (n <= 0) break;
+        ctx->err_len += (size_t)n;
+    }
+    close(err_p[0]);
+    if (ctx->err_buf) ctx->err_buf[ctx->err_len] = '\0';
 
     free(g.argv);
     return rc;

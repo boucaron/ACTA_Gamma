@@ -39,13 +39,27 @@ them), verified against the running binary on a test DB
    plain FK violations masked by the empty message.) `sqlite3_errmsg()`
    should be propagated into the stderr JSON `message` on the
    entity-create paths, matching the `db exec` behavior.
+   **Resolved (KI-7):** `acta_db` now exposes `acta_db_errmsg` (the
+   connection's `sqlite3_errmsg`); `finish_op_error` (the single choke
+   point of every entity handler's failure path) and the `db exec` error
+   path fall back to it when `last_error` is NULL, and
+   `acta_db_execution_create`'s C-level context pre-check records its
+   detail in `last_error` via `db_set_error` (that path returns
+   `ACTA_DB_ERR_FK` without any SQL error occurring). FK failures now
+   print e.g. `execution create failed: FOREIGN KEY constraint failed:
+   executions.context_id` / `FOREIGN KEY violation: context <id> does not
+   exist`; pinned by `test_create_fk_error_has_detail` (the harness now
+   captures stderr via `stest_stderr`).
 
 2. **Same FK violation, two different exit codes/messages depending on
    path.** Via entity create: exit 4 `ACTA_DB_ERR_FK` + "(no detail)".
    Via `db exec`: exit 2 `ACTA_DB_ERR_SQL` + the full SQLite message.
    Pick one canonical classification (the spec's exit table lists FK
    under exit 4, so the `db exec` mapping is the odd one out) and make
-   both paths carry the SQLite detail.
+   both paths carry the SQLite detail. **Partial (KI-7):** both paths
+   now carry the SQLite detail; the exit-code split itself (FK as exit 4
+   via create vs exit 2 `ACTA_DB_ERR_SQL` via `db exec`) is unchanged —
+   the spec's error section now documents the message shape.
 
 3. **Full entity help dump on usage errors.** A missing required flag
    prints the JSON error line *plus the entire ~100-line entity help*

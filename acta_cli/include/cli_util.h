@@ -202,14 +202,24 @@ static inline int emit_db_open_error(int rc, const char *what)
 
 /* Emit the JSON error line for a failed library call and return the mapped
  * exit code.  `op` names the operation ("model update", "skill create", …);
- * the detail is `acta_db_last_error(db)`, so the stderr line is
+ * the detail is `acta_db_last_error(db)`, falling back to
+ * `acta_db_errmsg(db)` (the connection's most recent sqlite3_errmsg) when
+ * the library stored no last_error — which is the case for entity mutators
+ * failing inside prepared statements (KI-7), e.g. FK violations.  The
+ * stderr line is
  *   {"error":"ACTA_DB_ERR_*","code":-<exit>,"message":"<op> failed: <detail>"}
+ * with `(no detail)` only when neither source carries a message.
  * Thin wrapper over finish_db_error for the per-entity
  * `if (rc != ACTA_DB_OK)` paths (P4 #3) — the single place that composes
  * the "<op> failed: <detail>" message. */
 static inline int finish_op_error(db_t *db, int rc, const char *op)
 {
     const char *msg = (db != NULL) ? acta_db_last_error(db) : NULL;
+    if (!msg && db != NULL) {
+        const char *e = acta_db_errmsg(db);
+        if (e && strcmp(e, "not an error") != 0)
+            msg = e;
+    }
     char what[512];
     snprintf(what, sizeof what, "%s failed: %s",
              op ? op : "operation", msg ? msg : "(no detail)");

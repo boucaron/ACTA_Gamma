@@ -387,8 +387,25 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
         }
         sqlite3_finalize(stmt);
 
-        if (ctx_missing) return ACTA_DB_ERR_FK;
-        if (ctx_deleted) return ACTA_DB_ERR_NOT_FOUND;
+        /* C-level FK/not-found decisions set no SQLite error, so store
+         * the detail in last_error for the CLI error message (KI-7): the
+         * connection's sqlite3_errmsg is "not an error" here. */
+        if (ctx_missing) {
+            char msg[160];
+            snprintf(msg, sizeof msg,
+                     "FOREIGN KEY violation: context %d does not exist",
+                     e->context_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_FK;
+        }
+        if (ctx_deleted) {
+            char msg[160];
+            snprintf(msg, sizeof msg,
+                     "context %d is soft-deleted",
+                     e->context_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
     }
 
     /* e->status is deliberately ignored: a new execution is always

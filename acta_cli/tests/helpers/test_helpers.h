@@ -22,6 +22,10 @@ typedef struct {
     char  *out_buf;             /* heap buffer holding captured stdout */
     size_t out_len;             /* bytes captured */
     size_t out_cap;
+    char  *err_buf;             /* heap buffer holding captured stderr
+                                  (stest_run_argv / stest_run_dispatch) */
+    size_t err_len;
+    size_t err_cap;
     int    failures;            /* incremented by TEST_* macros */
     int    assertions;          /* total assertions run */
 } stest_ctx_t;
@@ -34,6 +38,11 @@ void stest_teardown(stest_ctx_t *ctx);
 void stest_capture_begin(stest_ctx_t *ctx);
 void stest_capture_end(stest_ctx_t *ctx);
 const char *stest_stdout(stest_ctx_t *ctx);
+
+/* stderr captured by stest_run_argv / stest_run_dispatch (the error
+ * JSON from finish_db_error / emit_cli_error lands here, not on the
+ * console).  Returns "" when nothing was captured. */
+const char *stest_stderr(stest_ctx_t *ctx);
 
 /* ── argv-level runner (parse_globals + handler, like main.c) ───── */
 

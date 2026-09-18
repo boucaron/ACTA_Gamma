@@ -111,7 +111,12 @@ where the exit code is authoritative and `code` = −exit (the T2
 invariant, exit code canonical with `code` = −exit everywhere);
 the `error` name keeps per-cause granularity — e.g.
 `ACTA_DB_ERR_DUPLICATE` is `code:-4` with exit `4`, and a DB-open failure
-is `code:-11` with exit `11`.
+is `code:-11` with exit `11`. The `message` carries a human-readable
+detail: on a DB failure it is `<op> failed: <detail>` (e.g. `execution
+create failed: FOREIGN KEY constraint failed: executions.context_id`),
+where `<detail>` is the last error recorded by `acta_db`, falling back
+to the connection's `sqlite3_errmsg` (`acta_db_errmsg`) — it degenerates
+to `(no detail)` only when no error message was recorded at all.
 
 ## db
 

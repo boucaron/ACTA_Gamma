@@ -302,6 +302,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         if (rc != ACTA_DB_OK) {
             const char *msg = acta_db_last_error(db);
+            if (!msg) msg = acta_db_errmsg(db);   /* KI-7: surface sqlite3_errmsg */
             VLOG(1, "  FAILED rc=%d (%s)", rc,
                  acta_db_strerror(rc));
             char what[1024];

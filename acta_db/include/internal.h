@@ -33,6 +33,28 @@ struct db_t {
  *
  * err may be NULL (the code is then discarded).
  */
+/*
+ * Record an error message in db->last_error (the string returned by
+ * acta_db_last_error()).  The message is a sqlite3_malloc'd copy owned
+ * by the db layer — freed by the next db_exec_capture() / close — so
+ * the caller passes any NUL-terminated string and keeps no pointer.
+ *
+ * Used by entity mutator failure paths that decide an error in C code
+ * without a failing SQL statement (e.g. the FK pre-check in
+ * acta_db_execution_create), so the CLI error message can surface the
+ * detail instead of "(no detail)" (KI-7).
+ */
+static inline void db_set_error(db_t *db, const char *msg) {
+    if (!db || !msg) return;
+    sqlite3_free(db->last_error);
+    size_t len = strlen(msg) + 1;
+    char *copy = sqlite3_malloc(len);
+    if (copy) {
+        memcpy(copy, msg, len);
+        db->last_error = copy;
+    }
+}
+
 static inline char *db_strdup(const char *s, int *err) {
     if (!s) return NULL;
     size_t len = strlen(s) + 1;

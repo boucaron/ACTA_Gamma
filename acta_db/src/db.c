@@ -242,6 +242,11 @@ const char *acta_db_last_error(db_t *db) {
     return db->last_error;
 }
 
+const char *acta_db_errmsg(db_t *db) {
+    if (!db || !db->handle) return NULL;
+    return sqlite3_errmsg(db->handle);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Callback-style transaction                                         */
 /* ------------------------------------------------------------------ */
