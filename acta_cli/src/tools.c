@@ -570,13 +570,15 @@ static const tool_entry_t tool_table[] = {
       &suc_id_folder },
 
     { "skill.list", "skill", "list", NULL, 0,
-      "List skills, optionally filtered by folder.",
+      "List skills, optionally filtered by folder (--all is the "
+      "default scope: no-op alone, wins over --folder_id when combined).",
       NULL, 0, f_skill_list, 10, "flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 
     { "skill.count", "skill", "count", NULL, 0,
-      "Count skills, optionally filtered by folder.",
+      "Count skills, optionally filtered by folder (--all is the "
+      "default scope: no-op alone, wins over --folder_id when combined).",
       NULL, 0, f_skill_count, 3, "flags",
       NULL, 0, NULL, 0,
       &suc_int },

@@ -17,8 +17,9 @@
  *           id=4 (folder 2), id=5 (root, "summarize2"),
  *           id=6 (folder 2), id=7 (folder 2) — all live.
  *
- * Note: skill list defaults to root-level rows; --all widens to every
- * folder.  All cases run through parse_globals + validation + handler
+ * Note: skill list's default scope is all folders; --all is that scope
+ * made explicit (it only matters with --folder_id, where it wins).
+ * All cases run through parse_globals + validation + handler
  * exactly like main.c does (stest_run_argv).
  */
 #include "test_helpers.h"
@@ -50,7 +51,7 @@ static void test_list_default_excludes_deleted(stest_ctx_t *ctx)
 {
     seed_deleted(ctx, 5);
 
-    /* Root list (default scope): id=2 live, id=5 deleted → hidden */
+    /* Default scope is all folders: id=2 live, id=5 deleted → hidden */
     char *argv0[] = { "acta_cli", "skill", "list" };
     int rc = stest_run_argv(ctx, cmd_skill, 3, argv0, "");
     TEST_EQ(ctx, rc, EXIT_OK);

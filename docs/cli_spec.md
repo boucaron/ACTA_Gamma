@@ -224,6 +224,11 @@ changed) snapshots nothing. Revision rows are read via the
 | `skill list` | — | `--all` (all folders), `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `skill count` | — | `--all` (all folders), `--folder_id`, `--include_deleted` / `--deleted` | — | bare int |
 
+> **`skill list` / `skill count` — `--all`:** the default scope is
+> already all folders, so `--all` alone is a no-op (identical rows /
+> count); it is kept as the explicit form and wins over `--folder_id`
+> when both are given (KI-8, resolved by documentation).
+
 ## skill_folder
 
 | Command | Positionals | Flags | Input | stdout on success |
