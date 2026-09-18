@@ -377,6 +377,15 @@ int cmd_skill_rev(const char *action, cmd_args_t *ga, const global_opts_t *gopts
 
     /* ── list <skill_id> ──────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
+        /* KI-6: --id_only is a single-row modifier (get); list actions
+         * reject it with exit 4 instead of silently ignoring it. */
+        if (gopts->id_only) {
+            emit_error("skill_revision list: --id_only is not supported; "
+                       "remove the flag (use the JSON rows, --count, or "
+                       "--table)");
+            return EXIT_INVALID;
+        }
+
         int skill_id;
         if (!parse_id_positional(ga, "skill_id", usage_sr_list,
                                  "skill_revision list", &skill_id))

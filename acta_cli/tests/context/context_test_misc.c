@@ -119,15 +119,14 @@ static void test_create_unknown_json_key(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
-/* KI-6 (pin): --id_only is silently ignored on list actions (full JSON
- * printed). Locks the current behavior until it is rejected or
- * implemented. */
+/* KI-6 (fixed, now a regression pin): --id_only was silently ignored
+ * on list actions (full JSON printed). Every list action now rejects
+ * it with exit 4; the flag below must fail, not print rows. */
 static void test_list_id_only_pinned(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "context", "list", "--id_only" };
     int rc = stest_run_argv(ctx, cmd_context, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
 /* ── runner ───────────────────────────────────────────────────────── */

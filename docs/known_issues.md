@@ -20,8 +20,8 @@ Conventions:
 | KI-2 | **Unknown JSON keys silently accepted** on `create` — `{"type","content","bogus_key"}` created the row. **Fixed**: `jwalk` (single choke point of all seven `json_parse_*` parsers in `json.c`) now rejects any top-level key not in the entity's cli_spec.md field table → rc 4. Covers every create/update path and every input source (`--json`/`--stdin`/`--from_file`). | **fixed** | regression | `echo '{"type":"x","content":"c","bogus_key":1}' \| acta_cli context create --stdin` → rc 4. |
 | KI-3 | `--raw_out` on a **NULL** field → rc 10 `unknown --raw_out field: 'metadata'` while listing `metadata` as supported; help says "null values produce no output". **Fixed**: `context.c`/`execution.c` track `known` separately from the NULL value (`known && v` / `known` / else unknown). | **fixed** | regression | `acta_cli context get <id-without-metadata> --raw_out metadata` → rc 0, empty output. |
 | KI-4 | Trailing `help` form **silently executed** the action: `context list help` ran the list ("help" swallowed as an unconsumed positional). **Fixed**: `commands_dispatch` rejects any positional left unconsumed by a successful handler → exit 10 `unexpected argument` (covers all entities/actions, per the documented positional-rejection decision in `docs/cli_help_analysis.md`). | **fixed** | regression | `acta_cli context list help` → rc 10. |
-| KI-5 | Help / `--tools` say `db exec` is "no SELECT", but `db exec "SELECT 1;"` **succeeds** (rc 0, `{"status":"ok"}`). Either guard non-mutating statements in `db.c` or fix the help text. | open | **pin** | `acta_cli db exec "SELECT 1;"` → currently rc 0; test pins this until a decision is made. |
-| KI-6 | `--id_only` **silently ignored** on `list` actions (prints full JSON rows). | open | **pin** | `acta_cli context list --id_only` → currently full JSON; test pins until reject-or-implement. |
+| KI-5 | Help / `--tools` say `db exec` is "no SELECT", but `db exec "SELECT 1;"` **succeeds** (rc 0, `{"status":"ok"}`). **Fixed**: `db.c` rejects any statement whose first keyword is `SELECT` (skipping leading whitespace, stray `;`, and `--` / `/* */` comments) before executing → rc 4; the help text is now true by construction. | **fixed** | regression | `acta_cli db exec "SELECT 1;"` → rc 4, `db exec does not support SELECT / query statements`. |
+| KI-6 | `--id_only` **silently ignored** on `list` actions (prints full JSON rows). **Fixed**: all nine `list` actions (context, exec, log, model, model_folder, model_revision, skill, skill_folder, skill_revision) reject `--id_only` → rc 4; it is a single-row modifier for `create` / `get`-style actions. | **fixed** | regression | `acta_cli context list --id_only` → rc 4, `context list: --id_only is not supported`. |
 | KI-7 | FK-violation error message is `execution create failed: (no detail)` — `sqlite3_errmsg` is not surfaced (`db.c:264` pattern `msg ? msg : "(no detail)"`; same in entity handlers). Note: the error JSON goes to **stderr** (`emit_cli_error`), which the unit harness does not capture, so the test can only assert the rc. | open | **rc-pinned** | `echo '{"prompt":"p","context_id":999999,...}' \| acta_cli exec create --stdin` → stderr message contains `FOREIGN KEY` (actual: `(no detail)`). |
 | KI-8 | `skill list --all` is accepted as a **no-op** (default already lists all folders); identical output with or without the flag. | open | **pin** | `acta_cli skill list --all` → same rc + same output as `skill list`; test pins until documented or rejected. |
 
@@ -33,12 +33,13 @@ is now correctly rejected with rc 4 (`context list --stream --count`); the
 ## Tests
 
 - `tests/db/db_test.c`: `test_exec_sql_stdin_flag` (KI-1, regression pin —
-  now green), `test_exec_select_behavior_pinned` (KI-5, pin).
+  now green), `test_exec_select_behavior_pinned` (KI-5, regression pin —
+  now green).
 - `tests/context/context_test_misc.c`: `test_get_raw_out_null_field`
   (KI-3, regression — now green), `test_trailing_help_rejected` (KI-4,
   regression, routed via `stest_run_dispatch`),
   `test_create_unknown_json_key` (KI-2, regression — now green),
-  `test_list_id_only_pinned` (KI-6, pin).
+  `test_list_id_only_pinned` (KI-6, regression pin — now green).
 - `tests/exec/execution_test_create.c`: `test_create_fk_error_has_detail`
   (KI-7, rc-pinned; the message check needs stderr capture, which the
   harness lacks).
@@ -50,6 +51,6 @@ is now correctly rejected with rc 4 (`context list --stream --count`); the
   (`tests/skill/skill_test_list_count.c`): `--all` is asserted to be
   identical to the default listing.
 
-Run: `make -C acta_cli test`. Currently red: **none** — KI-1…KI-4 are
-fixed and pinned as regression tests; KI-5/6/7/8 are open *decisions*
+Run: `make -C acta_cli test`. Currently red: **none** — KI-1…KI-6 are
+fixed and pinned as regression tests; KI-7/8 remain open *decisions*
 behind passing pins.

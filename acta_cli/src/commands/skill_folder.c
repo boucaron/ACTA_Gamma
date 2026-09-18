@@ -118,7 +118,8 @@ void skill_folder_usage(FILE *f)
 "  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
 "  --fields <csv>     comma-separated field whitelist\n"
 "  --no_nulls         omit null-valued fields from JSON output\n"
-"  --id_only          print only the id (create / get)\n"
+"  --id_only          print only the id (create / get; rejected on list\n"
+"                         — exit 4)\n"
 "\n", f);
 }
 
@@ -514,6 +515,15 @@ int cmd_skill_folder(const char *action, cmd_args_t *ga, const global_opts_t *go
 
     /* ── list [parent_id] ─────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
+        /* KI-6: --id_only is a single-row modifier (create/get); list
+         * actions reject it with exit 4 instead of silently ignoring it. */
+        if (gopts->id_only) {
+            emit_error("skill_folder list: --id_only is not supported; "
+                       "remove the flag (use the JSON rows, --count, "
+                       "--table, or --stream)");
+            return EXIT_INVALID;
+        }
+
         const char *parent_str = cmd_args_next_positional(ga);
         int parent_id = 0;
         int has_parent = 0;

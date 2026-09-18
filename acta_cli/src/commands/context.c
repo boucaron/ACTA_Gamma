@@ -167,7 +167,8 @@ void ctx_usage(FILE *f)
 "  --from_file <p>  read input from a file as JSON\n"
 "  --fields <a,b>   comma-separated field filter for output\n"
 "  --no_nulls       suppress null-valued fields in JSON output\n"
-"  --id_only        print only the numeric id\n"
+"  --id_only        print only the numeric id (create / get; rejected\n"
+"                      on list — exit 4)\n"
 "  --table          columnar output instead of JSON\n"
 "  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
 "\n", f);
@@ -585,6 +586,15 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     /* ── list ─────────────────────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
+        /* KI-6: --id_only is a single-row modifier (create/get); list
+         * actions reject it with exit 4 instead of silently ignoring it. */
+        if (gopts->id_only) {
+            emit_error("context list: --id_only is not supported; remove "
+                       "the flag (use the JSON rows, --count, --table, or "
+                       "--stream)");
+            return EXIT_INVALID;
+        }
+
         const char *f_type = cmd_args_flag(ga, "type", 1);
         const char *f_hash = cmd_args_flag(ga, "hash", 1);
 

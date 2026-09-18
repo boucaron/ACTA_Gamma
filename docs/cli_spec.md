@@ -41,7 +41,14 @@ Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--table` (columnar / plain instead of JSON), `--fields <csv>`,
 `--no_nulls`, and on every `list` action `--stream` (P5). `get`/
 `get-latest` return the full entity JSON object (subject to those
-modifiers).
+modifiers). `--id_only` is a single-row modifier for `create` /
+`get`-style actions only; every `list` action rejects it with exit 4
+(it used to be silently ignored, printing full JSON rows).
+
+`db exec` is mutating-only: a statement whose first keyword is
+`SELECT` (after leading whitespace, stray `;`, and `--` / `/* */`
+comments) is rejected with exit 4 before execution, so the "no
+SELECT" help claim is enforced, not just documented.
 
 Stream output (P5): `--stream` turns any `list` action's array output
 into NDJSON — one JSON object per line, no array wrapper, empty result

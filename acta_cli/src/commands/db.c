@@ -22,6 +22,8 @@ static void usage_exec(FILE *f)
     fputs(
 "== exec =========================================================\n"
 "  Execute a single mutating statement (no SELECT / query support).\n"
+"  A SELECT statement is rejected with exit 4 (query statements are\n"
+"  not supported; use the entity list actions to read rows).\n"
 "  Supported: INSERT, UPDATE, DELETE, CREATE, DROP, ALTER,\n"
 "             TRUNCATE, REPLACE, and other write / DDL statements.\n"
 "\n"
@@ -97,6 +99,32 @@ int db_help_for_action(const char *action, FILE *out)
 
 
 /* ── helpers ───────────────────────────────────────────────────────── */
+
+/* KI-5: skip leading whitespace, stray ';', and SQL comments, then
+ * report whether the first statement keyword is SELECT. */
+static int sql_first_statement_is_select(const char *sql)
+{
+    const char *p = sql;
+    for (;;) {
+        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ';')
+            p++;
+        if (p[0] == '-' && p[1] == '-') {   /* line comment */
+            while (*p && *p != '\n') p++;
+            continue;
+        }
+        if (p[0] == '/' && p[1] == '*') {   /* block comment */
+            p += 2;
+            while (*p && !(*p == '*' && p[1] == '/')) p++;
+            if (*p) p += 2;
+            continue;
+        }
+        break;
+    }
+    return (p[0] == 'S' || p[0] == 's') &&
+           p[1] == 'E' && p[2] == 'L' && p[3] == 'E' && p[4] == 'C' &&
+           (p[5] == '\0' || p[5] == ' ' || p[5] == '\t' ||
+            p[5] == '\r' || p[5] == '\n');
+}
 
 static void exec_output(const global_opts_t *gopts)
 {
@@ -249,6 +277,18 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         VLOG(3, "  sql_ptr=%p sql_len=%zu",
              (const void *)sql_ptr, strlen(sql_ptr));
+
+        /* KI-5: db exec is mutating-only (per the help text and
+         * cli_spec.md); reject SELECT before touching the DB instead
+         * of running a silent query. */
+        if (sql_first_statement_is_select(sql_ptr)) {
+            VLOG(1, "  ERROR: SELECT statement rejected");
+            return finish_db_error(ACTA_DB_ERR_INVALID,
+                "db exec does not support SELECT / query statements; "
+                "it executes mutating SQL only (INSERT, UPDATE, DELETE, "
+                "CREATE, DROP, ALTER, ...). Use the entity list actions "
+                "to query rows.");
+        }
 
         int rc = acta_db_exec(db, sql_ptr);
 

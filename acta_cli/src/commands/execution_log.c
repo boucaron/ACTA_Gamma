@@ -492,6 +492,15 @@ int cmd_execution_log(const char *action, cmd_args_t *ga, const global_opts_t *g
 
     /* ── list <execution_id> ──────────────────────────────────────── */
     if (strcmp(action, "list") == 0) {
+        /* KI-6: --id_only is a single-row modifier (get); list actions
+         * reject it with exit 4 instead of silently ignoring it. */
+        if (gopts->id_only) {
+            emit_error("log list: --id_only is not supported; remove the "
+                       "flag (use the JSON rows, --count, --table, or "
+                       "--stream)");
+            return EXIT_INVALID;
+        }
+
         int execution_id;
         if (!parse_id_positional(ga, "execution_id", usage_list,
                                  "log list", &execution_id))

@@ -354,16 +354,15 @@ static void test_exec_sql_stdin_flag(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
 }
 
-/* KI-5 (pin): help/--tools claim "no SELECT" but sqlite3_exec runs a
- * SELECT fine (rc 0, {"status":"ok"}). This locks the CURRENT behavior
- * so a guard in db.c or a help-text change cannot regress silently;
- * update the assertions when the issue is resolved. */
+/* KI-5 (fixed, now a regression pin): help/--tools claim "no SELECT"
+ * and db.c now enforces it — a statement whose first keyword is
+ * SELECT is rejected before execution. The SELECT below must fail
+ * with exit 4 (not run silently). */
 static void test_exec_select_behavior_pinned(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "db", "exec", "SELECT 1;" };
     int rc = stest_run_argv(ctx, cmd_db, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
 /* ── runner ───────────────────────────────────────────────────────── */
