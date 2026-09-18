@@ -51,20 +51,19 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-/* ── flag-ignoring edge cases ─────────────────────────────────────── */
+/* ── flag-rejection edge cases ────────────────────────────────────── */
 
-static void test_list_id_only_ignored(stest_ctx_t *ctx)
+/* KI-6 (fixed, regression pin): --id_only used to be silently ignored
+ * on list actions (full JSON printed); model_revision list now
+ * rejects it with exit 4. */
+static void test_list_id_only_rejected(stest_ctx_t *ctx)
 {
-    /* list has no id_only branch; must still produce a JSON array */
     global_opts_t g = gopts_id_only();
     cmd_args_t *a = targs_new();
     targs_pos(a, "5", &g);
 
     int rc = do_rev(ctx, "list", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    const char *out = stest_stdout(ctx);
-    TEST(ctx, out[0] == '[');          /* still an array, not a bare int */
-    TEST_CONTAINS(ctx, out, "\"name\"");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
     targs_free(a, &g);
 }
 
@@ -139,7 +138,7 @@ int run_model_revision_test_misc(void)
     test_help(&ctx);
     test_unknown_action(&ctx);
     test_unknown_action_suggestion(&ctx);
-    test_list_id_only_ignored(&ctx);
+    test_list_id_only_rejected(&ctx);
     test_get_fields_no_match(&ctx);
     test_list_table_empty(&ctx);
     test_list_offset_exceeds(&ctx);
