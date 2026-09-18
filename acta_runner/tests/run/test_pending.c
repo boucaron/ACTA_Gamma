@@ -1,7 +1,7 @@
 /*
  * test_pending.c — R3: `run --pending` batch looping and `--max` clamping.
  *
- * Covers (docs/runner_plan.md, "R3 — `--pending` batch and `--max`
+ * Covers (docs/runner_contract.md, "R3 — `--pending` batch and `--max`
  * clamping tests"):
  *   1. N pending rows → all run, all `completed`, one log sequence per
  *      row, exit 0.

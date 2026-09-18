@@ -1,7 +1,7 @@
 /*
  * acta_runner — "sweep" action (R4: stale-`running` cleanup)
  *
- * Per docs/runner_plan.md R4 and decision 6 in docs/runner_contract.md:
+ * Per R4 and decision 6 in docs/runner_contract.md:
  * when a runner process dies, its execution row stays stuck in
  * `running` forever. `sweep` finds those rows and fails them.
  *

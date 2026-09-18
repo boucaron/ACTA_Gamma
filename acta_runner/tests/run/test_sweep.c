@@ -1,7 +1,7 @@
 /*
  * test_sweep.c — R4: `sweep --stale-seconds` stale-`running` cleanup.
  *
- * Covers (docs/runner_plan.md, "R4 — Stale-`running` cleanup sweep"):
+ * Covers (docs/runner_contract.md, "R4 — Stale-`running` cleanup sweep"):
  *   1. no running rows → clean exit 0.
  *   2. fresh `running` row (started_at + latest log ≈ now) → left
  *      running, exit 0.

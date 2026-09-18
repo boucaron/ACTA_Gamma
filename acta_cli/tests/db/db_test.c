@@ -336,7 +336,7 @@ static void test_exec_verbose(stest_ctx_t *ctx)
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  known issues (docs/known_issues.md) — run via parse_globals +
+ *  known issues (KI-n) — run via parse_globals +
  *  handler exactly like main.c does (stest_run_argv).
  * ═══════════════════════════════════════════════════════════════════ */
 
@@ -405,7 +405,7 @@ int run_db_test_all(void)
     /* verbose */
     test_exec_verbose(&ctx);
 
-    /* known issues (docs/known_issues.md) */
+    /* known issues (KI-n) */
     test_exec_sql_stdin_flag(&ctx);
     test_exec_select_behavior_pinned(&ctx);
 

@@ -55,7 +55,7 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  known issues (docs/known_issues.md)
+ *  known issues (KI-n regression pins)
  * ═══════════════════════════════════════════════════════════════════ */
 
 /* KI-3 (RED until fixed): --raw_out on a NULL field returns rc 10
@@ -98,7 +98,7 @@ static void test_get_raw_out_null_field(stest_ctx_t *ctx)
  * positional and SILENTLY EXECUTE the action (`context list help`
  * printed the full list, exit 0). commands_dispatch now rejects any
  * positional left unconsumed by a successful handler: exit 10
- * (documented decision in docs/cli_help_analysis.md). Routed through
+ * (documented decision, see docs/cli_spec.md). Routed through
  * stest_run_dispatch (the real main.c path, not the bare handler). */
 static void test_trailing_help_rejected(stest_ctx_t *ctx)
 {
@@ -140,7 +140,7 @@ int run_context_test_misc(void)
     test_unknown_action(&ctx);
     test_unknown_action_suggestion(&ctx);
 
-    /* known issues (docs/known_issues.md) */
+    /* known issues (KI-n regression pins) */
     test_get_raw_out_null_field(&ctx);
     test_trailing_help_rejected(&ctx);
     test_create_unknown_json_key(&ctx);

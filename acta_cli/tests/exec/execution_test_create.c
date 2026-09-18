@@ -385,7 +385,7 @@ static void test_create_src_json_status_rejected(stest_ctx_t *ctx)
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  known issues (docs/known_issues.md)
+ *  known issues (KI-n)
  * ═══════════════════════════════════════════════════════════════════ */
 
 /* KI-7 (fixed): an FK-violation failure must surface sqlite3_errmsg —
@@ -440,7 +440,7 @@ int run_execution_test_create(void)
     test_create_src_conflict_stdin_file(&ctx);
     test_create_src_json_status_rejected(&ctx);
 
-    /* known issues (docs/known_issues.md) */
+    /* known issues (KI-n) */
     test_create_fk_error_has_detail(&ctx);
 
     int f = ctx.failures;

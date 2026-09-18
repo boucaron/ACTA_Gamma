@@ -324,5 +324,4 @@ contract). `help` takes an optional action positional (`X help
 <action>` → that action's section only; unknown action → exit 10), and
 `--help` is scoped by what follows it: `X --help` → full entity help,
 `X <action> --help` → single-action section, bare `--help` → global
-usage (unknown entity/action → exit 10). See `docs/cli_help_plan.md`
-(P0).
+usage (unknown entity/action → exit 10).
