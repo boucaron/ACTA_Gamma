@@ -384,6 +384,27 @@ static void test_create_src_json_status_rejected(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ *  known issues (docs/known_issues.md)
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* KI-7: the FK-violation error message is
+ * "execution create failed: (no detail)" — sqlite3_errmsg is not
+ * surfaced (db.c:264 pattern `msg ? msg : "(no detail)"`). The error
+ * JSON goes to stderr (emit_cli_error), which this harness does not
+ * capture, so only the rc is assertable here; once stderr capture
+ * exists, assert the message contains "FOREIGN KEY" and not
+ * "(no detail)". */
+static void test_create_fk_error_has_detail(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "exec", "create",
+                      "--json",
+                      "{\"prompt\":\"ki7\",\"context_id\":999999,"
+                      "\"skill_revision_id\":1,\"model_revision_id\":1}" };
+    int rc = stest_run_argv(ctx, cmd_exec, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
 /* ── runner ────────────────────────────────────────────────────────── */
 
 int run_execution_test_create(void)
@@ -418,6 +439,9 @@ int run_execution_test_create(void)
     test_create_src_conflict_json_file(&ctx);
     test_create_src_conflict_stdin_file(&ctx);
     test_create_src_json_status_rejected(&ctx);
+
+    /* known issues (docs/known_issues.md) */
+    test_create_fk_error_has_detail(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

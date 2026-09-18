@@ -54,6 +54,82 @@ static void test_unknown_action_suggestion(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ *  known issues (docs/known_issues.md)
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* KI-3 (RED until fixed): --raw_out on a NULL field returns rc 10
+ * "unknown --raw_out field" while listing that field as supported;
+ * help says "null values produce no output". context.c/execution.c
+ * conflate a NULL value with an unknown field (else if(v)). Desired:
+ * rc 0 with empty output. */
+static void test_get_raw_out_null_field(stest_ctx_t *ctx)
+{
+    /* create without --metadata → metadata is NULL; parse the id back */
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "type",    "ki3", &g);
+    targs_flag(a, "content", "raw-out-null-test", &g);
+    stest_capture_begin(ctx);
+    int crc = cmd_context("create", a, &g, ctx->db);
+    stest_capture_end(ctx);
+    targs_free(a, &g);
+    TEST_EQ(ctx, crc, EXIT_OK);
+    const char *p = strstr(stest_stdout(ctx), "\"id\":");
+    TEST_NOT_NULL(ctx, p);
+    int id = atoi(p + 5);
+
+    char idstr[16];
+    snprintf(idstr, sizeof(idstr), "%d", id);
+
+    global_opts_t g2 = gopts_default();
+    g2.raw_out = "metadata";
+    cmd_args_t   *b = targs_new();
+    targs_pos(b, idstr, &g2);
+    stest_capture_begin(ctx);
+    int rc = cmd_context("get", b, &g2, ctx->db);
+    stest_capture_end(ctx);
+    targs_free(b, &g2);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, (int)strlen(stest_stdout(ctx)), 0);
+}
+
+/* KI-4 (RED until fixed): trailing "help" form is swallowed as an
+ * unconsumed positional and SILENTLY EXECUTES the action:
+ * `context list help` runs the list instead of printing help. */
+static void test_trailing_help_runs_action(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "context", "list", "help" };
+    int rc = stest_run_argv(ctx, cmd_context, 4, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "Usage:");
+    /* must not be the list payload */
+    TEST(ctx, strstr(stest_stdout(ctx), "\"id\":") == NULL);
+}
+
+/* KI-2 (RED until fixed): unknown JSON keys are silently accepted on
+ * create — no key allow-list. Desired: rc 4 rejecting the unknown key. */
+static void test_create_unknown_json_key(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "context", "create",
+                      "--json",
+                      "{\"type\":\"ki2\",\"content\":\"c\","
+                      "\"bogus_key\":1}" };
+    int rc = stest_run_argv(ctx, cmd_context, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
+
+/* KI-6 (pin): --id_only is silently ignored on list actions (full JSON
+ * printed). Locks the current behavior until it is rejected or
+ * implemented. */
+static void test_list_id_only_pinned(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "context", "list", "--id_only" };
+    int rc = stest_run_argv(ctx, cmd_context, 4, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_context_test_misc(void)
@@ -64,6 +140,12 @@ int run_context_test_misc(void)
     test_help(&ctx);
     test_unknown_action(&ctx);
     test_unknown_action_suggestion(&ctx);
+
+    /* known issues (docs/known_issues.md) */
+    test_get_raw_out_null_field(&ctx);
+    test_trailing_help_runs_action(&ctx);
+    test_create_unknown_json_key(&ctx);
+    test_list_id_only_pinned(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

@@ -335,6 +335,37 @@ static void test_exec_verbose(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ *  known issues (docs/known_issues.md) — run via parse_globals +
+ *  handler exactly like main.c does (stest_run_argv).
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* KI-1 (fixed): db exec --sql_stdin used to always fail rc 4 —
+ * db.c derived the boolean flag with cmd_args_flag(...) != NULL, which
+ * is NULL by construction. Now use_stdin = cmd_args_has_flag(...);
+ * this test is a regression pin: the INSERT below must succeed. */
+static void test_exec_sql_stdin_flag(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "db", "exec", "--sql_stdin" };
+    int rc = stest_run_argv(ctx, cmd_db, 4, argv0,
+        "INSERT INTO contexts(type, content, content_hash) "
+        "VALUES('text','ki1-sql-stdin','hki1');");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+}
+
+/* KI-5 (pin): help/--tools claim "no SELECT" but sqlite3_exec runs a
+ * SELECT fine (rc 0, {"status":"ok"}). This locks the CURRENT behavior
+ * so a guard in db.c or a help-text change cannot regress silently;
+ * update the assertions when the issue is resolved. */
+static void test_exec_select_behavior_pinned(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "db", "exec", "SELECT 1;" };
+    int rc = stest_run_argv(ctx, cmd_db, 4, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_db_test_all(void)
@@ -374,6 +405,10 @@ int run_db_test_all(void)
 
     /* verbose */
     test_exec_verbose(&ctx);
+
+    /* known issues (docs/known_issues.md) */
+    test_exec_sql_stdin_flag(&ctx);
+    test_exec_select_behavior_pinned(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

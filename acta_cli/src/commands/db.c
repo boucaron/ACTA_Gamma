@@ -141,7 +141,9 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         const char *pos_sql = cmd_args_next_positional(ga);
         const char *sql     = cmd_args_flag(ga, "sql",   1);
         const char *fpath   = cmd_args_flag(ga, "file",  1);
-        const int   use_stdin = (cmd_args_flag(ga, "sql_stdin", 0) != NULL);
+        /* KI-1: boolean flags must be read with cmd_args_has_flag;
+         * cmd_args_flag(...) is NULL by construction for them. */
+        const int   use_stdin = cmd_args_has_flag(ga, "sql_stdin");
 
         VLOG(1, "db exec: pos=%s sql=%s file=%s stdin=%d",
              pos_sql? pos_sql: "(null)",
