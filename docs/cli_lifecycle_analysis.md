@@ -51,11 +51,17 @@ un-sticks `failed`.
    states, result status, plus the `delete` / `restore` row-class
    refusals) in the exec notes, so agents see the transition rules
    instead of probing by trial and mistaking exit 4 for a DB fault.
-2. **`update` silently snapshots a new revision row.** `model update` /
-   `skill update` each created a new `model_revision` / `skill_revision`
-   (ids 13/12 in the test, same timestamp). This is important semantics
-   (the "current" row is updated *and* a revision is appended) and is
-   not mentioned anywhere in `cli_spec.md` or the help text.
+2. ~~`update` silently snapshots a new revision row.~~ **Resolved.**
+   `model update` / `skill update` each created a new
+   `model_revision` / `skill_revision` (ids 13/12 in the test, same
+   timestamp). That semantics (the "current" row is updated *and* a
+   revision is appended) is now documented in `cli_spec.md` (the
+   "Versioning side effect" note: `update` and `move` — `folder_id`
+   being a tracked field — append `revision = max(revision) + 1` via
+   the schema triggers whenever a tracked value changes; `create`
+   snapshots the initial revision, `delete` a final deleted one, no-op
+   updates snapshot nothing). The trigger design itself was already in
+   `docs/DBDesign.md`; only the CLI-visible consequence was missing.
 3. **"(no detail)" message class covers more than create.** Every
    refused transition, the `delete`-from-`running` refusal, and the
    cycle-guarded `move` refusal print `<action> failed: (no detail)`.
@@ -82,10 +88,14 @@ un-sticks `failed`.
    delete/restore) suites; the exit-code split (refused operation on
    an existing row → exit 4 `INVALID`; missing / already-deleted row →
    exit 1 `NOT_FOUND`) is documented in `cli_spec.md`.
-4. **`move` on a soft-deleted row → exit 1 (live-only), no
-   `--include_deleted`.** Consistent with get/list live-only defaults,
-   but easy to misread as "row gone" — the error could say "row is
-   soft-deleted".
+4. ~~`move` on a soft-deleted row → exit 1 (live-only), no
+   `--include_deleted`.~~ **Resolved.** The refusal message now says
+   so: `model/skill/model_folder/skill_folder move failed: <row> N
+   does not exist or is soft-deleted` — the `db_set_error` detail added
+   by the KI-7 follow-up (finding 3), pinned by `test_move_refusal_msgs`
+   in `tests/model_folder` and `tests/skill_folder`. Live-only
+   semantics with no `--include_deleted` is unchanged and is the
+   consistent get/list default.
 
 ## Notes
 

@@ -133,6 +133,27 @@ on an existing row* (bad state, cycle, guard) is
 `ACTA_DB_ERR_INVALID` → exit 4; a refusal because the *row is missing
 or already deleted* is `ACTA_DB_ERR_NOT_FOUND` → exit 1.
 
+`restore` is row-class-strict per entity: `context`, `exec` and
+`skill_folder` restore refuse a live (non-deleted) row with exit 1
+(`context restore failed: context 1 is not deleted (nothing to
+restore)`, `execution restore failed: execution 1 is not deleted
+(nothing to restore)`, `skill_folder restore failed: skill_folder 1
+does not exist`), while `model`, `skill` and `model_folder` restore
+treat an already-live row as a no-op success (exit 0, same
+`{"id":N,"restored":true}` line). A missing row is always exit 1
+(`<row> does not exist`).
+
+Versioning side effect (model / skill): every mutation of a tracked
+field automatically snapshots a new immutable revision row via the DB
+triggers in `acta_gui/db/schema.sql` — so `model update` / `skill
+update` (and `model move` / `skill move`, `folder_id` being a tracked
+field) append a `model_revision` / `skill_revision` row with
+`revision = max(revision) + 1` whenever a tracked value actually
+changes; `create` snapshots the initial revision and `delete` a final
+`deleted_at`-carrying one, and a no-op update (no tracked field
+changed) snapshots nothing. Revision rows are read via the
+`model_revision` / `skill_revision` actions (design: `docs/DBDesign.md`).
+
 ## db
 
 | Command | Positionals | Flags | Input | stdout on success |
