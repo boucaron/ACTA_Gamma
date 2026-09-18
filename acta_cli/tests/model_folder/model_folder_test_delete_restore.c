@@ -1,5 +1,9 @@
 #include "test_helpers.h"
 
+#include <sqlite3.h>
+
+#include "internal.h"   /* complete db_t (sqlite3 *handle) */
+
 #define REF_DB "acta_test_ref.db"
 
 /* ── helpers ──────────────────────────────────────────────────────── */
@@ -261,6 +265,51 @@ static void test_restore_then_get_clears_deleted_at(stest_ctx_t *ctx)
     targs_free(ga, &g);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ *  refusal messages (KI-7)
+ * ══════════════════════════════════════════════════════════════════
+ * The C-level delete/restore checks record their refusal reason in
+ * last_error (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `<op> failed: (no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * Suite state at this point: 5, 7 deleted; 3, 4, 1, 2, 6 (live child
+ * 8), 8 live.
+ */
+
+static void check_refusal(stest_ctx_t *ctx, const char *action, const char *id,
+                          int want_rc, const char *needle)
+{
+    char *argv0[] = { "acta_cli", "model_folder", action, id };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 4, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_refusal_msgs(stest_ctx_t *ctx)
+{
+    check_refusal(ctx, "delete", "9999", EXIT_NOT_FOUND,
+                  "model_folder 9999 does not exist or is soft-deleted");
+    /* folder 6 has live child folder 8 → the sub-folder guard fires */
+    check_refusal(ctx, "delete", "6", EXIT_INVALID,
+                  "cannot delete model_folder 6: it has live sub-folders");
+    /* folder 8 has no sub-folders; seed a live model into it so the
+     * assigned-models guard is the one that fires. */
+    char sql[192];
+    snprintf(sql, sizeof sql,
+             "INSERT INTO models (name, backend, model_identifier, folder_id) "
+             "VALUES ('mf_refusal_seed', 'openai', 'mf-refusal-seed', 8)");
+    int seeded = (sqlite3_exec(ctx->db->handle, sql, NULL, NULL, NULL)
+                  == SQLITE_OK);
+    TEST(ctx, seeded);
+    check_refusal(ctx, "delete", "8", EXIT_INVALID,
+                  "cannot delete model_folder 8: live models are assigned to it");
+    check_refusal(ctx, "restore", "9999", EXIT_NOT_FOUND,
+                  "model_folder 9999 does not exist");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_model_folder_test_delete_restore(void)
@@ -286,6 +335,9 @@ int run_model_folder_test_delete_restore(void)
 
     test_delete_then_get_shows_deleted_at(&ctx);
     test_restore_then_get_clears_deleted_at(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_refusal_msgs(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

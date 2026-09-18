@@ -237,6 +237,41 @@ static void test_count_live_vs_included(stest_ctx_t *ctx)
     TEST_EQ(ctx, atoi(stest_stdout(ctx)), 7);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ *  refusal messages (KI-7)
+ * ══════════════════════════════════════════════════════════════════
+ * The C-level delete/restore decisions record their refusal reason in
+ * last_error (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `(no detail)`.  Pinned through
+ * stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * Suite state at this point: 3 deleted (re-seeded by the get/list
+ * tests), 1 live; 9999 does not exist.
+ */
+
+static void pin_refusal(stest_ctx_t *ctx, const char *action, const char *id,
+                        int want_rc, const char *needle)
+{
+    char *argv0[] = { "acta_cli", "context", action, id };
+    int rc = stest_run_argv(ctx, cmd_context, 4, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_refusal_msgs(stest_ctx_t *ctx)
+{
+    pin_refusal(ctx, "delete", "3", EXIT_NOT_FOUND,
+                "context 3 does not exist or is already deleted");
+    pin_refusal(ctx, "delete", "9999", EXIT_NOT_FOUND,
+                "context 9999 does not exist or is already deleted");
+    pin_refusal(ctx, "restore", "1", EXIT_NOT_FOUND,
+                "context 1 is not deleted (nothing to restore)");
+    pin_refusal(ctx, "restore", "9999", EXIT_NOT_FOUND,
+                "context 9999 does not exist");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_context_test_deleted(void)
@@ -257,6 +292,9 @@ int run_context_test_deleted(void)
     test_list_include_deleted(&ctx);
     test_list_deleted_alias(&ctx);
     test_count_live_vs_included(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_refusal_msgs(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

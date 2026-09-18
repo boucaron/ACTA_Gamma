@@ -26,7 +26,7 @@ a throwaway test DB (`acta_cli/tmp/acta.db`). Companion to
   `ACTA_DB_ERR_INVALID`, exit 4) — no tree corruption possible via the
   CLI.
 
-## The exec state machine (measured, **not in cli_spec.md**)
+## The exec state machine (measured; now documented in `cli_spec.md`)
 
 | Action | Allowed from | Result status | Required flag |
 |---|---|---|---|
@@ -37,19 +37,20 @@ a throwaway test DB (`acta_cli/tmp/acta.db`). Companion to
 | `reset` | `failed` only | `pending` | — (clears `error`, `raw_response`, `started_at`, `completed_at`) |
 | `set-raw` | any | unchanged (echoes current, incl. `pending`) | `--raw*` / `--raw_file*` |
 
-Every illegal transition → exit 4 `ACTA_DB_ERR_INVALID` +
-`"(no detail)"`. Consequences for callers: `complete`/`fail` are only
-reachable *through* `running` (start first, from `pending`);
+Every illegal transition → exit 4 `ACTA_DB_ERR_INVALID` with the
+refusal reason in the error message (the "(no detail)" degeneration is
+gone — see finding 3). Consequences for callers: `complete`/`fail`
+are only reachable *through* `running` (start first, from `pending`);
 `cancelled` is a dead end (no restart, no complete); `reset` only
-un-sticks `failed`. All of this is absent from `cli_spec.md` — the spec
-lists actions and success shapes but not the transition rules.
+un-sticks `failed`.
 
 ## Findings (priority order)
 
-1. **Document the state machine in `cli_spec.md`.** Add the table
-   above (plus "all other transitions → exit 4") next to the exec
-   section. An agent that cannot see it will probe transitions by trial
-   and mistake exit 4 for a DB fault.
+1. ~~Document the state machine in `cli_spec.md`.~~ **Resolved.**
+   `cli_spec.md` now carries the state-machine table (allowed source
+   states, result status, plus the `delete` / `restore` row-class
+   refusals) in the exec notes, so agents see the transition rules
+   instead of probing by trial and mistaking exit 4 for a DB fault.
 2. **`update` silently snapshots a new revision row.** `model update` /
    `skill update` each created a new `model_revision` / `skill_revision`
    (ids 13/12 in the test, same timestamp). This is important semantics
@@ -63,14 +64,24 @@ lists actions and success shapes but not the transition rules.
    The cycle guard deserves its own message ("cannot move folder into
    its own subtree") — it is a real protection whose reason is
    invisible to the caller.
-   **Partial (KI-7):** the create paths and every SQL-error-based
-   failure now surface the detail (`acta_db_errmsg` fallback in
-   `finish_op_error` + `db_set_error` at C-level FK checks); the
-   C-level state-check refusals (illegal transitions, delete-
-   from-`running`, cycle-guarded `move`) still return
-   `<action> failed: (no detail)` because they decide the error in C
-   code without any SQL error — they need their own `db_set_error`
-   messages to close this out.
+   **Resolved.** The create paths and every SQL-error-based failure
+   surface the detail (`acta_db_errmsg` fallback in `finish_op_error` +
+   `db_set_error` at C-level FK checks), and the remaining class — the
+   C-level state-check refusals that decide the error without any SQL
+   error (illegal exec transitions, delete-from-`running`,
+   reset/restore row-class refusals, model/skill/folder NOT_FOUND
+   paths, the folder-move cycle guard, and the folder-delete guards
+   for live sub-folders / live assigned models) — now records its own
+   `db_set_error` message (`execution start failed: execution 3 is
+   'completed'; start requires status 'pending'`, `cannot move
+   model_folder 6 into its own subtree: parent 8 is a descendant of 6`,
+   …). Refusal-message pins via `stest_stderr` live in the `tests/exec`
+   (lifecycle + deleted), `tests/context` (deleted), `tests/model`
+   (error_contract), `tests/skill` (update + delete/restore),
+   `tests/model_folder` and `tests/skill_folder` (move +
+   delete/restore) suites; the exit-code split (refused operation on
+   an existing row → exit 4 `INVALID`; missing / already-deleted row →
+   exit 1 `NOT_FOUND`) is documented in `cli_spec.md`.
 4. **`move` on a soft-deleted row → exit 1 (live-only), no
    `--include_deleted`.** Consistent with get/list live-only defaults,
    but easy to misread as "row gone" — the error could say "row is
@@ -82,5 +93,8 @@ lists actions and success shapes but not the transition rules.
   exactly this); `raw_response` survives a subsequent `reset` test
   ordering in the session but the spec says `reset` clears it —
   `reset` was only exercised from `failed`, per the table.
-- `db exec` remains the only path that surfaces SQLite error text;
-  entity paths never do (see `cli_creation_analysis.md`).
+- Superseded by the KI-7 work: entity paths now surface error detail
+  too — `finish_op_error` falls back to `acta_db_errmsg` (the
+  connection's `sqlite3_errmsg`) when the library stored no
+  `last_error`, and every C-level refusal records its own reason via
+  `db_set_error` (see finding 3, resolved).

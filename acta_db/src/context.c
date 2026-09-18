@@ -353,7 +353,14 @@ int acta_db_context_delete(db_t *db, int id)
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
     /* 0 rows: either the id does not exist or the row is already
      * deleted – both map to NOT_FOUND by contract. */
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+    /* C-level decision without a SQL error: record the detail for the
+     * CLI's error message (KI-7). */
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "context %d does not exist or is already deleted", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_context_restore(db_t *db, int id)
@@ -376,7 +383,24 @@ int acta_db_context_restore(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+    /* 0 rows: either the id does not exist or the row is live —
+     * distinguish so the refusal reason is accurate (KI-7). */
+    char msg[192];
+    const char *probe_sql = "SELECT 1 FROM contexts WHERE id = ?;";
+    sqlite3_stmt *probe;
+    if (sqlite3_prepare_v2(db->handle, probe_sql, -1, &probe, NULL) != SQLITE_OK)
+        return ACTA_DB_ERR_SQL;
+    sqlite3_bind_int(probe, 1, id);
+    int exists = (sqlite3_step(probe) == SQLITE_ROW);
+    sqlite3_finalize(probe);
+    if (exists)
+        snprintf(msg, sizeof msg,
+                 "context %d is not deleted (nothing to restore)", id);
+    else
+        snprintf(msg, sizeof msg, "context %d does not exist", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

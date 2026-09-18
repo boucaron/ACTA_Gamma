@@ -160,6 +160,20 @@ static void test_update_nonexistent_id(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* KI-7: `skill update` of a missing id fails on the live-row fetch →
+ * the JSON error line on stderr carries the not-found detail, never
+ * "(no detail)".  Pinned through stest_run_argv (captures stderr). */
+static void test_update_nonexistent_msg(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "skill", "update", "99999",
+                      "--name", "ghost", "--prompt_template", "boo" };
+    int rc = stest_run_argv(ctx, cmd_skill, 8, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, "skill not found");
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
 static void test_update_invalid_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
@@ -335,6 +349,7 @@ int run_skill_test_update(void)
     test_update_no_fields_rejected(&ctx);
     test_update_empty_name_rejected(&ctx);
     test_update_nonexistent_id(&ctx);
+    test_update_nonexistent_msg(&ctx);
     test_update_invalid_id(&ctx);
     test_update_missing_positional(&ctx);
     test_update_creates_revision(&ctx);

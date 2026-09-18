@@ -176,9 +176,15 @@ int acta_db_skill_update(db_t *db, const skill_t *s)
         return ACTA_DB_ERR_SQL;
     }
 
-    return sqlite3_changes(db->handle) > 0
-           ? ACTA_DB_OK
-           : ACTA_DB_ERR_NOT_FOUND;
+    if (sqlite3_changes(db->handle) > 0)
+        return ACTA_DB_OK;
+    /* C-level decision without a SQL error: record the detail for the
+     * CLI's error message (KI-7). */
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "skill %d does not exist or is soft-deleted", s->id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_skill_soft_delete(db_t *db, int id)
@@ -201,7 +207,12 @@ int acta_db_skill_soft_delete(db_t *db, int id)
     }
     int changed = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "skill %d does not exist or is soft-deleted", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_skill_restore(db_t *db, int id)
@@ -236,7 +247,11 @@ int acta_db_skill_restore(db_t *db, int id)
     sqlite3_bind_int(chk, 1, id);
     int exists = (sqlite3_step(chk) == SQLITE_ROW);
     sqlite3_finalize(chk);
-    return exists ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (exists) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg, "skill %d does not exist", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id)
@@ -254,7 +269,14 @@ int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id)
         sqlite3_bind_int(chk, 1, folder_id);
         int found = (sqlite3_step(chk) == SQLITE_ROW);
         sqlite3_finalize(chk);
-        if (!found) return ACTA_DB_ERR_NOT_FOUND;
+        if (!found) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "skill_folder %d does not exist or is soft-deleted",
+                     folder_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
     }
 
     const char *sql =
@@ -275,7 +297,12 @@ int acta_db_skill_move_to_folder(db_t *db, int skill_id, int folder_id)
     }
     int changed = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "skill %d does not exist or is soft-deleted", skill_id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

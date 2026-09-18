@@ -326,6 +326,41 @@ static void test_count_live_vs_included(stest_ctx_t *ctx)
     TEST_EQ(ctx, atoi(stest_stdout(ctx)), 5);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ *  refusal messages (KI-7)
+ * ══════════════════════════════════════════════════════════════════
+ * The C-level delete/reset/restore decisions record their refusal
+ * reason in last_error (db_set_error), so the JSON error line on
+ * stderr carries `<op> failed: <reason>` instead of `(no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * Suite state at this point: 1 running, 2 deleted (cancelled),
+ * 3 pending, 4 deleted (completed), 5 pending.
+ */
+
+static void pin_refusal(stest_ctx_t *ctx, const char *action, const char *id,
+                        int want_rc, const char *needle)
+{
+    char *argv0[] = { "acta_cli", "exec", action, id };
+    int rc = stest_run_argv(ctx, cmd_exec, 4, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_refusal_msgs(stest_ctx_t *ctx)
+{
+    pin_refusal(ctx, "delete", "1", EXIT_INVALID,
+                "cannot delete execution 1 while its status is 'running'");
+    pin_refusal(ctx, "delete", "2", EXIT_NOT_FOUND,
+                "execution 2 is already deleted");
+    pin_refusal(ctx, "reset", "2", EXIT_NOT_FOUND,
+                "execution 2 is soft-deleted; restore it before reset");
+    pin_refusal(ctx, "restore", "1", EXIT_NOT_FOUND,
+                "execution 1 is not deleted (nothing to restore)");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_execution_test_deleted(void)
@@ -345,6 +380,9 @@ int run_execution_test_deleted(void)
     test_list_include_deleted(&ctx);
     test_list_deleted_alias(&ctx);
     test_count_live_vs_included(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_refusal_msgs(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

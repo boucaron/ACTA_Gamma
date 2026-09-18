@@ -219,7 +219,12 @@ int acta_db_skill_folder_rename(db_t *db, int id, const char *new_name)
     }
     int changed = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "skill_folder %d does not exist or is soft-deleted", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id)
@@ -236,7 +241,13 @@ int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id)
         sqlite3_bind_int(stmt, 1, id);
         int rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
-        if (rc != SQLITE_ROW) return ACTA_DB_ERR_NOT_FOUND;
+        if (rc != SQLITE_ROW) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "skill_folder %d does not exist or is soft-deleted", id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
     }
 
     if (new_parent_id != 0) {
@@ -251,7 +262,14 @@ int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id)
             sqlite3_bind_int(stmt, 1, new_parent_id);
             int rc = sqlite3_step(stmt);
             sqlite3_finalize(stmt);
-            if (rc != SQLITE_ROW) return ACTA_DB_ERR_NOT_FOUND;
+            if (rc != SQLITE_ROW) {
+                char msg[192];
+                snprintf(msg, sizeof msg,
+                         "parent skill_folder %d does not exist or is soft-deleted",
+                         new_parent_id);
+                db_set_error(db, msg);
+                return ACTA_DB_ERR_NOT_FOUND;
+            }
         }
 
         /* 3 – cycle detection: walk up from new_parent_id;
@@ -267,6 +285,12 @@ int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id)
             int cursor = new_parent_id;
             for (int depth = 0; depth < 4096; depth++) {
                 if (cursor == id) {
+                    char msg[192];
+                    snprintf(msg, sizeof msg,
+                             "cannot move skill_folder %d into its own subtree: "
+                             "parent %d is a descendant of %d",
+                             id, new_parent_id, id);
+                    db_set_error(db, msg);
                     sqlite3_finalize(stmt);
                     return ACTA_DB_ERR_INVALID;
                 }
@@ -304,7 +328,12 @@ int acta_db_skill_folder_move_to(db_t *db, int id, int new_parent_id)
         }
         int changed = sqlite3_changes(db->handle);
         sqlite3_finalize(stmt);
-        return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+        if (changed > 0) return ACTA_DB_OK;
+        char msg[192];
+        snprintf(msg, sizeof msg,
+                 "skill_folder %d does not exist or is soft-deleted", id);
+        db_set_error(db, msg);
+        return ACTA_DB_ERR_NOT_FOUND;
     }
 }
 
@@ -325,7 +354,14 @@ int acta_db_skill_folder_soft_delete(db_t *db, int id)
         if (sqlite3_step(stmt) == SQLITE_ROW)
             child_count = (int)sqlite3_column_int64(stmt, 0);
         sqlite3_finalize(stmt);
-        if (child_count > 0) return ACTA_DB_ERR_INVALID;
+        if (child_count > 0) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "cannot delete skill_folder %d: it has live sub-folders",
+                     id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_INVALID;
+        }
     }
 
     /* Reject if live skills are assigned to this folder */
@@ -341,7 +377,14 @@ int acta_db_skill_folder_soft_delete(db_t *db, int id)
         if (sqlite3_step(stmt) == SQLITE_ROW)
             skill_count = (int)sqlite3_column_int64(stmt, 0);
         sqlite3_finalize(stmt);
-        if (skill_count > 0) return ACTA_DB_ERR_INVALID;
+        if (skill_count > 0) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "cannot delete skill_folder %d: live skills are assigned to it",
+                     id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_INVALID;
+        }
     }
 
     /* Soft-delete */
@@ -362,7 +405,12 @@ int acta_db_skill_folder_soft_delete(db_t *db, int id)
         }
         int changed = sqlite3_changes(db->handle);
         sqlite3_finalize(stmt);
-        return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+        if (changed > 0) return ACTA_DB_OK;
+        char msg[192];
+        snprintf(msg, sizeof msg,
+                 "skill_folder %d does not exist or is soft-deleted", id);
+        db_set_error(db, msg);
+        return ACTA_DB_ERR_NOT_FOUND;
     }
 }
 
@@ -370,12 +418,12 @@ int acta_db_skill_folder_restore(db_t *db, int id)
 {
     if (!db || id <= 0) return ACTA_DB_ERR_INVALID;
 
+    /* Strict undelete: only a soft-deleted row may be restored; a live
+     * or a missing row both yield NOT_FOUND (KI-7). */
     const char *sql =
         "UPDATE skill_folders"
-        " SET deleted_at = NULL,"
-        "     updated_at = CASE WHEN deleted_at IS NOT NULL"
-        "                       THEN datetime('now') ELSE updated_at END"
-        " WHERE id = ?;";
+        " SET deleted_at = NULL, updated_at = datetime('now')"
+        " WHERE id = ? AND deleted_at IS NOT NULL;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
         return ACTA_DB_ERR_SQL;
@@ -388,7 +436,11 @@ int acta_db_skill_folder_restore(db_t *db, int id)
     }
     int changed = sqlite3_changes(db->handle);
     sqlite3_finalize(stmt);
-    return changed > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changed > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg, "skill_folder %d does not exist", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 /* ================================================================

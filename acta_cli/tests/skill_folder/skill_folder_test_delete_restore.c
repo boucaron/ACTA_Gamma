@@ -177,14 +177,16 @@ static void test_restore_deleted(stest_ctx_t *ctx)
 
 static void test_restore_not_deleted(stest_ctx_t *ctx)
 {
-    /* restoring a live folder is a no-op → OK (updated_at untouched) */
-    global_opts_t g = gopts_default();
-    cmd_args_t *a = targs_new();
-    targs_pos(a, "1", &g);  /* live folder */
-
-    int rc = do_restore(ctx, a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
+    /* Restoring a LIVE folder is a hard NOT_FOUND: restore only unflags
+     * soft-deleted rows. The refusal reason is recorded in last_error
+     * (db_set_error) and pinned here (KI-7); runs through
+     * stest_run_argv so stderr is captured. */
+    char *argv0[] = { "acta_cli", "skill_folder", "restore", "1" };
+    int rc = stest_run_argv(ctx, cmd_skill_folder, 4, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_NOT_FOUND);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, "skill_folder 1 does not exist");
+    TEST(ctx, err && !strstr(err, "(no detail)"));
 }
 
 static void test_restore_nonexistent(stest_ctx_t *ctx)
@@ -219,6 +221,43 @@ static void test_restore_missing_positional(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ *  refusal messages (KI-7)
+ * ══════════════════════════════════════════════════════════════════
+ * The C-level delete/restore checks record their refusal reason in
+ * last_error (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `<op> failed: (no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * Suite state at this point: 1 live (child 2), 2 live with 4 skills;
+ * 99999 does not exist.
+ */
+
+static void pin_refusal(stest_ctx_t *ctx, const char *action, const char *id,
+                        int want_rc, const char *needle)
+{
+    char *argv0[] = { "acta_cli", "skill_folder", action, id };
+    int rc = stest_run_argv(ctx, cmd_skill_folder, 4, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_refusal_msgs(stest_ctx_t *ctx)
+{
+    pin_refusal(ctx, "delete", "99999", EXIT_NOT_FOUND,
+                "skill_folder 99999 does not exist or is soft-deleted");
+    /* folder 1 has live child folder 2 → the sub-folder guard fires */
+    pin_refusal(ctx, "delete", "1", EXIT_INVALID,
+                "cannot delete skill_folder 1: it has live sub-folders");
+    /* folder 2 has 4 live skills and no children → the skills guard */
+    pin_refusal(ctx, "delete", "2", EXIT_INVALID,
+                "cannot delete skill_folder 2: live skills are assigned to it");
+    pin_refusal(ctx, "restore", "99999", EXIT_NOT_FOUND,
+                "skill_folder 99999 does not exist");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_skill_folder_test_delete_restore(void)
@@ -236,6 +275,10 @@ int run_skill_folder_test_delete_restore(void)
     test_restore_deleted(&ctx);
     test_restore_not_deleted(&ctx);
     test_restore_nonexistent(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_refusal_msgs(&ctx);
+
     test_restore_invalid_id(&ctx);
     test_restore_missing_positional(&ctx);
 

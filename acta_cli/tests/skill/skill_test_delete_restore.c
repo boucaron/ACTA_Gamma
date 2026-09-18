@@ -149,6 +149,34 @@ static void test_restore_missing_positional(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ *  refusal messages (KI-7)
+ * ══════════════════════════════════════════════════════════════════
+ * The library records the NOT_FOUND refusal reason in last_error
+ * (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `<op> failed: (no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ */
+
+static void pin_refusal(stest_ctx_t *ctx, const char *action, const char *id,
+                        int want_rc, const char *needle)
+{
+    char *argv0[] = { "acta_cli", "skill", action, id };
+    int rc = stest_run_argv(ctx, cmd_skill, 4, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_refusal_msgs(stest_ctx_t *ctx)
+{
+    pin_refusal(ctx, "delete", "99999", EXIT_NOT_FOUND,
+                "skill 99999 does not exist or is soft-deleted");
+    pin_refusal(ctx, "restore", "99999", EXIT_NOT_FOUND,
+                "skill 99999 does not exist");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_skill_test_delete_restore(void)
@@ -164,6 +192,10 @@ int run_skill_test_delete_restore(void)
     test_restore_deleted(&ctx);
     test_restore_not_deleted(&ctx);
     test_restore_nonexistent(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_refusal_msgs(&ctx);
+
     test_restore_invalid_id(&ctx);
     test_restore_missing_positional(&ctx);
 

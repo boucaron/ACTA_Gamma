@@ -3,6 +3,8 @@
 #include "model.h"
 #include "db.h"
 
+#include <stdio.h>
+
 /* ---------- constants ---------- */
 
 #define MODEL_LIST_INIT_CAP 16
@@ -211,7 +213,14 @@ int acta_db_model_update(db_t *db, const model_t *m) {
     int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    /* C-level decision without a SQL error: record the detail for the
+     * CLI's error message (KI-7). */
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "model %d does not exist or is soft-deleted", m->id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_model_soft_delete(db_t *db, int id) {
@@ -230,7 +239,12 @@ int acta_db_model_soft_delete(db_t *db, int id) {
     int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "model %d does not exist or is soft-deleted", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_model_restore(db_t *db, int id) {
@@ -263,7 +277,11 @@ int acta_db_model_restore(db_t *db, int id) {
     int exists = (sqlite3_step(stmt) == SQLITE_ROW);
     sqlite3_finalize(stmt);
 
-    return exists ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (exists) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg, "model %d does not exist", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
@@ -279,7 +297,14 @@ int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
         sqlite3_bind_int(chk, 1, folder_id);
         int found = (sqlite3_step(chk) == SQLITE_ROW);
         sqlite3_finalize(chk);
-        if (!found) return ACTA_DB_ERR_NOT_FOUND;
+        if (!found) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "model_folder %d does not exist or is soft-deleted",
+                     folder_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
     }
 
     const char *sql =
@@ -299,7 +324,12 @@ int acta_db_model_move_to_folder(db_t *db, int model_id, int folder_id) {
     int changes = (rc == SQLITE_DONE) ? sqlite3_changes(db->handle) : 0;
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "model %d does not exist or is soft-deleted", model_id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 /* ---------- getters ---------- */

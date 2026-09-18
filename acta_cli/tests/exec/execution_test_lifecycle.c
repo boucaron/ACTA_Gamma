@@ -424,6 +424,51 @@ static void test_set_raw_nonexistent(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ *  refusal messages (KI-7)
+ * ══════════════════════════════════════════════════════════════════
+ * Every C-level state check records its refusal reason in last_error
+ * (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `<op> failed: (no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * Suite state at this point: 1 failed, 2 cancelled, 3 completed,
+ * 4 pending, 5 completed; 9999 does not exist.
+ */
+
+static void check_refusal_msg(stest_ctx_t *ctx, const char *action,
+                              const char *id, int want_rc,
+                              const char *needle)
+{
+    char *argv0[] = { "acta_cli", "exec", action, id };
+    int rc = stest_run_argv(ctx, cmd_exec, 4, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_refusal_msgs(stest_ctx_t *ctx)
+{
+    check_refusal_msg(ctx, "start", "9999", EXIT_NOT_FOUND,
+                      "execution 9999 does not exist");
+    check_refusal_msg(ctx, "start", "3", EXIT_INVALID,
+                      "execution 3 is 'completed'; start requires status "
+                      "'pending'");
+    check_refusal_msg(ctx, "cancel", "3", EXIT_INVALID,
+                      "execution 3 is 'completed'; cancel requires status "
+                      "'pending' or 'running'");
+    check_refusal_msg(ctx, "complete", "4", EXIT_INVALID,
+                      "execution 4 is 'pending'; complete requires status "
+                      "'running'");
+    check_refusal_msg(ctx, "fail", "3", EXIT_INVALID,
+                      "execution 3 is 'completed'; fail requires status "
+                      "'running'");
+    check_refusal_msg(ctx, "reset", "2", EXIT_INVALID,
+                      "execution 2 is 'cancelled'; reset requires status "
+                      "'failed'");
+}
+
 /* ── runner ────────────────────────────────────────────────────────── */
 
 int run_execution_test_lifecycle(void)
@@ -468,6 +513,9 @@ int run_execution_test_lifecycle(void)
     test_set_raw_missing_raw(&ctx);
     test_set_raw_missing_id(&ctx);
     test_set_raw_nonexistent(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_refusal_msgs(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

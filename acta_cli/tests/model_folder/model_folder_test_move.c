@@ -265,6 +265,40 @@ static void test_move_unique_root_conflict(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* T15 ── refusal messages (KI-7) ────────────────────────────────────
+ *
+ * The C-level move checks record their refusal reason in last_error
+ * (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `<op> failed: (no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * State at this point: 3→NULL, 2→3, 6→1, 8→6 (T1–T3 applied).
+ */
+
+static void check_move_refusal(stest_ctx_t *ctx, const char *id,
+                               const char *parent, int want_rc,
+                               const char *needle)
+{
+    char *argv0[] = { "acta_cli", "model_folder", "move", id,
+                      "--parent_id", parent };
+    int rc = stest_run_argv(ctx, cmd_model_folder, 6, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_move_refusal_msgs(stest_ctx_t *ctx)
+{
+    check_move_refusal(ctx, "9999", "1", EXIT_NOT_FOUND,
+                       "model_folder 9999 does not exist or is soft-deleted");
+    check_move_refusal(ctx, "1", "9999", EXIT_NOT_FOUND,
+                       "parent model_folder 9999 does not exist or is soft-deleted");
+    check_move_refusal(ctx, "6", "8", EXIT_INVALID,
+                       "cannot move model_folder 6 into its own subtree: "
+                       "parent 8 is a descendant of 6");
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_model_folder_test_move(void)
@@ -291,6 +325,9 @@ int run_model_folder_test_move(void)
     test_move_same_parent_noop(&ctx);
     test_move_unique_child_conflict(&ctx);
     test_move_unique_root_conflict(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_move_refusal_msgs(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

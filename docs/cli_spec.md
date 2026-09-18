@@ -118,6 +118,21 @@ where `<detail>` is the last error recorded by `acta_db`, falling back
 to the connection's `sqlite3_errmsg` (`acta_db_errmsg`) — it degenerates
 to `(no detail)` only when no error message was recorded at all.
 
+Refusal reasons (KI-7, fully closed): decisions made in C code without
+any failing SQL statement — illegal exec state transitions, `delete`
+from `running`, `reset` / `restore` of the wrong row class, delete /
+restore of a missing or already-deleted row, the folder-move cycle
+guard, and the folder-delete guards (live sub-folders, live assigned
+models) — each records its own detail in `last_error` via
+`db_set_error`, so they surface as `<op> failed: <reason>` (e.g.
+`execution start failed: execution 3 is 'completed'; start requires
+status 'pending'`, `model_folder move failed: cannot move model_folder
+6 into its own subtree: parent 8 is a descendant of 6`) instead of
+`(no detail)`. The exit-code split for refusals: a refused *operation
+on an existing row* (bad state, cycle, guard) is
+`ACTA_DB_ERR_INVALID` → exit 4; a refusal because the *row is missing
+or already deleted* is `ACTA_DB_ERR_NOT_FOUND` → exit 1.
+
 ## db
 
 | Command | Positionals | Flags | Input | stdout on success |
@@ -229,6 +244,23 @@ to `(no detail)` only when no error message was recorded at all.
 
 Notes on `exec`:
 
+- **State machine** — the lifecycle transitions and their allowed source
+  states; every other transition is refused:
+
+  | Action | Allowed from | Result status |
+  |---|---|---|
+  | `start` | `pending` | `running` |
+  | `cancel` | `pending`, `running` | `cancelled` |
+  | `complete` | `running` | `completed` |
+  | `fail` | `running` | `failed` |
+  | `reset` | `failed` | `pending` (clears `error`, `raw_response`, `started_at`, `completed_at`) |
+  | `set-raw` | any | unchanged (echoes the current status, which can be `pending`) |
+  | `delete` | any **except** `running` and already-deleted | soft-deleted (refused from `running` → exit 4; already deleted → exit 1) |
+  | `restore` | deleted rows only | status untouched (live or missing row → exit 1) |
+
+  Consequences for callers: `complete` / `fail` are only reachable
+  *through* `running` (start first, from `pending`); `cancelled` is a
+  dead end (no restart, no complete); `reset` only un-sticks `failed`.
 - **Replay** — there is no dedicated replay action. Replay an execution by
   creating a new one with the same inputs — `exec create` with the same
   `context_id` / `skill_revision_id` / `model_revision_id` (and `--prompt`

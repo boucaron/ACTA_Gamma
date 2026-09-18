@@ -18,8 +18,11 @@
 
 #define REF_DB "acta_test_ref.db"
 
-/* ── stderr capture (local; the shared helper captures stdout only) ── */
-/* Same dup2 technique as stest_capture_begin/end, applied to fd 2.
+/* ── stderr capture (local) ───────────────────────────────────────── */
+/* The shared harness also captures stderr (stest_stderr); this file
+ * keeps its own local capture so the single-line shape check can assert
+ * on the exact bytes, prefix through the closing "}\n".
+ * Same dup2 technique as stest_capture_begin/end, applied to fd 2.
  * The buffer is a static 64 KiB: the contract line is short; anything
  * larger is already a contract violation (extra stderr lines) and the
  * prefix/shape asserts below still hold on the truncated head. */
@@ -66,13 +69,17 @@ static void err_end(void)
 
 const char *captured_stderr(void) { return s_err; }
 
-/* Pinned stderr prefixes: name, code, and op label per the contract. */
+/* Pinned stderr lines: name, code, op label, and — since the KI-7
+ * follow-up — the full refusal detail the library records in last_error
+ * (db_set_error) before returning NOT_FOUND, so the whole single line
+ * is deterministic. */
 static const char *const DELETE_ERR_PREFIX =
     "{\"error\":\"ACTA_DB_ERR_NOT_FOUND\",\"code\":-1,"
-    "\"message\":\"model delete failed:";
+    "\"message\":\"model delete failed: model 9999 does not exist "
+    "or is soft-deleted\"}";
 static const char *const RESTORE_ERR_PREFIX =
     "{\"error\":\"ACTA_DB_ERR_NOT_FOUND\",\"code\":-1,"
-    "\"message\":\"model restore failed:";
+    "\"message\":\"model restore failed: model 9999 does not exist\"}";
 
 /* Single-line JSON check: prefix match + closing "...}\n". */
 static int err_line_matches(const char *prefix)
@@ -108,8 +115,8 @@ static int do_restore(stest_ctx_t *ctx, cmd_args_t *args, global_opts_t gopts)
 
 /* ── tests ────────────────────────────────────────────────────────── */
 
-/* `model delete <missing>` → NOT_FOUND: JSON error line on stderr,
- * empty stdout, exit 1. */
+/* `model delete <missing>` → NOT_FOUND: the full JSON error line on
+ * stderr (op label + refusal detail), empty stdout, exit 1. */
 static void test_delete_missing_emits_json_error(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
@@ -127,7 +134,9 @@ static void test_delete_missing_emits_json_error(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-/* `model restore <missing>` → same contract, different op label. */
+/* `model restore <missing>` → same contract, different op label and
+ * refusal detail ("does not exist" — restore has no "or is
+ * soft-deleted" clause). */
 static void test_restore_missing_emits_json_error(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();

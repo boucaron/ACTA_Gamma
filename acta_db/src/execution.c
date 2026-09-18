@@ -165,7 +165,23 @@ static int exec_bind_where(sqlite3_stmt *stmt,
 /*  Lightweight status check (replaces full-row read in transitions)  */
 /* ------------------------------------------------------------------ */
 
-static int exec_verify_status(db_t *db, int id, const char *expected)
+/*
+ * Lightweight status check (replaces full-row read in transitions).
+ *
+ * Refusals are recorded in last_error via db_set_error (KI-7): the
+ * decision is made in C code without any SQL error ever occurring,
+ * so without this the CLI would print "<op> failed: (no detail)".
+ *
+ *   row missing        -> ACTA_DB_ERR_NOT_FOUND,
+ *                         "execution <id> does not exist"
+ *   status mismatch    -> ACTA_DB_ERR_INVALID,
+ *                         "execution <id> is '<actual>'; <why>"
+ *
+ * `why` is the requirement sentence (e.g. "start requires status
+ * 'pending'").  On ACTA_DB_OK no message is stored.
+ */
+static int exec_verify_status(db_t *db, int id, const char *expected,
+                             const char *why)
 {
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle,
@@ -178,9 +194,20 @@ static int exec_verify_status(db_t *db, int id, const char *expected)
     int result = ACTA_DB_ERR_NOT_FOUND;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         const unsigned char *s = sqlite3_column_text(stmt, 0);
-        result = (s && strcmp((const char *)s, expected) == 0)
-                   ? ACTA_DB_OK
-                   : ACTA_DB_ERR_INVALID;
+        if (s && strcmp((const char *)s, expected) == 0)
+            result = ACTA_DB_OK;
+        else {
+            char msg[192];
+            snprintf(msg, sizeof msg, "execution %d is '%s'; %s",
+                     id, s ? (const char *)s : "(null)", why);
+            db_set_error(db, msg);
+            result = ACTA_DB_ERR_INVALID;
+        }
+    }
+    else {
+        char msg[80];
+        snprintf(msg, sizeof msg, "execution %d does not exist", id);
+        db_set_error(db, msg);
     }
     sqlite3_finalize(stmt);
     return result;
@@ -494,7 +521,8 @@ int acta_db_execution_start(db_t *db, int id)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING);
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING,
+                               "start requires status 'pending'");
     if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
@@ -512,20 +540,29 @@ int acta_db_execution_start(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+    if (changes > 0) return ACTA_DB_OK;
+    /* Race: the status moved between the check and the guarded UPDATE. */
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d changed concurrently; start not applied", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_INVALID;
 }
 
 int acta_db_execution_cancel(db_t *db, int id)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    /* Allow cancel from pending or running. A row in some other
-     * state makes the pending check fail with INVALID (not
-     * NOT_FOUND), so always fall through to the running check
-     * before giving up. */
-    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING);
-    if (rc != ACTA_DB_OK)
-        rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
+    /* Allow cancel from pending or running.  A row in some other state
+     * makes the pending check fail with INVALID (not NOT_FOUND), so fall
+     * through to the running check before giving up.  The requirement
+     * sentence covers both allowed states, so the message is correct
+     * whichever check produced the refusal. */
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_PENDING,
+                               "cancel requires status 'pending' or 'running'");
+    if (rc == ACTA_DB_ERR_INVALID)
+        rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING,
+                               "cancel requires status 'pending' or 'running'");
     if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
@@ -543,14 +580,20 @@ int acta_db_execution_cancel(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d changed concurrently; cancel not applied", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_INVALID;
 }
 
 int acta_db_execution_complete(db_t *db, int id, const char *result)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING,
+                               "complete requires status 'running'");
     if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
@@ -570,14 +613,20 @@ int acta_db_execution_complete(db_t *db, int id, const char *result)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d changed concurrently; complete not applied", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_INVALID;
 }
 
 int acta_db_execution_fail(db_t *db, int id, const char *error)
 {
     if (!db) return ACTA_DB_ERR_INVALID;
 
-    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING);
+    int rc = exec_verify_status(db, id, ACTA_EXEC_STATUS_RUNNING,
+                               "fail requires status 'running'");
     if (rc != ACTA_DB_OK) return rc;
 
     const char *sql =
@@ -597,7 +646,12 @@ int acta_db_execution_fail(db_t *db, int id, const char *error)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d changed concurrently; fail not applied", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_INVALID;
 }
 
 int acta_db_execution_reset(db_t *db, int id)
@@ -616,13 +670,29 @@ int acta_db_execution_reset(db_t *db, int id)
         sqlite3_bind_int(stmt, 1, id);
 
         int rc = ACTA_DB_ERR_NOT_FOUND;
+        char msg[192];
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             const unsigned char *s = sqlite3_column_text(stmt, 0);
-            rc = (sqlite3_column_type(stmt, 1) != SQLITE_NULL)
-                   ? ACTA_DB_ERR_NOT_FOUND
-                   : ((s && strcmp((const char *)s, ACTA_EXEC_STATUS_FAILED) == 0)
-                        ? ACTA_DB_OK
-                        : ACTA_DB_ERR_INVALID);
+            if (sqlite3_column_type(stmt, 1) != SQLITE_NULL)
+                rc = ACTA_DB_ERR_NOT_FOUND;          /* soft-deleted row */
+            else if (s && strcmp((const char *)s, ACTA_EXEC_STATUS_FAILED) == 0)
+                rc = ACTA_DB_OK;
+            else
+                rc = ACTA_DB_ERR_INVALID;           /* live, non-failed */
+            if (rc == ACTA_DB_ERR_NOT_FOUND)
+                snprintf(msg, sizeof msg,
+                         "execution %d is soft-deleted; restore it before reset",
+                         id);
+            else if (rc == ACTA_DB_ERR_INVALID)
+                snprintf(msg, sizeof msg,
+                         "execution %d is '%s'; reset requires status 'failed'",
+                         id, s ? (const char *)s : "(null)");
+            if (rc != ACTA_DB_OK)
+                db_set_error(db, msg);
+        }
+        else {
+            snprintf(msg, sizeof msg, "execution %d does not exist", id);
+            db_set_error(db, msg);
         }
         sqlite3_finalize(stmt);
         if (rc != ACTA_DB_OK) return rc;
@@ -644,7 +714,12 @@ int acta_db_execution_reset(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d changed concurrently; reset not applied", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_INVALID;
 }
 
 /* ------------------------------------------------------------------ */
@@ -669,13 +744,30 @@ int acta_db_execution_delete(db_t *db, int id)
         sqlite3_bind_int(stmt, 1, id);
 
         int rc = ACTA_DB_ERR_NOT_FOUND;
+        char msg[192];
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             const unsigned char *s = sqlite3_column_text(stmt, 0);
             int deleted = sqlite3_column_type(stmt, 1) != SQLITE_NULL;
             int running = s && strcmp((const char *)s, ACTA_EXEC_STATUS_RUNNING) == 0;
-            rc = deleted        ? ACTA_DB_ERR_NOT_FOUND
-                 : running      ? ACTA_DB_ERR_INVALID
-                                : ACTA_DB_OK;
+            if (deleted)
+                rc = ACTA_DB_ERR_NOT_FOUND;
+            else if (running)
+                rc = ACTA_DB_ERR_INVALID;
+            else
+                rc = ACTA_DB_OK;
+            if (rc == ACTA_DB_ERR_INVALID)
+                snprintf(msg, sizeof msg,
+                         "cannot delete execution %d while its status is 'running'",
+                         id);
+            else if (rc == ACTA_DB_ERR_NOT_FOUND)
+                snprintf(msg, sizeof msg,
+                         "execution %d is already deleted", id);
+            if (rc != ACTA_DB_OK)
+                db_set_error(db, msg);
+        }
+        else {
+            snprintf(msg, sizeof msg, "execution %d does not exist", id);
+            db_set_error(db, msg);
         }
         sqlite3_finalize(stmt);
         if (rc != ACTA_DB_OK) return rc;
@@ -697,7 +789,12 @@ int acta_db_execution_delete(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_INVALID;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d changed concurrently; delete not applied", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_INVALID;
 }
 
 int acta_db_execution_restore(db_t *db, int id)
@@ -722,7 +819,12 @@ int acta_db_execution_restore(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "execution %d is not deleted (nothing to restore)", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw)
@@ -744,7 +846,11 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw)
     sqlite3_finalize(stmt);
 
     if (step_rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg, "execution %d does not exist", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 /* ------------------------------------------------------------------ */

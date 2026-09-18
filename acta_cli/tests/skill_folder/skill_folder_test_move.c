@@ -199,6 +199,62 @@ static void test_move_to_deleted_parent(stest_ctx_t *ctx)
     targs_free(ma, &mg);
 }
 
+/* ── refusal messages (KI-7) ─────────────────────────────────────── */
+
+/* The C-level move checks record their refusal reason in last_error
+ * (db_set_error), so the JSON error line on stderr carries
+ * `<op> failed: <reason>` instead of `<op> failed: (no detail)`.  Pinned
+ * through stest_run_argv, which captures stderr (stest_stderr).
+ *
+ * State at this point: 2→NULL (root), 1 live with live child 2; 99999
+ * does not exist. */
+
+static void check_move_refusal(stest_ctx_t *ctx, const char *id,
+                               const char *parent, int want_rc,
+                               const char *needle)
+{
+    char *argv0[] = { "acta_cli", "skill_folder", "move", id,
+                      "--parent_id", parent };
+    int rc = stest_run_argv(ctx, cmd_skill_folder, 6, argv0, "");
+    TEST_EQ(ctx, rc, want_rc);
+    const char *err = stest_stderr(ctx);
+    TEST_CONTAINS(ctx, err, needle);
+    TEST(ctx, err && !strstr(err, "(no detail)"));
+}
+
+static void test_move_refusal_msgs(stest_ctx_t *ctx)
+{
+    check_move_refusal(ctx, "99999", "1", EXIT_NOT_FOUND,
+                       "skill_folder 99999 does not exist or is soft-deleted");
+    check_move_refusal(ctx, "1", "99999", EXIT_NOT_FOUND,
+                       "parent skill_folder 99999 does not exist or is soft-deleted");
+    check_move_refusal(ctx, "1", "1", EXIT_INVALID,
+                       "cannot move skill_folder 1 into its own subtree: "
+                       "parent 1 is a descendant of 1");
+}
+
+static void test_move_to_deleted_parent_msg(stest_ctx_t *ctx)
+{
+    /* message form of test_move_to_deleted_parent: seed a parent,
+     * soft-delete it, then move another folder under it. */
+    int p = stest_seed_folder(ctx, "RefusalGoneParent", 0);
+    int q = stest_seed_folder(ctx, "RefusalMover", 0);
+    if (p <= 0 || q <= 0) return;  /* skip if seeding failed */
+
+    char pbuf[16], qbuf[16];
+    snprintf(pbuf, sizeof pbuf, "%d", p);
+    snprintf(qbuf, sizeof qbuf, "%d", q);
+
+    char *dargv0[] = { "acta_cli", "skill_folder", "delete", pbuf };
+    int rc = stest_run_argv(ctx, cmd_skill_folder, 4, dargv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+
+    char needle[192];
+    snprintf(needle, sizeof needle,
+             "parent skill_folder %d does not exist or is soft-deleted", p);
+    check_move_refusal(ctx, qbuf, pbuf, EXIT_NOT_FOUND, needle);
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_skill_folder_test_move(void)
@@ -218,6 +274,10 @@ int run_skill_folder_test_move(void)
     test_move_to_self(&ctx);
     test_move_to_descendant(&ctx);
     test_move_to_deleted_parent(&ctx);
+
+    /* refusal messages (KI-7) */
+    test_move_refusal_msgs(&ctx);
+    test_move_to_deleted_parent_msg(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

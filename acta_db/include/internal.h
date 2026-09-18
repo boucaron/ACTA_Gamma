@@ -40,8 +40,10 @@ struct db_t {
  * the caller passes any NUL-terminated string and keeps no pointer.
  *
  * Used by entity mutator failure paths that decide an error in C code
- * without a failing SQL statement (e.g. the FK pre-check in
- * acta_db_execution_create), so the CLI error message can surface the
+ * without a failing SQL statement — the FK pre-check in
+ * acta_db_execution_create, the illegal exec state transitions,
+ * delete-from-running, the model/skill/folder NOT_FOUND paths, and the
+ * folder-move cycle guard — so the CLI error message can surface the
  * detail instead of "(no detail)" (KI-7).
  */
 static inline void db_set_error(db_t *db, const char *msg) {

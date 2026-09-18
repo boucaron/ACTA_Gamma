@@ -2,6 +2,8 @@
 #include "model_folder.h"
 #include "db.h"
 
+#include <stdio.h>
+
 /* ------------------------------------------------------------------ */
 /*  Row decoding                                                      */
 /* ------------------------------------------------------------------ */
@@ -146,7 +148,12 @@ int acta_db_model_folder_rename(db_t *db, int id, const char *new_name)
             return ACTA_DB_ERR_FK;
         return ACTA_DB_ERR_SQL;
     }
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "model_folder %d does not exist or is soft-deleted", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_model_folder_soft_delete(db_t *db, int id)
@@ -169,7 +176,14 @@ int acta_db_model_folder_soft_delete(db_t *db, int id)
             child_count = (int)sqlite3_column_int64(check, 0);
         sqlite3_finalize(check);
 
-        if (child_count > 0) return ACTA_DB_ERR_INVALID;
+        if (child_count > 0) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "cannot delete model_folder %d: it has live sub-folders",
+                     id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_INVALID;
+        }
     }
 
     /* Reject if live models are assigned to this folder. */
@@ -188,7 +202,14 @@ int acta_db_model_folder_soft_delete(db_t *db, int id)
             model_count = (int)sqlite3_column_int64(check, 0);
         sqlite3_finalize(check);
 
-        if (model_count > 0) return ACTA_DB_ERR_INVALID;
+        if (model_count > 0) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "cannot delete model_folder %d: live models are assigned to it",
+                     id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_INVALID;
+        }
     }
 
     const char *sql =
@@ -205,7 +226,12 @@ int acta_db_model_folder_soft_delete(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "model_folder %d does not exist or is soft-deleted", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 int acta_db_model_folder_restore(db_t *db, int id)
@@ -228,7 +254,12 @@ int acta_db_model_folder_restore(db_t *db, int id)
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-    return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+    if (changes > 0) return ACTA_DB_OK;
+    char msg[192];
+    snprintf(msg, sizeof msg,
+             "model_folder %d does not exist", id);
+    db_set_error(db, msg);
+    return ACTA_DB_ERR_NOT_FOUND;
 }
 
 /* ------------------------------------------------------------------ */
@@ -282,7 +313,14 @@ int acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id)
             cur_parent = db_col_int_or_zero(stmt, 0);
         sqlite3_finalize(stmt);
 
-        if (cur_parent < 0) return ACTA_DB_ERR_NOT_FOUND;
+        if (cur_parent < 0) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "model_folder %d does not exist or is soft-deleted",
+                     folder_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
         if (cur_parent == new_parent_id) return ACTA_DB_OK;  /* no-op */
     }
 
@@ -297,14 +335,29 @@ int acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id)
         sqlite3_bind_int(stmt, 1, new_parent_id);
         int rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
-        if (rc != SQLITE_ROW) return ACTA_DB_ERR_NOT_FOUND;
+        if (rc != SQLITE_ROW) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "parent model_folder %d does not exist or is soft-deleted",
+                     new_parent_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_NOT_FOUND;
+        }
     }
 
     /* 3. Cycle check. */
     if (new_parent_id > 0) {
         int cycle = ancestor_reaches(db, new_parent_id, folder_id);
         if (cycle < 0) return ACTA_DB_ERR_SQL;
-        if (cycle > 0) return ACTA_DB_ERR_INVALID;
+        if (cycle > 0) {
+            char msg[192];
+            snprintf(msg, sizeof msg,
+                     "cannot move model_folder %d into its own subtree: "
+                     "parent %d is a descendant of %d",
+                     folder_id, new_parent_id, folder_id);
+            db_set_error(db, msg);
+            return ACTA_DB_ERR_INVALID;
+        }
     }
 
     /* 4. Update. */
@@ -327,7 +380,13 @@ int acta_db_model_folder_move_to(db_t *db, int folder_id, int new_parent_id)
         sqlite3_finalize(stmt);
 
         if (rc != SQLITE_DONE) return ACTA_DB_ERR_SQL;
-        return changes > 0 ? ACTA_DB_OK : ACTA_DB_ERR_NOT_FOUND;
+        if (changes > 0) return ACTA_DB_OK;
+        char msg[192];
+        snprintf(msg, sizeof msg,
+                 "model_folder %d does not exist or is soft-deleted",
+                 folder_id);
+        db_set_error(db, msg);
+        return ACTA_DB_ERR_NOT_FOUND;
     }
 }
 
