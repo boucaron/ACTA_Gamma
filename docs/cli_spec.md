@@ -103,9 +103,10 @@ Exit codes: `0` ok, `1` not found, `2` SQL error, `3` OOM, `4` invalid
 argument / missing flag / missing required field / duplicate / FK
 violation / invalid DB file, `10` CLI usage error (unknown entity,
 unknown action, unknown option, bad `--verbose`, too few positionals,
-missing flag value, unexpected positional — an extra positional left
-unconsumed by a successful action, e.g. `context list help`, is
-rejected with `unexpected argument: '<tok>'`), `11` DB open failed. Errors: single JSON line on
+missing flag value, unexpected positional — a positional beyond the
+action's declared count (e.g. `context list help`) is rejected before
+the action runs, with no stdout payload, as `unexpected argument:
+'<tok>'`), `11` DB open failed. Errors: single JSON line on
 stderr `{"error":"ACTA_DB_ERR_*"|"ACTA_CLI_ERR","code":<n>,"message":"..."}`
 where the exit code is authoritative and `code` = −exit (the exit code
 is canonical, `code` = −exit everywhere);

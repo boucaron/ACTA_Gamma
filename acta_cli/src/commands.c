@@ -124,13 +124,36 @@ int commands_dispatch(const char *entity, const char *action,
 
     cli_gopts = gopts;   /* ← makes VLOG() see the current verbose level */
     VLOG(2, "dispatch to %s", entity);
+
+    /* KI-4 (now pre-checked): unexpected positional args used to be
+     * silently swallowed (`context list help` ran the list, exit 0).
+     * Surplus positionals are rejected BEFORE the handler runs, so the
+     * failure path emits only the stderr error line — no payload on
+     * stdout alongside exit 10.  Expected count comes from the tools
+     * table (single source of truth); the `help` action optionally
+     * takes one positional (<action>). */
+    {
+        int expected = tool_entry_positionals(entity, action);
+        if (expected >= 0) {
+            if (strcmp(action, "help") == 0) expected = 1;
+            if (cmd_args_count_positionals(ga) > expected) {
+                const char *extra = cmd_args_kth_positional(ga, expected);
+                char msg[256];
+                snprintf(msg, sizeof msg,
+                         "unexpected argument: '%s'", extra);
+                emit_cli_error(msg);   /* JSON contract line, stderr line 1 */
+                fprintf(stderr,
+                        "  Run 'acta_cli %s help' for usage.\n", entity);
+                return EXIT_CLI;
+            }
+        }
+    }
+
     int rc = fn(action, ga, gopts, db);
 
-    /* KI-4: unexpected positional args used to be silently swallowed
-     * (`context list help` ran the list, exit 0). Handlers read their
-     * positionals with cmd_args_next_positional, which advances ga->pos;
-     * anything left unconsumed after a successful handler run is an
-     * error, not data. */
+    /* Defense in depth: handlers read their positionals with
+     * cmd_args_next_positional, which advances ga->pos; anything left
+     * unconsumed after a successful handler run is an error, not data. */
     if (rc == EXIT_OK) {
         const char *extra = cmd_args_next_positional(ga);
         if (extra) {

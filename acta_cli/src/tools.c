@@ -821,6 +821,14 @@ static const tool_entry_t tool_table[] = {
 
 #define TOOL_COUNT (sizeof(tool_table) / sizeof(tool_table[0]))
 
+int tool_entry_positionals(const char *entity, const char *action) {
+    for (size_t i = 0; i < TOOL_COUNT; i++)
+        if (strcmp(tool_table[i].entity, entity) == 0 &&
+            strcmp(tool_table[i].action, action) == 0)
+            return (int)tool_table[i].n_pos;
+    return -1;
+}
+
 /* ------------------------------------------------------------------ */
 /*  rendering (hand-rolled, matches the existing json_str emitter)     */
 /* ------------------------------------------------------------------ */

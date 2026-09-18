@@ -67,6 +67,15 @@ int cmd_args_validate(const cmd_args_t *it);
 const char *cmd_args_next_positional(cmd_args_t *it);
 
 /*
+ * Read-only positional scans: same tokenization as
+ * cmd_args_next_positional (value-taking flags eat their value), but
+ * they never advance it->pos.  Used to detect surplus positionals
+ * BEFORE a handler runs.
+ */
+int cmd_args_count_positionals(const cmd_args_t *it);
+const char *cmd_args_kth_positional(const cmd_args_t *it, int k);
+
+/*
  * Flag accessor.  One protocol, no state mutation:
  *   - scans the FULL argument range (argv[0..argc), never advances pos;
  *   - returns the value string when the flag is present and takes a

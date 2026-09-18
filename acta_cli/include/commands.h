@@ -25,6 +25,11 @@ int tools_print(FILE *out, int pretty);
  * line per command, ~7 KB.  Static data, no DB. */
 int tools_print_compact(FILE *out);
 
+/* Number of positionals declared for "<entity>.<action>" in the tools
+ * table; -1 if the action is unknown.  Used by commands_dispatch to
+ * reject surplus positionals before the handler runs. */
+int tool_entry_positionals(const char *entity, const char *action);
+
 /*
  * P0: entity/action help router (no DB needed).
  *   - action == NULL or "help"   → the whole entity help

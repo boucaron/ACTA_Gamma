@@ -320,6 +320,37 @@ const char *cmd_args_next_positional(cmd_args_t *it) {
     return NULL;
 }
 
+int cmd_args_count_positionals(const cmd_args_t *it) {
+    int n = 0, p = it->pos;
+    while (p < it->argc) {
+        const char *tok = it->argv[p];
+        if (!is_flag(tok)) { n++; p++; continue; }
+        p++;
+        if (strchr(tok + 2, '=')) continue;   /* --name=value: inline */
+        if (flag_has_value(tok + 2) &&
+            p < it->argc && !is_flag(it->argv[p]))
+            p++;
+    }
+    return n;
+}
+
+const char *cmd_args_kth_positional(const cmd_args_t *it, int k) {
+    int n = 0, p = it->pos;
+    while (p < it->argc) {
+        const char *tok = it->argv[p];
+        if (!is_flag(tok)) {
+            if (n == k) return tok;
+            n++; p++; continue;
+        }
+        p++;
+        if (strchr(tok + 2, '=')) continue;   /* --name=value: inline */
+        if (flag_has_value(tok + 2) &&
+            p < it->argc && !is_flag(it->argv[p]))
+            p++;
+    }
+    return NULL;
+}
+
 /*
  * Rewrite documented flag aliases to their canonical names, in place
  * on the raw argv pointer array (g->argv), BEFORE cmd_args_init().

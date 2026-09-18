@@ -22,12 +22,16 @@ Early prototype / POC — not a product. By design (see `docs/DBDesign.md`, "Sco
 - Help small fixes in `acta_cli`: the `--db` line in `help_print` (`src/commands.c`) documents the default DB path (`$ACTA_DB`, else `./acta.db`), and `tools_print_compact` (`src/tools.c`) only emits the ` / ` required/optional JSON separator when the required list is non-empty, so `skill.update` renders `json:name,prompt_template,folder_id,description,output_schema` instead of `json: / name,…`. No schema or test-shape change.
 - Download ergonomics in `acta_cli` for the high-volume payload data (`context.content`, execution `prompt` / `raw_response` / `result` / `error`): **P1** the `--tools` schema now advertises `--full` on `context.list` / `exec.list` with a `success.note` documenting the light default (commit `427671a`); **P2** a stderr warning when `--fields` names a light-omitted field without `--full` (silent-null trap; exit code unchanged, `740a3c6`); **P3** global `--out <path>` (whole stdout payload to a file, fd-1 redirect in `main.c`, stderr untouched, unopenable path → exit 10) and `--raw_out <field>` for `context get` / `exec get` (one raw unescaped field, precedence over `--id_only`/`--table`/`--fields`, `d820c6b`); **P4** large-payload file input — `context create --content_file`, `exec set-raw --raw_file`, `exec complete --result_file` (raw file content, mutually exclusive with the inline flags and, for `--content_file`, with `--json`/`--stdin`/`--from_file`; conflicts/unreadable file → exit 4, `0ce3886`); **P5** `--stream` on every `list` action — NDJSON, one JSON object per line, internal paging until the filter is exhausted (`--offset` start, `--limit` cap), mutually exclusive with `--count`/`--table`/`--id_only` → exit 4 (`a830bf2`). All registered in the `--tools` schema, `--help`, and per-action help; covered by the `tools` test suite; wire contract in `docs/cli_spec.md`.
 
-**Known issues:** none open. All previously tracked issues are fixed and
-regression-pinned in the `acta_db/tests` and `acta_cli/tests` suites: the
-three `acta_db` review issues (light-projection listers, open-time pragma
-check-and-report, `acta_db_exec` contract) and CLI known-issues KI-1..KI-8
-(`--sql_stdin` flag, unknown JSON keys, `--raw_out` on NULL field, trailing
-`help` positional, `db exec` SELECT guard, `--id_only` on `list`, error-detail
+**Known issues:** tracked in `docs/known_issues.md` — 6 items found by
+read-only testing against a real DB (2026-09-18); #1 (trailing positional
+emitted payload alongside rc 10) is fixed, #2-#6 (revision soft-delete
+gaps, `--verbose` help wording, empty-string `event` seed rows) remain
+open. All previously tracked issues are fixed and regression-pinned in the
+`acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
+issues (light-projection listers, open-time pragma check-and-report,
+`acta_db_exec` contract) and CLI known-issues KI-1..KI-8 (`--sql_stdin`
+flag, unknown JSON keys, `--raw_out` on NULL field, trailing `help`
+positional, `db exec` SELECT guard, `--id_only` on `list`, error-detail
 propagation, `--all` no-op). The wire/error contracts they established are
 documented in `docs/cli_spec.md`; fix history is in the git log.
 
