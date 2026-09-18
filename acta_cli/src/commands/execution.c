@@ -758,34 +758,35 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (gopts->raw_out) {
             const char *v = NULL;
             int is_id = 0;
+            int known = 0;
             if (strcmp(gopts->raw_out, "id") == 0)
-                is_id = 1;
+                { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "context_id") == 0)
-                is_id = 1;
+                { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "skill_revision_id") == 0)
-                is_id = 1;
+                { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "model_revision_id") == 0)
-                is_id = 1;
+                { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "parent_execution_id") == 0)
-                is_id = 1;
+                { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "prompt") == 0)
-                v = e->prompt;
+                { v = e->prompt; known = 1; }
             else if (strcmp(gopts->raw_out, "raw_response") == 0)
-                v = e->raw_response;
+                { v = e->raw_response; known = 1; }
             else if (strcmp(gopts->raw_out, "result") == 0)
-                v = e->result;
+                { v = e->result; known = 1; }
             else if (strcmp(gopts->raw_out, "status") == 0)
-                v = e->status;
+                { v = e->status; known = 1; }
             else if (strcmp(gopts->raw_out, "error") == 0)
-                v = e->error;
+                { v = e->error; known = 1; }
             else if (strcmp(gopts->raw_out, "created_at") == 0)
-                v = e->created_at;
+                { v = e->created_at; known = 1; }
             else if (strcmp(gopts->raw_out, "started_at") == 0)
-                v = e->started_at;
+                { v = e->started_at; known = 1; }
             else if (strcmp(gopts->raw_out, "completed_at") == 0)
-                v = e->completed_at;
+                { v = e->completed_at; known = 1; }
             else if (strcmp(gopts->raw_out, "deleted_at") == 0)
-                v = e->deleted_at;
+                { v = e->deleted_at; known = 1; }
 
             if (is_id) {
                 int iv = e->id;
@@ -804,9 +805,12 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 snprintf(idb, sizeof idb, "%d", iv);
                 fputs(idb, stdout);
                 fputc('\n', stdout);
-            } else if (v) {
+            } else if (known && v) {
                 fputs(v, stdout);
                 fputc('\n', stdout);
+            } else if (known) {
+                /* KI-3: known field with a NULL value → no output
+                 * (previously fell through to the unknown-field error). */
             } else {
                 char msg[256];
                 snprintf(msg, sizeof msg,

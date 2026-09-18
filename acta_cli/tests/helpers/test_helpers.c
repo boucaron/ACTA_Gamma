@@ -324,8 +324,15 @@ const char *stest_stdout(stest_ctx_t *ctx)
  *  argv-level runner (parse_globals + handler, like main.c)
  * ══════════════════════════════════════════════════════════════════ */
 
-int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
-                   int argc, char **argv, const char *stdin_blob)
+/*
+ * Shared runner: parse_globals → cmd_args → handler, exactly like
+ * main.c.  via_dispatch selects between calling the entity handler
+ * directly (fn) and routing through commands_dispatch() (fn ignored),
+ * which adds the KI-4 remaining-positional check.
+ */
+static int stest_run_main_path(stest_ctx_t *ctx, stest_cmd_fn_t fn,
+                               int argc, char **argv,
+                               const char *stdin_blob, int via_dispatch)
 {
     global_opts_t g;
     /* T2: return parse_globals' real rc (EXIT_CLI for missing flag
@@ -392,7 +399,9 @@ int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
         free(g.argv);
         return vrc;
     }
-    int rc = fn(g.argv[1], &ga, &g, ctx->db);
+    int rc = via_dispatch
+        ? commands_dispatch(g.argv[1], g.argv[2], &ga, &g, ctx->db)
+        : fn(g.argv[1], &ga, &g, ctx->db);
 
     fflush(stdout);
     dup2(saved_out, STDOUT_FILENO);
@@ -421,6 +430,18 @@ int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
 
     free(g.argv);
     return rc;
+}
+
+int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
+                   int argc, char **argv, const char *stdin_blob)
+{
+    return stest_run_main_path(ctx, fn, argc, argv, stdin_blob, 0);
+}
+
+int stest_run_dispatch(stest_ctx_t *ctx, int argc, char **argv,
+                       const char *stdin_blob)
+{
+    return stest_run_main_path(ctx, NULL, argc, argv, stdin_blob, 1);
 }
 
 const char *stest_write_input(stest_ctx_t *ctx, const char *blob)

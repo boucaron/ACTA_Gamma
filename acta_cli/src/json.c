@@ -153,6 +153,21 @@ static int jwalk(const char *blob, void *dst, size_t size,
     cJSON *root;
     if (parse_root(blob, &root) != 0) return -1;
 
+    /* KI-2: unknown top-level keys are a contract violation — the
+     * tables are the exact wire keys from cli_spec.md (including the
+     * read-back keys). Reject instead of silently accepting (a typo'd
+     * key like "nam" used to parse fine and create the row). */
+    for (const cJSON *item = root->child; item; item = item->next) {
+        int known = 0;
+        for (size_t i = 0; i < n; i++)
+            if (strcmp(fields[i].key, item->string) == 0) { known = 1; break; }
+        if (!known) {
+            VLOG(1, "unknown JSON key: '%s'", item->string ? item->string : "(null)");
+            cJSON_Delete(root);
+            return -1;
+        }
+    }
+
     int ok = 1;
     for (size_t i = 0; i < n && ok; i++) {
         if (fields[i].kind == JF_STR) {

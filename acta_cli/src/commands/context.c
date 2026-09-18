@@ -529,29 +529,33 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         if (gopts->raw_out) {
             const char *v = NULL;
             int is_id = 0;
+            int known = 0;
             if (strcmp(gopts->raw_out, "id") == 0)
-                is_id = 1;
+                { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "type") == 0)
-                v = c->type;
+                { v = c->type; known = 1; }
             else if (strcmp(gopts->raw_out, "content") == 0)
-                v = c->content;
+                { v = c->content; known = 1; }
             else if (strcmp(gopts->raw_out, "content_hash") == 0)
-                v = c->content_hash;
+                { v = c->content_hash; known = 1; }
             else if (strcmp(gopts->raw_out, "metadata") == 0)
-                v = c->metadata;
+                { v = c->metadata; known = 1; }
             else if (strcmp(gopts->raw_out, "created_at") == 0)
-                v = c->created_at;
+                { v = c->created_at; known = 1; }
             else if (strcmp(gopts->raw_out, "deleted_at") == 0)
-                v = c->deleted_at;
+                { v = c->deleted_at; known = 1; }
 
             if (is_id) {
                 char idb[16];
                 snprintf(idb, sizeof idb, "%d", c->id);
                 fputs(idb, stdout);
                 fputc('\n', stdout);
-            } else if (v) {
+            } else if (known && v) {
                 fputs(v, stdout);
                 fputc('\n', stdout);
+            } else if (known) {
+                /* KI-3: known field with a NULL value → no output
+                 * (previously fell through to the unknown-field error). */
             } else {
                 char msg[192];
                 snprintf(msg, sizeof msg,

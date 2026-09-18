@@ -94,17 +94,17 @@ static void test_get_raw_out_null_field(stest_ctx_t *ctx)
     TEST_EQ(ctx, (int)strlen(stest_stdout(ctx)), 0);
 }
 
-/* KI-4 (RED until fixed): trailing "help" form is swallowed as an
- * unconsumed positional and SILENTLY EXECUTES the action:
- * `context list help` runs the list instead of printing help. */
-static void test_trailing_help_runs_action(stest_ctx_t *ctx)
+/* KI-4 (fixed): trailing "help" used to be swallowed as an unconsumed
+ * positional and SILENTLY EXECUTE the action (`context list help`
+ * printed the full list, exit 0). commands_dispatch now rejects any
+ * positional left unconsumed by a successful handler: exit 10
+ * (documented decision in docs/cli_help_analysis.md). Routed through
+ * stest_run_dispatch (the real main.c path, not the bare handler). */
+static void test_trailing_help_rejected(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "context", "list", "help" };
-    int rc = stest_run_argv(ctx, cmd_context, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "Usage:");
-    /* must not be the list payload */
-    TEST(ctx, strstr(stest_stdout(ctx), "\"id\":") == NULL);
+    int rc = stest_run_dispatch(ctx, 4, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_CLI);
 }
 
 /* KI-2 (RED until fixed): unknown JSON keys are silently accepted on
@@ -143,7 +143,7 @@ int run_context_test_misc(void)
 
     /* known issues (docs/known_issues.md) */
     test_get_raw_out_null_field(&ctx);
-    test_trailing_help_runs_action(&ctx);
+    test_trailing_help_rejected(&ctx);
     test_create_unknown_json_key(&ctx);
     test_list_id_only_pinned(&ctx);
 

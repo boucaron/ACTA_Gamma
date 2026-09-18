@@ -58,6 +58,14 @@ typedef int (*stest_cmd_fn_t)(const char *action, cmd_args_t *ga,
 int stest_run_argv(stest_ctx_t *ctx, stest_cmd_fn_t fn,
                    int argc, char **argv, const char *stdin_blob);
 
+/*
+ * Like stest_run_argv, but routes through commands_dispatch()
+ * (entity → handler lookup + the KI-4 remaining-positional check),
+ * mirroring main.c exactly.  argv must be >= entity + action + rest.
+ */
+int stest_run_dispatch(stest_ctx_t *ctx, int argc, char **argv,
+                       const char *stdin_blob);
+
 /* Write blob to a temp file under ./tmp/ and remember its path in ctx
  * (removed by stest_teardown).  Returns the path, or NULL on error. */
 const char *stest_write_input(stest_ctx_t *ctx, const char *blob);

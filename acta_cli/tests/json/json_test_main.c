@@ -220,16 +220,17 @@ static void tier3_single_fields(void)
     TEQ(m.folder_id, 7);
     fmodel(&m);
 
-    /* keys are case-sensitive: "Name" is not "name" */
+    /* KI-2: keys are case-sensitive AND unknown top-level keys are
+     * rejected (the table is the exact cli_spec.md wire key set).
+     * Struct is left fully zeroed on -1 (json.h contract). */
     memset(&m, 0, sizeof m);
-    TEQ(json_parse_model("{\"Name\":\"x\"}", &m), 0);
+    TEQ(json_parse_model("{\"Name\":\"x\"}", &m), -1);
     TNULL(m.name);
 
-    /* unknown keys are ignored by the parse layer (callers re-validate) */
     memset(&m, 0, sizeof m);
-    TEQ(json_parse_model("{\"name\":\"x\",\"unknown\":1,\"nam\":\"typo\"}", &m), 0);
-    TSTREQ(m.name, "x");
-    fmodel(&m);
+    TEQ(json_parse_model("{\"name\":\"x\",\"unknown\":1,\"nam\":\"typo\"}", &m), -1);
+    TNULL(m.name);
+    TEQ(m.folder_id, 0);
 }
 
 /* ── Tier 4: strict integer contract ─────────────────────────────── */

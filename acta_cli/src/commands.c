@@ -124,7 +124,25 @@ int commands_dispatch(const char *entity, const char *action,
 
     cli_gopts = gopts;   /* ← makes VLOG() see the current verbose level */
     VLOG(2, "dispatch to %s", entity);
-    return fn(action, ga, gopts, db);
+    int rc = fn(action, ga, gopts, db);
+
+    /* KI-4: unexpected positional args used to be silently swallowed
+     * (`context list help` ran the list, exit 0). Handlers read their
+     * positionals with cmd_args_next_positional, which advances ga->pos;
+     * anything left unconsumed after a successful handler run is an
+     * error, not data. */
+    if (rc == EXIT_OK) {
+        const char *extra = cmd_args_next_positional(ga);
+        if (extra) {
+            char msg[256];
+            snprintf(msg, sizeof msg,
+                     "unexpected argument: '%s'", extra);
+            emit_cli_error(msg);   /* JSON contract line, stderr line 1 */
+            fprintf(stderr, "  Run 'acta_cli %s help' for usage.\n", entity);
+            return EXIT_CLI;
+        }
+    }
+    return rc;
 }
 
 /* ------------------------------------------------------------------ */
