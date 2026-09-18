@@ -1,10 +1,10 @@
-# acta_cli contract — per-action stdout table (T1 / source for `--tools` §11)
+# acta_cli contract — per-action stdout table (source for `--tools`)
 
 This table is the single source of truth for the per-action stdout schema.
-It is the data from which the machine-readable `--tools` JSON (T3, spec §11)
-will be generated — do not hand-write `--tools` against this table.
+It is the data from which the machine-readable `--tools` JSON
+(`src/tools.c`) is generated — do not hand-write `--tools` against this table.
 
-Wire-format decisions settled here (T1):
+Wire-format decisions settled here:
 
 - **Root folder is `null` in every JSON emit** (`model_to_json`,
   `skill_to_json`, `emit_ok_folder`, `model_folder move`). `0` survives
@@ -39,7 +39,7 @@ Wire-format decisions settled here (T1):
 
 Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--table` (columnar / plain instead of JSON), `--fields <csv>`,
-`--no_nulls`, and on every `list` action `--stream` (P5). `get`/
+`--no_nulls`, and on every `list` action `--stream`. `get`/
 `get-latest` return the full entity JSON object (subject to those
 modifiers). `--id_only` is a single-row modifier for `create` /
 `get`-style actions only; every `list` action rejects it with exit 4
@@ -50,7 +50,7 @@ modifiers). `--id_only` is a single-row modifier for `create` /
 comments) is rejected with exit 4 before execution, so the "no
 SELECT" help claim is enforced, not just documented.
 
-Stream output (P5): `--stream` turns any `list` action's array output
+Stream output: `--stream` turns any `list` action's array output
 into NDJSON — one JSON object per line, no array wrapper, empty result
 emits nothing. The lister pages internally (chunks of at most
 `ACTA_DB_MAX_PAGE` rows) until the filter is exhausted, so bulk export
@@ -60,7 +60,7 @@ the starting point and `--limit` caps the total emitted. `--fields` /
 `--count`, `--table` and `--id_only` (conflict → exit 4).
 `exec list --stream` keeps the light/full projection choice (`--full`).
 
-Output destinations (P3): `--out <path>` writes the entire stdout
+Output destinations: `--out <path>` writes the entire stdout
 payload to `<path>` instead of stdout (errors/warnings stay on
 stderr; the flag is ignored with `--version` / `--help` / `--tools`).
 `--raw_out <field>` prints one field's raw (unescaped) value with no
@@ -68,7 +68,7 @@ JSON wrapper — `context get` / `exec get` only; it takes precedence
 over `--id_only` / `--table` / `--fields`, null values produce no
 output, and an unknown field is a CLI usage error (exit 10).
 
-Input from file (P4): `--content_file <path>` (`context create`) reads
+Input from file: `--content_file <path>` (`context create`) reads
 the payload as raw file content, no JSON escaping; `--result_file
 <path>` (`exec complete`) and `--raw_file <path>` (`exec set-raw`) are
 the same for their respective fields. Each is mutually exclusive with
@@ -84,14 +84,14 @@ any top-level key outside that set — including a misspelling with the
 wrong case — is rejected with exit 4 (`invalid JSON body`), not
 silently ignored.
 
-Schema flags: `--tools` emits the machine-readable JSON schema (T3,
-`src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
+Schema flags: `--tools` emits the machine-readable JSON schema
+(`src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
 rendering (~7 KB) of the same static table — positionals, flags (with `*`
 = required), JSON keys, input mode, aliases — intended for LLM/agent
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
-`success` is structured (schema version 2, P1): a JSON object
+`success` is structured (schema version 2): a JSON object
 `{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
 (`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
 per-action table above; `,"note": "…"` optional, carrying the
@@ -107,8 +107,8 @@ missing flag value, unexpected positional — an extra positional left
 unconsumed by a successful action, e.g. `context list help`, is
 rejected with `unexpected argument: '<tok>'`), `11` DB open failed. Errors: single JSON line on
 stderr `{"error":"ACTA_DB_ERR_*"|"ACTA_CLI_ERR","code":<n>,"message":"..."}`
-where the exit code is authoritative and `code` = −exit (the T2
-invariant, exit code canonical with `code` = −exit everywhere);
+where the exit code is authoritative and `code` = −exit (the exit code
+is canonical, `code` = −exit everywhere);
 the `error` name keeps per-cause granularity — e.g.
 `ACTA_DB_ERR_DUPLICATE` is `code:-4` with exit `4`, and a DB-open failure
 is `code:-11` with exit `11`. The `message` carries a human-readable
@@ -118,7 +118,7 @@ where `<detail>` is the last error recorded by `acta_db`, falling back
 to the connection's `sqlite3_errmsg` (`acta_db_errmsg`) — it degenerates
 to `(no detail)` only when no error message was recorded at all.
 
-Refusal reasons (KI-7, fully closed): decisions made in C code without
+Refusal reasons: decisions made in C code without
 any failing SQL statement — illegal exec state transitions, `delete`
 from `running`, `reset` / `restore` of the wrong row class, delete /
 restore of a missing or already-deleted row, the folder-move cycle
@@ -227,7 +227,7 @@ changed) snapshots nothing. Revision rows are read via the
 > **`skill list` / `skill count` — `--all`:** the default scope is
 > already all folders, so `--all` alone is a no-op (identical rows /
 > count); it is kept as the explicit form and wins over `--folder_id`
-> when both are given (KI-8, resolved by documentation).
+> when both are given.
 
 ## skill_folder
 

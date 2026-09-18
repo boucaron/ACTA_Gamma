@@ -1,7 +1,7 @@
-/* tools_test_main.c — T4: contract test for `--tools` (T3 schema).
+/* tools_test_main.c — contract test for the `--tools` schema.
  *
  * Verifies the emitted tool schema against its contract
- * (docs/t4_analysis.md):
+ * (docs/cli_spec.md):
  *   1. both the compact (default) and --pretty outputs are well-formed
  *      JSON — checked with the project's own json layer (json_validate)
  *      and walked with cJSON (the layer json.c is built on);

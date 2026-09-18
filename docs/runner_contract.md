@@ -1,6 +1,6 @@
 # Runner analysis
 
-Analysis and spec of the `acta_runner` component (UI review #18): a
+Analysis and spec of the `acta_runner` component: a
 component that connects to the database, resolves a pending execution's
 skill + model + context, calls the OpenAI-compatible backend, and records
 the outcome (raw response, result, error, phase logs) back into the
