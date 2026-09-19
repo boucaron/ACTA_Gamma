@@ -38,6 +38,15 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 * **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, model revision, and execution prompt. Output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track.
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
+## What it does — and deliberately does not
+
+| Does | Deliberately does **not** (on purpose) |
+|---|---|
+| Runs **one** versioned, replayable, auditable LLM action against an immutable context | Not an agent: no self-orchestration, no conversational state, no delegation, no workflow composition between skills (a higher-level program chains the executions — [`PointOfView.md`](docs/PointOfView.md)) |
+| Versioned skills & models; immutable revision snapshots; immutable contexts | No automatic retries (owner decision — retry is manual: `exec reset` / GUI Retry) and no streaming responses (owner decision — [`status.md`](docs/status.md)) |
+| Standalone runner + GUI (Run/Cancel), soft-delete lifecycle, stale-execution `sweep` | No users, permissions, organizations, queues, vector DBs, datasets — serverless: one private SQLite file ([`DBDesign.md`](docs/DBDesign.md)); no hard delete / purge either |
+| Multi-model via a llama.cpp `llama-server` router; any OpenAI-compatible backend | No server manager mode — the backend is user-launched and user-managed ([`runner_contract.md`](docs/runner_contract.md)) |
+
 ## Architecture
 
 ```text
@@ -109,9 +118,17 @@ Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim
 
 See [`docs/building.md`](docs/building.md) for dependencies, platform-specific setup (MinGW/MSYS2, Linux, macOS), the per-component `make` steps, and the top-level wrapper (`make all`, `make test`).
 
+## Quick start
+
+Three steps before the example below:
+
+1. **Install dependencies** — SQLite, curl, cJSON (plus Qt 6 for the GUI): one command block per platform in [`docs/building.md`](docs/building.md).
+2. **Build** — from the repo root: `make all` (or per-component `make`; `make test` runs all C test suites).
+3. **Start the backend** — a llama.cpp `llama-server` in router mode, e.g. `llama-server --models-dir models -c 2048` on `127.0.0.1:8080` (canonical startup: [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1).
+
 ## Minimal end-to-end example
 
-Against a running llama.cpp `llama-server` in router mode (e.g. on `127.0.0.1:8080`):
+Against the running `llama-server` router from the quick start:
 
 ```sh
 # 1. Register the model
@@ -140,30 +157,21 @@ Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --sta
 
 ## CLI ergonomics
 
-The high-volume payload data (context `content`; execution `prompt` / `raw_response` / `result` / `error`) has dedicated flags, and all output shaping is global:
-
-- `--full` on `context list` / `exec list` — list actions return light projections by default (blob fields are `null` in every row); `--full` fetches the blobs
-- `--out <path>` — write the whole stdout payload to a file
-- `--raw_out <field>` — print one field raw and unescaped (`context get` / `exec get`)
-- `--content_file` / `--raw_file` / `--result_file` — feed large payloads from files instead of inline arguments
-- `--stream` — NDJSON for any `list` action (one JSON object per line, internal paging until the filter is exhausted)
-- global output shaping: `--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`
-- `--db <path>` — DB file (else `$ACTA_DB`, else `./acta.db`)
-- `--tools` — machine-readable schema of every command and flag (version 2); `--tools --compact` for one line per command
-
-`db exec` runs developer-supplied static SQL (DDL, migrations, schema scripts — never `SELECT`, never user-composed input); exactly one source wins, in order: positional sql, `--sql`, `--file`, `--sql_stdin`.
-
-The full wire and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+For the high-volume payload data (context `content`; execution `prompt` / `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 2). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 ## Current status
 
 Early prototype / POC. See [`docs/status.md`](docs/status.md) for what is done and what is not yet implemented, and [`docs/known_issues.md`](docs/known_issues.md) for the issue tracker.
 
-Other reference docs:
+Components and their reference docs:
 
-- [`docs/cli_spec.md`](docs/cli_spec.md) — `acta_cli` wire format, flags, and error contracts
-- [`docs/runner_contract.md`](docs/runner_contract.md) — runner pipeline contract
-- [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) — llama.cpp router backend contract
+| Component | Contract / design doc |
+|---|---|
+| `acta_db/` | [`docs/DBDesign.md`](docs/DBDesign.md) — schema, triggers, state machine, soft-delete rules |
+| `acta_cli/` | [`docs/cli_spec.md`](docs/cli_spec.md) — wire format, per-action flags, error contracts |
+| `acta_runner/` | [`docs/runner_contract.md`](docs/runner_contract.md) — pipeline; [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) — backend contract |
+| `acta_gui/` | build in [`docs/building.md`](docs/building.md); design decisions in [`docs/status.md`](docs/status.md) |
+| project-wide | [`docs/PointOfView.md`](docs/PointOfView.md) — philosophy and non-goals |
 
 ## License
 
