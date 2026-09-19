@@ -9,7 +9,7 @@
 - curl — runner + GUI
 - llama.cpp — local backend server (`llama-server` in router mode), runtime only
 
-The C targets build with plain `make` on Windows (MinGW/MSYS2) and Linux (gcc/clang); the Qt 6 GUI additionally needs `qmake6` on either platform.
+The C targets build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
 ## MinGW64 (MSYS2)
 
