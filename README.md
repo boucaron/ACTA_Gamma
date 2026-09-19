@@ -156,3 +156,16 @@ The SHA-256 implementation in `acta_cli/src/sha256.c` is taken from
 restrictions. The author requests acknowledgement if the code is used,
 but does not require it. This code is provided free of any liability and
 without any quality claims by the author.
+
+Two external libraries are linked at build time (not vendored; point the
+Makefile overrides `CJSON_DIR` / `CJSON_LIB` / `CURL_INC` / `CURL_LIB` at a
+custom build if needed — see [`docs/building.md`](docs/building.md)):
+
+- **cJSON** ([DaveGamble/cJSON](https://github.com/DaveGamble/cJSON), MIT) —
+  used by `acta_cli/src/json.c` for the CLI's JSON input/output layer and
+  by `acta_runner/src/run.c` for request/response handling; the GUI compiles
+  `run.c` and reuses it.
+- **libcurl** ([curl](https://curl.se/), MIT-style "curl" license with an
+  explicit patent grant) — used only by `acta_runner/src/backend.c`, the
+  minimal wrapper around the curl easy interface for the preflight and chat
+  HTTP calls; the GUI compiles `backend.c` and reuses it.
