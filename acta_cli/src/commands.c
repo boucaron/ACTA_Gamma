@@ -215,7 +215,7 @@ void help_print(FILE *out)
         "  --tools            JSON tool schema\n"
         "  --compact          compact schema (with --tools): one line\n"
         "                     per command\n"
-        "  --verbose, -v      increase verbosity (repeatable, 1-3)\n"
+        "  --verbose, -v      debug level 0-3 (repeatable, default 0)\n"
         "\n"
         "see --tools for full command reference.\n");
 }

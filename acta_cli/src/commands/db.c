@@ -47,7 +47,7 @@ static void usage_exec(FILE *f)
 "    --file <path>      Read SQL from a file (max 64 KiB)\n"
 "    --sql_stdin        Read SQL from stdin (max 64 KiB)\n"
 "    --table            print 'ok' instead of JSON\n"
-"    --verbose <n>      debug level 0-3 (stderr)\n"
+"    --verbose [N]      debug level 0-3 (stderr)\n"
 "\n"
 "  stdout on success: {\"status\":\"ok\"}\n"
 "  stderr on failure: single-line JSON {\"error\":\"ACTA_DB_ERR_*\",\n"
@@ -83,7 +83,7 @@ void db_usage(FILE *f)
     fputs(
 "Global options:\n"
 "  --table          columnar / plain output instead of JSON\n"
-"  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
+"  --verbose [N]    debug level 0-3 (diagnostics on stderr)\n"
 "\n", f);
 }
 

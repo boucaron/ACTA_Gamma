@@ -56,7 +56,7 @@ void skill_usage(FILE *f)
 "  Options:\n"
 "    --json <blob>          Read the skill as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
-"    --verbose <n>        debug level 0-3 (stderr)\n"
+"    --verbose [N]        debug level 0-3 (stderr)\n"
 "\n"
 "== get <id> ========================================================\n"
 "  Fetch a single skill by its primary key.\n"
@@ -95,7 +95,7 @@ void skill_usage(FILE *f)
 "\n"
 "  Options:\n"
 "    --json <blob>          Read the skill patch as JSON; --stdin and --from_file <path> are the alternative sources\n"
-"    --verbose <n>        debug level 0-3 (stderr)\n"
+"    --verbose [N]        debug level 0-3 (stderr)\n"
 "\n"
 "== delete <id> ====================================================\n"
 "  Soft-delete a skill (sets deleted_at; row is retained).\n"
@@ -154,7 +154,7 @@ void skill_usage(FILE *f)
 "\n"
 "Global options:\n"
 "  --table            columnar / plain output instead of JSON\n"
-"  --verbose <n>      debug level 0-3 (diagnostics on stderr)\n"
+"  --verbose [N]      debug level 0-3 (diagnostics on stderr)\n"
 "  --fields <csv>     comma-separated field whitelist\n"
 "  --no_nulls         omit null-valued fields from JSON output\n"
 "  --id_only          print only the id (create / get; rejected on list\n"
@@ -195,7 +195,7 @@ static void usage_create(FILE *f)
 "  Options:\n"
 "    --json <blob>          Read the skill as JSON; --stdin and --from_file <path> are the alternative sources\n"
 "    --id_only            Print only the new id (no JSON wrapper)\n"
-"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+"    --verbose [N]        debug level 0-3 (stderr)\n", f);
 }
 
 static void usage_get(FILE *f)
@@ -242,7 +242,7 @@ static void usage_update(FILE *f)
 "\n"
 "  Options:\n"
 "    --json <blob>          Read the skill patch as JSON; --stdin and --from_file <path> are the alternative sources\n"
-"    --verbose <n>        debug level 0-3 (stderr)\n", f);
+"    --verbose [N]        debug level 0-3 (stderr)\n", f);
 }
 
 static void usage_delete(FILE *f)

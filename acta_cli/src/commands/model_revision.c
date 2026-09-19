@@ -75,7 +75,7 @@ void model_revision_usage(FILE *f)
 "\n"
 "Global options:\n"
 "  --table              columnar / plain output instead of JSON\n"
-"  --verbose <n>        debug level 0-3 (diagnostics on stderr)\n"
+"  --verbose [N]        debug level 0-3 (diagnostics on stderr)\n"
 "  --fields <csv>       comma-separated field whitelist\n"
 "  --no_nulls           omit null-valued fields from JSON output\n"
 "  --id_only            print only the id (get / get-latest)\n"

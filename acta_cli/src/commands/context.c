@@ -170,7 +170,7 @@ void ctx_usage(FILE *f)
 "  --id_only        print only the numeric id (create / get; rejected\n"
 "                      on list — exit 4)\n"
 "  --table          columnar output instead of JSON\n"
-"  --verbose <n>    debug level 0-3 (diagnostics on stderr)\n"
+"  --verbose [N]    debug level 0-3 (diagnostics on stderr)\n"
 "\n", f);
 }
 

@@ -29,8 +29,11 @@ regression-pinned: #1 (trailing positional emitted payload alongside rc 10,
 `ce14a22`), #2 (`model_revision get-latest` ignored soft-delete, `d678a12`),
 #3 (`model_revision get` on a deleted row → rc 1, `4451244`), #4 (revision
 listers/counter live-only by default + `--include_deleted` / `--deleted`
-machinery, `c437b3e`). Remaining open: #5 (`--verbose` help wording,
-doc-only) and #6 (empty-string `event` seed rows, cosmetic). All previously
+machinery, `c437b3e`). Remaining open: #6 (empty-string `event` seed rows, cosmetic).
+#5 (`--verbose` help wording) is fixed: the global usage line now reads
+`debug level 0-3 (repeatable, default 0)` and every per-entity help line
+uses `--verbose [N]` with the same `debug level 0-3` wording — one
+canonical phrasing, no compile or test-shape change. All previously
 tracked issues are fixed and regression-pinned in the
 `acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
 issues (light-projection listers, open-time pragma check-and-report,
