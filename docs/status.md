@@ -40,9 +40,12 @@ compile or test-shape change for either. Of the static-review items, #7
 (`main.c` included Windows-only `<io.h>` for the `--out` fd-redirect with no
 POSIX fallback; now `#ifdef _WIN32` selects `<io.h>` vs `<unistd.h>`, so the
 CLI compiles on Linux/macOS as the README claims — build-portability only) is
-fixed (`c327a49`); #8 (bearer-key truncation in `acta_runner`), #9 (flag-value
-extraction in `cmd_args_flag`), #10 (sweep `last_activity` page cap) and #11
-(GUI "Show trash" persistence on the context/execution panels) remain open. All previously
+fixed (`c327a49`); #8 (bearer header snprintf'd into a fixed 512-byte buffer,
+silently truncating long `api_key`s in `acta_runner`; now built on a buffer
+sized for the key, `malloc` failure → `BACKEND_ERR_ALLOC`) is fixed; #9
+(flag-value extraction in `cmd_args_flag`), #10 (sweep `last_activity` page
+cap) and #11 (GUI "Show trash" persistence on the context/execution panels)
+remain open. All previously
 tracked issues are fixed and regression-pinned in the
 `acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
 issues (light-projection listers, open-time pragma check-and-report,

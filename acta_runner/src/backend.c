@@ -141,11 +141,21 @@ int backend_request(const char *method, const char *url,
     struct curl_slist *hdrs = NULL;
     int hdr_fail = 0;
     if (api_key && api_key[0]) {
-        char auth[512];
-        snprintf(auth, sizeof auth, "Authorization: Bearer %s", api_key);
-        hdrs = curl_slist_append(hdrs, auth);
-        if (!hdrs)
+        /* Size the header for the key: a fixed buffer would silently
+         * truncate a long api_key and send a wrong credential.
+         * curl_slist_append copies the string, so it is freed right away. */
+        const char *prefix = "Authorization: Bearer ";
+        size_t auth_len = strlen(prefix) + strlen(api_key) + 1;
+        char *auth = malloc(auth_len);
+        if (!auth)
             hdr_fail = 1;
+        else {
+            snprintf(auth, auth_len, "%s%s", prefix, api_key);
+            hdrs = curl_slist_append(hdrs, auth);
+            free(auth);
+            if (!hdrs)
+                hdr_fail = 1;
+        }
     }
     if (strcmp(method, "POST") == 0) {
         hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
