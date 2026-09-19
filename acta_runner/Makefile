@@ -93,7 +93,8 @@ DEL_SRCS  := tests/run/test_deleted.c tests/stub_server.c \
              src/run.c src/backend.c src/argparse.c
 DEL_OBJS  := $(patsubst %.c, %.o, $(DEL_SRCS))
 DEL_TARGET := tests/run/test_deleted$(EXEEXT)
-DEL_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
+# DEL_LDLIBS is defined with TEST_LDLIBS below (it must come after
+# $(SOCK_LIBS) is set, since := expands immediately).
 
 # ---- dead-runner end-to-end suite: SIGKILL a real runner, sweep it ----
 # Spawns real acta_runner child processes (run, then sweep) against the
@@ -122,6 +123,10 @@ else
 endif
 TEST_LDLIBS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB) $(CURL_LIB) \
                 -lpthread $(SOCK_LIBS)
+# The DEL suite links the same stub-server sources as the TEST suite,
+# so it gets the same link libraries (curl, cJSON, pthread, and
+# -lws2_32 on Windows via $(SOCK_LIBS)).
+DEL_LDLIBS := $(TEST_LDLIBS)
 
 .PHONY: all clean test test-e2e smoke
 
