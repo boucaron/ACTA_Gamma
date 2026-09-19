@@ -40,7 +40,7 @@ compile or test-shape change for either. Of the static-review items, #7
 (`main.c` included Windows-only `<io.h>` for the `--out` fd-redirect with no
 POSIX fallback; now `#ifdef _WIN32` selects `<io.h>` vs `<unistd.h>`, so the
 CLI compiles on Linux/macOS as the README claims — build-portability only) is
-fixed; #8 (bearer-key truncation in `acta_runner`), #9 (flag-value
+fixed (`c327a49`); #8 (bearer-key truncation in `acta_runner`), #9 (flag-value
 extraction in `cmd_args_flag`), #10 (sweep `last_activity` page cap) and #11
 (GUI "Show trash" persistence on the context/execution panels) remain open. All previously
 tracked issues are fixed and regression-pinned in the
