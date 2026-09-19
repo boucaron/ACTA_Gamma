@@ -73,6 +73,10 @@ The whole lifecycle: create/update the parent, revisions are snapshotted automat
 - **No promote / deprecate.** There is deliberately no `active` or `current` flag: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want.
 - **Editing creates, not modifies.** Updating a skill or model parent inserts a new immutable revision; it does not modify the existing one, and existing executions keep pointing at the revision they were bound to.
 
+## Soft-delete (trash) lifecycle
+
+Rows are never hard-deleted: `delete` sets a `deleted_at` timestamp and `restore` clears it (there is no purge — a new DB file is the clean-state path). `model`, `model_folder`, `skill`, `skill_folder`, `context`, and `exec` all have `delete` / `restore` actions, and their `list` / `count` default to live-only rows with `--include_deleted` / `--deleted` to opt back in. Deleted rows are skipped by `get` / `get-latest` (context, model, skill, exec, model_revision — skill_revision has no deleted filter), `context create` refuses deleted contexts, `exec reset` refuses deleted executions, and the runner's claim step ignores deleted executions. The GUI surfaces the same lifecycle as trash views in the context and execution panels with per-row Delete/Restore (Retry disabled for deleted executions).
+
 ## How a run is assembled
 
 The runner assembles the chat call from the bound revisions:
