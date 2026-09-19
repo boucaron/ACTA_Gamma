@@ -157,7 +157,7 @@ Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --sta
 
 ## Your first session in the GUI
 
-Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). Then:
+Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). Note the default location is the platform app-data directory (`QStandardPaths::AppDataLocation` — e.g. `%LOCALAPPDATA\boucaron\ACTA Gamma\acta.db` on Windows, `~/.local/share/boucaron/ACTA Gamma/acta.db` on Linux) — not `./acta.db` next to the binary, and the GUI does not read `--db` or `$ACTA_DB`. The CLI resolves its DB as `--db` → `$ACTA_DB` → `./acta.db`. To make both use the same database, either pick the CLI's file in the GUI's *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) or point `--db` / `$ACTA_DB` at the GUI's file. Then:
 
 1. **Model** — Models panel → *New…* → give it a name, the backend (`openai`), the router's address, and the model id (the GGUF file's name in your `--models-dir` folder).
 2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
