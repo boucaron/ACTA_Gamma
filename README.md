@@ -8,7 +8,7 @@ A small, stateless LLM execution engine for versioned skills and reproducible an
 
 > **The engine decides what happens. The LLM only does the work it's asked to do.**
 
-The C targets build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
+The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
 ## What is ACTA Gamma?
 
@@ -35,7 +35,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 * **Immutable contexts** — the exact input can be retained for replay.
 * **Multi-model** — the backend serves several models; any model served by the llama.cpp router can be registered as a model record.
 * **Auditable** — executions retain prompts, raw responses, results, errors, and execution events.
-* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, model revision, and execution prompt. Output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track.
+* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, model revision, and execution prompt (output equivalence additionally depends on backend determinism — see [Revisions and lifecycle](#revisions-and-lifecycle)).
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
 ## What it does — and deliberately does not
@@ -55,11 +55,11 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
                  └──────┬───────┘
                         │
                  ┌──────▼───────┐
-                 │ Skill @ N    │
+                 │  Skill @ n   │
                  └──────┬───────┘
                         │
                  ┌──────▼───────┐
-                 │  Model @ N   │
+                 │   Model @ n  │
                  └──────┬───────┘
                         │
                  ┌──────▼───────┐
