@@ -138,6 +138,23 @@ acta_cli log list 1
 
 Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose newest activity (latest `execution_log` row, or `started_at`) is older than `N` seconds (`--stale-seconds` is required, positive integer). A failed execution is retried manually with `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button.
 
+## CLI ergonomics
+
+The high-volume payload data (context `content`; execution `prompt` / `raw_response` / `result` / `error`) has dedicated flags, and all output shaping is global:
+
+- `--full` on `context list` / `exec list` — list actions return light projections by default (blob fields are `null` in every row); `--full` fetches the blobs
+- `--out <path>` — write the whole stdout payload to a file
+- `--raw_out <field>` — print one field raw and unescaped (`context get` / `exec get`)
+- `--content_file` / `--raw_file` / `--result_file` — feed large payloads from files instead of inline arguments
+- `--stream` — NDJSON for any `list` action (one JSON object per line, internal paging until the filter is exhausted)
+- global output shaping: `--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`
+- `--db <path>` — DB file (else `$ACTA_DB`, else `./acta.db`)
+- `--tools` — machine-readable schema of every command and flag (version 2); `--tools --compact` for one line per command
+
+`db exec` runs developer-supplied static SQL (DDL, migrations, schema scripts — never `SELECT`, never user-composed input); exactly one source wins, in order: positional sql, `--sql`, `--file`, `--sql_stdin`.
+
+The full wire and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+
 ## Current status
 
 Early prototype / POC. See [`docs/status.md`](docs/status.md) for what is done and what is not yet implemented, and [`docs/known_issues.md`](docs/known_issues.md) for the issue tracker.
