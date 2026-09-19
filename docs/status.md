@@ -54,7 +54,7 @@ the skill/model panels, `494e988`) and #10 (sweep `last_activity` page cap —
 the total
 log-row count is taken first and only the LAST page is fetched, so the
 overall newest row is seen for any row count; pinned by the > 10,000-row
-scenario in `acta_runner/tests/run/test_sweep.c`) are also fixed. All
+scenario in `acta_runner/tests/run/test_sweep.c`, `c3d37b8`) are also fixed. All
 previously tracked issues are
 fixed and regression-pinned in the `acta_db/tests`, `acta_cli/tests` and
 `acta_runner/tests` suites: the three `acta_db` review
