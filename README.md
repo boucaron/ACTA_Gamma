@@ -132,9 +132,17 @@ acta_cli exec get 1
 acta_cli log list 1
 ```
 
+Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose newest activity (latest `execution_log` row, or `started_at`) is older than `N` seconds (`--stale-seconds` is required, positive integer). A failed execution is retried manually with `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button.
+
 ## Current status
 
-Early prototype / POC. See [`docs/status.md`](docs/status.md) for what is done and what is not yet implemented.
+Early prototype / POC. See [`docs/status.md`](docs/status.md) for what is done and what is not yet implemented, and [`docs/known_issues.md`](docs/known_issues.md) for the issue tracker.
+
+Other reference docs:
+
+- [`docs/cli_spec.md`](docs/cli_spec.md) — `acta_cli` wire format, flags, and error contracts
+- [`docs/runner_contract.md`](docs/runner_contract.md) — runner pipeline contract
+- [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) — llama.cpp router backend contract
 
 ## License
 
