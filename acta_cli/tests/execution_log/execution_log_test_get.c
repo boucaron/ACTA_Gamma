@@ -17,7 +17,7 @@ static int do_get(stest_ctx_t *ctx, cmd_args_t *args, global_opts_t gopts)
 
 static void test_get_basic(stest_ctx_t *ctx)
 {
-    /* log id=1 exists: execution_id=1, level='error', event='' */
+    /* log id=1 exists: execution_id=1, level='error', event='seed' */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "1", &g);

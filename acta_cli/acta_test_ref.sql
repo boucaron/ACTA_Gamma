@@ -171,7 +171,7 @@ CREATE TABLE execution_logs (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
 );
-INSERT INTO execution_logs VALUES(1,1,'error','',NULL,NULL,'2026-08-25 19:37:26');
+INSERT INTO execution_logs VALUES(1,1,'error','seed',NULL,NULL,'2026-08-25 19:37:26');
 INSERT INTO execution_logs VALUES(2,1,'debug','hi',NULL,NULL,'2026-08-25 19:56:02');
 PRAGMA writable_schema=ON;
 CREATE TABLE IF NOT EXISTS sqlite_sequence(name,seq);
