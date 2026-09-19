@@ -394,6 +394,19 @@ int cmd_args_validate(const cmd_args_t *it) {
                      tok);
             return emit_cli_error(msg);
         }
+        /* A value-taking flag in the space form must be followed by a
+         * non-flag value token; `--name --table` or `--name` as the last
+         * token is a CLI usage error (exit 10), mirroring pass 1's
+         * "missing value for --db" (T2). The inline form `--name=`
+         * carries its value in the token itself (possibly empty). */
+        if (flag_has_value(tok + 2) && eq == NULL) {
+            const char *next = (i + 1 < it->argc) ? it->argv[i + 1] : NULL;
+            if (next == NULL || is_flag(next)) {
+                char msg[128];
+                snprintf(msg, sizeof msg, "missing value for %s", tok);
+                return emit_cli_error(msg);
+            }
+        }
     }
     return EXIT_OK;
 }
@@ -413,7 +426,14 @@ const char *cmd_args_flag(cmd_args_t *it, const char *name, int has_value)
             return tok + 2 + nlen + 1;
         }
 
-        if (has_value && i + 1 < it->argc) {
+        /* Space form: the value is the next token ONLY if it is not
+         * itself a flag — the same tokenization the positional walkers
+         * use. `--name --table` therefore yields NULL here (and
+         * cmd_args_validate reports it as a missing-value CLI usage
+         * error); before this guard the flag token was silently
+         * returned as the value (known issue 9). */
+        if (has_value && i + 1 < it->argc &&
+            !is_flag(it->argv[i + 1])) {
             return it->argv[i + 1];
         }
         return NULL;

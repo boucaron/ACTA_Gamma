@@ -18,6 +18,8 @@
  *       known (entity, action) → EXIT_OK
  *   G8  inline "--name=value" extraction (flag_inline_value): the exact
  *       value each global flag yields, plus the --verbose error paths
+ *   G9  missing value for a pass-2 value flag (`--name` followed by a
+ *       flag token, or as the last token) → EXIT_CLI (known issue 9)
  *
  * The per-entity *_test_create.c suites already cover the input-source
  * happy paths; this suite owns the *seam* itself, plus the
@@ -175,6 +177,18 @@ static void test_rejections(stest_ctx_t *ctx)
     /* G5: --verbose=99 clamps to 3 (VLOG-only) and the command runs */
     char *vb[] = { "acta_cli", "model", "list", "--verbose=99" };
     TEST_EQ(ctx, stest_run_argv(ctx, cmd_model, 4, vb, NULL), EXIT_OK);
+
+    /* G9: missing value for a pass-2 value flag (known issue 9):
+     * `--name --deleted` — a flag token must not be consumed as the
+     * value (cmd_args_flag used to return it silently as the filter),
+     * and `--name` as the last token. Both → EXIT_CLI, mirroring pass
+     * 1's G2. (--table is a global flag, so the entity flag --deleted
+     * is used to keep both tokens in pass 2.) */
+    char *n1[] = { "acta_cli", "model", "list", "--name", "--deleted" };
+    TEST_EQ(ctx, stest_run_argv(ctx, cmd_model, 5, n1, NULL), EXIT_CLI);
+
+    char *n2[] = { "acta_cli", "model", "list", "--name" };
+    TEST_EQ(ctx, stest_run_argv(ctx, cmd_model, 4, n2, NULL), EXIT_CLI);
 }
 
 /* ── G8: inline "--name=value" extraction (flag_inline_value) ──────

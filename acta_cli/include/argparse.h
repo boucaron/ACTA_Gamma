@@ -53,8 +53,13 @@ void apply_flag_aliases(char **argv, int argc);
  * Strict check of the pass-2 flags: every --name token must be a known
  * entity flag; unknown long options used to be silently ignored (a
  * typo'd filter flag then produced a plausible-looking but wrong list).
+ * A value-taking flag in the space form must also be followed by a
+ * non-flag value token — `--name --table` or `--name` as the last token
+ * is rejected ("missing value for --name") instead of silently losing
+ * the filter (known issue 9; mirrors pass 1's missing-value errors).
  * Prints the JSON CLI-usage error to stderr. Returns EXIT_OK, or
- * EXIT_CLI on an unknown option (T2 error contract).
+ * EXIT_CLI on an unknown option or a missing flag value (T2 error
+ * contract).
  */
 int cmd_args_validate(const cmd_args_t *it);
 
