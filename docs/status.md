@@ -24,7 +24,8 @@ Early prototype / POC — not a product. By design (see `docs/DBDesign.md`, "Sco
 - Download ergonomics in `acta_cli` for the high-volume payload data (`context.content`, execution `prompt` / `raw_response` / `result` / `error`): **P1** the `--tools` schema now advertises `--full` on `context.list` / `exec.list` with a `success.note` documenting the light default (commit `427671a`); **P2** a stderr warning when `--fields` names a light-omitted field without `--full` (silent-null trap; exit code unchanged, `740a3c6`); **P3** global `--out <path>` (whole stdout payload to a file, fd-1 redirect in `main.c`, stderr untouched, unopenable path → exit 10) and `--raw_out <field>` for `context get` / `exec get` (one raw unescaped field, precedence over `--id_only`/`--table`/`--fields`, `d820c6b`); **P4** large-payload file input — `context create --content_file`, `exec set-raw --raw_file`, `exec complete --result_file` (raw file content, mutually exclusive with the inline flags and, for `--content_file`, with `--json`/`--stdin`/`--from_file`; conflicts/unreadable file → exit 4, `0ce3886`); **P5** `--stream` on every `list` action — NDJSON, one JSON object per line, internal paging until the filter is exhausted (`--offset` start, `--limit` cap), mutually exclusive with `--count`/`--table`/`--id_only` → exit 4 (`a830bf2`). All registered in the `--tools` schema, `--help`, and per-action help; covered by the `tools` test suite; wire contract in `docs/cli_spec.md`.
 
 **Known issues:** tracked in `docs/known_issues.md` — 6 items found by
-read-only testing against a real DB (2026-09-18). #1–#4 are fixed and
+read-only testing against a real DB (2026-09-18), extended from 2026-09-19
+with items #7–#11 from a full static code review. #1–#4 are fixed and
 regression-pinned: #1 (trailing positional emitted payload alongside rc 10,
 `ce14a22`), #2 (`model_revision get-latest` ignored soft-delete, `d678a12`),
 #3 (`model_revision get` on a deleted row → rc 1, `4451244`), #4 (revision
@@ -35,7 +36,13 @@ every per-entity help line uses `--verbose [N]` with the same
 `debug level 0-3` wording) and #6 (seed row 1 of `acta_cli/acta_test_ref.sql`
 and `acta_test_ref.db` now carries `event='seed'` instead of `''`; `event` is
 `TEXT NOT NULL`, so NULL was never a valid value — data-only edit). No
-compile or test-shape change for either. All previously
+compile or test-shape change for either. Of the static-review items, #7
+(`main.c` included Windows-only `<io.h>` for the `--out` fd-redirect with no
+POSIX fallback; now `#ifdef _WIN32` selects `<io.h>` vs `<unistd.h>`, so the
+CLI compiles on Linux/macOS as the README claims — build-portability only) is
+fixed; #8 (bearer-key truncation in `acta_runner`), #9 (flag-value
+extraction in `cmd_args_flag`), #10 (sweep `last_activity` page cap) and #11
+(GUI "Show trash" persistence on the context/execution panels) remain open. All previously
 tracked issues are fixed and regression-pinned in the
 `acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
 issues (light-projection listers, open-time pragma check-and-report,

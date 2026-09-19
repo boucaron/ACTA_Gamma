@@ -15,7 +15,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <io.h>        /* dup, dup2, fileno, close — --out fd redirect */
+/* --out fd redirect: dup / dup2 / close.
+ * Windows (MinGW/MSVC): <io.h>; POSIX: <unistd.h>.
+ * fileno and STDOUT_FILENO come from <stdio.h> above on both. */
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 #include <stdarg.h>
 
 #include "cli.h"        /* global_opts_t, cmd_args_t, EXIT_* codes */
