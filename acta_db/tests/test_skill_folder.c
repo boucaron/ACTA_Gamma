@@ -490,7 +490,12 @@ static void test_sf_restore_already_live(void) {
     TEST_ASSERT_EQ_INT(acta_db_skill_folder_create(db, "Alive", 0, &id),
                        ACTA_DB_OK);
 
-    TEST_ASSERT_EQ_INT(acta_db_skill_folder_restore(db, id), ACTA_DB_OK);
+    /* Strict undelete (cli_spec.md): like context/execution, restoring
+     * a LIVE row is refused — restore only unflags soft-deleted rows.
+     * (skill / model / model_folder restore tolerate the already-live
+     * no-op; skill_folder is on the strict side.) */
+    TEST_ASSERT_EQ_INT(acta_db_skill_folder_restore(db, id),
+                       ACTA_DB_ERR_NOT_FOUND);
 
     int err = 0;
     skill_folder_t *f = acta_db_skill_folder_get(db, id, &err);
