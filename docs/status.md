@@ -50,7 +50,8 @@ rejects a value flag without a non-flag value as a CLI usage error, exit
 10) is fixed (`cebd993`); #11 (GUI "Show trash"
 persistence on the context/execution panels — the checkbox states are now
 saved to QSettings in `closeEvent` and restored in the constructor, mirroring
-the skill/model panels) and #10 (sweep `last_activity` page cap — the total
+the skill/model panels, `494e988`) and #10 (sweep `last_activity` page cap —
+the total
 log-row count is taken first and only the LAST page is fetched, so the
 overall newest row is seen for any row count; pinned by the > 10,000-row
 scenario in `acta_runner/tests/run/test_sweep.c`) are also fixed. All
