@@ -37,6 +37,8 @@ Wire-format decisions settled here:
 | `[ {…}, … ]` / `[]` | list success (empty list → `[]`) |
 | bare integer | `--count` on list, and `count` actions |
 
+DB file: the global `--db <path>` selects the database; when omitted it defaults to `$ACTA_DB` if set, else `./acta.db`.
+
 Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--table` (columnar / plain instead of JSON), `--fields <csv>`,
 `--no_nulls`, and on every `list` action `--stream`. `get`/
