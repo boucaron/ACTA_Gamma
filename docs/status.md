@@ -42,7 +42,7 @@ POSIX fallback; now `#ifdef _WIN32` selects `<io.h>` vs `<unistd.h>`, so the
 CLI compiles on Linux/macOS as the README claims — build-portability only) is
 fixed (`c327a49`); #8 (bearer header snprintf'd into a fixed 512-byte buffer,
 silently truncating long `api_key`s in `acta_runner`; now built on a buffer
-sized for the key, `malloc` failure → `BACKEND_ERR_ALLOC`) is fixed; #9
+sized for the key, `malloc` failure → `BACKEND_ERR_ALLOC`) is fixed (`c64b74c`); #9
 (flag-value extraction in `cmd_args_flag`), #10 (sweep `last_activity` page
 cap) and #11 (GUI "Show trash" persistence on the context/execution panels)
 remain open. All previously
