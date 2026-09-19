@@ -143,6 +143,8 @@ acta_cli context create --json '{"type":"text","content":"The build system shipp
 
 # 4. Create an execution binding context + skill revision + model revision
 # the "prompt" field is optional; omit it to send just the context
+# (each entity above got id 1 — first rows in a fresh database —
+# so every "1" below is the corresponding row id)
 acta_cli exec create --json '{"prompt":"What is the sentiment of the context?","context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
 # 5. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
