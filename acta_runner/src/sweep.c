@@ -71,21 +71,34 @@ static void utc_stamp(time_t t, char *out, size_t outsz)
  * CURRENT_TIMESTAMP strings, so lexicographic max is the
  * chronological max), falling back to created_at if neither exists.
  * Returns 1 and fills `out` on success, 0 if no timestamp is usable.
+ *
+ * The lister is capped at ACTA_DB_MAX_PAGE rows, ordered
+ * (created_at, id) ASC, so a plain first-page read would yield the
+ * newest *fetched* row, not the overall newest, for an execution
+ * with more log rows than the cap (known issue 10). The total is
+ * therefore counted first and only the LAST page is fetched
+ * (offset = total - limit, limit = min(total, ACTA_DB_MAX_PAGE)), so
+ * rows[n-1] is the overall newest row for any row count.
  */
 static int last_activity(db_t *db, const execution_t *e,
                          char *out, size_t outsz)
 {
-    int err = ACTA_DB_OK, n = 0;
-    execution_log_t **rows = acta_db_execution_log_list_by_execution(
-        db, e->id, NULL, 0, ACTA_DB_MAX_PAGE, &n, &err);
+    int err = ACTA_DB_OK;
     const char *last_log = NULL;
-    if (err == ACTA_DB_OK && rows) {
-        /* lister order is (created_at, id) ASC → the newest is last */
-        if (n > 0)
-            last_log = rows[n - 1]->created_at;
-        acta_db_execution_log_list_free(rows, n);
-    } else if (rows) {
-        acta_db_execution_log_list_free(rows, n);
+    int total = acta_db_execution_log_count(db, e->id, NULL, &err);
+    if (err == ACTA_DB_OK && total > 0) {
+        int limit = total < ACTA_DB_MAX_PAGE ? total : ACTA_DB_MAX_PAGE;
+        int n = 0;
+        execution_log_t **rows = acta_db_execution_log_list_by_execution(
+            db, e->id, NULL, total - limit, limit, &n, &err);
+        if (err == ACTA_DB_OK && rows) {
+            /* lister order is (created_at, id) ASC → the newest is last */
+            if (n > 0)
+                last_log = rows[n - 1]->created_at;
+            acta_db_execution_log_list_free(rows, n);
+        } else if (rows) {
+            acta_db_execution_log_list_free(rows, n);
+        }
     }
     const char *started = (e->started_at && e->started_at[0])
         ? e->started_at : NULL;

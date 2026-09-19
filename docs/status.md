@@ -49,11 +49,14 @@ matches the positional walkers' tokenization and `cmd_args_validate`
 rejects a value flag without a non-flag value as a CLI usage error, exit
 10) is fixed (`cebd993`); #11 (GUI "Show trash"
 persistence on the context/execution panels — the checkbox states are now
-saved to QSettings in `closeEvent` and restored in the constructor,
-mirroring the skill/model panels) is also fixed; #10 (sweep
-`last_activity` page cap) remains open. All previously tracked issues are
-fixed and regression-pinned in the
-`acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
+saved to QSettings in `closeEvent` and restored in the constructor, mirroring
+the skill/model panels) and #10 (sweep `last_activity` page cap — the total
+log-row count is taken first and only the LAST page is fetched, so the
+overall newest row is seen for any row count; pinned by the > 10,000-row
+scenario in `acta_runner/tests/run/test_sweep.c`) are also fixed. All
+previously tracked issues are
+fixed and regression-pinned in the `acta_db/tests`, `acta_cli/tests` and
+`acta_runner/tests` suites: the three `acta_db` review
 issues (light-projection listers, open-time pragma check-and-report,
 `acta_db_exec` contract) and CLI known-issues KI-1..KI-8 (`--sql_stdin`
 flag, unknown JSON keys, `--raw_out` on NULL field, trailing `help`

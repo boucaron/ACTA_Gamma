@@ -17,6 +17,9 @@
  *   8. missing `--stale-seconds` → EXIT_INVALID.
  *   9. `--stale-seconds` non-numeric → EXIT_INVALID.
  *  10. inline `--stale-seconds=<n>` form works.
+ *  11. page cap (known issue 10): with more log rows than
+ *      ACTA_DB_MAX_PAGE, the newest row BEYOND the first page must be
+ *      what last_activity() sees; a fresh row is kept, not swept.
  *
  * Same harness style as test_run.c / test_pending.c: scratch `:memory:`
  * DB seeded from `acta_gui/db/schema.sql`. No stub server — sweep is
@@ -432,6 +435,58 @@ int main(void)
         check(execution_status(db, id, st, sizeof st) &&
                   strcmp(st, ACTA_EXEC_STATUS_FAILED) == 0,
               "stale row failed via inline form");
+    }
+
+    /* 11. page cap: > ACTA_DB_MAX_PAGE log rows — the newest row sits
+     * beyond the first page, so a first-page-only read would miss it
+     * and sweep a fresh row (known issue 10). */
+    {
+        printf("== sweep: log rows beyond ACTA_DB_MAX_PAGE\n");
+        int id = seed_running(db);
+        check(id > 0, "seeded running row");
+
+        /* Push the row count past the cap, all backdated to now - 2h. */
+        int created = 0;
+        for (int i = 0; i < ACTA_DB_MAX_PAGE; i++) {
+            execution_log_t log;
+            memset(&log, 0, sizeof log);
+            log.execution_id = id;
+            log.level = (char *)ACTA_LOG_LEVEL_DEBUG;
+            log.event = (char *)"bulk";
+            log.message = (char *)"bulk row";
+            if (acta_db_execution_log_create(db, &log, NULL) == ACTA_DB_OK)
+                created++;
+        }
+        check(created == ACTA_DB_MAX_PAGE,
+              "created ACTA_DB_MAX_PAGE extra log rows");
+        check(set_log_ts(db, id, now - 2 * 3600) == ACTA_DB_OK,
+              "backdated every log row to now - 2h");
+
+        /* Bump ONLY the overall newest row (max id) to now: with the
+         * (created_at, id) ASC order it is the last row of the LAST
+         * page, beyond the first page's cap. */
+        char fresh_ts[32];
+        ts(now, fresh_ts, sizeof fresh_ts);
+        char bump_sql[200];
+        snprintf(bump_sql, sizeof bump_sql,
+                 "UPDATE execution_logs SET created_at = '%s' "
+                 "WHERE execution_id = %d AND id = "
+                 "(SELECT MAX(id) FROM execution_logs);",
+                 fresh_ts, id);
+        check(acta_db_exec(db, bump_sql) == ACTA_DB_OK,
+              "newest log row bumped to now");
+
+        char *av[] = { "--stale-seconds", "600" };
+        check(cmd_sweep_argv(db, 2, av) == EXIT_OK, "exit code 0");
+        check(execution_status(db, id, st, sizeof st) &&
+                  strcmp(st, ACTA_EXEC_STATUS_RUNNING) == 0,
+              "fresh row kept (newest log beyond the page cap seen)");
+        /* Exact count (1 seeded + ACTA_DB_MAX_PAGE bulk): a swept row
+         * would have appended an execution_failed row beyond the first
+         * page, which the first-page-only log_has_event() cannot see. */
+        check(acta_db_execution_log_count(db, id, NULL, &err) ==
+                  ACTA_DB_MAX_PAGE + 1,
+              "log count unchanged (no execution_failed log added)");
     }
 
     acta_db_close(db);
