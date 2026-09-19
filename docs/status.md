@@ -47,9 +47,12 @@ sized for the key, `malloc` failure → `BACKEND_ERR_ALLOC`) is fixed (`c64b74c`
 --name --table` silently filtered by name "--table"; `cmd_args_flag` now
 matches the positional walkers' tokenization and `cmd_args_validate`
 rejects a value flag without a non-flag value as a CLI usage error, exit
-10) is fixed (`cebd993`); #10 (sweep `last_activity` page cap) and #11 (GUI "Show
-trash" persistence on the context/execution panels) remain open. All previously
-tracked issues are fixed and regression-pinned in the
+10) is fixed (`cebd993`); #11 (GUI "Show trash"
+persistence on the context/execution panels — the checkbox states are now
+saved to QSettings in `closeEvent` and restored in the constructor,
+mirroring the skill/model panels) is also fixed; #10 (sweep
+`last_activity` page cap) remains open. All previously tracked issues are
+fixed and regression-pinned in the
 `acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
 issues (light-projection listers, open-time pragma check-and-report,
 `acta_db_exec` contract) and CLI known-issues KI-1..KI-8 (`--sql_stdin`

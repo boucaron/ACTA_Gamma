@@ -379,6 +379,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                 && s.value(QStringLiteral("window/showDeletedModel"), false)
                        .toBool() != m_modelPanel->showDeletedCheck->isChecked())
             m_modelPanel->showDeletedCheck->setChecked(true);
+        if (m_contextPanel->showDeletedCheck
+                && s.value(QStringLiteral("window/showDeletedContext"), false)
+                       .toBool() != m_contextPanel->showDeletedCheck->isChecked())
+            m_contextPanel->showDeletedCheck->setChecked(true);
+        if (m_executionPanel->showDeletedCheck
+                && s.value(QStringLiteral("window/showDeletedExecution"), false)
+                       .toBool() != m_executionPanel->showDeletedCheck->isChecked())
+            m_executionPanel->showDeletedCheck->setChecked(true);
     }
 }
 
@@ -396,6 +404,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
                     m_skillPanel->showDeletedCheck->isChecked());
         s.setValue(QStringLiteral("window/showDeletedModel"),
                     m_modelPanel->showDeletedCheck->isChecked());
+        s.setValue(QStringLiteral("window/showDeletedContext"),
+                    m_contextPanel->showDeletedCheck->isChecked());
+        s.setValue(QStringLiteral("window/showDeletedExecution"),
+                    m_executionPanel->showDeletedCheck->isChecked());
         s.sync();
     }
     QMainWindow::closeEvent(event);
