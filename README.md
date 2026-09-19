@@ -155,6 +155,16 @@ acta_cli log list 1
 
 Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose newest activity (latest `execution_log` row, or `started_at`) is older than `N` seconds (`--stale-seconds` is required, positive integer). A failed execution is retried manually with `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button.
 
+## Your first session in the GUI
+
+Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). Then:
+
+1. **Model** — Models panel → *New…* → give it a name, the backend (`openai`), the router's address, and the model id (the GGUF file's name in your `--models-dir` folder).
+2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
+3. **Context** — Contexts panel → *New…* → a type, and paste the content (a document, a code file, a log…).
+4. **Execution** — Executions panel → *New…* → pick the context, the skill and the model (optionally add a short extra instruction), then press **Run**.
+5. **Watch it** — the row moves `pending → running → completed` (or `failed`). While it runs, **Run** becomes **Cancel**. **Log** shows the phase timeline, **Details** shows the prompt sent, the raw response and the result; **Retry** re-runs a failed execution.
+
 ## CLI ergonomics
 
 For the high-volume payload data (context `content`; execution `prompt` / `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 2). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
