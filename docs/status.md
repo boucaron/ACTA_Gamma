@@ -47,7 +47,7 @@ sized for the key, `malloc` failure → `BACKEND_ERR_ALLOC`) is fixed (`c64b74c`
 --name --table` silently filtered by name "--table"; `cmd_args_flag` now
 matches the positional walkers' tokenization and `cmd_args_validate`
 rejects a value flag without a non-flag value as a CLI usage error, exit
-10) is fixed; #10 (sweep `last_activity` page cap) and #11 (GUI "Show
+10) is fixed (`cebd993`); #10 (sweep `last_activity` page cap) and #11 (GUI "Show
 trash" persistence on the context/execution panels) remain open. All previously
 tracked issues are fixed and regression-pinned in the
 `acta_db/tests` and `acta_cli/tests` suites: the three `acta_db` review
