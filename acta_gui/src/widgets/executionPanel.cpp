@@ -268,11 +268,12 @@ void ExecutionPanel::stopRunner()
     }
     if (m_runnerThread) {
         // The database switched underneath the worker (or the app is
-        // shutting down). The worker thread cannot be cancelled
-        // mid-HTTP (the runner's pipeline has no cancellation hook),
-        // so let it run to completion — bounded by the backend
-        // timeout — so the execution row never stays stuck in
-        // "running". Its own DB connection closes with the worker, so
+        // shutting down). We deliberately do NOT request a cooperative
+        // cancel here (backend_cancel_request would only abort the
+        // transfer; the pipeline would still finish on the worker's own
+        // connection): let the worker run to completion — bounded by
+        // the backend timeout — so the execution row never stays stuck
+        // in "running". Its own DB connection closes with the worker, so
         // the stale database only receives that execution's final
         // complete/fail.
         //
