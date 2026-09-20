@@ -3,9 +3,9 @@
 Status: **in progress** (follow-up to the completed
 [`drop-execution-prompt.md`](drop-execution-prompt.md); owner decision,
 dev phase — no users, so full removal is acceptable). Items 2
-(`acta_db`, `75142db`) and 3 (`acta_cli`) are implemented and all
-CLI/DB/runner suites pass; the migration script exists and all DB files
-in the repo have already been migrated.
+(`acta_db`, `75142db`), 3 (`acta_cli`) and 5 (`acta_runner`) are
+implemented and all CLI/DB/runner suites pass; the migration script
+exists and all DB files in the repo have already been migrated.
 
 ## Rationale
 
@@ -112,12 +112,12 @@ it) — the script is for hygiene, not for correctness.
   column comments: drop `prompt` from the list.
 - Regenerate `build/ui/ui_executionDialog.h` at build time.
 
-### 5. `acta_runner/`
+### 5. `acta_runner/` — done
 
-- `src/run.c` — comment near the user-message block: the column no
-  longer exists (it is not audit data anywhere in-app).
-- `tests/run/test_run.c` — drop the `e.prompt = "USER-PROMPT"`
-  legacy-ignore pin (the field does not exist).
+- `src/run.c` — comment near the user-message block now states the
+  executions table has no prompt column.
+- `tests/run/test_run.c` — the `e.prompt = "USER-PROMPT"` legacy-ignore
+  pin is gone (the field does not exist).
 
 ### 6. Docs
 

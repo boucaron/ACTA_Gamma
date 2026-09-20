@@ -155,9 +155,6 @@ static int make_execution(db_t *db, int ctx_id, int skill_rev_id,
     e.context_id = ctx_id;
     e.skill_revision_id = skill_rev_id;
     e.model_revision_id = model_rev_id;
-    /* Legacy column: pinned to a non-empty value so the suite proves the
-     * runner ignores execution.prompt (user = context content only). */
-    e.prompt = "USER-PROMPT";
     int id = 0;
     if (acta_db_execution_create(db, &e, &id) != ACTA_DB_OK)
         return -1;

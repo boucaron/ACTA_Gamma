@@ -462,9 +462,9 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         return ex;
     }
 
-    /* The user message is always the context content. The legacy
-     * execution.prompt column is audit data only and is never used here.
-     * Empty context content -> fail with EXIT_INVALID. */
+    /* The user message is always the context content; the executions
+     * table has no prompt column. Empty context content -> fail with
+     * EXIT_INVALID. */
     const char *cc = ctx->content;
     user = (cc && cc[0]) ? strdup(cc) : NULL;
     if (!user || !user[0]) {
