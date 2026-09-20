@@ -168,8 +168,10 @@ acta_cli context create --json '{"type":"text","content":"The build system shipp
 # so every "1" below is the corresponding row id)
 acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
-# 5. Set the API key environment variable (must be set; empty is fine
-# for the keyless localhost server from step 3)
+# 5. Set the API key environment variable.
+# The variable must exist in the environment; for a keyless localhost
+# server, setting it to empty is sufficient (no Authorization header will
+# be sent).
 export OPENAI_API_KEY=
 
 # 6. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
