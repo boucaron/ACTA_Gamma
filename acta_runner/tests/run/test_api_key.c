@@ -42,7 +42,7 @@
 #define probe_close(s) close(s)
 #endif
 
-#define STUB_PORT 8919
+#define STUB_PORT 8918
 #define STUB_BASE_URL "http://127.0.0.1:8918"
 
 static int checks = 0;
