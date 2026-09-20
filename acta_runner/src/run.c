@@ -93,8 +93,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
 
     /* API key: $OPENAI_API_KEY only (the --api_key flag is gone; the key
      * is never read from the model configuration blob — see
-     * docs/plans/drop-runner-api-key-flag.md and
-     * docs/plans/drop-model-config-api-key.md). Presence policy:
+     * docs/plans/drop-runner-api-key-flag.md). Presence policy:
      * unset -> hard error before any claim; empty -> warning, no
      * Authorization header. */
     api_key = getenv("OPENAI_API_KEY");
@@ -512,7 +511,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
 
     /* ---- configuration JSON (backend knobs) ----
      * Auth: the API key comes only from $OPENAI_API_KEY — it is never
-     *   read from this blob (see docs/plans/drop-model-config-api-key.md).
+     *   read from this blob (see docs/runner_contract.md, decision 4).
      * Known keys:
      *   temperature             number
      *   max_tokens              positive number

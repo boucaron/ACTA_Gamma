@@ -539,7 +539,7 @@ int main(void)
 
     /* 14. configuration carrying api_key -> hard failure: the key is
      *     no longer read from the blob, so a stored secret is now an
-     *     unknown key (docs/plans/drop-model-config-api-key.md). */
+     *     unknown key (docs/runner_contract.md, decision 4). */
     {
         stub_config_t cfg;
         memset(&cfg, 0, sizeof cfg);

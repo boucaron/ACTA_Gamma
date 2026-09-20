@@ -94,8 +94,7 @@ void RunnerWorker::runInThread()
 
     // API key: $OPENAI_API_KEY only — the UI has no --api_key flag, and
     // the pipeline never reads the key from the model configuration
-    // blob (docs/plans/drop-model-config-api-key.md and
-    // docs/plans/drop-runner-api-key-flag.md). Presence policy: unset
+    // blob (docs/plans/drop-runner-api-key-flag.md). Presence policy: unset
     // -> hard error, the pipeline is not started; empty -> warning in
     // the run result, no Authorization header.
     const char *apiKey = std::getenv("OPENAI_API_KEY");
