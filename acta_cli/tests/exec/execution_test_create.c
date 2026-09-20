@@ -23,7 +23,6 @@ static void test_create_basic(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "What is the capital of France?", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -38,7 +37,6 @@ static void test_create_all_fields(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "Full exec", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -53,7 +51,6 @@ static void test_create_id_only(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_id_only();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "id only", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -66,13 +63,14 @@ static void test_create_id_only(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-/* prompt is optional: a context-only execution is valid (the runner
- * fails at run time only if prompt and context are both empty). */
+/* Canonical positive case: no prompt input at all — prompt is a
+ * legacy column never written by current code; the user message
+ * comes from context.content and instruction text from the skill
+ * revision's prompt_template. */
 static void test_create_without_prompt(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    /* no --prompt */
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -87,7 +85,6 @@ static void test_create_missing_context_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "no ctx", &g);
     /* no --context_id */
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -101,7 +98,6 @@ static void test_create_missing_skill_revision_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "no skill", &g);
     targs_flag(a, "context_id", "1", &g);
     /* no --skill_revision_id */
     targs_flag(a, "model_revision_id", "2", &g);
@@ -115,7 +111,6 @@ static void test_create_missing_model_revision_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "no model", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     /* no --model_revision_id */
@@ -129,7 +124,6 @@ static void test_create_zero_context_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "zero ctx", &g);
     targs_flag(a, "context_id", "0", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -143,7 +137,6 @@ static void test_create_negative_skill_id(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "neg skill", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "-3", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -160,7 +153,6 @@ static void test_create_status_pending_rejected(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "dead status", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -175,7 +167,6 @@ static void test_create_status_running_rejected(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "run me", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -190,7 +181,6 @@ static void test_create_status_bogus_rejected(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "bad status", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -206,7 +196,6 @@ static void test_create_valid_parent(stest_ctx_t *ctx)
     /* parent_execution_id=4 exists in ref DB */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "child exec", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -221,7 +210,6 @@ static void test_create_fk_violation_context(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "bad ctx fk", &g);
     targs_flag(a, "context_id", "9999", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -235,7 +223,6 @@ static void test_create_fk_violation_skill_rev(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "bad skill fk", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "9999", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -249,7 +236,6 @@ static void test_create_fk_violation_model_rev(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "bad model fk", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "9999", &g);
@@ -263,7 +249,6 @@ static void test_create_fk_violation_parent(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "prompt", "bad parent fk", &g);
     targs_flag(a, "context_id", "1", &g);
     targs_flag(a, "skill_revision_id", "1", &g);
     targs_flag(a, "model_revision_id", "2", &g);
@@ -295,7 +280,7 @@ static void test_create_src_json_space(stest_ctx_t *ctx)
      * (P2: it used to be ignored and stdin read instead). */
     char *argv0[] = { "acta_cli", "exec", "create",
                       "--json",
-                      "{\"prompt\":\"src json space\",\"context_id\":1,"
+                      "{\"context_id\":1,"
                       "\"skill_revision_id\":1,"
                       "\"model_revision_id\":2}" };
     int rc = stest_run_argv(ctx, cmd_exec, 5, argv0, "");
@@ -307,7 +292,7 @@ static void test_create_src_json_equals(stest_ctx_t *ctx)
 {
     /* --json=<blob> (equals form) */
     char *argv0[] = { "acta_cli", "exec", "create",
-                      "--json={\"prompt\":\"src json equals\","
+                      "--json={"
                       "\"context_id\":1,\"skill_revision_id\":1,"
                       "\"model_revision_id\":2}" };
     int rc = stest_run_argv(ctx, cmd_exec, 4, argv0, "");
@@ -318,7 +303,7 @@ static void test_create_src_json_equals(stest_ctx_t *ctx)
 static void test_create_src_from_file_present(stest_ctx_t *ctx)
 {
     const char *path = stest_write_input(ctx,
-        "{\"prompt\":\"src from_file\",\"context_id\":1,"
+        "{\"context_id\":1,"
         "\"skill_revision_id\":1,\"model_revision_id\":2}");
     TEST_NOT_NULL(ctx, path);
     char *argv0[] = { "acta_cli", "exec", "create",
@@ -340,7 +325,7 @@ static void test_create_src_stdin(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "exec", "create", "--stdin" };
     int rc = stest_run_argv(ctx, cmd_exec, 4, argv0,
-        "{\"prompt\":\"src stdin\",\"context_id\":1,"
+        "{\"context_id\":1,"
         "\"skill_revision_id\":1,\"model_revision_id\":2}");
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
@@ -377,13 +362,26 @@ static void test_create_src_json_status_rejected(stest_ctx_t *ctx)
     /* "status" in the JSON body is rejected just like the flag (W3) */
     char *argv0[] = { "acta_cli", "exec", "create",
                       "--json",
-                      "{\"prompt\":\"json status\",\"context_id\":1,"
+                      "{\"context_id\":1,"
                       "\"skill_revision_id\":1,"
                       "\"model_revision_id\":2,\"status\":\"completed\"}" };
     int rc = stest_run_argv(ctx, cmd_exec, 5, argv0, "");
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
+
+/* Prompt key removed from the contract: a JSON body carrying 'prompt'
+ * is rejected as an unknown key (KI-2) -> EXIT_INVALID. */
+static void test_create_json_prompt_key_rejected(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "exec", "create",
+                      "--json",
+                      "{\"prompt\":\"legacy\",\"context_id\":1,"
+                      "\"skill_revision_id\":1,"
+                      "\"model_revision_id\":2}" };
+    int rc = stest_run_argv(ctx, cmd_exec, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+}
 /* ═══════════════════════════════════════════════════════════════════
  *  known issues (KI-n)
  * ═══════════════════════════════════════════════════════════════════ */
@@ -396,7 +394,7 @@ static void test_create_fk_error_has_detail(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "exec", "create",
                       "--json",
-                      "{\"prompt\":\"ki7\",\"context_id\":999999,"
+                      "{\"context_id\":999999,"
                       "\"skill_revision_id\":1,\"model_revision_id\":1}" };
     int rc = stest_run_argv(ctx, cmd_exec, 5, argv0, "");
     TEST_EQ(ctx, rc, EXIT_INVALID);
@@ -439,6 +437,8 @@ int run_execution_test_create(void)
     test_create_src_conflict_json_file(&ctx);
     test_create_src_conflict_stdin_file(&ctx);
     test_create_src_json_status_rejected(&ctx);
+
+    test_create_json_prompt_key_rejected(&ctx);
 
     /* known issues (KI-n) */
     test_create_fk_error_has_detail(&ctx);

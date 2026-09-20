@@ -218,7 +218,9 @@ static const jfield_t context_fields[] = {
 static const jfield_t execution_fields[] = {
     { "id",                  JF_ID,  offsetof(execution_t, id) },
     { "status",              JF_STR, offsetof(execution_t, status) },
-    { "prompt",              JF_STR, offsetof(execution_t, prompt) },
+    /* 'prompt' is deliberately NOT a create key: executions.prompt is
+     * a legacy column never written by current code; a body carrying
+     * it is rejected as an unknown key (KI-2). */
     { "context_id",          JF_ID,  offsetof(execution_t, context_id) },
     { "skill_revision_id",   JF_ID,  offsetof(execution_t, skill_revision_id) },
     { "model_revision_id",   JF_ID,  offsetof(execution_t, model_revision_id) },

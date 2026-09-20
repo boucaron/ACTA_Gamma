@@ -192,7 +192,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     TEST_STREQ(ctx, cj_str(root, "name"), "acta_cli");
     cJSON *ver = cJSON_GetObjectItem(root, "version");
     TEST(ctx, ver && cJSON_IsNumber(ver));
-    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 2);   /* P1: structured success */
+    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 3);   /* v3: exec create drops the prompt flag/key */
     TEST_NOT_NULL(ctx, cj_str(root, "usage"));
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");

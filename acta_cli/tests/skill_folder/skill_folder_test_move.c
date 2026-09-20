@@ -213,8 +213,8 @@ static void check_move_refusal(stest_ctx_t *ctx, const char *id,
                                const char *parent, int want_rc,
                                const char *needle)
 {
-    char *argv0[] = { "acta_cli", "skill_folder", "move", id,
-                      "--parent_id", parent };
+    char *argv0[] = { "acta_cli", "skill_folder", "move", (char *)id,
+                      "--parent_id", (char *)parent };
     int rc = stest_run_argv(ctx, cmd_skill_folder, 6, argv0, "");
     TEST_EQ(ctx, rc, want_rc);
     const char *err = stest_stderr(ctx);

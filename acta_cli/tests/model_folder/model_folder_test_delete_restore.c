@@ -280,7 +280,7 @@ static void test_restore_then_get_clears_deleted_at(stest_ctx_t *ctx)
 static void check_refusal(stest_ctx_t *ctx, const char *action, const char *id,
                           int want_rc, const char *needle)
 {
-    char *argv0[] = { "acta_cli", "model_folder", action, id };
+    char *argv0[] = { "acta_cli", "model_folder", (char *)action, (char *)id };
     int rc = stest_run_argv(ctx, cmd_model_folder, 4, argv0, "");
     TEST_EQ(ctx, rc, want_rc);
     const char *err = stest_stderr(ctx);

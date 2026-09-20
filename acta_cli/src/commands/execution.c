@@ -37,7 +37,6 @@ void exec_usage(FILE *f)
 "  Provide data via one of:\n"
 "\n"
 "    acta_cli exec create \\\n"
-"      --prompt \"What is the capital of France?\" \\\n"
 "      --context_id 1 --skill_revision_id 3 \\\n"
 "      --model_revision_id 2\n"
 "        <- flag-based\n"
@@ -51,8 +50,12 @@ void exec_usage(FILE *f)
 "    --model_revision_id <int>    Model revision (must be > 0)\n"
 "\n"
 "  Optional fields:\n"
-"    --prompt <str>               Prompt / task description\n"
 "    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
+"\n"
+"  Note: no prompt input — the prompt comes from the skill revision's\n"
+"  prompt_template and the user message from the context's content;\n"
+"  a --prompt flag or 'prompt' JSON key is rejected (unknown option /\n"
+"  unknown key, exit 4 for the key).\n"
 "\n"
 "  Options:\n"
 "    --json <blob>          Read the record as JSON; --stdin and --from_file <path> are the alternative sources\n"
@@ -188,7 +191,6 @@ static void usage_create(FILE *f)
 "  Provide data via one of:\n"
 "\n"
 "    acta_cli exec create \\\n"
-"      --prompt \"What is the capital of France?\" \\\n"
 "      --context_id 1 --skill_revision_id 3 \\\n"
 "      --model_revision_id 2\n"
 "        <- flag-based\n"
@@ -202,8 +204,12 @@ static void usage_create(FILE *f)
 "    --model_revision_id <int>    Model revision (must be > 0)\n"
 "\n"
 "  Optional fields:\n"
-"    --prompt <str>               Prompt / task description\n"
 "    --parent_execution_id <int>  Parent execution (for sub-tasks)\n"
+"\n"
+"  Note: no prompt input — the prompt comes from the skill revision's\n"
+"  prompt_template and the user message from the context's content;\n"
+"  a --prompt flag or 'prompt' JSON key is rejected (unknown option /\n"
+"  unknown key, exit 4 for the key).\n"
 "\n"
 "  Options:\n"
 "    --json <blob>          Read the record as JSON; --stdin and --from_file <path> are the alternative sources\n"
@@ -608,7 +614,6 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             free(blob);
             json_owned = 1;
         } else {
-            exec.prompt = (char *)cmd_args_flag(ga, "prompt", 1);
             exec.status = (char *)cmd_args_flag(ga, "status", 1);
 
             /* Optional ref filters: absent → 0 ("all" / unset, exec is
@@ -628,31 +633,30 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 return EXIT_INVALID;
         }
 
-        VLOG(1, "exec create: prompt=%s context_id=%d skill_revision_id=%d "
+        VLOG(1, "exec create: context_id=%d skill_revision_id=%d "
                 "model_revision_id=%d parent_execution_id=%d status=%s",
-             exec.prompt ? exec.prompt : "(none)",
              exec.context_id, exec.skill_revision_id,
              exec.model_revision_id, exec.parent_execution_id,
              exec.status ? exec.status : "(default)");
 
-        VLOG(2, "  params: prompt=%s context_id=%d skill_revision_id=%d "
+        VLOG(2, "  params: context_id=%d skill_revision_id=%d "
                 "model_revision_id=%d parent_execution_id=%d status=%s "
                 "fields=%s no_nulls=%d id_only=%d table=%d",
-             exec.prompt ? exec.prompt : "(null)",
              exec.context_id, exec.skill_revision_id,
              exec.model_revision_id, exec.parent_execution_id,
              exec.status ? exec.status : "(null)",
              gopts->fields ? gopts->fields : "(all)",
              gopts->no_nulls, gopts->id_only, gopts->table);
 
-        VLOG(3, "  raw: ga=%p json_owned=%d exec=%p prompt=%p status=%p",
+        VLOG(3, "  raw: ga=%p json_owned=%d exec=%p status=%p",
              (const void *)ga, json_owned, (const void *)&exec,
-             (const void *)exec.prompt, (const void *)exec.status);
+             (const void *)exec.status);
 
         /* ── required-field validation ──────────────────────────────
-         * prompt is optional (context-only is a valid execution; the
-         * runner fails at run time if prompt and context are both
-         * empty). */
+         * prompt is IGNORED: executions.prompt is a legacy column that
+         * is never written by current code; the user message comes from
+         * context.content and instruction text from the skill
+         * revision's prompt_template. */
         if (exec.context_id <= 0) {
             VLOG(1, "  ERROR: missing required field 'context_id'");
             emit_error("missing required field: context_id");
@@ -712,7 +716,6 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
     cleanup_exec_create:
         if (json_owned) {
-            free(exec.prompt);
             free((void *)exec.status);
             free(exec.created_at);
         }

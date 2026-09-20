@@ -182,7 +182,7 @@ static const tool_flag_t f_sf_list[] = {
 static const tool_flag_t f_exec_create[] = {
     { "context_id", 1, 1 }, { "skill_revision_id", 1, 1 },
     { "model_revision_id", 1, 1 },
-    { "prompt", 1, 0 }, { "parent_execution_id", 1, 0 },
+    { "parent_execution_id", 1, 0 },
 };
 static const tool_flag_t f_exec_complete[] = {
     { "result", 1, 0 }, { "result_file", 1, 0 },
@@ -233,7 +233,7 @@ static const char *const jk_skill_upd[]  =
     { "name", "prompt_template", "folder_id", "description", "output_schema" };
 static const char *const jk_exec_req[]   =
     { "context_id", "skill_revision_id", "model_revision_id" };
-static const char *const jk_exec_opt[]   = { "prompt", "parent_execution_id" };
+static const char *const jk_exec_opt[]   = { "parent_execution_id" };
 static const char *const jk_log_req[]    = { "execution_id", "level", "event" };
 static const char *const jk_log_opt[]    = { "message", "metadata" };
 
@@ -691,10 +691,13 @@ static const tool_entry_t tool_table[] = {
     { "exec.create", "exec", "create", alias_execution, 1,
       "Create an execution from flags or a JSON body. The row is always "
       "created 'pending'; --status (flag or JSON key) is rejected — later "
-      "states are reached via start/complete/fail/cancel. The canonical "
-      "entity name is 'exec' (dispatch rejects the alias 'execution').",
-      NULL, 0, f_exec_create, 5, "flags|json",
-      jk_exec_req, 3, jk_exec_opt, 2,
+      "states are reached via start/complete/fail/cancel. No prompt input: "
+      "the --prompt flag and 'prompt' JSON key are rejected (the prompt "
+      "comes from the skill revision's prompt_template, the user message "
+      "from the context's content). The canonical entity name is 'exec' "
+      "(dispatch rejects the alias 'execution').",
+      NULL, 0, f_exec_create, 4, "flags|json",
+      jk_exec_req, 3, jk_exec_opt, 1,
       &suc_exec_create },
 
     { "exec.get", "exec", "get", alias_execution, 1,
@@ -1235,7 +1238,7 @@ static void compact_pos(FILE *f, const tool_pos_t *p, size_t n)
 
 int tools_print_compact(FILE *out)
 {
-    fputs("# acta_cli tools v2 (compact); full JSON: --tools\n", out);
+    fputs("# acta_cli tools v3 (compact); full JSON: --tools\n", out);
     fputs("usage: acta_cli [global flags] <entity> <action> [args]\n", out);
     fputs("globals: --db --fields --no_nulls --id_only --count --table "
           "--pretty --json --stdin --from_file --out --raw_out "
@@ -1300,7 +1303,7 @@ int tools_print(FILE *out, int pretty)
     fputs(pretty ? "{\n" : "{", out);
 
     jf_str(out, "name", "acta_cli", pretty, 1, &i, top_n);
-    jf_num(out, "version", 2, pretty, 1, &i, top_n);
+    jf_num(out, "version", 3, pretty, 1, &i, top_n);
     jf_str(out, "usage",
            "acta_cli [global flags] <entity> <action> [args]",
            pretty, 1, &i, top_n);

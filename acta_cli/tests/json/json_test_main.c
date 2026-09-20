@@ -356,16 +356,18 @@ static void tier5_full_payloads(void)
     fcontext(&c);
 
     /* exec: {context_id*, skill_revision_id*, model_revision_id*,
-     * prompt, parent_execution_id} (+ id, status, created_at) */
+     * parent_execution_id} (+ id, status, created_at).  'prompt' is
+     * no longer a create wire key (legacy column, never written) —
+     * a body carrying it is rejected as an unknown key. */
     execution_t e; memset(&e, 0, sizeof e);
     TEQ(json_parse_execution(
             "{\"id\":4,\"status\":\"pending\","
-            "\"prompt\":\"line1\\nline2\",\"context_id\":1,"
+            "\"context_id\":1,"
             "\"skill_revision_id\":2,\"model_revision_id\":3,"
             "\"parent_execution_id\":0,\"created_at\":\"ts\"}", &e), 0);
     TEQ(e.id, 4);
     TSTREQ(e.status, "pending");
-    TSTREQ(e.prompt, "line1\nline2");
+    TNULL(e.prompt);                          /* legacy column: not parsed */
     TEQ(e.context_id, 1);
     TEQ(e.skill_revision_id, 2);
     TEQ(e.model_revision_id, 3);
@@ -440,7 +442,7 @@ static void tier5_full_payloads(void)
 /* ── Tier 6: error-path hygiene — struct fully zeroed on -1 ───────── */
 
 /* The tables put string fields after id fields in some entities
- * (execution: status/prompt before context_id; folders: name before
+ * (execution: status before context_id; folders: name before
  * parent_id; log: level/event/message/metadata before execution_id),
  * so a late id failure forces the walker to free already-copied
  * strings.  After -1 every string field must be NULL and every int
@@ -467,7 +469,7 @@ static void tier6_error_hygiene(void)
 
     execution_t e; memset(&e, 0, sizeof e);
     TEQ(json_parse_execution(
-            "{\"id\":4,\"status\":\"s\",\"prompt\":\"p\",\"context_id\":-5}",
+            "{\"id\":4,\"status\":\"s\",\"context_id\":-5}",
             &e), -1);
     TNULL(e.status); TNULL(e.prompt); TNULL(e.created_at);
     TEQ(e.id, 0); TEQ(e.context_id, 0);

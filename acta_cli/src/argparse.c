@@ -275,7 +275,6 @@ static const flag_spec_t entity_flag_specs[] = {
     { "output_schema", 1 },
     { "parent_execution_id", 1 },
     { "parent_id", 1 },
-    { "prompt", 1 },
     { "prompt_template", 1 },
     { "raw", 1 },
     { "raw_file", 1 },

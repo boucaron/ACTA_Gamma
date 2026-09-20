@@ -440,7 +440,7 @@ static void check_refusal_msg(stest_ctx_t *ctx, const char *action,
                               const char *id, int want_rc,
                               const char *needle)
 {
-    char *argv0[] = { "acta_cli", "exec", action, id };
+    char *argv0[] = { "acta_cli", "exec", (char *)action, (char *)id };
     int rc = stest_run_argv(ctx, cmd_exec, 4, argv0, "");
     TEST_EQ(ctx, rc, want_rc);
     const char *err = stest_stderr(ctx);

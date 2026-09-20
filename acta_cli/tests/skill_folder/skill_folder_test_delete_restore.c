@@ -236,7 +236,7 @@ static void test_restore_missing_positional(stest_ctx_t *ctx)
 static void pin_refusal(stest_ctx_t *ctx, const char *action, const char *id,
                         int want_rc, const char *needle)
 {
-    char *argv0[] = { "acta_cli", "skill_folder", action, id };
+    char *argv0[] = { "acta_cli", "skill_folder", (char *)action, (char *)id };
     int rc = stest_run_argv(ctx, cmd_skill_folder, 4, argv0, "");
     TEST_EQ(ctx, rc, want_rc);
     const char *err = stest_stderr(ctx);
