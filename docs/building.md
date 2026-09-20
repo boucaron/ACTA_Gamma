@@ -76,7 +76,7 @@ cd ../acta_cli   && make test   # per-entity CLI tests
 cd ../acta_runner && make test   # pipeline tests against a local stub backend
 ```
 
-The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and `make smoke` (manual check of `tests/llama_smoke` against a LIVE OpenAI-compatible server).
+The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and `make smoke` (manual check of `tests/llama_smoke` against a LIVE OpenAI-compatible server; `llama_smoke` takes the key as a CLI argument, or `-` for no auth). For real use — `acta_runner run` or the GUI — `$OPENAI_API_KEY` **must be set** (unset → hard error, empty → warning; see the README *Environment variables* section).
 
 ## Build notes
 
