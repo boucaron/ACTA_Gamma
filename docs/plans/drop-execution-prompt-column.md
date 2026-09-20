@@ -1,12 +1,13 @@
 # Plan — fully drop the `executions.prompt` column
 
-Status: **in progress** (follow-up to the completed
+Status: **done** (follow-up to the completed
 [`drop-execution-prompt.md`](drop-execution-prompt.md); owner decision,
 dev phase — no users, so full removal is acceptable). Items 1
 (`acta_gui/db`), 2 (`acta_db`, `75142db`), 3 (`acta_cli`), 4
 (`acta_gui`) and 5 (`acta_runner`) are implemented and all CLI/DB/runner
 suites pass; the migration script exists and all DB files in the repo
-have already been migrated.
+have already been migrated; item 6 (docs) and 7 (verification) are
+complete.
 
 ## Rationale
 
@@ -135,7 +136,7 @@ it) — the script is for hygiene, not for correctness.
 - `docs/runner_contract.md` — drop references to the legacy column.
 - `docs/status.md` — pointer to this plan.
 
-### 7. Verification
+### 7. Verification — done
 
 1. `make all` (CLI + runner + DB libs compile).
 2. `make test` — all three C suites green (DB, CLI, runner).
