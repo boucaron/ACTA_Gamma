@@ -537,6 +537,25 @@ int main(void)
                  "must be a number", events, 1);
     }
 
+    /* 14. configuration carrying api_key -> hard failure: the key is
+     *     no longer read from the blob, so a stored secret is now an
+     *     unknown key (docs/plans/drop-model-config-api-key.md). */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        const char *events[] = { "execution_failed" };
+        scenario("config api_key is an unknown key", db, &cfg, NULL,
+                 "{\"api_key\":\"secret\",\"temperature\":0.7}",
+                 "CTX-CONTENT", 30, EXIT_INVALID,
+                 ACTA_EXEC_STATUS_FAILED, NULL,
+                 "unknown model configuration keys", events, 1);
+    }
+
     /* 14. empty context content -> failed + EXIT_INVALID */
     {
         stub_config_t cfg;
