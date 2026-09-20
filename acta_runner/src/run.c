@@ -17,7 +17,7 @@
  *                              EXIT_INVALID, "empty context content");
  *                     model  = model_identifier,
  *                     params from the model configuration JSON
- *                     (temperature, max_tokens, top_k, api_key,
+ *                     (temperature, max_tokens, top_k,
  *                      supports_response_format),
  *                     response_format = json_schema(output_schema) when the
  *                     skill has an output_schema and the backend supports it;
@@ -500,8 +500,10 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     free(meta);
 
     /* ---- configuration JSON (backend knobs) ----
+     * Auth: the API key comes only from the --api_key flag or
+     *   $OPENAI_API_KEY — it is never read from this blob (see
+     *   docs/plans/drop-model-config-api-key.md).
      * Known keys:
-     *   api_key                 string; used when --api_key / env not set
      *   temperature             number
      *   max_tokens              positive number
      *   top_k                   positive number
@@ -526,12 +528,6 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     int supports_rf = 1;
     if (cfg) {
         cJSON *kv;
-        kv = cJSON_GetObjectItem(cfg, "api_key");
-        if (kv && !cJSON_IsString(kv))
-            FAIL(EXIT_INVALID,
-                 "model configuration key 'api_key' must be a string");
-        if (kv && kv->valuestring)
-            api_key = kv->valuestring;
         kv = cJSON_GetObjectItem(cfg, "temperature");
         if (kv && !cJSON_IsNumber(kv))
             FAIL(EXIT_INVALID,
@@ -560,7 +556,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         /* Unknown keys are a hard error (not a warning), so typos and
          * stale keys surface immediately instead of changing the
          * effective model parameters. */
-        const char *known[] = { "api_key", "temperature", "max_tokens",
+        const char *known[] = { "temperature", "max_tokens",
                                 "top_k", "supports_response_format" };
         char unknown[256];
         unknown[0] = '\0';
