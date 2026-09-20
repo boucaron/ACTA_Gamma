@@ -26,6 +26,14 @@
  *     `char *` fields, the API only reads and copies them.
  */
 
+/* Suppress -Wunused-function for TUs that include this header but do
+ * not call exec_insert_raw. */
+#if defined(__GNUC__) || defined(__clang__)
+#define TEST_EXEC_UNUSED __attribute__((unused))
+#else
+#define TEST_EXEC_UNUSED
+#endif
+
 /* ------------------------------------------------------------------ */
 /*  Raw INSERT for seeding rows without valid FK targets.             */
 /*                                                                    */
@@ -37,7 +45,7 @@
 /*                                                                    */
 /*  Returns ACTA_DB_OK (0) on success, ACTA_DB_ERR_SQL on failure.   */
 /* ------------------------------------------------------------------ */
-static int exec_insert_raw(db_t *db, int execution_id, int ctx_id,
+static TEST_EXEC_UNUSED int exec_insert_raw(db_t *db, int execution_id, int ctx_id,
                            int sr_id, int mr_id, int parent_id) {
     acta_db_exec(db, "PRAGMA foreign_keys=OFF;");
 
