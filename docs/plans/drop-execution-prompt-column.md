@@ -3,10 +3,10 @@
 Status: **in progress** (follow-up to the completed
 [`drop-execution-prompt.md`](drop-execution-prompt.md); owner decision,
 dev phase — no users, so full removal is acceptable). Items 1
-(`acta_gui/db`), 2 (`acta_db`, `75142db`), 3 (`acta_cli`) and 5
-(`acta_runner`) are implemented and all CLI/DB/runner suites pass; the
-migration script exists and all DB files in the repo have already been
-migrated.
+(`acta_gui/db`), 2 (`acta_db`, `75142db`), 3 (`acta_cli`), 4
+(`acta_gui`) and 5 (`acta_runner`) are implemented and all CLI/DB/runner
+suites pass; the migration script exists and all DB files in the repo
+have already been migrated.
 
 ## Rationale
 
@@ -103,15 +103,19 @@ it) — the script is for hygiene, not for correctness.
 - `acta_test_ref.sql` / `acta_test_ref.db` — ref DB rebuilt from the
   columnless seed (seed `executions` rows lose their prompt values).
 
-### 4. `acta_gui/`
+### 4. `acta_gui/` — done
 
-- `ui/executionDialog.ui` — remove the `promptTab` / `promptTextEdit`
-  from the dialog's tab widget.
-- `src/widgets/executionDialog.cpp` — drop the prompt-tab population
+- `ui/executionDialog.ui` — `promptTab` / `promptTextEdit` removed from
+  the dialog's tab widget; the tab widget itself renamed
+  `promptWidget` → `tabWidget`.
+- `src/widgets/executionDialog.cpp` — prompt-tab population dropped
   (including the legacy placeholder logic).
+- `ui/executionCreateDialog.ui` — the orphaned `Prompt:` label
+  (`label_5`) left behind when the prompt edit was removed in the
+  earlier change is gone.
 - `src/widgets/executionCreateDialog.cpp`, `executionPanel.cpp` — blob
-  column comments: drop `prompt` from the list.
-- Regenerate `build/ui/ui_executionDialog.h` at build time.
+  column comments now list `(raw_response, result, error)`.
+- `build/ui/ui_executionDialog.h` regenerated at build time.
 
 ### 5. `acta_runner/` — done
 
