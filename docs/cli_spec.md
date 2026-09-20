@@ -258,7 +258,7 @@ changed) snapshots nothing. Revision rows are read via the
 
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
-| `exec create` | — | `--context_id*`, `--skill_revision_id*`, `--model_revision_id*`, `--prompt`, `--parent_execution_id` | flags or JSON (same keys) | `{"id":N}` (row always created `pending`) |
+| `exec create` | — | `--context_id*`, `--skill_revision_id*`, `--model_revision_id*`, `--parent_execution_id` | flags or JSON (same keys) | `{"id":N}` (row always created `pending`) |
 | `exec get <id>` | `id` | `--include_deleted` / `--deleted` | — | execution JSON object |
 | `exec delete <id>` | `id` | — | — | `{"deleted":true}` |
 | `exec restore <id>` | `id` | — | — | `{"id":N,"restored":true}` |
@@ -273,6 +273,14 @@ changed) snapshots nothing. Revision rows are read via the
 
 Notes on `exec`:
 
+- **No `prompt` input** — `exec create` takes no `--prompt` flag and no
+  `prompt` JSON key: a JSON body carrying `prompt` (any case) is rejected
+  as an unknown key, exit 4 (`invalid JSON body`). The user message is
+  always `context.content` (see `docs/runner_contract.md`). The legacy
+  `executions.prompt` column is read-only: it may still hold a value in
+  rows created before the removal and is still emitted by `exec get` /
+  `--fields prompt` / `--raw_out prompt`; current `exec create` never
+  writes it (plan: `docs/plans/drop-execution-prompt.md`).
 - **State machine** — the lifecycle transitions and their allowed source
   states; every other transition is refused:
 
@@ -292,8 +300,8 @@ Notes on `exec`:
   dead end (no restart, no complete); `reset` only un-sticks `failed`.
 - **Replay** — there is no dedicated replay action. Replay an execution by
   creating a new one with the same inputs — `exec create` with the same
-  `context_id` / `skill_revision_id` / `model_revision_id` (and `--prompt`
-  if the original had one) — plus `--parent_execution_id <id>` to link the
+  `context_id` / `skill_revision_id` / `model_revision_id` — plus
+  `--parent_execution_id <id>` to link the
   new row to the one being replayed; the new row is created `pending` and
   runs normally.
 - **Reset** — `exec reset <id>` performs the `failed → pending` reset

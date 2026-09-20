@@ -35,7 +35,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 * **Immutable contexts** — the exact input can be retained for replay.
 * **Multi-model** — the backend serves several models; any model served by the llama.cpp router can be registered as a model record.
 * **Auditable** — executions retain prompts, raw responses, results, errors, and execution events.
-* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, model revision, and execution prompt (output equivalence additionally depends on backend determinism — see [Revisions and lifecycle](#revisions-and-lifecycle)).
+* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, and model revision (output equivalence additionally depends on backend determinism — see [Revisions and lifecycle](#revisions-and-lifecycle)).
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
 ## What it does — and deliberately does not
@@ -77,7 +77,7 @@ The whole lifecycle: create/update the parent, revisions are snapshotted automat
 
 - **How revisions are created.** A DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created, updated, or soft-deleted (`acta_cli skill create` / `skill update` / `skill delete`, same for `model`). The soft-delete trigger snapshots a final revision carrying `deleted_at`. There is no separate "snapshot" command.
 - **Immutability.** Revision rows cannot be edited or deleted — they can only be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`). Contexts are likewise immutable (a trigger rejects updates), which is what makes replay inputs exact.
-- **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its final user message is `execution.prompt + "\n\n" + context.content`. The request inputs are exactly reproducible only with all four inputs: the context, the skill revision, the model revision, and the execution-level prompt.
+- **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its user message is exactly `context.content`. The request inputs are exactly reproducible with all three inputs: the context, the skill revision, and the model revision.
 - **Replay caveat.** Output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track.
 - **No promote / deprecate.** There is deliberately no `active` or `current` flag: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want.
 - **Editing creates, not modifies.** Updating a skill or model parent inserts a new immutable revision; it does not modify the existing one, and existing executions keep pointing at the revision they were bound to.
@@ -91,9 +91,9 @@ Rows are never hard-deleted: `delete` sets a `deleted_at` timestamp and `restore
 The runner assembles the chat call from the bound revisions:
 
 - `system` = `skill.prompt_template` (from the bound skill revision)
-- `user`   = `execution.prompt` (the optional per-execution instruction given at `exec create`) + `\n\n` + `context.content` (from the bound context); when the execution has no `prompt`, the user message is just the context content
+- `user`   = `context.content` (from the bound context)
 
-So `execution.prompt` is not a second template — it is an optional per-execution instruction layered on top of the skill's prompt template, and it is stored on the execution record so the audit trail shows exactly what was asked.
+There is no per-execution prompt field: the skill's prompt template is the only instruction source, and the context is the user message content. An empty context content fails the execution. (The `executions.prompt` column remains in the schema as a legacy, never-written field; rows created before its removal may still carry a value, and `exec get` keeps returning it.)
 
 ## Implementation
 
@@ -149,10 +149,9 @@ acta_cli skill create --json '{"name":"sentiment","prompt_template":"Classify th
 acta_cli context create --json '{"type":"text","content":"The build system shipped on time and the release went smoothly."}'
 
 # 4. Create an execution binding context + skill revision + model revision
-# the "prompt" field is optional; omit it to send just the context
 # (each entity above got id 1 — first rows in a fresh database —
 # so every "1" below is the corresponding row id)
-acta_cli exec create --json '{"prompt":"What is the sentiment of the context?","context_id":1,"skill_revision_id":1,"model_revision_id":1}'
+acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
 # 5. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
 acta_runner run 1
@@ -171,12 +170,12 @@ Prefer not to use the command line? Once the backend is running (see Quick start
 1. **Model** — Models panel → *New…* → give it a name, the backend (`openai`), the router's address, and the model id (the GGUF file's name in your `--models-dir` folder).
 2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
 3. **Context** — Contexts panel → *New…* → a type, and paste the content (a document, a code file, a log…).
-4. **Execution** — Executions panel → *New…* → pick the context, the skill and the model (optionally add a short extra instruction), then press **Run**.
+4. **Execution** — Executions panel → *New…* → pick the context, the skill and the model, then press **Run**.
 5. **Watch it** — the row moves `pending → running → completed` (or `failed`). While it runs, **Run** becomes **Cancel**. **Log** shows the phase timeline, **Details** shows the prompt sent, the raw response and the result; **Retry** re-runs a failed execution.
 
 ## CLI ergonomics
 
-For the high-volume payload data (context `content`; execution `prompt` / `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 2). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 2). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 ## Current status
 

@@ -74,17 +74,16 @@ Implementation notes (where the spec left room):
   (code always equals the process exit code); DB failures keep the
   `ACTA_DB_ERR_*` contract. Exit codes: 12 for HTTP/preflight failures,
   13 for timeout, 4 for validation/claim failures.
-- User message concatenation order: the optional `execution.prompt` comes
-  first (when present), then `context.content` is appended:
-  `execution.prompt + "\n\n" + context.content` (either half may be
-  empty; both empty → fail). Together with the system message
-  (`skill.prompt_template`), the full prompt sent to the LLM is therefore:
-  skill prompt first, then the execution prompt (if present), finally the
-  context data. The `prompt_resolved` log event
+- User message: `user = context.content`, always. The skill's
+  `prompt_template` is the only instruction source (it is the `system`
+  message); there is no per-execution prompt field. An empty context
+  content fails the execution with `EXIT_INVALID` (`empty context
+  content`). The `prompt_resolved` log event
   records the fully resolved `system` and `user` strings (plus their
   byte counts) in its `metadata`, so each execution is self-describing.
-  `executions.prompt` keeps its original meaning: the optional,
-  user-entered instruction at creation time.
+  `executions.prompt` is a legacy column: it used to hold an optional,
+  user-entered instruction at creation time, but current code never
+  writes it (removal plan: `docs/plans/drop-execution-prompt.md`).
 - Preflight catalog (R8): after the `/v1/models` id match, the runner
   fetches the llama.cpp model catalog (`GET /`) and logs a
   `preflight_passed` event whose `metadata` carries `model_id`,
@@ -115,13 +114,14 @@ Implementation notes (where the spec left room):
    (`base_url`, `model_identifier`, `configuration`) is the only link to
    the server instance.
 3. **Prompt resolution:** `system = skill.prompt_template`,
-   `user = execution.prompt + "\n\n" + context.content` (the optional
-   execution prompt is appended first, then the context data; either
-   half may be empty). If a skill has an
+   `user = context.content`. There is no per-execution prompt field:
+   the skill is the only instruction source, and the context is the
+   user message content. If a skill has an
    `output_schema`, use `response_format: {"type":"json_schema",
    "schema": ...}` when the backend supports it, otherwise validate the
    raw response post-hoc. The resolved prompt is NOT stored in
-   `executions.prompt` (that column stays the user-entered instruction);
+   `executions.prompt` (that column is legacy and never written by
+   current code);
    it is recorded in the `prompt_resolved` event of `execution_logs`
    (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
    makes the execution self-describing and protects the audit trail if
@@ -172,10 +172,11 @@ Implementation notes (where the spec left room):
    `"catalog":null` (non-llama OpenAI-compatible backends have no
    catalog; the engine must not depend on llama.cpp itself).
 4. **Call** — `POST /v1/chat/completions` with `messages = [system:
-   prompt_template, user: prompt + context.content]`, `model =
+   prompt_template, user: context.content]`, `model =
    model_identifier`, params from `configuration`, and
    `response_format = json_schema(output_schema)` when a skill has one;
-   log `llm_request` (url, model id, params).
+   log `llm_request` (url, model id, params). Empty context content →
+   `fail(EXIT_INVALID, "empty context content")` before the call.
 5. **Record** — `set_raw_response(choices[0].message.content)`; log
    `llm_response` (HTTP status, latency, `usage` tokens, `timings`).
 6. **Validate** — if `output_schema` is set and `response_format` was

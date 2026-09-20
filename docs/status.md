@@ -66,3 +66,5 @@ propagation, `--all` no-op). The wire/error contracts they established are
 documented in `docs/cli_spec.md`; fix history is in the git log.
 
 **Out of scope — we do not implement these:** automatic retries (owner decision, 2026-09-12 — retrying without knowing the cause is pointless); streaming responses (owner decision, 2026-07-10). A failed execution is retried manually via the `failed → pending` reset (GUI Retry button / `acta_cli exec reset <id>`).
+
+**Planned changes:** removal of `execution.prompt` from the contract — `user = context.content` always, no `--prompt` on `exec create`, `executions.prompt` kept as a legacy never-written column. The contract docs (`README.md`, `docs/DBDesign.md`, `docs/cli_spec.md`, `docs/runner_contract.md`) already describe the post-removal state; the implementation plan and code touchpoints are in [`docs/plans/drop-execution-prompt.md`](plans/drop-execution-prompt.md).
