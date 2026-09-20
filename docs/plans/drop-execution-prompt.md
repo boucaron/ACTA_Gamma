@@ -1,6 +1,6 @@
 # Plan — remove `execution.prompt` from the contract
 
-Status: **in progress** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`, `1ac8624`), 4 (`acta_gui`, `47b97b2`), 5 (schema comment, `47b97b2`) and 6 (docs, `c849509`) are implemented; item 3's suite updates are in place (runner suite incl. legacy-ignore pin and empty-context scenario). Remaining: 7 (verification).
+Status: **done** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`, `1ac8624`), 4 (`acta_gui`, `47b97b2`), 5 (schema comment, `47b97b2`), 6 (docs, `c849509`) and 7 (verification) are complete: `make all` and `make test` green (runner suite incl. legacy-ignore pin and empty-context scenario, CLI unknown-key negative case), dead-runner e2e 14/14, GUI manual smoke (create dialog has no prompt field; `prompt_resolved` `user` = context content; legacy `prompt` still shown in the dialog Prompt tab), and the wire check `exec create --json` with a `prompt` key exits 4 (unknown key).
 
 ## Rationale
 
@@ -122,7 +122,7 @@ instruction is a new skill revision.
   Decision 3, Phase-2 pipeline step 4.
 - `docs/status.md` — "Planned changes" pointer to this file.
 
-### 7. Verification
+### 7. Verification — done
 
 1. `make all` (CLI + runner + DB libs compile).
 2. `make test` — all three C suites green (DB, CLI, runner, incl.
