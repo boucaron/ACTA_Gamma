@@ -14,7 +14,7 @@ public:
     ~ExecutionDialog();
 
     // Read-only edit: fetch execution `executionId` and fill every tab
-    // (input / prompt / output / execution / metadata / logs).
+    // (input / output / execution / metadata / logs).
     void editExecution(db_t *db, int executionId);
 
 private:

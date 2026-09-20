@@ -395,8 +395,8 @@ void ExecutionCreateDialog::loadParentExecutions()
     // keep offering deleted parents.
     //
     // Light projection: the picker labels only need id / status /
-    // deleted_at, so the blob columns (prompt, raw_response, result,
-    // error) are not materialized here.
+    // deleted_at, so the blob columns (raw_response, result, error)
+    // are not materialized here.
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.include_deleted = 1;
     int n = 0;

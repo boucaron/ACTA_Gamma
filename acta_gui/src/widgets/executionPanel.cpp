@@ -566,9 +566,9 @@ void ExecutionPanel::reload()
     // soft-deleted rows so they can be restored.
     //
     // Light projection: the list only displays ids / status /
-    // timestamps / revision names, so the blob columns (prompt,
-    // raw_response, result, error) are not materialized here (they
-    // stay NULL in each row). The detail dialog and the in-flight
+    // timestamps / revision names, so the blob columns (raw_response,
+    // result, error) are not materialized here (they stay NULL in each
+    // row). The detail dialog and the in-flight
     // poll fetch full rows via acta_db_execution_get.
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.include_deleted =
