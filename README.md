@@ -106,7 +106,7 @@ The implementation is C/C++ on top of SQLite:
 | `acta_runner/` | C11 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend: claim → resolve → preflight → chat call → record → complete/fail, with `execution_log` phase rows (uses curl + cJSON) |
 | `acta_gui/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app "Run" button runs the runner's pipeline in-process — it directly compiles and reuses the runner's own source files `acta_runner/src/run.c` and `acta_runner/src/backend.c` via its qmake project, no `acta_runner` binary needed; there is a single pipeline codebase, not a second copy of the pipeline logic). While a run is in flight the button toggles into **Cancel**, which cooperatively cancels the in-flight pipeline and transitions the row to `cancelled` |
 
-The backend is a llama.cpp `llama-server` running in **router mode** (launched without a model, e.g. with `--models-dir` pointing at local GGUF files): an OpenAI-compatible endpoint that serves several models and routes each request to the matching model instance. A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `api_key`, `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; any deviation from that contract — an unknown key (typo), a wrong value type, or a malformed blob — fails the execution with `EXIT_INVALID` instead of silently falling back to backend defaults.
+The backend is a llama.cpp `llama-server` running in **router mode** (launched without a model, e.g. with `--models-dir` pointing at local GGUF files): an OpenAI-compatible endpoint that serves several models and routes each request to the matching model instance. A model record stores `backend`, `base_url`, `model_identifier`, and a JSON configuration blob. The runner reads the keys `temperature`, `max_tokens`, `top_k`, and `supports_response_format`; any deviation from that contract — an unknown key (typo), a wrong value type, or a malformed blob — fails the execution with `EXIT_INVALID` instead of silently falling back to backend defaults.
 
 **Preflight** (the `preflight` step of the pipeline) verifies the backend before the chat call: `GET /health` must return 200 (503 means the model is still loading → execution `failed`), `GET /v1/models` must list the model record's `model_identifier` (if not, the execution fails with the ids the server actually serves), and the matched entry's `max_context` is read. As a best-effort audit step, the router's model catalog (`GET /`, models.json format) records the matched model's launch args and meta (`n_ctx`, `n_params`, `size`, `ftype`, …) into the execution timeline, so the server-instance configuration is part of the audit trail — the same model id can be served under different server flags. Success is logged as `preflight_passed`.
 
@@ -129,8 +129,10 @@ Three steps before the example below:
 ## Environment variables
 
 * **`OPENAI_API_KEY`** — default API key for the backend's HTTP calls (preflight and chat). Resolution order:
-  * `acta_runner run`: `--api_key` flag → `$OPENAI_API_KEY` → the `api_key` key inside the model's JSON configuration blob
-  * `acta_gui` (in-process pipeline; there is no `--api_key` flag): `$OPENAI_API_KEY` → the `api_key` key inside the model's JSON configuration blob
+  * `acta_runner run`: `--api_key` flag → `$OPENAI_API_KEY`
+  * `acta_gui` (in-process pipeline; there is no `--api_key` flag): `$OPENAI_API_KEY`
+
+  The key is never stored in the database: a model `configuration` blob carrying an `api_key` key is rejected as an unknown key (`EXIT_INVALID`).
 * **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given (fallback: `./acta.db`). The GUI does **not** read `$ACTA_DB` — its default is the platform app-data directory, and the file can be chosen in its *Choose database file* dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
 
 ## Minimal end-to-end example

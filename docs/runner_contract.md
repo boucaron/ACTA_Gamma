@@ -56,10 +56,11 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 Implementation notes (where the spec left room):
 
 - The model `configuration` JSON keys the runner understands:
-  `api_key` (takes precedence over `--api_key` / `$OPENAI_API_KEY` when
-  set to a non-empty string),
   `temperature`, `max_tokens`, `top_k`, and `supports_response_format`
-  (bool, default `true`). `false` means the backend has no json_schema
+  (bool, default `true`). The API key is NOT a configuration key — it
+  comes only from the `--api_key` flag or `$OPENAI_API_KEY` (decision 4);
+  a `configuration` carrying `api_key` is rejected as an unknown key
+  (`EXIT_INVALID`). `false` means the backend has no json_schema
   `response_format`: the field is not sent and the raw response is
   validated post-hoc instead. This is the concrete resolution of
   decision 3's "when the backend supports it".
@@ -123,11 +124,12 @@ Implementation notes (where the spec left room):
    (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
    makes the execution self-describing and protects the audit trail if
    prompt-resolution behavior changes later.
-4. **Auth:** resolution order, highest first: per-model `configuration`
-   JSON (`{"api_key": ...}`, only when a non-empty string) → `--api_key`
-   flag → `$OPENAI_API_KEY`. The configuration value is applied last in
-   the code, so it wins over the flag and the environment variable. Sent
-   as `Authorization: Bearer <key>` on every request (preflight GETs and
+4. **Auth:** resolution order, highest first: `--api_key` flag →
+   `$OPENAI_API_KEY`. The key is never read from the model
+   `configuration` blob (it must not be stored in the database): a
+   `configuration` carrying an `api_key` key is rejected as an unknown
+   key and fails the execution with `EXIT_INVALID`. Sent as
+   `Authorization: Bearer <key>` on every request (preflight GETs and
    the chat POST); optional when the server has no `--api-key` set.
 5. **Timeouts / retries:** single request, configurable `--timeout` (s),
    no retries — failures are first-class artifacts here.
