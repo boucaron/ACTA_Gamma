@@ -2,10 +2,11 @@
 
 Status: **in progress** (follow-up to the completed
 [`drop-execution-prompt.md`](drop-execution-prompt.md); owner decision,
-dev phase — no users, so full removal is acceptable). Items 2
-(`acta_db`, `75142db`), 3 (`acta_cli`) and 5 (`acta_runner`) are
-implemented and all CLI/DB/runner suites pass; the migration script
-exists and all DB files in the repo have already been migrated.
+dev phase — no users, so full removal is acceptable). Items 1
+(`acta_gui/db`), 2 (`acta_db`, `75142db`), 3 (`acta_cli`) and 5
+(`acta_runner`) are implemented and all CLI/DB/runner suites pass; the
+migration script exists and all DB files in the repo have already been
+migrated.
 
 ## Rationale
 
@@ -52,11 +53,11 @@ it) — the script is for hygiene, not for correctness.
 
 ## Work items
 
-### 1. `acta_gui/db/`
+### 1. `acta_gui/db/` — done
 
-- `schema.sql` — delete the `prompt TEXT, -- legacy…` line from the
-  `executions` DDL. *(pending — the DB files are already migrated, so
-  the source schema is now ahead of nothing but itself)*
+- `schema.sql` — the `prompt TEXT, -- legacy…` line is gone from the
+  `executions` DDL (the DDL now matches the migrated DBs and the
+  rebuilt ref seed).
 - `drop_execution_prompt.sh` — added (`3e468d8`) and tested.
 - `engine.db` — migrated (all repo DB files migrated: `acta_cli/
   acta_test_ref.db`, `acta_cli/tmp/acta.db`, `acta_db/test/*.db`, `acta_gui/
