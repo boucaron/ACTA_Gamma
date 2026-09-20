@@ -1,9 +1,11 @@
 # Known issues
 
-Small tracking file for CLI issues found by read-only testing against a
-real DB (`acta_cli/tmp/acta.db`, 2026-09-18). Status: **open** until fixed;
-fixes are regression-pinned in `acta_cli/tests` when done. From 2026-09-19
-it also holds items from a full static code review (rows 7–11).
+Closed-issue log for CLI/GUI/runner issues found by read-only testing against
+a real DB (`acta_cli/tmp/acta.db`, 2026-09-18), extended from 2026-09-19 with
+items from a full static code review (rows 7–11, plus the GUI/CLI/runner DB
+path mismatch in row 12). All items below are **fixed** and regression-pinned
+in `acta_cli/tests`, `acta_db/tests` and `acta_runner/tests` — each row records
+the fixing commit and the test(s) that pin the fix.
 
 | # | Issue | Status | Repro |
 |---|---|---|---|
