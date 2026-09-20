@@ -69,3 +69,5 @@ propagation, `--all` no-op). The wire/error contracts they established are
 documented in `docs/cli_spec.md`; fix history is in the git log.
 
 **Out of scope — we do not implement these:** automatic retries (owner decision, 2026-09-12 — retrying without knowing the cause is pointless); streaming responses (owner decision, 2026-07-10). A failed execution is retried manually via the `failed → pending` reset (GUI Retry button / `acta_cli exec reset <id>`).
+
+**Future constraint (not scheduled):** if ACTA Gamma ever outgrows single-user, single-machine use (shared server, service unit without a shell environment, several users on one machine), an optional per-machine config file (`0600`-class permissions, read by all three binaries) is expected to gain two settings: the API key (fallback under `$OPENAI_API_KEY`) and the database path (fallback under `--db` / `$ACTA_DB`); the plan is in `docs/plans/acta-config-file.md` — no code work started, the POC contract stays as-is until the trigger is real.
