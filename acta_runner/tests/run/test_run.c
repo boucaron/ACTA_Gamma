@@ -556,7 +556,7 @@ int main(void)
                  "unknown model configuration keys", events, 1);
     }
 
-    /* 14. empty context content -> failed + EXIT_INVALID */
+    /* 15. empty context content -> failed + EXIT_INVALID */
     {
         stub_config_t cfg;
         memset(&cfg, 0, sizeof cfg);

@@ -511,9 +511,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
     free(meta);
 
     /* ---- configuration JSON (backend knobs) ----
-     * Auth: the API key comes only from the --api_key flag or
-     *   $OPENAI_API_KEY — it is never read from this blob (see
-     *   docs/plans/drop-model-config-api-key.md).
+     * Auth: the API key comes only from $OPENAI_API_KEY — it is never
+     *   read from this blob (see docs/plans/drop-model-config-api-key.md).
      * Known keys:
      *   temperature             number
      *   max_tokens              positive number
