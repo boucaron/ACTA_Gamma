@@ -198,7 +198,7 @@ static inline int emit_runner_error(int exit_code, const char *msg)
 /* Classify the $OPENAI_API_KEY environment variable, the ONLY API-key
  * source (the --api_key flag is gone and the key is never read from the
  * model configuration blob; see
- * docs/plans/drop-runner-api-key-flag.md):
+ * docs/runner_contract.md, decision 4):
  *   NULL (unset)  -> KEY_UNSET_ERR  hard error, the run does not start;
  *   "" (empty)    -> KEY_EMPTY_WARN warning only, no Authorization
  *                     header (acceptable only for a keyless localhost

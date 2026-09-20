@@ -239,7 +239,7 @@ int main(void)
     runner_gopts = &gopts;
 
     /* API key presence policy: $OPENAI_API_KEY must be SET
-     * (docs/plans/drop-runner-api-key-flag.md). Use a non-empty value:
+     * (docs/runner_contract.md, decision 4). Use a non-empty value:
      * MSVCRT _putenv("name=") is not reliable for setting an empty
      * string (it can remove the variable), and the stub server
      * ignores the Authorization header, so any value works here. */

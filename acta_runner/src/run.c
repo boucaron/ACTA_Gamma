@@ -93,7 +93,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
 
     /* API key: $OPENAI_API_KEY only (the --api_key flag is gone; the key
      * is never read from the model configuration blob — see
-     * docs/plans/drop-runner-api-key-flag.md). Presence policy:
+     * docs/runner_contract.md, decision 4). Presence policy:
      * unset -> hard error before any claim; empty -> warning, no
      * Authorization header. */
     api_key = getenv("OPENAI_API_KEY");

@@ -1,6 +1,6 @@
 /*
  * test_api_key.c — API key presence policy
- * (docs/plans/drop-runner-api-key-flag.md):
+ * (docs/runner_contract.md, decision 4):
  *   1. $OPENAI_API_KEY UNSET -> cmd_run rejects with EXIT_INVALID (4)
  *      BEFORE any claim; the seeded row stays `pending`.
  *   2. $OPENAI_API_KEY set but EMPTY -> warning only (no error): the
