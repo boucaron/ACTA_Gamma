@@ -4,9 +4,9 @@
 
 **LLMs as actions, not agents.**
 
-A small, stateless LLM execution engine for versioned skills and reproducible analysis.
+A small, stateless runner for versioned skills and reproducible LLM actions.
 
-> **The engine decides what happens. The LLM only does the work it's asked to do.**
+> **You (or your program) decide what happens. The runner makes one LLM call and records the outcome. The LLM only does the work it's asked to do.**
 
 The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
@@ -24,7 +24,7 @@ Context + Skill + Model
          Observation
 ```
 
-The engine controls the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next. ACTA Gamma is deliberately not an agent framework — the full point of view is in [`docs/PointOfView.md`](docs/PointOfView.md).
+The runner drives the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next. ACTA Gamma is deliberately not an agent framework — at its core it is a runner over an OpenAI-compatible endpoint plus a SQLite audit log — the full point of view is in [`docs/PointOfView.md`](docs/PointOfView.md).
 
 Terms used throughout this README: a **skill** is a versioned prompt template with an optional output schema — it is not a tool, function, or agent capability; a **context** is a named, immutable snapshot of input data (a document, a code file, a log excerpt) — it is not the model's prompt window.
 

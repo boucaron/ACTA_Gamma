@@ -10,14 +10,18 @@ ACTA Gamma starts from a simple premise:
 
 Instead of building an autonomous agent that maintains context, decides what to do next, delegates tasks, and accumulates state, ACTA Gamma keeps the surrounding system deterministic.
 
-The engine decides:
+The surrounding program — and the person running it — decides:
 
 * what context is provided;
 * which skill is executed;
 * which model performs the action;
-* how the result is validated;
-* what is persisted;
 * and what happens next.
+
+The runner handles the rest deterministically:
+
+* how the prompt is assembled and the call is issued;
+* how the result is validated;
+* what is persisted.
 
 The LLM performs one task and returns an observation.
 
@@ -109,7 +113,7 @@ The context does not need to be related to software development. It could be:
 * test results;
 * arbitrary structured data.
 
-The engine does not need to understand the domain.
+The runner does not need to understand the domain.
 
 ## Models are replaceable
 
@@ -119,7 +123,7 @@ The model is another independent dimension of an execution.
 Context × Skill Revision × Model
 ```
 
-The initial implementation can use llama.cpp through its OpenAI-compatible API, but the engine should not depend on llama.cpp itself.
+The initial implementation can use llama.cpp through its OpenAI-compatible API, but the runner should not depend on llama.cpp itself.
 
 A local model can be replaced by another local model or a cloud model without changing the skill system.
 
@@ -186,7 +190,7 @@ Such a setup makes it possible to measure changes in:
 ACTA Gamma intentionally keeps orchestration outside the model, and workflows
 are not our business. ACTA Gamma is just a building block: one replayable,
 auditable action. The following is an example of how a higher-level program
-could **use that building block** to do what the engine does not do.
+could **use that building block** to do what the runner does not do.
 
 If an application wants to perform:
 
@@ -230,7 +234,7 @@ Verification
 Evaluation
 ```
 
-The engine remains the same:
+The primitive remains the same:
 
 ```text
 Context + Skill + Model
@@ -246,7 +250,7 @@ That is the core abstraction.
 
 The central philosophy can be summarized as:
 
-> **Deterministic orchestration, probabilistic actions.**
+> **Deterministic flow, probabilistic actions.**
 
 The software remains responsible for the process.
 

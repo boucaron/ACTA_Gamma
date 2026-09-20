@@ -83,7 +83,7 @@ For example:
 }
 ```
 
-The engine should treat the backend as an interchangeable implementation.
+The runner should treat the backend as an interchangeable implementation.
 
 ```sql
 -- Model Folders
@@ -388,7 +388,7 @@ incident
 custom
 ```
 
-The engine does not need to interpret these. `type` is free form and is deliberately not enforced (owner decision, 2026-07-10).
+The runner does not need to interpret these. `type` is free form and is deliberately not enforced (owner decision, 2026-07-10).
 
 `content_hash` gives the content a stable identity (a small check today; it is not used for deduplication).
 

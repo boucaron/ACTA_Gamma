@@ -174,7 +174,7 @@ Implementation notes (where the spec left room):
    and `max_context` are recorded in a `preflight_passed` log event.
    A missing/unparseable catalog never fails the execution — it records
    `"catalog":null` (non-llama OpenAI-compatible backends have no
-   catalog; the engine must not depend on llama.cpp itself).
+   catalog; the runner must not depend on llama.cpp itself).
 4. **Call** — `POST /v1/chat/completions` with `messages = [system:
    prompt_template, user: context.content]`, `model =
    model_identifier`, params from `configuration`, and
