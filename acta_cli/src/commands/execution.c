@@ -148,7 +148,7 @@ void exec_usage(FILE *f)
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
 "    --full                     Include blob columns\n"
-"                               (prompt, raw_response, result, error)\n"
+"                               (raw_response, result, error)\n"
 "                               (default: omitted)\n"
 "    --table                    Columnar output instead of JSON\n"
 "    --fields <csv>             Comma-separated field filter\n"
@@ -235,7 +235,7 @@ static void usage_get(FILE *f)
 "    --no_nulls           Omit null-valued fields from JSON\n"
 "    --raw_out <field>    Print one field's raw (unescaped) value, no\n"
 "                         JSON wrapper (id, context_id, skill_revision_id,\n"
-"                         model_revision_id, parent_execution_id, prompt,\n"
+"                         model_revision_id, parent_execution_id,\n"
 "                         raw_response, result, status, error,\n"
 "                         created_at, started_at, completed_at,\n"
 "                         deleted_at); takes precedence over\n"
@@ -367,7 +367,7 @@ static void usage_list(FILE *f)
 "    --limit <n>                Max rows to return (default 0 = unlimited)\n"
 "    --count                    Return only the row count (no rows)\n"
 "    --full                     Include blob columns\n"
-"                               (prompt, raw_response, result, error)\n"
+"                               (raw_response, result, error)\n"
 "                               (default: omitted)\n"
 "    --table                    Columnar output instead of JSON\n"
 "    --stream                   NDJSON: one JSON object per line; pages\n"
@@ -400,7 +400,7 @@ static void usage_count(FILE *f)
 
 static void vlog_exec_fields(const char *tag, const execution_t *e)
 {
-    VLOG(2, "%s: id=%d ctx=%d skill_rev=%d model_rev=%d status=%s prompt=%s "
+    VLOG(2, "%s: id=%d ctx=%d skill_rev=%d model_rev=%d status=%s "
          "result=%s error=%s started_at=%s completed_at=%s parent=%d "
          "deleted_at=%s",
          tag,
@@ -409,7 +409,6 @@ static void vlog_exec_fields(const char *tag, const execution_t *e)
          e->skill_revision_id,
          e->model_revision_id,
          e->status           ? e->status           : "(null)",
-         e->prompt           ? e->prompt           : "(null)",
          e->result           ? e->result           : "(null)",
          e->error            ? e->error            : "(null)",
          e->started_at       ? e->started_at       : "(null)",
@@ -454,11 +453,6 @@ static void exec_to_json(FILE *f, const execution_t *e, const global_opts_t *gop
     if ((!fl || fields_has(fl, "model_revision_id")) && !(gopts->no_nulls && e->model_revision_id == 0)) {
         if (shown++) fputs(", ", f);
         fprintf(f, "\"model_revision_id\":%d", e->model_revision_id);
-    }
-    if ((!fl || fields_has(fl, "prompt")) && !(gopts->no_nulls && !e->prompt)) {
-        if (shown++) fputs(", ", f);
-        fputs("\"prompt\":", f);
-        if (e->prompt) json_str(f, e->prompt); else fputs("null", f);
     }
     if ((!fl || fields_has(fl, "raw_response")) && !(gopts->no_nulls && !e->raw_response)) {
         if (shown++) fputs(", ", f);
@@ -513,8 +507,8 @@ static void exec_to_json(FILE *f, const execution_t *e, const global_opts_t *gop
 static void exec_table(FILE *f, const execution_t *e, int header)
 {
     if (header) {
-        fprintf(f, " %4s  %4s  %-10s  %-38s  %-22s  %-22s  %-19s\n",
-                "ID", "CTX", "STATUS", "PROMPT", "STARTED_AT", "COMPLETED_AT",
+        fprintf(f, " %4s  %4s  %-10s  %-22s  %-22s  %-19s\n",
+                "ID", "CTX", "STATUS", "STARTED_AT", "COMPLETED_AT",
                 "DELETED_AT");
         return;
     }
@@ -525,7 +519,6 @@ static void exec_table(FILE *f, const execution_t *e, int header)
     fprintf(f, " %4s  ", idb);
     fprintf(f, " %4s  ", ctxb);
     tcol(f, e->status,       10);
-    tcol(f, e->prompt,      38);
     tcol(f, e->started_at,  22);
     tcol(f, e->completed_at, 22);
     tcol(f, e->deleted_at,   19);
@@ -653,10 +646,9 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
              (const void *)exec.status);
 
         /* ── required-field validation ──────────────────────────────
-         * prompt is IGNORED: executions.prompt is a legacy column that
-         * is never written by current code; the user message comes from
-         * context.content and instruction text from the skill
-         * revision's prompt_template. */
+         * The executions table has no prompt column; the user message
+         * comes from context.content and instruction text from the
+         * skill revision's prompt_template. */
         if (exec.context_id <= 0) {
             VLOG(1, "  ERROR: missing required field 'context_id'");
             emit_error("missing required field: context_id");
@@ -773,8 +765,6 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 { is_id = 1; known = 1; }
             else if (strcmp(gopts->raw_out, "parent_execution_id") == 0)
                 { is_id = 1; known = 1; }
-            else if (strcmp(gopts->raw_out, "prompt") == 0)
-                { v = e->prompt; known = 1; }
             else if (strcmp(gopts->raw_out, "raw_response") == 0)
                 { v = e->raw_response; known = 1; }
             else if (strcmp(gopts->raw_out, "result") == 0)
@@ -820,7 +810,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 snprintf(msg, sizeof msg,
                          "unknown --raw_out field: '%s' (supported: "
                          "id, context_id, skill_revision_id, "
-                         "model_revision_id, parent_execution_id, prompt, "
+                         "model_revision_id, parent_execution_id, "
                          "raw_response, result, status, error, created_at, "
                          "started_at, completed_at, deleted_at)",
                          gopts->raw_out);
@@ -1117,12 +1107,11 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         /* P2: silent-null trap — warn (stderr, exit code unchanged) when
          * --fields names a light-omitted field without --full. */
         if (!full && gopts->fields &&
-            (fields_has(gopts->fields, "prompt") ||
-             fields_has(gopts->fields, "raw_response") ||
+            (fields_has(gopts->fields, "raw_response") ||
              fields_has(gopts->fields, "result") ||
              fields_has(gopts->fields, "error"))) {
             fprintf(stderr,
-                "warning: --fields requests prompt/raw_response/result/"
+                "warning: --fields requests raw_response/result/"
                 "error but exec list is light by default; add --full to "
                 "fetch them\n");
         }
@@ -1206,7 +1195,7 @@ int cmd_exec(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             return EXIT_OK;
         }
 
-        /* Default: light projection (no prompt/raw_response/result/error
+        /* Default: light projection (no raw_response/result/error
          * blobs); --full fetches them. */
         int out_count = 0, err = 0;
         execution_t **items = full

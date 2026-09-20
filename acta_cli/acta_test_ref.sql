@@ -141,7 +141,6 @@ CREATE TABLE executions (
     context_id INTEGER NOT NULL,
     skill_revision_id INTEGER NOT NULL,
     model_revision_id INTEGER NOT NULL,
-    prompt TEXT,
     raw_response TEXT,
     result TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed','cancelled')),
@@ -156,11 +155,11 @@ CREATE TABLE executions (
     FOREIGN KEY(model_revision_id) REFERENCES model_revisions(id) ON DELETE RESTRICT,
     FOREIGN KEY(parent_execution_id) REFERENCES executions(id) ON DELETE SET NULL
 );
-INSERT INTO executions VALUES(1,1,1,2,NULL,NULL,NULL,'pending',NULL,'2026-08-19 08:57:02',NULL,NULL,NULL,NULL);
-INSERT INTO executions VALUES(2,1,1,1,'compiled prompt',NULL,NULL,'pending',NULL,'2026-08-25 20:15:45',NULL,NULL,NULL,NULL);
-INSERT INTO executions VALUES(3,1,1,2,'compiled prompt',NULL,NULL,'pending',NULL,'2026-08-25 20:15:48',NULL,NULL,NULL,NULL);
-INSERT INTO executions VALUES(4,1,1,2,'Summarize the Q3 revenue report',NULL,NULL,'pending',NULL,'2026-08-25 20:18:06',NULL,NULL,NULL,NULL);
-INSERT INTO executions VALUES(5,1,1,2,'Summarize the Q3 revenue report',NULL,NULL,'pending',NULL,'2026-08-25 20:18:44',NULL,NULL,NULL,4);
+INSERT INTO executions VALUES(1,1,1,2,NULL,NULL,'pending',NULL,'2026-08-19 08:57:02',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(2,1,1,1,NULL,NULL,'pending',NULL,'2026-08-25 20:15:45',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(3,1,1,2,NULL,NULL,'pending',NULL,'2026-08-25 20:15:48',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(4,1,1,2,NULL,NULL,'pending',NULL,'2026-08-25 20:18:06',NULL,NULL,NULL,NULL);
+INSERT INTO executions VALUES(5,1,1,2,NULL,NULL,'pending',NULL,'2026-08-25 20:18:44',NULL,NULL,NULL,4);
 CREATE TABLE execution_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     execution_id INTEGER NOT NULL,

@@ -63,10 +63,10 @@ static void test_create_id_only(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-/* Canonical positive case: no prompt input at all — prompt is a
- * legacy column never written by current code; the user message
- * comes from context.content and instruction text from the skill
- * revision's prompt_template. */
+/* Canonical positive case: no prompt input at all — the executions
+ * table has no prompt column; the user message comes from
+ * context.content and instruction text from the skill revision's
+ * prompt_template. */
 static void test_create_without_prompt(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();

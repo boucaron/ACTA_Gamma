@@ -61,7 +61,7 @@ static void fcontext(context_t *c)
 
 static void fexec(execution_t *e)
 {
-    free(e->status); free(e->prompt); free(e->created_at);
+    free(e->status); free(e->created_at);
 }
 
 static void felog(execution_log_t *l)
@@ -357,8 +357,8 @@ static void tier5_full_payloads(void)
 
     /* exec: {context_id*, skill_revision_id*, model_revision_id*,
      * parent_execution_id} (+ id, status, created_at).  'prompt' is
-     * no longer a create wire key (legacy column, never written) —
-     * a body carrying it is rejected as an unknown key. */
+     * not a create wire key: the executions table has no prompt
+     * column — a body carrying it is rejected as an unknown key. */
     execution_t e; memset(&e, 0, sizeof e);
     TEQ(json_parse_execution(
             "{\"id\":4,\"status\":\"pending\","
@@ -367,7 +367,6 @@ static void tier5_full_payloads(void)
             "\"parent_execution_id\":0,\"created_at\":\"ts\"}", &e), 0);
     TEQ(e.id, 4);
     TSTREQ(e.status, "pending");
-    TNULL(e.prompt);                          /* legacy column: not parsed */
     TEQ(e.context_id, 1);
     TEQ(e.skill_revision_id, 2);
     TEQ(e.model_revision_id, 3);
@@ -471,7 +470,7 @@ static void tier6_error_hygiene(void)
     TEQ(json_parse_execution(
             "{\"id\":4,\"status\":\"s\",\"context_id\":-5}",
             &e), -1);
-    TNULL(e.status); TNULL(e.prompt); TNULL(e.created_at);
+    TNULL(e.status); TNULL(e.created_at);
     TEQ(e.id, 0); TEQ(e.context_id, 0);
     TEQ(e.skill_revision_id, 0); TEQ(e.model_revision_id, 0);
     TEQ(e.parent_execution_id, 0);

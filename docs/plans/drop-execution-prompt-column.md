@@ -2,8 +2,9 @@
 
 Status: **in progress** (follow-up to the completed
 [`drop-execution-prompt.md`](drop-execution-prompt.md); owner decision,
-dev phase — no users, so full removal is acceptable). Item 2
-(`acta_db`) is implemented; the migration script exists and all DB files
+dev phase — no users, so full removal is acceptable). Items 2
+(`acta_db`, `75142db`) and 3 (`acta_cli`) are implemented and all
+CLI/DB/runner suites pass; the migration script exists and all DB files
 in the repo have already been migrated.
 
 ## Rationale
@@ -77,29 +78,29 @@ it) — the script is for hygiene, not for correctness.
   whole `test_exec_create_ignores_prompt` case and its registration —
   the concept no longer exists), `test_light_queries.c` (four asserts).
 
-### 3. `acta_cli/`
+### 3. `acta_cli/` — done (all suites pass)
 
 - `src/commands/execution.c`
-  - `exec get` JSON: drop the `prompt` key.
-  - `--fields` / `--raw_out`: drop the `"prompt"` case → now an unknown
-    field.
-  - `--table` (get and list): drop the PROMPT column; header and widths.
-  - vlog line: drop the `prompt` field.
-- `src/json.c` — the create-key comment: `prompt` is not a key because
-  the column does not exist.
-- `src/tools.c` — `exec get` success-shape wire keys: drop `prompt`;
-  schema version bump.
-- `tests/exec/execution_test_get.c` — drop the legacy-value pin
-  (`'Summarize the Q3 revenue report'`); pin the *absence* of the
-  `prompt` key instead; `--fields prompt` / `--raw_out prompt` negative
-  cases.
-- `tests/json/json_test_main.c` — drop `TNULL(e.prompt)` and any `prompt`
-  key expectations.
+  - `exec get` JSON: the `prompt` key is gone.
+  - `--raw_out`: the `"prompt"` case is gone → unknown-field error;
+    `--fields prompt` can no longer select anything; the light-projection
+    `--fields` warning drops `prompt`.
+  - `--table`: PROMPT column dropped from header and row print.
+  - vlog line: the `prompt` field is gone.
+  - help texts (`--full` blob list, `--raw_out` field list) updated.
+- `src/json.c` — create-key comment: `prompt` is not a key because the
+  column does not exist (KI-2 rejection unchanged).
+- `src/tools.c` — `exec list` light-projection note drops `prompt`;
+  schema version bumped 3 → 4.
+- `tests/exec/execution_test_get.c` — `test_get_with_prompt` replaced by
+  `test_get_no_prompt_key` (pins the *absence* of the `prompt` key on ref
+  row 4).
+- `tests/json/json_test_main.c` — `free(e->prompt)` and the two
+  `TNULL(e.prompt)` asserts dropped.
 - `tests/exec/execution_test_list_count.c`, `tests/tools/tools_test_main.c`
-  — update to the new wire shape / schema version.
-- `acta_test_ref.sql` / `acta_test_ref.db` — rebuild the ref DB from the
-  SQL seed with the columnless DDL (seed `executions` rows lose their
-  prompt values; everything else unchanged).
+  — expected schema version 4; comments updated.
+- `acta_test_ref.sql` / `acta_test_ref.db` — ref DB rebuilt from the
+  columnless seed (seed `executions` rows lose their prompt values).
 
 ### 4. `acta_gui/`
 

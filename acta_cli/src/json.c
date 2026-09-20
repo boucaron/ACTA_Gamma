@@ -15,7 +15,7 @@
  *                    description, output_schema}          + id, timestamps
  *   skill_folder   {name, parent_id}                       + id, timestamps
  *   exec           {context_id, skill_revision_id,
- *                    model_revision_id, prompt,
+ *                    model_revision_id,
  *                    parent_execution_id}                 + id, status, created_at
  *   log            {execution_id, level, event, message,
  *                    metadata}                            + id, created_at
@@ -218,9 +218,9 @@ static const jfield_t context_fields[] = {
 static const jfield_t execution_fields[] = {
     { "id",                  JF_ID,  offsetof(execution_t, id) },
     { "status",              JF_STR, offsetof(execution_t, status) },
-    /* 'prompt' is deliberately NOT a create key: executions.prompt is
-     * a legacy column never written by current code; a body carrying
-     * it is rejected as an unknown key (KI-2). */
+    /* 'prompt' is deliberately NOT a create key: the executions table
+     * has no prompt column; a body carrying it is rejected as an
+     * unknown key (KI-2). */
     { "context_id",          JF_ID,  offsetof(execution_t, context_id) },
     { "skill_revision_id",   JF_ID,  offsetof(execution_t, skill_revision_id) },
     { "model_revision_id",   JF_ID,  offsetof(execution_t, model_revision_id) },

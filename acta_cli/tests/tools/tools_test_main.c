@@ -192,7 +192,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     TEST_STREQ(ctx, cj_str(root, "name"), "acta_cli");
     cJSON *ver = cJSON_GetObjectItem(root, "version");
     TEST(ctx, ver && cJSON_IsNumber(ver));
-    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 3);   /* v3: exec create drops the prompt flag/key */
+    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 4);   /* v4: executions.prompt column fully dropped */
     TEST_NOT_NULL(ctx, cj_str(root, "usage"));
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");
@@ -324,7 +324,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
 
         /* light-projection lists must advertise --full in the schema so
          * agents know how to fetch the blob columns (context: content;
-         * exec: prompt, raw_response, result, error). */
+         * exec: raw_response, result, error). */
         if ((strcmp(entity, "context") == 0 && strcmp(action, "list") == 0) ||
             (strcmp(entity, "exec") == 0 && strcmp(action, "list") == 0)) {
             int has_full = 0;

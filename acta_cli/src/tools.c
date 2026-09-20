@@ -11,8 +11,9 @@
  *       <parent_id | all>, not a --parent_id flag
  *
  * Success shapes are structured (P1, schema v2 format; the emitted
- * `version` field is 3 — bumped when `exec create` dropped the prompt
- * flag / JSON key): `success` is a JSON
+ * `version` field is 4 — v3 bumped when `exec create` dropped the
+ * prompt flag / JSON key, v4 when the executions.prompt column was
+ * fully dropped and `exec get` lost its prompt key): `success` is a JSON
  * object `{"kind":"json"|"json_object"|"json_array"|"bare_int"|
  * "plain_text"(,"keys":[...])(,"note":"...")}`; kind "json" carries
  * the exact wire keys, the optional note carries the --table/--count
@@ -270,7 +271,7 @@ static const tool_success_t suc_ctx_list       =
       "--full fetches the content blob; --count -> bare int" };
 static const tool_success_t suc_exec_list      =
     { "json_array", NULL, 0,
-      "light projection by default: 'prompt','raw_response','result', "
+      "light projection by default: 'raw_response','result', "
       "'error' are null in every row; --full fetches them; "
       "--count -> bare int" };
 static const tool_success_t suc_int            =
@@ -1305,7 +1306,7 @@ int tools_print(FILE *out, int pretty)
     fputs(pretty ? "{\n" : "{", out);
 
     jf_str(out, "name", "acta_cli", pretty, 1, &i, top_n);
-    jf_num(out, "version", 3, pretty, 1, &i, top_n);
+    jf_num(out, "version", 4, pretty, 1, &i, top_n);
     jf_str(out, "usage",
            "acta_cli [global flags] <entity> <action> [args]",
            pretty, 1, &i, top_n);

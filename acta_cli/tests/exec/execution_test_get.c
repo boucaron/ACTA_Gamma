@@ -21,7 +21,7 @@ static int do_exec(stest_ctx_t *ctx, const char *action,
 
 static void test_get_basic(stest_ctx_t *ctx)
 {
-    /* ref DB: exec id=1 exists, status='pending', prompt=NULL */
+    /* ref DB: exec id=1 exists, status='pending' */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "1", &g);
@@ -33,17 +33,17 @@ static void test_get_basic(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
-static void test_get_with_prompt(stest_ctx_t *ctx)
+static void test_get_no_prompt_key(stest_ctx_t *ctx)
 {
-    /* ref DB: exec id=4 has prompt='Summarize the Q3 revenue report' */
+    /* executions has no prompt column: `exec get` never emits a
+     * "prompt" key (the ref DB was rebuilt from the columnless seed) */
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_pos(a, "4", &g);
 
     int rc = do_exec(ctx, "get", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"prompt\"");
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "Summarize the Q3");
+    TEST(ctx, !strstr(stest_stdout(ctx), "\"prompt\""));
     targs_free(a, &g);
 }
 
@@ -167,7 +167,7 @@ int run_execution_test_get(void)
     stest_init(&ctx, REF_DB);
 
     test_get_basic(&ctx);
-    test_get_with_prompt(&ctx);
+    test_get_no_prompt_key(&ctx);
     test_get_id_only(&ctx);
     test_get_table(&ctx);
     test_get_fields_filter(&ctx);
