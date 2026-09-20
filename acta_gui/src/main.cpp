@@ -76,7 +76,10 @@ int main(int argc, char *argv[])
 {
     // Application identity (UR #11): required so QSettings has a stable
     // home for preferences (H6: database path; P3: window state).
-    QCoreApplication::setOrganizationName(QStringLiteral("boucaron"));
+    // NOTE: the org name only affects the QSettings location (registry
+    // key / .conf file) — the DB path is built explicitly in
+    // MainWindow::defaultDbPath and must never contain the org name.
+    QCoreApplication::setOrganizationName(QStringLiteral("ACTA Gamma"));
     QCoreApplication::setApplicationName(QStringLiteral("ACTA Gamma"));
 
     QApplication app(argc, argv);

@@ -24,20 +24,7 @@
 #include "runner_util.h"
 #include "argparse.h"
 #include "acta_db.h"
-
-/*
- * Resolve DB path per spec §3 (same as the CLI):
- *   1. --db flag
- *   2. $ACTA_DB
- *   3. ./acta.db
- */
-const char *resolve_db_path(const char *flag_db)
-{
-    if (flag_db && flag_db[0]) return flag_db;
-    const char *env = getenv("ACTA_DB");
-    if (env && env[0]) return env;
-    return "./acta.db";
-}
+#include "acta_dbpath.h"  /* DB path resolution shared with acta_cli */
 
 /*
  * Single-line JSON error → stderr, empty stdout. Enforces the error
@@ -87,7 +74,9 @@ static void help_print(FILE *out)
         "                        row is stale (positive integer, required)\n"
         "\n"
         "Global options:\n"
-        "  --db <path>           Database file (default: $ACTA_DB, ./acta.db)\n"
+        "  --db <path>           Database file (default: $ACTA_DB, else the\n"
+        "                        platform app-data location — same file the\n"
+        "                        GUI uses; ./acta.db as a last resort)\n"
         "  -v / --verbose        Stackable verbose level 0–3 (stderr)\n"
         "  --version             Print version and exit\n"
         "  --help                Print this help and exit\n"
@@ -158,18 +147,31 @@ int main(int argc, char **argv)
         return EXIT_INVALID;
     }
 
-    /* ---- resolve DB path ---- */
-    const char *db_path = resolve_db_path(gopts.db);
+    /* ---- resolve DB path ----
+     * --db → $ACTA_DB → platform app-data default (same file the GUI
+     * uses) → ./acta.db (last resort). See acta_dbpath.h. */
+    const char *db_path = acta_db_resolve_db_path(gopts.db);
 
     /* ---- open database ---- */
     int db_err = ACTA_DB_OK;
     db_t *db = acta_db_open(db_path, &db_err, ACTA_DB_OPEN_EXISTING);
     if (!db) {
-        int open_exit = runner_error(db_err,
-                                     "cannot open database '%s' (%s): check "
-                                     "the path and that it is a valid "
-                                     "SQLite database",
-                                     db_path, acta_db_strerror(db_err));
+        char msg[2048];
+        int len = snprintf(msg, sizeof msg,
+                           "cannot open database '%s' (%s): check the path "
+                           "and that it is a valid SQLite database",
+                           db_path, acta_db_strerror(db_err));
+        /* Backward-compat: the default path was used (no --db, no
+         * $ACTA_DB), it cannot be opened, and a legacy ./acta.db exists
+         * in the working directory → point the user at it. */
+        const char *env = getenv("ACTA_DB");
+        if (db_err == ACTA_DB_ERR_INVALID_DB &&
+            !gopts.db && !(env && env[0])) {
+            char hint[256];
+            if (acta_db_legacy_db_hint(hint, sizeof hint))
+                snprintf(msg + len, sizeof msg - (size_t)len, " %s", hint);
+        }
+        int open_exit = runner_error(db_err, "%s", msg);
         free(gopts.argv);
         return open_exit;
     }

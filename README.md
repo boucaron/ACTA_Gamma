@@ -131,7 +131,7 @@ Three steps before the example below:
 * **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls (preflight and chat), used identically by `acta_runner` and `acta_gui` — the **only** key source (there is no CLI flag, and it is never stored in the database: a model `configuration` blob carrying an `api_key` key is rejected as an unknown key, `EXIT_INVALID`). It **must be set**:
   * not set → the run does not start (runner: `ACTA_RUNNER_ERROR`, exit 4, before any execution is claimed; GUI: error shown in the run result);
   * set but empty → warning, and no `Authorization` header is sent — acceptable only for a keyless localhost server, a bad idea in general.
-* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given (fallback: `./acta.db`). The GUI does **not** read `$ACTA_DB` — its default is the platform app-data directory, and the file can be chosen in its *Choose database file* dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
+* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. When neither `--db` nor `$ACTA_DB` is set, both C binaries default to the **same** app-data file as the GUI (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA Gamma/acta.db`); `./acta.db` is only a last-resort fallback when the platform base directory is unresolvable. The GUI does **not** read `--db` or `$ACTA_DB` — it uses the same default file, and a different one can be chosen in its *Choose database file* dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
 
 ## Minimal end-to-end example
 
@@ -169,7 +169,7 @@ Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --sta
 
 ## Your first session in the GUI
 
-Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). Note the default location is the platform app-data directory (`QStandardPaths::AppDataLocation` — e.g. `%LOCALAPPDATA\boucaron\ACTA Gamma\acta.db` on Windows, `~/.local/share/boucaron/ACTA Gamma/acta.db` on Linux) — not `./acta.db` next to the binary, and the GUI does not read `--db` or `$ACTA_DB`. The CLI resolves its DB as `--db` → `$ACTA_DB` → `./acta.db`. To make both use the same database, either pick the CLI's file in the GUI's *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) or point `--db` / `$ACTA_DB` at the GUI's file. Then:
+Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). The default location is the platform app-data directory (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux) — not `./acta.db` next to the binary — and `acta_cli` / `acta_runner` resolve to the **same** file out of the box (`--db` → `$ACTA_DB` → that app-data file; `./acta.db` only as a last resort, with a hint naming such a legacy file when the default DB is missing). The GUI does not read `--db` or `$ACTA_DB`; its *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) remains for non-default setups, e.g. a legacy `./acta.db`. Then:
 
 1. **Model** — Models panel → *New…* → give it a name, the backend (`openai`), the router's address, and the model id (the GGUF file's name in your `--models-dir` folder).
 2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
@@ -179,7 +179,7 @@ Prefer not to use the command line? Once the backend is running (see Quick start
 
 ## CLI ergonomics
 
-For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 3). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else the app-data file shared with the GUI), and the machine-readable `--tools` schema (version 3). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 ## Current status
 

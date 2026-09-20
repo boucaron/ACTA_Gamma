@@ -19,7 +19,6 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QSettings>
-#include <QStandardPaths>
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -37,8 +36,22 @@ QString MainWindow::defaultDbPath()
 {
     // Write the DB into a location we can actually write to (UR #9),
     // instead of next to the exe, which may be read-only.
-    const QString baseDir =
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    // Built explicitly from the platform base variable rather than
+    // QStandardPaths::AppDataLocation (which would append the
+    // organization name to the path).  Must stay byte-identical to
+    // acta_dbpath.c (acta_cli / acta_runner); single source of truth:
+    // docs/cli_spec.md, "DB file".
+    QString base;
+#ifdef Q_OS_WIN
+    base = QString::fromLocal8Bit(qgetenv("APPDATA"));
+    if (base.isEmpty())
+        base = QDir::homePath() + QStringLiteral("/AppData/Roaming");
+#else
+    base = QString::fromLocal8Bit(qgetenv("XDG_DATA_HOME"));
+    if (base.isEmpty())
+        base = QDir::homePath() + QStringLiteral("/.local/share");
+#endif
+    const QString baseDir = base + QStringLiteral("/ACTA Gamma");
     QDir().mkpath(baseDir);
     return baseDir + QStringLiteral("/acta.db");
 }

@@ -37,7 +37,7 @@ Wire-format decisions settled here:
 | `[ {…}, … ]` / `[]` | list success (empty list → `[]`) |
 | bare integer | `--count` on list, and `count` actions |
 
-DB file: the global `--db <path>` selects the database; when omitted it defaults to `$ACTA_DB` if set, else `./acta.db`.
+DB file: the global `--db <path>` selects the database; when omitted it defaults to `$ACTA_DB` if set, else the platform app-data location — the same file the GUI uses: `%APPDATA%\ACTA Gamma\acta.db` (Windows), `~/.local/share/ACTA Gamma/acta.db` (Linux; `$XDG_DATA_HOME/ACTA Gamma/acta.db` if set); `./acta.db` only as a last resort when the platform base directory is unresolvable. This paragraph is the single source of truth for the default: `acta_dbpath.c` (CLI/runner) and `MainWindow::defaultDbPath` (GUI) must stay in lockstep with it.
 
 Output modifiers (all entities): `--id_only` (bare `N` where noted),
 `--table` (columnar / plain instead of JSON), `--fields <csv>`,
