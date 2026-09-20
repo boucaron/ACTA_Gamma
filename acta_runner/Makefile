@@ -168,18 +168,25 @@ $(KEY_TARGET): $(KEY_OBJS) $(ACTA_DB_LIB)
 $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDLIBS)
 
+# The test executables resolve libcurl/libcjson/libwinpthread through the
+# native PATH. When another mingw (e.g. C:\Program Files\Git\mingw64\bin)
+# precedes /mingw64/bin, DLL loading dies with 0xC000007D (the shell
+# reports exit 127). Prepend msys2's bin when spawning them; harmless on
+# POSIX where /mingw64/bin does not exist.
+SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
+
 test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET)
-	$(AP_TARGET)
-	$(TEST_TARGET)
-	$(PEND_TARGET)
-	$(SWEEP_TARGET)
-	$(DEL_TARGET)
-	$(KEY_TARGET)
+	$(SPAWN_PATH) $(AP_TARGET)
+	$(SPAWN_PATH) $(TEST_TARGET)
+	$(SPAWN_PATH) $(PEND_TARGET)
+	$(SPAWN_PATH) $(SWEEP_TARGET)
+	$(SPAWN_PATH) $(DEL_TARGET)
+	$(SPAWN_PATH) $(KEY_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
 # acta_runner/ (the test spawns ./acta_runner[.exe] as child processes).
 test-e2e: $(DEAD_TARGET) $(TARGET)
-	$(DEAD_TARGET)
+	$(SPAWN_PATH) $(DEAD_TARGET)
 
 $(SMOKE_TARGET): $(SMOKE_OBJS)
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDLIBS)
