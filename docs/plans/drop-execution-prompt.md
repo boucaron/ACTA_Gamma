@@ -2,6 +2,11 @@
 
 Status: **done** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`, `1ac8624`), 4 (`acta_gui`, `47b97b2`), 5 (schema comment, `47b97b2`), 6 (docs, `c849509`) and 7 (verification) are complete: `make all` and `make test` green (runner suite incl. legacy-ignore pin and empty-context scenario, CLI unknown-key negative case), dead-runner e2e 14/14, GUI manual smoke (create dialog has no prompt field; `prompt_resolved` `user` = context content; legacy `prompt` still shown in the dialog Prompt tab), and the wire check `exec create --json` with a `prompt` key exits 4 (unknown key).
 
+**Follow-up:** the legacy `executions.prompt` column itself was
+subsequently fully dropped from the schema, `execution_t`, all read
+paths and the GUI — see
+[`drop-execution-prompt-column.md`](drop-execution-prompt-column.md).
+
 ## Rationale
 
 Review feedback: `execution.prompt` is mostly unused and awkward to use, and it

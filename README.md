@@ -34,7 +34,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 * **Versioned skills** — prompts and output schemas are revisioned.
 * **Immutable contexts** — the exact input can be retained for replay.
 * **Multi-model** — the backend serves several models; any model served by the llama.cpp router can be registered as a model record.
-* **Auditable** — executions retain prompts, raw responses, results, errors, and execution events.
+* **Auditable** — executions retain raw responses, results, errors, and execution events (the resolved prompt is recorded in the execution log).
 * **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, and model revision (output equivalence additionally depends on backend determinism — see [Revisions and lifecycle](#revisions-and-lifecycle)).
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
@@ -93,7 +93,7 @@ The runner assembles the chat call from the bound revisions:
 - `system` = `skill.prompt_template` (from the bound skill revision)
 - `user`   = `context.content` (from the bound context)
 
-There is no per-execution prompt field: the skill's prompt template is the only instruction source, and the context is the user message content. An empty context content fails the execution. (The `executions.prompt` column remains in the schema as a legacy, never-written field; rows created before its removal may still carry a value, and `exec get` keeps returning it.)
+There is no per-execution prompt field: the skill's prompt template is the only instruction source, and the context is the user message content. An empty context content fails the execution. The `executions` table has no prompt column.
 
 ## Implementation
 
@@ -171,7 +171,7 @@ Prefer not to use the command line? Once the backend is running (see Quick start
 2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
 3. **Context** — Contexts panel → *New…* → a type, and paste the content (a document, a code file, a log…).
 4. **Execution** — Executions panel → *New…* → pick the context, the skill and the model, then press **Run**.
-5. **Watch it** — the row moves `pending → running → completed` (or `failed`). While it runs, **Run** becomes **Cancel**. **Log** shows the phase timeline, **Details** shows the prompt sent, the raw response and the result; **Retry** re-runs a failed execution.
+5. **Watch it** — the row moves `pending → running → completed` (or `failed`). While it runs, **Run** becomes **Cancel**. **Log** shows the phase timeline (including the resolved prompt), **Details** shows the raw response and the result; **Retry** re-runs a failed execution.
 
 ## CLI ergonomics
 

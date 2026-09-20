@@ -81,9 +81,9 @@ Implementation notes (where the spec left room):
   content`). The `prompt_resolved` log event
   records the fully resolved `system` and `user` strings (plus their
   byte counts) in its `metadata`, so each execution is self-describing.
-  `executions.prompt` is a legacy column: it used to hold an optional,
-  user-entered instruction at creation time, but current code never
-  writes it (removal plan: `docs/plans/drop-execution-prompt.md`).
+  The `executions` table has no prompt column (removal plans:
+  `docs/plans/drop-execution-prompt.md`,
+  `docs/plans/drop-execution-prompt-column.md`).
 - Preflight catalog (R8): after the `/v1/models` id match, the runner
   fetches the llama.cpp model catalog (`GET /`) and logs a
   `preflight_passed` event whose `metadata` carries `model_id`,
@@ -119,9 +119,8 @@ Implementation notes (where the spec left room):
    user message content. If a skill has an
    `output_schema`, use `response_format: {"type":"json_schema",
    "schema": ...}` when the backend supports it, otherwise validate the
-   raw response post-hoc. The resolved prompt is NOT stored in
-   `executions.prompt` (that column is legacy and never written by
-   current code);
+   raw response post-hoc. The resolved prompt is NOT stored in the
+   `executions` row (the table has no prompt column);
    it is recorded in the `prompt_resolved` event of `execution_logs`
    (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
    makes the execution self-describing and protects the audit trail if

@@ -93,8 +93,9 @@ rendering (~7 KB) of the same static table — positionals, flags (with `*`
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
-`success` is structured (the schema `version` field is 3; it was 2 before
-`exec create` dropped the `prompt` flag / JSON key): a JSON object
+`success` is structured (the schema `version` field is 4; it was 3 after
+`exec create` dropped the `prompt` flag / JSON key, and became 4 when the
+`executions.prompt` column was fully dropped): a JSON object
 `{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
 (`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
 per-action table above; `,"note": "…"` optional, carrying the
@@ -274,14 +275,15 @@ changed) snapshots nothing. Revision rows are read via the
 
 Notes on `exec`:
 
-- **No `prompt` input** — `exec create` takes no `--prompt` flag and no
-  `prompt` JSON key: a JSON body carrying `prompt` (any case) is rejected
-  as an unknown key, exit 4 (`invalid JSON body`). The user message is
-  always `context.content` (see `docs/runner_contract.md`). The legacy
-  `executions.prompt` column is read-only: it may still hold a value in
-  rows created before the removal and is still emitted by `exec get` /
-  `--fields prompt` / `--raw_out prompt`; current `exec create` never
-  writes it (plan: `docs/plans/drop-execution-prompt.md`).
+- **No `prompt` input or output** — `exec create` takes no `--prompt`
+  flag and no `prompt` JSON key: a JSON body carrying `prompt` (any case)
+  is rejected as an unknown key, exit 4 (`invalid JSON body`). The
+  `executions` table has no prompt column, so `exec get` / `exec list`
+  never emit a `prompt` key, `--fields prompt` selects nothing and
+  `--raw_out prompt` is an unknown-field error. The user message is
+  always `context.content` (see `docs/runner_contract.md`; plans:
+  `docs/plans/drop-execution-prompt.md`,
+  `docs/plans/drop-execution-prompt-column.md`).
 - **State machine** — the lifecycle transitions and their allowed source
   states; every other transition is refused:
 
@@ -317,7 +319,7 @@ Notes on `exec`:
   (`--deleted` alias) includes soft-deleted rows. `exec create
   --context_id <deleted>` fails with the standard not-found path.
 - **Light by default** — without `--full`, `exec list` uses the light
-  projection (`acta_db_execution_query_light`): `prompt`, `raw_response`,
+  projection (`acta_db_execution_query_light`): `raw_response`,
   `result` and `error` are not fetched and are `null` in every row.
   `--full` switches to the full lister and returns them. `exec get`
   always returns the full row.

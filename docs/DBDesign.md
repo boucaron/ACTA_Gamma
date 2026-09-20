@@ -45,8 +45,6 @@ Model Revision
    ▼
 Execution
    │
-   ├── prompt (legacy — never written by current code; may hold a
-   │   value in rows created before the removal)
    ├── raw response
    ├── validated result
    ├── status
@@ -541,7 +539,7 @@ The original response should survive the validation failure.
 
 That means an unsuccessful execution can still be inspected.
 
-### Why the resolved prompt lives in the log (and why `executions.prompt` is legacy)
+### Why the resolved prompt lives in the log
 
 The skill revision contains the template, but the actual execution has a **resolved prompt**.
 
@@ -565,7 +563,7 @@ This makes the execution self-describing and protects the audit trail if prompt-
 In the schema this is split in two:
 
 * The fully resolved prompt — the actual `system` and `user` messages sent to the backend — is recorded in the `prompt_resolved` event of `execution_logs` (`metadata` carries `system`, `user`, `system_bytes`, `user_bytes`). It is deliberately not duplicated into the `executions` row: contexts are immutable and already referenced by `context_id`, so the log row provides the audit artifact without storing large content in every execution row.
-* `executions.prompt` is a **legacy column**: it used to hold an optional, user-entered instruction given at creation time. That input has been removed from the contract (see `docs/plans/drop-execution-prompt.md`): the column is kept in the schema, is never written by current code, and may hold a value only in rows created before the removal. New executions always have `prompt = NULL`; old values remain readable (`exec get`, `--fields prompt`) as audit data, not as an input.
+* The `executions` table has **no `prompt` column**: an earlier version held an optional, user-entered instruction at creation time, but both that input and the column itself have been removed (see `docs/plans/drop-execution-prompt.md` and `docs/plans/drop-execution-prompt-column.md`); pre-removal DB files can be cleaned with `acta_gui/db/drop_execution_prompt.sh`.
 
 ### Replay ?
 It is possible to replay a job, it creates a new job with the same parameters by defaults, or you can use another model
@@ -581,8 +579,6 @@ CREATE TABLE executions (
     context_id          INTEGER NOT NULL,
     skill_revision_id   INTEGER NOT NULL,
     model_revision_id   INTEGER NOT NULL,
-    prompt              TEXT,  -- legacy: never written by current code;
-                                -- may hold a value in pre-removal rows
     raw_response        TEXT,
     result              TEXT,
     status              TEXT NOT NULL DEFAULT 'pending' 
