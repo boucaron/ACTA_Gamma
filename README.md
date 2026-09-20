@@ -126,6 +126,13 @@ Three steps before the example below:
 2. **Build** — from the repo root: `make all` (or per-component `make`; `make test` runs all C test suites).
 3. **Start the backend** — a llama.cpp `llama-server` in router mode, e.g. `llama-server --models-dir models -c 2048` on `127.0.0.1:8080` (canonical startup: [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1).
 
+## Environment variables
+
+* **`OPENAI_API_KEY`** — default API key for the backend's HTTP calls (preflight and chat). Resolution order:
+  * `acta_runner run`: `--api_key` flag → `$OPENAI_API_KEY` → the `api_key` key inside the model's JSON configuration blob
+  * `acta_gui` (in-process pipeline; there is no `--api_key` flag): `$OPENAI_API_KEY` → the `api_key` key inside the model's JSON configuration blob
+* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given (fallback: `./acta.db`). The GUI does **not** read `$ACTA_DB` — its default is the platform app-data directory, and the file can be chosen in its *Choose database file* dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
+
 ## Minimal end-to-end example
 
 Against the running `llama-server` router from the quick start:
