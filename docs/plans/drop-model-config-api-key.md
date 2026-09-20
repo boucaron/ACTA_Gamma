@@ -1,6 +1,6 @@
 # Plan — remove `api_key` from the model `configuration` blob
 
-Status: **planned**.
+Status: **done** — all four work items complete: `acta_runner` (`3a0b072`), `acta_runner` test (`d0abfe6`), `acta_gui` (`9f02c60`), docs (`4c3fe27`). Verification: build + all C suites green (incl. `test_run.c` scenario 14 pinning a configuration carrying `api_key` as `EXIT_INVALID` unknown key), wire checks (old-style DB model fails with the unknown-key error; same model with the key removed and `$OPENAI_API_KEY` set completes), GUI smoke with `$OPENAI_API_KEY` only.
 
 Review point: "the `api_key` is a real secret stored in a plaintext SQLite
 file." Owner decision: the key is an environment variable (`$OPENAI_API_KEY`)
