@@ -1,6 +1,6 @@
 # Plan — remove `execution.prompt` from the contract
 
-Status: **in progress** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`, `1ac8624`) and 6 (docs, `c849509`) are implemented; item 3's suite updates are in place (runner suite incl. legacy-ignore pin and empty-context scenario). Remaining: 4 (`acta_gui`), 5 (schema comment), 7 (verification).
+Status: **in progress** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`, `1ac8624`), 4 (`acta_gui`, `47b97b2`), 5 (schema comment, `47b97b2`) and 6 (docs, `c849509`) are implemented; item 3's suite updates are in place (runner suite incl. legacy-ignore pin and empty-context scenario). Remaining: 7 (verification).
 
 ## Rationale
 
@@ -86,7 +86,7 @@ instruction is a new skill revision.
 - `tests/llama_smoke.c` — unchanged (its `[prompt]` positional is the
   smoke test's own direct chat message, not `execution.prompt`).
 
-### 4. `acta_gui/`
+### 4. `acta_gui/` — done (`47b97b2`)
 
 - `ui/executionCreateDialog.ui` — remove the `promptTextEdit` widget
   ("The prompt to send…").
@@ -101,7 +101,7 @@ instruction is a new skill revision.
   when the value is NULL.
 - Regenerate `build/ui/ui_executionCreateDialog.h` (qmake/uic handles it).
 
-### 5. Schema
+### 5. Schema — done (`47b97b2`)
 
 - `acta_gui/db/schema.sql` — `executions.prompt TEXT,` stays, with a
   comment: `-- legacy: never written by current code; may hold a value in
