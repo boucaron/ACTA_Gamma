@@ -108,6 +108,8 @@ This is important for experimentation:
 
 > **If the input is reproducible, the execution can be reproduced as an experiment.**
 
+Note: this is **input** determinism, not **output** determinism. Resending the same context, skill revision, and model revision resends exactly the same request, but the output may still differ — the LLM call is probabilistic, and the weights and server flags behind the model identifier may have changed in ways the record does not track (the preflight catalog, when available, records what the serving instance reported at the time). "Reproducing the experiment" means the experiment is *repeatable and comparable*, not that its result is identical.
+
 The context does not need to be related to software development. It could be:
 
 * source code;

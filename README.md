@@ -43,7 +43,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 * **Immutable contexts** — the exact input can be retained for replay.
 * **Multi-model** — the backend serves several models; any model served by the llama.cpp router can be registered as a model record.
 * **Auditable** — executions retain raw responses, results, errors, and execution events (the resolved prompt is recorded in the execution log).
-* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, and model revision (output equivalence additionally depends on backend determinism — see [Revisions and lifecycle](#revisions-and-lifecycle)).
+* **Replayable** — a replay reproduces the request inputs exactly when it reuses the same context, skill revision, and model revision. That is **input determinism, not output determinism** — resending the same inputs does not guarantee the same output (see [Revisions and lifecycle](#revisions-and-lifecycle), "Replay caveat").
 * **Generic** — suitable for review, analysis, classification, extraction, auditing, and similar tasks.
 
 ## What it does — and deliberately does not
@@ -80,7 +80,13 @@ The whole lifecycle: create/update the parent, revisions are snapshotted automat
 - **How revisions are created.** A DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created, updated, or soft-deleted (`acta_cli skill create` / `skill update` / `skill delete`, same for `model`). The soft-delete trigger snapshots a final revision carrying `deleted_at`. There is no separate "snapshot" command.
 - **Immutability.** Revision rows cannot be edited or deleted — they can only be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`). Contexts are likewise immutable (a trigger rejects updates), which is what makes replay inputs exact.
 - **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its user message is exactly `context.content`. The request inputs are exactly reproducible with all three inputs: the context, the skill revision, and the model revision.
-- **Replay caveat.** Output equivalence additionally depends on backend determinism and the model weights behind the model's `base_url`, which the system does not track.
+- **Replay caveat — input determinism, not output determinism.** A replay resends exactly the same request (context content, skill prompt revision, model revision). It does not promise the same output, because three things it cannot track may have changed:
+
+  - the **weights behind the `model_identifier`** — the same name may now point to a re-quantized or replaced GGUF; ACTA does not hash the weights, so a replay six months later is a run with "the same inputs", not a bit-for-bit reproduction;
+  - the **server instance** — different flags (`-c`, sampling, …) or a rebuilt engine. The preflight catalog fetch records the serving instance's launch args and `n_ctx`/`n_params`/`size`/`ftype` in the execution log when available (best-effort; `"catalog":null` on non-llama backends), so a *change in server configuration* is visible when comparing logs — a *change in the weights behind the same identifier* is not;
+  - the **inference engine itself** — the LLM call is probabilistic; even a byte-identical setup is not guaranteed to produce bit-reproducible output.
+
+  So "I re-ran execution 47 with the same inputs and got a different output" is a valid, expected outcome. The audit trail will tell you exactly what was sent and what the server *reported* at the time; explaining *why* the output differed may require the backend's own logs, which ACTA does not retain.
 - **No promote / deprecate.** There is deliberately no `active` or `current` flag: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want.
 - **Editing creates, not modifies.** Updating a skill or model parent inserts a new immutable revision; it does not modify the existing one, and existing executions keep pointing at the revision they were bound to.
 
