@@ -203,7 +203,7 @@ CREATE TABLE executions (
     context_id INTEGER NOT NULL,
     skill_revision_id INTEGER NOT NULL,
     model_revision_id INTEGER NOT NULL,
-    prompt TEXT,
+    prompt TEXT, -- legacy: never written by current code; may hold a value in pre-removal rows
     raw_response TEXT,
     result TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed','cancelled')),

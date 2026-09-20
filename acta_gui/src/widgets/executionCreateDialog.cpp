@@ -15,7 +15,6 @@
 
 #include <QtGlobal>
 
-#include <cstdlib>
 #include <functional>
 
 #include "contextDialog.h"
@@ -185,9 +184,6 @@ ExecutionCreateDialog::ExecutionCreateDialog(QWidget *parent)
             &ExecutionCreateDialog::onShowSkillClicked);
     connect(ui->showModelButton, &QPushButton::clicked, this,
             &ExecutionCreateDialog::onShowModelClicked);
-    connect(ui->promptTextEdit, &QTextEdit::textChanged, this,
-            [this] { updateSaveEnabled(); });
-
     // Right-click context menu on the context combo: "New…" and
     // "Show" (no "Edit": contexts are immutable — see
     // onContextComboContextMenu()).
@@ -211,7 +207,6 @@ void ExecutionCreateDialog::newExecution(db_t *db)
     m_skillEntityId = 0;
     m_modelEntityId = 0;
 
-    ui->promptTextEdit->clear();
     loadContexts();
     loadSkillTree();
     loadModelTree();
@@ -634,22 +629,19 @@ void ExecutionCreateDialog::onSaveClicked()
     if (!m_db || m_saved)
         return;
 
-    /* Prompt is optional: the context content alone is a valid user
-     * message for the runner. A context-less, prompt-less execution will
-     * fail at run time with a clear error. */
-    const QString prompt = ui->promptTextEdit->toPlainText().trimmed();
-
+    /* The context content is the only user-message source; the skill's
+     * prompt_template is the only instruction source. A context-less
+     * execution (or one with empty content) fails at run time with
+     * `empty context content`. */
     execution_t e{};
     e.context_id = ui->contextComboBox->currentData().toInt();
     e.skill_revision_id = m_skillRevisionId;
     e.model_revision_id = m_modelRevisionId;
     e.parent_execution_id =
         ui->parentExecutionComboBox->currentData().toInt();
-    e.prompt = dupString(prompt.toUtf8().constData());
 
     int newId = 0;
     int rc = acta_db_execution_create(m_db, &e, &newId);
-    std::free(e.prompt);
     if (rc != ACTA_DB_OK) {
         // Defensive: the form is filled from live queries, so an FK
         // failure is unlikely; INVALID/FK both mean the referenced

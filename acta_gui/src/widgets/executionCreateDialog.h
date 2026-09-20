@@ -18,7 +18,7 @@ public:
 
     // Create mode: fills the form from live DB listers (context
     // combo, skill and model folder trees with revision rows,
-    // parent execution combo), clears the prompt; Save creates the
+    // parent execution combo); Save creates the
     // execution (always status "pending" — acta_db_execution_create
     // ignores e->status; there is no status widget, the state machine
     // owns it).
@@ -61,8 +61,8 @@ private:
     void loadContextDataPreview();
     void loadSkillPromptPreview();
 
-    // Keep Save enabled only while context, a skill revision, a model
-    // revision and a non-empty (trimmed) prompt are all set.
+    // Keep Save enabled only while a context, a skill revision and a
+    // model revision are all set.
     void updateSaveEnabled();
 
     // Save button slot: create the execution from the dialog fields.

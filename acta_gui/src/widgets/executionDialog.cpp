@@ -106,8 +106,13 @@ void ExecutionDialog::editExecution(db_t *db, int executionId)
                  e->model_revision_id, acta_db_strerror(err));
     }
 
-    // Prompt
-    ui->promptTextEdit->setPlainText(utf8(e->prompt));
+    // Prompt (legacy field: never written by current code; may hold a
+    // value in pre-removal rows)
+    if (e->prompt)
+        ui->promptTextEdit->setPlainText(utf8(e->prompt));
+    else
+        ui->promptTextEdit->setPlaceholderText(
+            tr("(legacy field — no longer written)"));
 
     // Output
     ui->resultTextEdit->setPlainText(utf8(e->result));
