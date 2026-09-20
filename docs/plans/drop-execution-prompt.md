@@ -1,6 +1,6 @@
 # Plan — remove `execution.prompt` from the contract
 
-Status: **in progress** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`) and 6 (docs, `c849509`) are implemented; item 3's suite updates are in place (runner suite incl. legacy-ignore pin and empty-context scenario). Remaining: 4 (`acta_gui`), 5 (schema comment), 7 (verification).
+Status: **in progress** (owner-approved design change). Items 1 (`acta_db`, `00eb877`), 2 (`acta_cli`, `4a5e9ac`), 3 (`acta_runner`, `1ac8624`) and 6 (docs, `c849509`) are implemented; item 3's suite updates are in place (runner suite incl. legacy-ignore pin and empty-context scenario). Remaining: 4 (`acta_gui`), 5 (schema comment), 7 (verification).
 
 ## Rationale
 
@@ -66,7 +66,7 @@ instruction is a new skill revision.
 - `acta_test_ref.sql` / `acta_test_ref.db` — unchanged (seed data is
   historical; keeps the legacy read path exercised).
 
-### 3. `acta_runner/` — done
+### 3. `acta_runner/` — done (`1ac8624`)
 
 - `src/run.c`
   - File header comment (lines ~15–17): replace the concatenation spec with
