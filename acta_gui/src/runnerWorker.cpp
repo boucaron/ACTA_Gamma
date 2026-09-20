@@ -89,9 +89,9 @@ void RunnerWorker::runInThread()
         return;
     }
 
-    // api_key resolution mirrors the CLI (--api_key is absent in the
-    // UI): $OPENAI_API_KEY, then configuration.api_key inside the
-    // pipeline.
+    // api_key resolution: $OPENAI_API_KEY only — the UI has no
+    // --api_key flag, and the pipeline never reads the key from the
+    // model configuration blob (docs/plans/drop-model-config-api-key.md).
     const char *apiKey = std::getenv("OPENAI_API_KEY");
     const int exitCode =
         run_execution(db, m_executionId, m_timeoutSec, apiKey);
