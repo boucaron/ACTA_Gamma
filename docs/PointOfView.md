@@ -39,6 +39,13 @@ One-shot LLM action
 Observation
 ```
 
+Two needs, in order:
+
+1. **Run one skill against one context once, and read the result.** That is the entire workflow — four creates, a run, a read.
+2. **Reproduce that run later, or compare it against other skill revisions and models.** That is what the versioning, immutable contexts, and audit trail are for.
+
+The POC serves both, but need 1 is complete on its own: with one revision of each entity (created automatically), the one-shot run depends on nothing else in the system.
+
 ## Why this matters
 
 LLMs are changing extremely quickly. Prompts change, models change, inference engines change, and model behavior can change without the surrounding application changing.

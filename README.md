@@ -24,11 +24,19 @@ Context + Skill + Model
          Observation
 ```
 
+The workflow is one-shot: register a model, create a skill (a versioned prompt), create a context (the input), create an execution binding them, run it, read the result — the six commands in [Minimal end-to-end example](#minimal-end-to-end-example). **That is the whole first need.**
+
+Everything else in this README serves a *second*, legitimate need: reproducing an execution six months later, or comparing outputs across prompt revisions and models. The versioning, immutability, and audit trail exist for that second need — the one-shot run itself only needs the runner and the database.
+
 The runner drives the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next. ACTA Gamma is deliberately not an agent framework — at its core it is a runner over an OpenAI-compatible endpoint plus a SQLite audit log — the full point of view is in [`docs/PointOfView.md`](docs/PointOfView.md).
 
 Terms used throughout this README: a **skill** is a versioned prompt template with an optional output schema — it is not a tool, function, or agent capability; a **context** is a named, immutable snapshot of input data (a document, a code file, a log excerpt) — it is not the model's prompt window.
 
 ## Core ideas
+
+**The workflow** — one-shot: register a model, create a skill, create a context, create an execution, run, read the result. No conversational state, no steps beyond that.
+
+**The supporting infrastructure** — for the second need (reproduction and comparison):
 
 * **Stateless** — every execution is independent and one-shot.
 * **Versioned skills** — prompts and output schemas are revisioned.
