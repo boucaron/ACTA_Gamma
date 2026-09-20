@@ -21,6 +21,7 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 #define sock_close(s) closesocket(s)
 /* winsock has no POSIX read(); recv() is the equivalent here. */
 #define sock_read(s, buf, n) ((int)recv((s), (buf), (n), 0))
@@ -45,7 +46,7 @@ static void msleep(int ms)
     if (ms <= 0)
         return;
 #ifdef _WIN32
-    _sleep(ms); /* mingw time.h */
+    Sleep(ms);
 #else
     struct timespec ts = { ms / 1000, (long)(ms % 1000) * 1000000L };
     nanosleep(&ts, NULL);

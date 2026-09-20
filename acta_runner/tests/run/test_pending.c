@@ -135,7 +135,7 @@ static int seed_pending(db_t *db, const char *model_id)
     m.name = model_name;
     m.backend = "llama";
     m.base_url = STUB_BASE_URL;
-    m.model_identifier = model_id;
+    m.model_identifier = (char *)model_id;
     int model_id_ = 0;
     if (acta_db_model_create(db, &m, &model_id_) != ACTA_DB_OK)
         return -1;

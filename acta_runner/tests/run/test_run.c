@@ -116,7 +116,7 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
     memset(&s, 0, sizeof s);
     s.name = skill_name;
     s.prompt_template = "SYS-TEMPLATE";
-    s.output_schema = output_schema;
+    s.output_schema = (char *)output_schema;
     int skill_id = 0;
     if (acta_db_skill_create(db, &s, &skill_id) != ACTA_DB_OK)
         return -1;
@@ -133,7 +133,7 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
     m.backend = "llama";
     m.base_url = STUB_BASE_URL;
     m.model_identifier = "stub-model";
-    m.configuration = model_config;
+    m.configuration = (char *)model_config;
     int model_id = 0;
     if (acta_db_model_create(db, &m, &model_id) != ACTA_DB_OK)
         return -1;
