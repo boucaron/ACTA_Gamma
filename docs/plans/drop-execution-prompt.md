@@ -1,6 +1,6 @@
 # Plan — remove `execution.prompt` from the contract
 
-Status: **planned** (owner-approved design change).
+Status: **in progress** (owner-approved design change). Items 1 (`acta_db`, `00eb877`) and 2 (`acta_cli`, `4a5e9ac`) are implemented and their suites pass; item 6 (docs) landed in `c849509`. Remaining: 3 (`acta_runner`), 4 (`acta_gui`), 5 (schema comment), 7 (verification).
 
 ## Rationale
 
@@ -37,7 +37,7 @@ instruction is a new skill revision.
 
 ## Work items
 
-### 1. `acta_db/`
+### 1. `acta_db/` — done (`00eb877`)
 
 - `include/execution.h` — `execution_t.prompt` stays (read path); update the
   `acta_db_execution_create` doc: `prompt` is ignored / always stored NULL
@@ -45,7 +45,7 @@ instruction is a new skill revision.
 - `src/execution.c` — `acta_db_execution_create`: stop binding `e->prompt`,
   bind SQL NULL unconditionally. Getters/listers unchanged.
 
-### 2. `acta_cli/`
+### 2. `acta_cli/` — done (`4a5e9ac`)
 
 - `src/commands/execution.c`
   - Remove `--prompt` from `exec create` help text and flag parsing.

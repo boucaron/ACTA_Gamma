@@ -175,7 +175,7 @@ Prefer not to use the command line? Once the backend is running (see Quick start
 
 ## CLI ergonomics
 
-For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 2). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else `./acta.db`), and the machine-readable `--tools` schema (version 3). `db exec` is the developer-facing static-SQL escape hatch (DDL / migrations — never `SELECT`, never user-composed input). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 ## Current status
 

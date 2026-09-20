@@ -93,7 +93,8 @@ rendering (~7 KB) of the same static table — positionals, flags (with `*`
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
-`success` is structured (schema version 2): a JSON object
+`success` is structured (the schema `version` field is 3; it was 2 before
+`exec create` dropped the `prompt` flag / JSON key): a JSON object
 `{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
 (`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
 per-action table above; `,"note": "…"` optional, carrying the

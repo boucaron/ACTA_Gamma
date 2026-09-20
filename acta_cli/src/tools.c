@@ -10,7 +10,9 @@
  *   M3  skill_folder list/count filter by an optional positional
  *       <parent_id | all>, not a --parent_id flag
  *
- * Success shapes are structured (P1, schema v2): `success` is a JSON
+ * Success shapes are structured (P1, schema v2 format; the emitted
+ * `version` field is 3 — bumped when `exec create` dropped the prompt
+ * flag / JSON key): `success` is a JSON
  * object `{"kind":"json"|"json_object"|"json_array"|"bare_int"|
  * "plain_text"(,"keys":[...])(,"note":"...")}`; kind "json" carries
  * the exact wire keys, the optional note carries the --table/--count
