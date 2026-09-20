@@ -10,19 +10,19 @@
 
 enum {
     COL_ID = 0, COL_CONTEXT_ID, COL_SKILL_REV_ID, COL_MODEL_REV_ID,
-    COL_PROMPT, COL_RAW_RESPONSE, COL_RESULT, COL_STATUS, COL_ERROR,
+    COL_RAW_RESPONSE, COL_RESULT, COL_STATUS, COL_ERROR,
     COL_CREATED_AT, COL_STARTED_AT, COL_COMPLETED_AT, COL_PARENT_ID,
     COL_DELETED_AT,
     COL_COUNT
 };
 
 #define EXEC_SELECT \
-    "SELECT id, context_id, skill_revision_id, model_revision_id, prompt, " \
+    "SELECT id, context_id, skill_revision_id, model_revision_id, " \
     "raw_response, result, status, error, created_at, started_at, " \
     "completed_at, parent_execution_id, deleted_at FROM executions"
 
-/* Light projection: the blob columns (prompt, raw_response, result,
- * error) are omitted.  Column order must match row_to_execution_light. */
+/* Light projection: the blob columns (raw_response, result, error)
+ * are omitted.  Column order must match row_to_execution_light. */
 #define EXEC_SELECT_LIGHT \
     "SELECT id, context_id, skill_revision_id, model_revision_id, status, " \
     "created_at, started_at, completed_at, parent_execution_id, " \
@@ -45,7 +45,6 @@ static execution_t *row_to_execution(sqlite3_stmt *stmt, int *err)
     e->context_id          = db_col_int(stmt, COL_CONTEXT_ID);
     e->skill_revision_id   = db_col_int(stmt, COL_SKILL_REV_ID);
     e->model_revision_id   = db_col_int(stmt, COL_MODEL_REV_ID);
-    e->prompt              = db_col_text(stmt, COL_PROMPT, &alloc_err);
     e->raw_response        = db_col_text(stmt, COL_RAW_RESPONSE, &alloc_err);
     e->result              = db_col_text(stmt, COL_RESULT, &alloc_err);
     e->status              = db_col_text(stmt, COL_STATUS, &alloc_err);
@@ -66,7 +65,7 @@ static execution_t *row_to_execution(sqlite3_stmt *stmt, int *err)
 
 /*
  * Light-projection row decoder (EXEC_SELECT_LIGHT column order).
- * prompt / raw_response / result / error are intentionally left NULL
+ * raw_response / result / error are intentionally left NULL
  * (the struct is calloc'd and acta_db_execution_free is NULL-safe).
  * Allocation-error handling is identical to row_to_execution.
  */
@@ -390,11 +389,6 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
         e->model_revision_id <= 0)
         return ACTA_DB_ERR_INVALID;
 
-    /* e->prompt is IGNORED: executions.prompt is a legacy nullable
-     * column that is never written by current code.  SQL NULL is
-     * bound unconditionally; pre-removal rows may still hold a
-     * historical value, which the getters keep readable. */
-
     /* The referenced context must be LIVE: a soft-deleted context
      * cannot receive a new execution (per spec, NOT_FOUND), while a
      * missing context keeps the unchanged FK semantics (ERR_FK). */
@@ -443,8 +437,8 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
     const char *sql =
         "INSERT INTO executions "
         " (context_id, skill_revision_id, model_revision_id, "
-        "  prompt, status, parent_execution_id) "
-        "VALUES (?, ?, ?, ?, ?, ?);";
+        "  status, parent_execution_id) "
+        "VALUES (?, ?, ?, ?, ?);";
 
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK)
@@ -453,12 +447,11 @@ int acta_db_execution_create(db_t *db, const execution_t *e, int *out_id)
     sqlite3_bind_int  (stmt, 1, e->context_id);
     sqlite3_bind_int  (stmt, 2, e->skill_revision_id);
     sqlite3_bind_int  (stmt, 3, e->model_revision_id);
-    sqlite3_bind_null(stmt, 4); /* prompt: legacy column, never written */
-    sqlite3_bind_text (stmt, 5, ACTA_EXEC_STATUS_PENDING, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text (stmt, 4, ACTA_EXEC_STATUS_PENDING, -1, SQLITE_TRANSIENT);
     if (e->parent_execution_id == 0)
-        sqlite3_bind_null(stmt, 6);
+        sqlite3_bind_null(stmt, 5);
     else
-        sqlite3_bind_int (stmt, 6, e->parent_execution_id);
+        sqlite3_bind_int (stmt, 5, e->parent_execution_id);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -858,7 +851,6 @@ int acta_db_execution_set_raw_response(db_t *db, int id, const char *raw)
 void acta_db_execution_free(execution_t *e)
 {
     if (!e) return;
-    free(e->prompt);
     free(e->raw_response);
     free(e->result);
     free(e->status);

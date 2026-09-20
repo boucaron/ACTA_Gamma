@@ -22,7 +22,6 @@ typedef struct {
     int     context_id;
     int     skill_revision_id;
     int     model_revision_id;
-    char   *prompt;
     char   *raw_response;
     char   *result;
     char   *status;
@@ -124,12 +123,9 @@ typedef struct {
  *
  * Required fields (validated up front, all must hold):
  *   context_id > 0, skill_revision_id > 0, model_revision_id > 0.
- * prompt is IGNORED: executions.prompt is a legacy nullable column
- * that is never written by current code; SQL NULL is always stored.
- * (Rows created before the removal may still hold a historical value;
- * the getters keep it readable.)  The user message comes from
- * context.content; instruction text comes from the skill revision's
- * prompt_template.
+ * The executions table has no prompt column: the user message comes
+ * from context.content; instruction text comes from the skill
+ * revision's prompt_template.
  *
  * e->status is IGNORED: a new execution is always created "pending";
  * any other state is only reachable via the transition functions
@@ -237,8 +233,8 @@ execution_t *acta_db_execution_get(db_t *db, int id, int *err);
  *           .context_id = 7
  *       }, 0, 50, &n, &err);
  *
- * NOTE: this lister materializes the blob columns (prompt,
- * raw_response, result, error) for every row; a full page is clamped
+ * NOTE: this lister materializes the blob columns (raw_response,
+ * result, error) for every row; a full page is clamped
  * to ACTA_DB_MAX_PAGE rows of full-blob content.  List views that
  * only need ids/status/timestamps should prefer
  * acta_db_execution_query_light.
@@ -251,8 +247,8 @@ execution_t **acta_db_execution_query(db_t *db,
 
 
 /* Return a page of executions matching `q`, ordered by id ASC,
- * using the LIGHT projection: the blob columns (prompt, raw_response,
- * result, error) are NOT fetched, so those fields are NULL in every
+ * using the LIGHT projection: the blob columns (raw_response, result,
+ * error) are NOT fetched, so those fields are NULL in every
  * returned row.  All other fields (ids, status, timestamps, parent,
  * deleted_at) are populated as usual.
  *

@@ -31,7 +31,6 @@ static void test_exec_create_happy(void) {
     execution_t *got = acta_db_execution_get(db, out_id, &err);
     TEST_ASSERT_NOT_NULL(got);
     TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
-    TEST_ASSERT(got->prompt == NULL); /* legacy column: never written */
     acta_db_execution_free(got);
 
     test_db_teardown(db, path);
@@ -124,41 +123,6 @@ static void test_exec_create_invalid_mr(void) {
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
                        ACTA_DB_ERR_FK);
-
-    test_db_teardown(db, path);
-}
-
-/* prompt is IGNORED by acta_db_execution_create: executions.prompt is
- * a legacy nullable column that is never written by current code.
- * Any value supplied on the struct is discarded and SQL NULL is
- * stored; pre-removal rows may still hold a historical value, which
- * the getters keep readable. */
-static void test_exec_create_ignores_prompt(void) {
-    const char *path = "test/acta_test_exec_ign_prompt.db";
-    remove(path);
-    db_t *db = test_db_open(path);
-    TEST_ASSERT_NOT_NULL(db);
-
-    int ctx_id, sr_id, mr_id;
-    TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-
-    execution_t e;
-    memset(&e, 0, sizeof(e));
-    e.context_id          = ctx_id;
-    e.skill_revision_id   = sr_id;
-    e.model_revision_id   = mr_id;
-    e.prompt              = "Legacy prompt";   /* must be ignored */
-
-    int out_id = 0;
-    TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
-                       ACTA_DB_OK);
-    TEST_ASSERT(out_id > 0);
-
-    int err = 0;
-    execution_t *got = acta_db_execution_get(db, out_id, &err);
-    TEST_ASSERT_NOT_NULL(got);
-    TEST_ASSERT(got->prompt == NULL);
-    acta_db_execution_free(got);
 
     test_db_teardown(db, path);
 }
@@ -311,7 +275,6 @@ static void test_exec_get_existing(void) {
     TEST_ASSERT_EQ_INT(got->context_id, ctx_id);
     TEST_ASSERT_EQ_INT(got->skill_revision_id, sr_id);
     TEST_ASSERT_EQ_INT(got->model_revision_id, mr_id);
-    TEST_ASSERT(got->prompt == NULL); /* legacy column: NULL for new rows */
     TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
     acta_db_execution_free(got);
 
@@ -1309,7 +1272,6 @@ int run_execution_create_tests(void) {
     test_exec_create_invalid_ctx();
     test_exec_create_invalid_sr();
     test_exec_create_invalid_mr();
-    test_exec_create_ignores_prompt();
     test_exec_create_zero_ids();
     test_exec_create_default_status();
     test_exec_create_with_parent();

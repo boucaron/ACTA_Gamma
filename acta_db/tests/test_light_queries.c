@@ -180,7 +180,6 @@ static void test_execution_light_fields_and_pagination(void) {
     TEST_ASSERT_EQ_INT(count, 2);
 
     for (int i = 0; i < count; i++) {
-        TEST_ASSERT_NULL(items[i]->prompt);
         TEST_ASSERT_NULL(items[i]->raw_response);
         TEST_ASSERT_NULL(items[i]->result);
         TEST_ASSERT_NULL(items[i]->error);
@@ -204,7 +203,6 @@ static void test_execution_light_fields_and_pagination(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     TEST_ASSERT_EQ_INT(items[0]->id, id1);
-    TEST_ASSERT_NULL(items[0]->prompt); /* legacy column: never written */
     TEST_ASSERT_EQ_STR(items[0]->result, "result one");
     TEST_ASSERT_EQ_STR(items[0]->raw_response, "raw one");
     acta_db_execution_list_free(items, count);
@@ -239,7 +237,6 @@ static void test_execution_light_filters_and_count(void) {
     TEST_ASSERT_EQ_INT(count, 1);
     TEST_ASSERT_EQ_INT(items[0]->id, id2);
     TEST_ASSERT_EQ_STR(items[0]->status, "running");
-    TEST_ASSERT_NULL(items[0]->prompt);
     acta_db_execution_list_free(items, count);
 
     /* include_deleted light: both rows, blob fields NULL */
@@ -253,8 +250,6 @@ static void test_execution_light_filters_and_count(void) {
     TEST_ASSERT_NOT_NULL(items[0]->deleted_at);
     TEST_ASSERT_EQ_INT(items[1]->id, id2);
     TEST_ASSERT_NULL(items[1]->deleted_at);
-    TEST_ASSERT_NULL(items[0]->prompt);
-    TEST_ASSERT_NULL(items[1]->prompt);
     acta_db_execution_list_free(items, count);
 
     /* status filter on light */

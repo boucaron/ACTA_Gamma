@@ -1,8 +1,10 @@
 # Plan — fully drop the `executions.prompt` column
 
-Status: **planned** (follow-up to the completed
+Status: **in progress** (follow-up to the completed
 [`drop-execution-prompt.md`](drop-execution-prompt.md); owner decision,
-dev phase — no users, so full removal is acceptable).
+dev phase — no users, so full removal is acceptable). Item 2
+(`acta_db`) is implemented; the migration script exists and all DB files
+in the repo have already been migrated.
 
 ## Rationale
 
@@ -52,22 +54,28 @@ it) — the script is for hygiene, not for correctness.
 ### 1. `acta_gui/db/`
 
 - `schema.sql` — delete the `prompt TEXT, -- legacy…` line from the
-  `executions` DDL.
-- `drop_execution_prompt.sh` — already added (this commit).
-- `engine.db` — run the script on the dev DB (manual; not part of the
-  build).
+  `executions` DDL. *(pending — the DB files are already migrated, so
+  the source schema is now ahead of nothing but itself)*
+- `drop_execution_prompt.sh` — added (`3e468d8`) and tested.
+- `engine.db` — migrated (all repo DB files migrated: `acta_cli/
+  acta_test_ref.db`, `acta_cli/tmp/acta.db`, `acta_db/test/*.db`, `acta_gui/
+  db/engine.db`, `acta_gui/src/release/acta.db`).
 
-### 2. `acta_db/`
+### 2. `acta_db/` — done
 
-- `include/execution.h` — remove `char *prompt;` from `execution_t`;
-  rewrite the `acta_db_execution_create` doc (no legacy column anymore),
-  the main-projection and light-projection notes (blob list minus
-  `prompt`).
-- `src/execution.c` — main projection: drop `prompt` from the SELECT and
-  the `db_col_text(COL_PROMPT)` assignment (column indexes shift);
-  light projection: drop `prompt` from the column list; create: drop
-  `prompt` from the INSERT column list and the NULL bind; destructor:
-  drop `free(e->prompt)`.
+- `include/execution.h` — removed `char *prompt;` from `execution_t`;
+  rewritten the `acta_db_execution_create` doc (no legacy column
+  anymore), the main-projection and light-projection notes (blob list
+  minus `prompt`).
+- `src/execution.c` — main projection: dropped `prompt` from the SELECT
+  and the `db_col_text(COL_PROMPT)` assignment (column indexes shift);
+  light projection: dropped `prompt` from the column list; create:
+  dropped `prompt` from the INSERT column list and the NULL bind
+  (5 binds); destructor: dropped `free(e->prompt)`.
+- `tests/` — dropped every `->prompt` assert: `test_execution_common.h`
+  helper comment, `test_execution_create.c` (three asserts plus the
+  whole `test_exec_create_ignores_prompt` case and its registration —
+  the concept no longer exists), `test_light_queries.c` (four asserts).
 
 ### 3. `acta_cli/`
 

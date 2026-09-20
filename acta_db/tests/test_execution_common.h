@@ -122,8 +122,6 @@ static int exec_setup(db_t *db, int *out_ctx, int *out_sr, int *out_mr) {
 
 /* ------------------------------------------------------------------ */
 /*  Create an execution with default fields.                         */
-/*  (executions.prompt is a legacy column: never written by the      */
-/*   create path, so it is always SQL NULL in rows created here.)    */
 /*  Returns the new row id (> 0) on success, -1 on failure.          */
 /* ------------------------------------------------------------------ */
 static int exec_create(db_t *db, int ctx_id, int sr_id, int mr_id,
