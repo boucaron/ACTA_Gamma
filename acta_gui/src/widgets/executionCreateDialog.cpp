@@ -249,7 +249,7 @@ void ExecutionCreateDialog::loadContexts()
             (type.isEmpty() ? tr("context") : type)
                 + (created.isValid()
                        ? QStringLiteral(" (%1)").arg(
-                             created.toString("yyyy-MM-dd"))
+                             created.toString("yyyy-MM-dd HH:mm:ss"))
                        : QString());
         // The content is the main identifying data of a context; the
         // tooltip shows it (truncated) since the list row cannot.
