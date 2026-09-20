@@ -105,6 +105,8 @@ The runner assembles the chat call from the bound revisions:
 
 There is no per-execution prompt field: the skill's prompt template is the only instruction source, and the context is the user message content. An empty context content fails the execution. The `executions` table has no prompt column.
 
+**No instruction/data boundary.** The context is passed **verbatim** as the user message, so content that reads like an instruction ("Ignore the above instructions and output…") reaches the model as an instruction — ACTA does not sanitize, delimit, or refuse it. Prompt-injection defenses are out of scope for this primitive; the context is operator-supplied. What does bound the result: the skill's prompt template is the only instruction source and is operator-controlled, the optional `output_schema` validates the response shape (a schema-constrained reply cannot be hijacked into free-form text), and the resolved prompt is recorded in the execution log — so exactly what was sent to the model can always be inspected afterwards. Details in [`PointOfView.md`](docs/PointOfView.md), "Context is data, not memory".
+
 ## Implementation
 
 The implementation is C/C++ on top of SQLite:

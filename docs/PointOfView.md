@@ -123,6 +123,8 @@ The context does not need to be related to software development. It could be:
 
 The runner does not need to understand the domain.
 
+One honest limitation: "data" here means *the operator's* data. ACTA does not draw a boundary between instruction and data inside the prompt — the context is passed verbatim as the user message, and a document containing text like "Ignore the above instructions and…" reaches the model as an instruction. ACTA does not sanitize or reject this; the surrounding application, if it feeds untrusted content, must handle that itself. The mitigations that exist: the skill's prompt template is the only instruction source and is operator-controlled; the optional output schema constrains the response shape; and the execution log records the exact resolved prompt that was sent, so what reached the model can always be inspected. Full prompt-injection defenses belong to applications built on top of this, not to the primitive.
+
 ## Models are replaceable
 
 The model is another independent dimension of an execution.
