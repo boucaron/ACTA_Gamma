@@ -152,7 +152,6 @@ static int seed_pending(db_t *db, const char *model_id)
     e.context_id = ctx_id;
     e.skill_revision_id = skill_rev_id;
     e.model_revision_id = model_rev_id;
-    e.prompt = "USER-PROMPT";
     int id = 0;
     if (acta_db_execution_create(db, &e, &id) != ACTA_DB_OK)
         return -1;

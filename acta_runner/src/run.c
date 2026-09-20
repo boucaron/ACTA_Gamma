@@ -13,9 +13,8 @@
  *                   source, logged as preflight_passed).
  *   4. Call      — POST /v1/chat/completions with
  *                     system = skill.prompt_template,
- *                     user   = execution.prompt + "\n\n" + context.content
- *                              (execution prompt first when present,
- *                               context data appended last);
+ *                     user   = context.content (always; empty ->
+ *                              EXIT_INVALID, "empty context content");
  *                     model  = model_identifier,
  *                     params from the model configuration JSON
  *                     (temperature, max_tokens, top_k, api_key,
@@ -463,30 +462,15 @@ int run_execution(db_t *db, int exec_id, int timeout_sec,
         return ex;
     }
 
-    /* user message concatenation order: the optional execution prompt
-     * comes first (when present), then the context data is appended:
-     * execution.prompt + "\n\n" + context.content
-     * (either half may be empty; both empty -> fail). */
-    const char *prompt = e->prompt;
+    /* The user message is always the context content. The legacy
+     * execution.prompt column is audit data only and is never used here.
+     * Empty context content -> fail with EXIT_INVALID. */
     const char *cc = ctx->content;
-    user = NULL;
-    if (prompt && prompt[0] && cc && cc[0]) {
-        size_t n = strlen(prompt) + 2 + strlen(cc);
-        user = (char *)malloc(n + 1);
-        if (user) {
-            memcpy(user, prompt, strlen(prompt));
-            memcpy(user + strlen(prompt), "\n\n", 2);
-            memcpy(user + strlen(prompt) + 2, cc, strlen(cc) + 1);
-        }
-    } else {
-        const char *src = (prompt && prompt[0]) ? prompt : cc;
-        user = src ? strdup(src) : NULL;
-    }
+    user = (cc && cc[0]) ? strdup(cc) : NULL;
     if (!user || !user[0]) {
         free(user);
         int ex = fail_execution(db, exec_id, EXIT_INVALID,
-                                "empty prompt (no context content and no "
-                                "execution prompt)");
+                                "empty context content");
         acta_db_context_free(ctx);
         acta_db_skill_revision_free(skill);
         acta_db_model_revision_free(model);

@@ -17,6 +17,7 @@
  *   11. unknown config key -> failed + EXIT_INVALID
  *   12. malformed config JSON -> failed + EXIT_INVALID
  *   13. wrong config key type -> failed + EXIT_INVALID
+ *   14. empty context content -> failed + EXIT_INVALID
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
  * Exit code: 0 = all pass, 1 = at least one failure.
@@ -89,7 +90,7 @@ static int load_schema(db_t *db)
  * success, -1 on failure. */
 static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
                 int *model_rev_id, const char *output_schema,
-                const char *model_config)
+                const char *model_config, const char *ctx_content)
 {
     int err = ACTA_DB_OK;
 
@@ -105,7 +106,7 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
     context_t c;
     memset(&c, 0, sizeof c);
     c.type = "text";
-    c.content = "CTX-CONTENT";
+    c.content = (char *)ctx_content;
     /* Required non-NULL by acta_db_context_create; the runner pipeline
      * never verifies the hash, so a fixed placeholder is fine here. */
     c.content_hash = "test-hash";
@@ -154,6 +155,8 @@ static int make_execution(db_t *db, int ctx_id, int skill_rev_id,
     e.context_id = ctx_id;
     e.skill_revision_id = skill_rev_id;
     e.model_revision_id = model_rev_id;
+    /* Legacy column: pinned to a non-empty value so the suite proves the
+     * runner ignores execution.prompt (user = context content only). */
     e.prompt = "USER-PROMPT";
     int id = 0;
     if (acta_db_execution_create(db, &e, &id) != ACTA_DB_OK)
@@ -210,6 +213,7 @@ static int log_metadata_contains(db_t *db, int exec_id, const char *event,
 static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
                      const char *output_schema,
                      const char *model_config,
+                     const char *ctx_content,
                      int timeout_sec, int expect_exit,
                      const char *expect_status,
                      const char *expect_raw,
@@ -219,7 +223,8 @@ static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
     printf("== %s\n", name);
 
     int ctx = 0, skr = 0, mkr = 0;
-    if (seed(db, &ctx, &skr, &mkr, output_schema, model_config) != 0) {
+    if (seed(db, &ctx, &skr, &mkr, output_schema, model_config,
+             ctx_content) != 0) {
         check(0, "seed");
         return -1;
     }
@@ -301,7 +306,8 @@ int main(void)
         cfg.model_id = "stub-model";
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
-        int sid = scenario("success", db, &cfg, NULL, NULL, 30, EXIT_OK,
+        int sid = scenario("success", db, &cfg, NULL, NULL,
+                           "CTX-CONTENT", 30, EXIT_OK,
                            ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
                            EVT_FULL_SUCCESS, sizeof(EVT_FULL_SUCCESS) /
                            sizeof(EVT_FULL_SUCCESS[0]));
@@ -311,7 +317,7 @@ int main(void)
                   "prompt_resolved metadata carries resolved system");
             check(log_metadata_contains(
                       db, sid, "prompt_resolved",
-                      "\"user\":\"USER-PROMPT\\n\\nCTX-CONTENT\""),
+                      "\"user\":\"CTX-CONTENT\""),
                   "prompt_resolved metadata carries resolved user");
             check(log_metadata_contains(db, sid, "preflight_passed",
                                        "\"n_ctx\":162048"),
@@ -331,7 +337,8 @@ int main(void)
         cfg.model_id = "stub-model";
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
-        scenario("health 503", db, &cfg, NULL, NULL, 30, EXIT_HTTP,
+        scenario("health 503", db, &cfg, NULL, NULL, "CTX-CONTENT",
+                 30, EXIT_HTTP,
                  ACTA_EXEC_STATUS_FAILED, NULL, "still loading", NULL, 0);
     }
 
@@ -345,7 +352,8 @@ int main(void)
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
-        scenario("model mismatch", db, &cfg, NULL, NULL, 30, EXIT_HTTP,
+        scenario("model mismatch", db, &cfg, NULL, NULL, "CTX-CONTENT",
+                 30, EXIT_HTTP,
                  ACTA_EXEC_STATUS_FAILED, NULL, "not served by server",
                  events, 1);
     }
@@ -361,7 +369,8 @@ int main(void)
         cfg.chat_error = "boom";
         cfg.chat_content = "stub-response";
         const char *events[] = { "llm_request", "execution_failed" };
-        scenario("chat 500", db, &cfg, NULL, NULL, 30, EXIT_HTTP,
+        scenario("chat 500", db, &cfg, NULL, NULL, "CTX-CONTENT", 30,
+                 EXIT_HTTP,
                  ACTA_EXEC_STATUS_FAILED, NULL, "500",
                  events, 2);
     }
@@ -376,7 +385,8 @@ int main(void)
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
         cfg.delay_ms = 2500;
-        scenario("timeout", db, &cfg, NULL, NULL, 1, EXIT_TIMEOUT,
+        scenario("timeout", db, &cfg, NULL, NULL, "CTX-CONTENT",
+                 1, EXIT_TIMEOUT,
                  ACTA_EXEC_STATUS_FAILED, NULL, "timed out", NULL, 0);
     }
 
@@ -384,7 +394,7 @@ int main(void)
     {
         printf("== non-pending row\n");
         int ctx = 0, skr = 0, mkr = 0;
-        if (seed(db, &ctx, &skr, &mkr, NULL, NULL) != 0) {
+        if (seed(db, &ctx, &skr, &mkr, NULL, NULL, "CTX-CONTENT") != 0) {
             check(0, "seed");
         } else {
             int id = make_execution(db, ctx, skr, mkr);
@@ -430,8 +440,8 @@ int main(void)
             "llm_response", "validation_started", "validation_failed",
             "execution_failed",
         };
-        scenario("schema validation failure", db, &cfg, schema, model_config,
-                 30, EXIT_INVALID,
+        scenario("schema validation failure", db, &cfg, schema,
+                 model_config, "CTX-CONTENT", 30, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, "not-json-at-all",
                  "validation failed", events, 4);
     }
@@ -450,8 +460,8 @@ int main(void)
             "\"properties\":{\"answer\":{\"type\":\"string\"}}}";
         const char *model_config = "{\"supports_response_format\":false}";
         const char *events[] = { "validation_started", "execution_completed" };
-        scenario("schema validation success", db, &cfg, schema, model_config,
-                 30, EXIT_OK,
+        scenario("schema validation success", db, &cfg, schema,
+                 model_config, "CTX-CONTENT", 30, EXIT_OK,
                  ACTA_EXEC_STATUS_COMPLETED, "{\"answer\":\"ok\"}", NULL,
                  events, 2);
     }
@@ -468,7 +478,8 @@ int main(void)
         cfg.chat_content = "stub-response";
         cfg.catalog_status = 404;
         const char *events[] = { "preflight_passed" };
-        int cid = scenario("missing catalog", db, &cfg, NULL, NULL, 30,
+        int cid = scenario("missing catalog", db, &cfg, NULL, NULL,
+                           "CTX-CONTENT", 30,
                            EXIT_OK,
                            ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
                            events, 1);
@@ -490,7 +501,8 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("unknown config key", db, &cfg, NULL,
-                 "{\"temperature\":0.7,\"temperatue\":1}", 30, EXIT_INVALID,
+                 "{\"temperature\":0.7,\"temperatue\":1}",
+                 "CTX-CONTENT", 30, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "unknown model configuration keys", events, 1);
     }
@@ -506,7 +518,7 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("malformed config JSON", db, &cfg, NULL,
-                 "{\"temperature\":0.7", 30, EXIT_INVALID,
+                 "{\"temperature\":0.7", "CTX-CONTENT", 30, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "not valid JSON", events, 1);
     }
@@ -522,9 +534,26 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("wrong config key type", db, &cfg, NULL,
-                 "{\"temperature\":\"high\"}", 30, EXIT_INVALID,
+                 "{\"temperature\":\"high\"}", "CTX-CONTENT", 30,
+                 EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "must be a number", events, 1);
+    }
+
+    /* 14. empty context content -> failed + EXIT_INVALID */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        const char *events[] = { "execution_failed" };
+        scenario("empty context content", db, &cfg, NULL, NULL,
+                 "", 30, EXIT_INVALID,
+                 ACTA_EXEC_STATUS_FAILED, NULL, "empty context content",
+                 events, 1);
     }
 
     acta_db_close(db);
