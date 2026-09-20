@@ -80,7 +80,7 @@ static int fx_add_model_rev(fx_t *fx) {
  * Aborts on any failed insert. */
 static void fx_fill(fx_t *fx, int n) {
     for (int i = 0; i < n; i++) {
-        int id = exec_create(fx->db, fx->ctx_id, fx->sr_id, fx->mr_id, "X", 0);
+        int id = exec_create(fx->db, fx->ctx_id, fx->sr_id, fx->mr_id, 0);
         TEST_ASSERT_EQ_INT(id > 0, 1);
     }
 }
@@ -123,7 +123,7 @@ static void test_exec_query_null_query(void) {
 static void test_exec_query_by_status_pending(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_st_pend.db");
     fx_fill(&fx, 3);
-    int r1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "R1", 0);
+    int r1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, r1), ACTA_DB_OK);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -145,13 +145,13 @@ static void test_exec_query_by_status_pending(void) {
 static void test_exec_query_by_status_completed(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_st_comp.db");
 
-    int c1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", 0);
-    int c2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C2", 0);
+    int c1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int c2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c1, "ok"), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c2), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c2, "done"), ACTA_DB_OK);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P1", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_COMPLETED;
@@ -172,13 +172,13 @@ static void test_exec_query_by_status_completed(void) {
 static void test_exec_query_by_status_cancelled(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_st_canc.db");
 
-    int a = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
-    int b = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    int a = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int b = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(fx.db, a), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(fx.db, b), ACTA_DB_OK);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Pend", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
-    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Comp", 0);
+    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c, "ok"), ACTA_DB_OK);
 
@@ -201,13 +201,13 @@ static void test_exec_query_by_status_cancelled(void) {
 static void test_exec_query_by_status_failed(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_st_failed.db");
 
-    int f1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "F1", 0);
-    int f2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "F2", 0);
+    int f1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int f2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, f1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(fx.db, f1, "boom"), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, f2), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(fx.db, f2, "oops"), ACTA_DB_OK);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_FAILED;
@@ -229,7 +229,7 @@ static void test_exec_query_by_status_failed(void) {
 
 static void test_exec_query_by_status_no_match(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_st_nomatch.db");
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "X", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_FAILED;
@@ -248,9 +248,9 @@ static void test_exec_query_by_context(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_ctx.db");
     int ctx2 = fx_add_ctx(&fx);
 
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
-    exec_create(fx.db, ctx2,        fx.sr_id, fx.mr_id, "C", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = fx.ctx_id;
@@ -277,7 +277,7 @@ static void test_exec_query_by_context(void) {
 
 static void test_exec_query_by_context_no_match(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_ctx_nomatch.db");
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "X", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = 99999;
@@ -295,11 +295,11 @@ static void test_exec_query_by_context_no_match(void) {
 static void test_exec_query_by_parent(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_parent.db");
 
-    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", parent);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C2", parent);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C3", parent);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Unrelated", 0);
+    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
@@ -319,7 +319,7 @@ static void test_exec_query_by_parent(void) {
 
 static void test_exec_query_by_parent_none(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_parent_none.db");
-    int leaf = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Leaf", 0);
+    int leaf = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = leaf;
@@ -338,10 +338,10 @@ static void test_exec_query_by_skill_revision(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_skillrev.db");
     int sr2 = fx_add_skill_rev(&fx);
 
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A1", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A2", 0);
-    exec_create(fx.db, fx.ctx_id, sr2,        fx.mr_id, "B1", 0);
-    exec_create(fx.db, fx.ctx_id, sr2,        fx.mr_id, "B2", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, sr2, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, sr2, fx.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
 
@@ -378,10 +378,10 @@ static void test_exec_query_by_model_revision(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_modrev.db");
     int mr2 = fx_add_model_rev(&fx);
 
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A1", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A2", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2,   "B1", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2,   "B2", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
 
@@ -418,13 +418,13 @@ static void test_exec_query_combined_two(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_combo2.db");
     int ctx2 = fx_add_ctx(&fx);
 
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
-    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c), ACTA_DB_OK);
 
-    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, "D", 0);
-    int e_id = exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, "E", 0);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, 0);
+    int e_id = exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, e_id), ACTA_DB_OK);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -456,12 +456,12 @@ static void test_exec_query_combined_all(void) {
     int mr2  = fx_add_model_rev(&fx);
     int ctx2 = fx_add_ctx(&fx);
 
-    exec_create(fx.db, ctx2,    fx.sr_id, fx.mr_id, "WRONG_CTX", 0);
-    exec_create(fx.db, fx.ctx_id, sr2,    fx.mr_id, "WRONG_SR",  0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2,    "WRONG_MR",  0);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, sr2, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, mr2, 0);
 
-    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "PARENT", 0);
-    int child  = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "CHILD", parent);
+    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int child  = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, child), ACTA_DB_OK);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -589,8 +589,8 @@ static void test_exec_query_empty_table(void) {
 static void test_exec_query_all_statuses(void) {
     fx_t fx = fx_open("test/acta_test_exec_q_allstat.db");
 
-    int e1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
-    int e2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
+    int e1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int e2 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     fx_fill(&fx, 3);   /* C, D, E → pending */
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, e1), ACTA_DB_OK);
@@ -627,9 +627,9 @@ static void test_exec_count_by_status(void) {
     fx_t fx = fx_open("test/acta_test_exec_cnt_status.db");
 
     fx_fill(&fx, 2);   /* 2 pending */
-    int r1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "R1", 0);
+    int r1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, r1), ACTA_DB_OK);
-    int c1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", 0);
+    int c1 = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(fx.db, c1, "ok"), ACTA_DB_OK);
 
@@ -652,9 +652,9 @@ static void test_exec_count_by_context(void) {
     fx_t fx = fx_open("test/acta_test_exec_cnt_ctx.db");
     int ctx2 = fx_add_ctx(&fx);
 
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
-    exec_create(fx.db, ctx2,        fx.sr_id, fx.mr_id, "C", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, 0);
 
     int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -669,11 +669,11 @@ static void test_exec_count_by_context(void) {
 static void test_exec_count_by_parent(void) {
     fx_t fx = fx_open("test/acta_test_exec_cnt_parent.db");
 
-    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "P", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C1", parent);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C2", parent);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C3", parent);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "Root", 0);
+    int parent = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, parent);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -687,11 +687,11 @@ static void test_exec_count_combined(void) {
     fx_t fx = fx_open("test/acta_test_exec_cnt_combo.db");
     int ctx2 = fx_add_ctx(&fx);
 
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "B", 0);
-    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "C", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
+    int c = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, c), ACTA_DB_OK);
-    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, "D", 0);
+    exec_create(fx.db, ctx2, fx.sr_id, fx.mr_id, 0);
 
     int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -712,7 +712,7 @@ static void test_exec_count_combined(void) {
 
 static void test_exec_count_zero(void) {
     fx_t fx = fx_open("test/acta_test_exec_cnt_zero.db");
-    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "A", 0);
+    exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
 
     int e = 0;
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
@@ -743,7 +743,7 @@ static void test_exec_count_null_query(void) {
 static void test_exec_count_matches_lister(void) {
     fx_t fx = fx_open("test/acta_test_exec_cnt_xcheck.db");
     fx_fill(&fx, 10);
-    int r = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, "R", 0);
+    int r = exec_create(fx.db, fx.ctx_id, fx.sr_id, fx.mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(fx.db, r), ACTA_DB_OK);
 
     int e = 0;

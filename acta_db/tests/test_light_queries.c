@@ -161,8 +161,8 @@ static void test_execution_light_fields_and_pagination(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), 0);
 
-    int id1 = exec_create(db, ctx_id, sr_id, mr_id, "prompt one", 0);
-    int id2 = exec_create(db, ctx_id, sr_id, mr_id, "prompt two", id1);
+    int id1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    int id2 = exec_create(db, ctx_id, sr_id, mr_id, id1);
     TEST_ASSERT(id1 > 0 && id2 > 0);
 
     /* populate blobs on row 1 so we can prove they are NOT returned */
@@ -204,7 +204,7 @@ static void test_execution_light_fields_and_pagination(void) {
     TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(count, 2);
     TEST_ASSERT_EQ_INT(items[0]->id, id1);
-    TEST_ASSERT_EQ_STR(items[0]->prompt, "prompt one");
+    TEST_ASSERT_NULL(items[0]->prompt); /* legacy column: never written */
     TEST_ASSERT_EQ_STR(items[0]->result, "result one");
     TEST_ASSERT_EQ_STR(items[0]->raw_response, "raw one");
     acta_db_execution_list_free(items, count);
@@ -223,8 +223,8 @@ static void test_execution_light_filters_and_count(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), 0);
 
-    int id1 = exec_create(db, ctx_id, sr_id, mr_id, "p1", 0);
-    int id2 = exec_create(db, ctx_id, sr_id, mr_id, "p2", 0);
+    int id1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    int id2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT(id1 > 0 && id2 > 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, id2), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(db, id1), ACTA_DB_OK);

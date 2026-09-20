@@ -20,7 +20,6 @@ static void test_exec_create_happy(void) {
     e.context_id          = ctx_id;
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
-    e.prompt              = "Hello";
     e.status              = ACTA_EXEC_STATUS_PENDING;
     e.parent_execution_id = 0;
 
@@ -32,6 +31,7 @@ static void test_exec_create_happy(void) {
     execution_t *got = acta_db_execution_get(db, out_id, &err);
     TEST_ASSERT_NOT_NULL(got);
     TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
+    TEST_ASSERT(got->prompt == NULL); /* legacy column: never written */
     acta_db_execution_free(got);
 
     test_db_teardown(db, path);
@@ -43,7 +43,6 @@ static void test_exec_create_null_db(void) {
     e.context_id        = 1;
     e.skill_revision_id = 1;
     e.model_revision_id = 1;
-    e.prompt            = "x";
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(NULL, &e, &out_id),
@@ -77,7 +76,6 @@ static void test_exec_create_invalid_ctx(void) {
     e.context_id          = 999999;
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
-    e.prompt              = "Hello";
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
@@ -100,7 +98,6 @@ static void test_exec_create_invalid_sr(void) {
     e.context_id          = ctx_id;
     e.skill_revision_id   = 999999;
     e.model_revision_id   = mr_id;
-    e.prompt              = "Hello";
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
@@ -123,7 +120,6 @@ static void test_exec_create_invalid_mr(void) {
     e.context_id          = ctx_id;
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = 999999;
-    e.prompt              = "Hello";
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
@@ -132,11 +128,13 @@ static void test_exec_create_invalid_mr(void) {
     test_db_teardown(db, path);
 }
 
-/* prompt is optional: a context-only execution is valid, and a NULL
- * prompt must be stored as SQL NULL (the runner fails at run time only
- * if both prompt and context content are empty). */
-static void test_exec_create_null_prompt(void) {
-    const char *path = "test/acta_test_exec_null_prompt.db";
+/* prompt is IGNORED by acta_db_execution_create: executions.prompt is
+ * a legacy nullable column that is never written by current code.
+ * Any value supplied on the struct is discarded and SQL NULL is
+ * stored; pre-removal rows may still hold a historical value, which
+ * the getters keep readable. */
+static void test_exec_create_ignores_prompt(void) {
+    const char *path = "test/acta_test_exec_ign_prompt.db";
     remove(path);
     db_t *db = test_db_open(path);
     TEST_ASSERT_NOT_NULL(db);
@@ -149,7 +147,7 @@ static void test_exec_create_null_prompt(void) {
     e.context_id          = ctx_id;
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
-    e.prompt              = NULL;
+    e.prompt              = "Legacy prompt";   /* must be ignored */
 
     int out_id = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, &out_id),
@@ -174,7 +172,7 @@ static void test_exec_create_default_status(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "Hi", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT(eid > 0);
 
     int err = 0;
@@ -197,10 +195,10 @@ static void test_exec_create_with_parent(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int parent_id = exec_create(db, ctx_id, sr_id, mr_id, "Parent", 0);
+    int parent_id = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT(parent_id > 0);
 
-    int child_id = exec_create(db, ctx_id, sr_id, mr_id, "Child", parent_id);
+    int child_id = exec_create(db, ctx_id, sr_id, mr_id, parent_id);
     TEST_ASSERT(child_id > 0);
 
     int err = 0;
@@ -226,7 +224,6 @@ static void test_exec_create_invalid_parent(void) {
     e.context_id          = ctx_id;
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
-    e.prompt              = "Hello";
     e.parent_execution_id = 999999;
 
     int out_id = 0;
@@ -246,7 +243,6 @@ static void test_exec_create_zero_ids(void) {
     /* each id field == 0 must be rejected up front as INVALID */
     execution_t e;
     memset(&e, 0, sizeof(e));
-    e.prompt = "Hello";
 
     e.context_id = 0; e.skill_revision_id = sr_id; e.model_revision_id = mr_id;
     TEST_ASSERT_EQ_INT(acta_db_execution_create(db, &e, NULL), ACTA_DB_ERR_INVALID);
@@ -278,7 +274,6 @@ static void test_exec_create_ignores_status(void) {
     e.context_id        = ctx_id;
     e.skill_revision_id = sr_id;
     e.model_revision_id = mr_id;
-    e.prompt            = "Hello";
     e.status            = ACTA_EXEC_STATUS_COMPLETED;  /* must be ignored */
 
     int out_id = 0;
@@ -306,7 +301,7 @@ static void test_exec_get_existing(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "GetPrompt", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT(eid > 0);
 
     int err = 0;
@@ -316,7 +311,7 @@ static void test_exec_get_existing(void) {
     TEST_ASSERT_EQ_INT(got->context_id, ctx_id);
     TEST_ASSERT_EQ_INT(got->skill_revision_id, sr_id);
     TEST_ASSERT_EQ_INT(got->model_revision_id, mr_id);
-    TEST_ASSERT_EQ_STR(got->prompt, "GetPrompt");
+    TEST_ASSERT(got->prompt == NULL); /* legacy column: NULL for new rows */
     TEST_ASSERT_EQ_STR(got->status, ACTA_EXEC_STATUS_PENDING);
     acta_db_execution_free(got);
 
@@ -377,7 +372,7 @@ static void test_exec_start_happy(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "StartMe", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT(eid > 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, eid), ACTA_DB_OK);
@@ -401,7 +396,7 @@ static void test_exec_start_already_running(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "StartMe", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, eid),
                        ACTA_DB_ERR_INVALID);
@@ -419,20 +414,20 @@ static void test_exec_start_from_terminal(void) {
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
     /* completed */
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e1);
     acta_db_execution_complete(db, e1, "ok");
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e1),
                        ACTA_DB_ERR_INVALID);
 
     /* cancelled */
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_cancel(db, e2);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e2),
                        ACTA_DB_ERR_INVALID);
 
     /* failed */
-    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
+    int e3 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e3);
     acta_db_execution_fail(db, e3, "x");
     TEST_ASSERT_EQ_INT(acta_db_execution_start(db, e3),
@@ -452,7 +447,7 @@ static void test_exec_complete_happy(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "DoWork", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, eid);
 
     TEST_ASSERT_EQ_INT(
@@ -479,7 +474,7 @@ static void test_exec_complete_from_pending(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "P", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT_EQ_INT(
         acta_db_execution_complete(db, eid, "x"),
         ACTA_DB_ERR_INVALID);
@@ -497,14 +492,14 @@ static void test_exec_complete_from_terminal(void) {
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
     /* from cancelled */
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_cancel(db, e1);
     TEST_ASSERT_EQ_INT(
         acta_db_execution_complete(db, e1, "x"),
         ACTA_DB_ERR_INVALID);
 
     /* double-complete */
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e2);
     acta_db_execution_complete(db, e2, "first");
     TEST_ASSERT_EQ_INT(
@@ -525,7 +520,7 @@ static void test_exec_fail_happy(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "WillFail", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, eid);
 
     TEST_ASSERT_EQ_INT(
@@ -551,7 +546,7 @@ static void test_exec_fail_from_pending(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "P", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT_EQ_INT(
         acta_db_execution_fail(db, eid, "x"),
         ACTA_DB_ERR_INVALID);
@@ -569,14 +564,14 @@ static void test_exec_fail_from_terminal(void) {
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
     /* from completed */
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e1);
     acta_db_execution_complete(db, e1, "ok");
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(db, e1, "x"),
                        ACTA_DB_ERR_INVALID);
 
     /* from cancelled */
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_cancel(db, e2);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(db, e2, "x"),
                        ACTA_DB_ERR_INVALID);
@@ -595,7 +590,7 @@ static void test_exec_cancel_pending(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelMe", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, eid), ACTA_DB_OK);
 
     int err = 0;
@@ -616,7 +611,7 @@ static void test_exec_cancel_running(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "CancelRun", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, eid);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, eid), ACTA_DB_OK);
 
@@ -639,20 +634,20 @@ static void test_exec_cancel_from_terminal(void) {
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
     /* completed */
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e1);
     acta_db_execution_complete(db, e1, "ok");
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, e1),
                        ACTA_DB_ERR_INVALID);
 
     /* cancelled (double-cancel) */
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_cancel(db, e2);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, e2),
                        ACTA_DB_ERR_INVALID);
 
     /* failed */
-    int e3 = exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
+    int e3 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e3);
     acta_db_execution_fail(db, e3, "x");
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(db, e3),
@@ -672,7 +667,7 @@ static void test_exec_set_raw_response_pending(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "Raw", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     const char *raw = "{\"tokens\": 42}";
     TEST_ASSERT_EQ_INT(
         acta_db_execution_set_raw_response(db, eid, raw), ACTA_DB_OK);
@@ -697,7 +692,7 @@ static void test_exec_set_raw_response_terminal(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "Raw", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, eid);
     acta_db_execution_complete(db, eid, "done");
 
@@ -740,11 +735,8 @@ static void test_exec_query_any(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    for (int i = 0; i < 4; i++) {
-        char p[8];
-        snprintf(p, sizeof(p), "P%d", i);
-        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, p, 0) > 0);
-    }
+    for (int i = 0; i < 4; i++)
+        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     int n = 0, err = 0;
     execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
@@ -766,8 +758,8 @@ static void test_exec_query_by_status(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
     acta_db_execution_start(db, e2);
     acta_db_execution_complete(db, e2, "done");
     (void)e1;
@@ -808,10 +800,10 @@ static void test_exec_query_by_parent(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int parent = exec_create(db, ctx_id, sr_id, mr_id, "Root", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C1", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "C2", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "Other", 0);
+    int parent = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, parent);
+    exec_create(db, ctx_id, sr_id, mr_id, parent);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
@@ -836,9 +828,9 @@ static void test_exec_query_by_context(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    exec_create(db, ctx_id, sr_id, mr_id, "In1", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "In2", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "In3", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     int err = 0;
 
@@ -866,8 +858,8 @@ static void test_exec_query_by_skill_rev(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     int err = 0;
 
@@ -895,7 +887,7 @@ static void test_exec_query_by_model_rev(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     int err = 0;
 
@@ -923,8 +915,8 @@ static void test_exec_query_combined(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     acta_db_execution_start(db, e1);
     acta_db_execution_complete(db, e1, "ok");
@@ -967,11 +959,8 @@ static void test_exec_query_pagination(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    for (int i = 0; i < 7; i++) {
-        char p[8];
-        snprintf(p, sizeof(p), "R%d", i);
-        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, p, 0) > 0);
-    }
+    for (int i = 0; i < 7; i++)
+        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     int err = 0;
 
@@ -1010,7 +999,7 @@ static void test_exec_query_null_q(void) {
 
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "X", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     int n = 0, err = 0;
     execution_t **items = acta_db_execution_query(db, NULL, 0, 0, &n, &err);
@@ -1052,7 +1041,7 @@ static void test_exec_query_null_outparams(void) {
 
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "N", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
                                                   0, 0, NULL, NULL);
@@ -1075,11 +1064,8 @@ static void test_exec_count_all(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    for (int i = 0; i < 5; i++) {
-        char p[8];
-        snprintf(p, sizeof(p), "C%d", i);
-        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, p, 0) > 0);
-    }
+    for (int i = 0; i < 5; i++)
+        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     int err = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY,
@@ -1098,9 +1084,9 @@ static void test_exec_count_by_status(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    int e2 = exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "C", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    int e2 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     acta_db_execution_start(db, e1);
     acta_db_execution_complete(db, e1, "ok");
@@ -1132,11 +1118,11 @@ static void test_exec_count_by_parent(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int parent = exec_create(db, ctx_id, sr_id, mr_id, "P", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "K1", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "K2", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "K3", parent);
-    exec_create(db, ctx_id, sr_id, mr_id, "Other", 0);
+    int parent = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, parent);
+    exec_create(db, ctx_id, sr_id, mr_id, parent);
+    exec_create(db, ctx_id, sr_id, mr_id, parent);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
@@ -1156,8 +1142,8 @@ static void test_exec_count_combined(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int e1 = exec_create(db, ctx_id, sr_id, mr_id, "A", 0);
-    exec_create(db, ctx_id, sr_id, mr_id, "B", 0);
+    int e1 = exec_create(db, ctx_id, sr_id, mr_id, 0);
+    exec_create(db, ctx_id, sr_id, mr_id, 0);
 
     acta_db_execution_start(db, e1);
     acta_db_execution_complete(db, e1, "done");
@@ -1211,8 +1197,8 @@ static void test_exec_count_null_q(void) {
 
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "X", 0) > 0);
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "Y", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     int err = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(db, NULL, &err), 2);
@@ -1228,7 +1214,7 @@ static void test_exec_count_null_err(void) {
 
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
-    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, "X", 0) > 0);
+    TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     TEST_ASSERT_EQ_INT(
         acta_db_execution_count(db, &ACTA_EXEC_QUERY_ANY, NULL), 1);
@@ -1249,7 +1235,7 @@ static void test_exec_free_valid(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    int eid = exec_create(db, ctx_id, sr_id, mr_id, "FreeTest", 0);
+    int eid = exec_create(db, ctx_id, sr_id, mr_id, 0);
     TEST_ASSERT(eid > 0);
 
     int err = 0;
@@ -1273,11 +1259,8 @@ static void test_exec_list_free_valid(void) {
     int ctx_id, sr_id, mr_id;
     TEST_ASSERT_EQ_INT(exec_setup(db, &ctx_id, &sr_id, &mr_id), ACTA_DB_OK);
 
-    for (int i = 0; i < 3; i++) {
-        char prompt[16];
-        snprintf(prompt, sizeof(prompt), "L%d", i);
-        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, prompt, 0) > 0);
-    }
+    for (int i = 0; i < 3; i++)
+        TEST_ASSERT(exec_create(db, ctx_id, sr_id, mr_id, 0) > 0);
 
     int out_count = 0, err = 0;
     execution_t **items = acta_db_execution_query(db, &ACTA_EXEC_QUERY_ANY,
@@ -1326,7 +1309,7 @@ int run_execution_create_tests(void) {
     test_exec_create_invalid_ctx();
     test_exec_create_invalid_sr();
     test_exec_create_invalid_mr();
-    test_exec_create_null_prompt();
+    test_exec_create_ignores_prompt();
     test_exec_create_zero_ids();
     test_exec_create_default_status();
     test_exec_create_with_parent();

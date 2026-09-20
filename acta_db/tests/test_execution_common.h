@@ -122,15 +122,16 @@ static int exec_setup(db_t *db, int *out_ctx, int *out_sr, int *out_mr) {
 
 /* ------------------------------------------------------------------ */
 /*  Create an execution with default fields.                         */
+/*  (executions.prompt is a legacy column: never written by the      */
+/*   create path, so it is always SQL NULL in rows created here.)    */
 /*  Returns the new row id (> 0) on success, -1 on failure.          */
 /* ------------------------------------------------------------------ */
 static int exec_create(db_t *db, int ctx_id, int sr_id, int mr_id,
-                       const char *prompt, int parent_id) {
+                       int parent_id) {
     execution_t e = {0};
     e.context_id          = ctx_id;
     e.skill_revision_id   = sr_id;
     e.model_revision_id   = mr_id;
-    e.prompt              = (char *)prompt;
     e.status              = ACTA_EXEC_STATUS_PENDING;
     e.parent_execution_id = parent_id;
 

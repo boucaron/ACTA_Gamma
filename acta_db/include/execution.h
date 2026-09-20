@@ -124,9 +124,12 @@ typedef struct {
  *
  * Required fields (validated up front, all must hold):
  *   context_id > 0, skill_revision_id > 0, model_revision_id > 0.
- * prompt is OPTIONAL: NULL is stored as SQL NULL (a context-only
- * execution is valid; the runner fails at run time only if both
- * prompt and context content are empty).
+ * prompt is IGNORED: executions.prompt is a legacy nullable column
+ * that is never written by current code; SQL NULL is always stored.
+ * (Rows created before the removal may still hold a historical value;
+ * the getters keep it readable.)  The user message comes from
+ * context.content; instruction text comes from the skill revision's
+ * prompt_template.
  *
  * e->status is IGNORED: a new execution is always created "pending";
  * any other state is only reachable via the transition functions

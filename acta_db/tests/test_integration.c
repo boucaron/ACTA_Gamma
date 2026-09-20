@@ -65,14 +65,12 @@ static skill_revision_t *get_skill_rev(db_t *db, int skill_id, int rev) {
 }
 
 static int make_execution(db_t *db, int ctx_id,
-                          int skill_rev_id, int model_rev_id,
-                          char *prompt) {
+                          int skill_rev_id, int model_rev_id) {
     execution_t e;
     memset(&e, 0, sizeof(e));
     e.context_id        = ctx_id;
     e.skill_revision_id = skill_rev_id;
     e.model_revision_id = model_rev_id;
-    e.prompt            = prompt;
     e.status            = ACTA_EXEC_STATUS_PENDING;
     int id = 0;
     int rc = acta_db_execution_create(db, &e, &id);
@@ -363,7 +361,7 @@ static void test_integration_execution_references_revisions(void) {
 
     test_set_t ts = make_test_set(db, "ExecRef");
 
-    int exec_id = make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id, "Say hello");
+    int exec_id = make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id);
     TEST_ASSERT(exec_id > 0);
 
     int err = 0;
@@ -418,7 +416,7 @@ static void test_integration_execution_updated_revisions(void) {
 
     skill_revision_t  *srev2 = get_skill_rev(db, skill_id, 2);
 
-    int exec_id = make_execution(db, ctx_id, srev2->id, mrev2->id, "test");
+    int exec_id = make_execution(db, ctx_id, srev2->id, mrev2->id);
     TEST_ASSERT(exec_id > 0);
 
     acta_db_model_revision_free(mrev2);
@@ -443,7 +441,7 @@ static void test_integration_context_reuse(void) {
     /* Three executions share the same context */
     int exec_ids[3];
     for (int i = 0; i < 3; i++) {
-        exec_ids[i] = make_execution(db, ctx_id, srev->id, mrev->id, "exec");
+        exec_ids[i] = make_execution(db, ctx_id, srev->id, mrev->id);
     }
 
     int err = 0;
@@ -481,7 +479,7 @@ static void test_integration_nested_executions(void) {
 
     test_set_t ts = make_test_set(db, "Nested");
 
-    int root_id = make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id, "root");
+    int root_id = make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id);
 
     /* child → parent = root */
     execution_t child;
@@ -489,7 +487,6 @@ static void test_integration_nested_executions(void) {
     child.context_id        = ts.context_id;
     child.skill_revision_id = ts.srev->id;
     child.model_revision_id = ts.mrev->id;
-    child.prompt            = "child";
     child.status            = ACTA_EXEC_STATUS_PENDING;
     child.parent_execution_id = root_id;
     int child_id = 0;
@@ -501,7 +498,6 @@ static void test_integration_nested_executions(void) {
     gc.context_id        = ts.context_id;
     gc.skill_revision_id = ts.srev->id;
     gc.model_revision_id = ts.mrev->id;
-    gc.prompt            = "grandchild";
     gc.status            = ACTA_EXEC_STATUS_PENDING;
     gc.parent_execution_id = child_id;
     int gc_id = 0;
@@ -582,7 +578,6 @@ static void test_integration_fk_enforcement(void) {
         e.context_id        = 999999;
         e.skill_revision_id = srev->id;
         e.model_revision_id = mrev->id;
-        e.prompt            = "test";
         e.status            = ACTA_EXEC_STATUS_PENDING;
         int id = 0;
         int rc = acta_db_execution_create(db, &e, &id);
@@ -598,7 +593,6 @@ static void test_integration_fk_enforcement(void) {
         e.context_id        = ctx_id;
         e.skill_revision_id = 999999;
         e.model_revision_id = mrev->id;
-        e.prompt            = "test";
         e.status            = ACTA_EXEC_STATUS_PENDING;
         int id = 0;
         TEST_ASSERT(acta_db_execution_create(db, &e, &id) < 0);
@@ -611,7 +605,6 @@ static void test_integration_fk_enforcement(void) {
         e.context_id        = ctx_id;
         e.skill_revision_id = srev->id;
         e.model_revision_id = 999999;
-        e.prompt            = "test";
         e.status            = ACTA_EXEC_STATUS_PENDING;
         int id = 0;
         TEST_ASSERT(acta_db_execution_create(db, &e, &id) < 0);
@@ -744,7 +737,7 @@ static void test_integration_memory_leak_sweep(void) {
     /* execution */
     model_revision_t *mrev = get_model_rev(db, mid, 1);
     skill_revision_t  *srev = get_skill_rev(db, sid, 1);
-    int eid = make_execution(db, cid, srev->id, mrev->id, "p");
+    int eid = make_execution(db, cid, srev->id, mrev->id);
     {
         int err = 0;
         execution_t *eg = acta_db_execution_get(db, eid, &err);
@@ -939,7 +932,7 @@ static void test_integration_execution_pagination(void) {
 
     /* Create 5 pending executions in the same context */
     for (int i = 0; i < 5; i++)
-        make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id, "page_test");
+        make_execution(db, ts.context_id, ts.srev->id, ts.mrev->id);
 
     int err = 0, count = 0;
 

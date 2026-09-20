@@ -35,27 +35,22 @@ static void env_close(env_t *e) {
 }
 
 /* Shorthand: open env + create one execution, return its id. */
-static int env_exec(env_t *e, const char *prompt, int parent_id) {
-    int eid = exec_create(e->db, e->ctx_id, e->sr_id, e->mr_id,
-                          prompt, parent_id);
+static int env_exec(env_t *e, int parent_id) {
+    int eid = exec_create(e->db, e->ctx_id, e->sr_id, e->mr_id, parent_id);
     TEST_ASSERT(eid > 0);
     return eid;
 }
 
 /* Override context_id (uses default sr_id, mr_id). */
-static int env_exec_with_ctx(env_t *e, int ctx_id,
-                             const char *prompt, int parent_id) {
-    int eid = exec_create(e->db, ctx_id, e->sr_id, e->mr_id,
-                          prompt, parent_id);
+static int env_exec_with_ctx(env_t *e, int ctx_id, int parent_id) {
+    int eid = exec_create(e->db, ctx_id, e->sr_id, e->mr_id, parent_id);
     TEST_ASSERT(eid > 0);
     return eid;
 }
 
 /* Override parent_execution_id (uses default ctx_id, sr_id, mr_id). */
-static int env_exec_with_parent(env_t *e, int parent_id,
-                                const char *prompt) {
-    int eid = exec_create(e->db, e->ctx_id, e->sr_id, e->mr_id,
-                          prompt, parent_id);
+static int env_exec_with_parent(env_t *e, int parent_id) {
+    int eid = exec_create(e->db, e->ctx_id, e->sr_id, e->mr_id, parent_id);
     TEST_ASSERT(eid > 0);
     return eid;
 }
@@ -67,7 +62,7 @@ static int env_exec_with_parent(env_t *e, int parent_id,
 
 static void test_exec_start_pending_to_running(void) {
     env_t e = env_open("test/acta_test_exec_start_pr.db");
-    int eid = env_exec(&e, "StartTest", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
 
@@ -83,7 +78,7 @@ static void test_exec_start_pending_to_running(void) {
 
 static void test_exec_start_already_running(void) {
     env_t e = env_open("test/acta_test_exec_start_rr.db");
-    int eid = env_exec(&e, "DoubleStart", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid),
@@ -93,7 +88,7 @@ static void test_exec_start_already_running(void) {
 
 static void test_exec_start_completed(void) {
     env_t e = env_open("test/acta_test_exec_start_comp.db");
-    int eid = env_exec(&e, "CompThenStart", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(e.db, eid, "done"),
@@ -105,7 +100,7 @@ static void test_exec_start_completed(void) {
 
 static void test_exec_start_failed(void) {
     env_t e = env_open("test/acta_test_exec_start_fail.db");
-    int eid = env_exec(&e, "FailThenStart", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(e.db, eid, "oops"),
@@ -134,7 +129,7 @@ static void test_exec_start_null_db(void) {
 
 static void test_exec_complete_running_to_completed(void) {
     env_t e = env_open("test/acta_test_exec_comp.db");
-    int eid = env_exec(&e, "CompleteTest", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(e.db, eid, "the result"),
@@ -152,7 +147,7 @@ static void test_exec_complete_running_to_completed(void) {
 
 static void test_exec_complete_pending(void) {
     env_t e = env_open("test/acta_test_exec_comp_pending.db");
-    int eid = env_exec(&e, "SkipRunning", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(e.db, eid, "nope"),
                        ACTA_DB_ERR_INVALID);
@@ -161,7 +156,7 @@ static void test_exec_complete_pending(void) {
 
 static void test_exec_complete_twice(void) {
     env_t e = env_open("test/acta_test_exec_comp_twice.db");
-    int eid = env_exec(&e, "Twice", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(e.db, eid, "first"),
@@ -173,7 +168,7 @@ static void test_exec_complete_twice(void) {
 
 static void test_exec_complete_null_result(void) {
     env_t e = env_open("test/acta_test_exec_comp_null.db");
-    int eid = env_exec(&e, "NullResult", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(e.db, eid, NULL),
@@ -192,7 +187,7 @@ static void test_exec_complete_null_db(void) {
 
 static void test_exec_fail_running_to_failed(void) {
     env_t e = env_open("test/acta_test_exec_fail.db");
-    int eid = env_exec(&e, "FailTest", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(e.db, eid, "something broke"),
@@ -210,7 +205,7 @@ static void test_exec_fail_running_to_failed(void) {
 
 static void test_exec_fail_pending(void) {
     env_t e = env_open("test/acta_test_exec_fail_pending.db");
-    int eid = env_exec(&e, "FailPending", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(e.db, eid, "nope"),
                        ACTA_DB_ERR_INVALID);
@@ -219,7 +214,7 @@ static void test_exec_fail_pending(void) {
 
 static void test_exec_fail_null_error(void) {
     env_t e = env_open("test/acta_test_exec_fail_null.db");
-    int eid = env_exec(&e, "NullErr", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(e.db, eid, NULL),
@@ -238,7 +233,7 @@ static void test_exec_fail_null_db(void) {
 
 static void test_exec_cancel_pending_to_cancelled(void) {
     env_t e = env_open("test/acta_test_exec_cancel_pend.db");
-    int eid = env_exec(&e, "CancelPend", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid), ACTA_DB_OK);
 
@@ -252,7 +247,7 @@ static void test_exec_cancel_pending_to_cancelled(void) {
 
 static void test_exec_cancel_running_to_cancelled(void) {
     env_t e = env_open("test/acta_test_exec_cancel_run.db");
-    int eid = env_exec(&e, "CancelRun", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid), ACTA_DB_OK);
@@ -268,7 +263,7 @@ static void test_exec_cancel_running_to_cancelled(void) {
 
 static void test_exec_cancel_already_cancelled(void) {
     env_t e = env_open("test/acta_test_exec_cancel_twice.db");
-    int eid = env_exec(&e, "CancelTwice", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid),
@@ -278,7 +273,7 @@ static void test_exec_cancel_already_cancelled(void) {
 
 static void test_exec_cancel_completed(void) {
     env_t e = env_open("test/acta_test_exec_cancel_comp.db");
-    int eid = env_exec(&e, "CancelComp", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_complete(e.db, eid, "done"),
@@ -290,7 +285,7 @@ static void test_exec_cancel_completed(void) {
 
 static void test_exec_cancel_failed(void) {
     env_t e = env_open("test/acta_test_exec_cancel_fail.db");
-    int eid = env_exec(&e, "CancelFail", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_fail(e.db, eid, "oops"),
@@ -310,7 +305,7 @@ static void test_exec_cancel_nonexistent(void) {
 
 static void test_exec_cancel_completed_at(void) {
     env_t e = env_open("test/acta_test_exec_cancel_at.db");
-    int eid = env_exec(&e, "CancelAt", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_cancel(e.db, eid), ACTA_DB_OK);
 
@@ -334,7 +329,7 @@ static void test_exec_cancel_null_db(void) {
 
 static void test_exec_set_raw_valid(void) {
     env_t e = env_open("test/acta_test_exec_raw.db");
-    int eid = env_exec(&e, "RawTest", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(
@@ -352,7 +347,7 @@ static void test_exec_set_raw_valid(void) {
 
 static void test_exec_set_raw_null(void) {
     env_t e = env_open("test/acta_test_exec_raw_null.db");
-    int eid = env_exec(&e, "RawNull", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_set_raw_response(e.db, eid, NULL),
@@ -382,7 +377,7 @@ static void test_exec_query_any_returns_all(void) {
     env_t e = env_open("test/acta_test_exec_q_any.db");
 
     for (int i = 0; i < 3; i++)
-        env_exec(&e, "Q", 0);
+        env_exec(&e, 0);
 
     int n = 0, err = 0;
     execution_t **items =
@@ -398,7 +393,7 @@ static void test_exec_query_limit_caps(void) {
     env_t e = env_open("test/acta_test_exec_q_limit.db");
 
     for (int i = 0; i < 10; i++)
-        env_exec(&e, "Q", 0);
+        env_exec(&e, 0);
 
     int n = 0, err = 0;
     execution_t **items =
@@ -413,7 +408,7 @@ static void test_exec_query_offset_skips(void) {
     env_t e = env_open("test/acta_test_exec_q_offset.db");
 
     for (int i = 0; i < 5; i++)
-        env_exec(&e, "Q", 0);
+        env_exec(&e, 0);
 
     int n = 0, err = 0;
     execution_t **items =
@@ -427,8 +422,8 @@ static void test_exec_query_offset_skips(void) {
 static void test_exec_query_offset_exhausted(void) {
     env_t e = env_open("test/acta_test_exec_q_exhausted.db");
 
-    env_exec(&e, "Q", 0);
-    env_exec(&e, "Q", 0);
+    env_exec(&e, 0);
+    env_exec(&e, 0);
 
     int n = -1, err = 0;
     execution_t **items =
@@ -443,7 +438,7 @@ static void test_exec_query_offset_exhausted(void) {
 static void test_exec_query_negative_offset(void) {
     env_t e = env_open("test/acta_test_exec_q_negoff.db");
 
-    env_exec(&e, "Q", 0);
+    env_exec(&e, 0);
 
     int n = 0, err = 0;
     execution_t **items =
@@ -459,9 +454,9 @@ static void test_exec_query_negative_offset(void) {
 static void test_exec_query_by_status(void) {
     env_t e = env_open("test/acta_test_exec_q_status.db");
 
-    int e1 = env_exec(&e, "Q", 0);
-    env_exec(&e, "Q", 0);
-    env_exec(&e, "Q", 0);
+    int e1 = env_exec(&e, 0);
+    env_exec(&e, 0);
+    env_exec(&e, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e1), ACTA_DB_OK);
 
     /* pending */
@@ -502,9 +497,9 @@ static void test_exec_query_by_context(void) {
     TEST_ASSERT_EQ_INT(acta_db_context_create(e.db, &c2, &ctx2_id),
                        ACTA_DB_OK);
 
-    env_exec_with_ctx(&e, e.ctx_id,  "Q", 0);
-    env_exec_with_ctx(&e, e.ctx_id,  "Q", 0);
-    env_exec_with_ctx(&e, ctx2_id,   "Q", 0);
+    env_exec_with_ctx(&e, e.ctx_id, 0);
+    env_exec_with_ctx(&e, e.ctx_id, 0);
+    env_exec_with_ctx(&e, ctx2_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = e.ctx_id;
@@ -521,10 +516,10 @@ static void test_exec_query_by_context(void) {
 static void test_exec_query_by_parent(void) {
     env_t e = env_open("test/acta_test_exec_q_parent.db");
 
-    int parent = env_exec(&e, "Parent", 0);
-    env_exec_with_parent(&e, parent, "Q");
-    env_exec_with_parent(&e, parent, "Q");
-    env_exec(&e, "Q", 0);  /* root */
+    int parent = env_exec(&e, 0);
+    env_exec_with_parent(&e, parent);
+    env_exec_with_parent(&e, parent);
+    env_exec(&e, 0);  /* root */
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.parent_execution_id = parent;
@@ -541,9 +536,9 @@ static void test_exec_query_by_parent(void) {
 static void test_exec_query_by_skill_revision(void) {
     env_t e = env_open("test/acta_test_exec_q_sr.db");
 
-    exec_create(e.db, e.ctx_id, e.sr_id,    e.mr_id, "Q", 0);
-    exec_create(e.db, e.ctx_id, e.sr_id,    e.mr_id, "Q", 0);
-    exec_create(e.db, e.ctx_id, e.sr_id + 999, e.mr_id, "Q", 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, e.ctx_id, e.sr_id + 999, e.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.skill_revision_id = e.sr_id;
@@ -560,8 +555,8 @@ static void test_exec_query_by_skill_revision(void) {
 static void test_exec_query_by_model_revision(void) {
     env_t e = env_open("test/acta_test_exec_q_mr.db");
 
-    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id,    "Q", 0);
-    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id + 999, "Q", 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id + 999, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.model_revision_id = e.mr_id;
@@ -587,10 +582,10 @@ static void test_exec_query_combined(void) {
     TEST_ASSERT_EQ_INT(acta_db_context_create(e.db, &c2, &ctx2_id),
                        ACTA_DB_OK);
 
-    int e1 = exec_create(e.db, e.ctx_id,  e.sr_id, e.mr_id, "Q", 0);
-    exec_create(e.db, e.ctx_id,  e.sr_id, e.mr_id, "Q", 0);
-    int e3 = exec_create(e.db, ctx2_id,   e.sr_id, e.mr_id, "Q", 0);
-    exec_create(e.db, ctx2_id,   e.sr_id, e.mr_id, "Q", 0);
+    int e1 = exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    int e3 = exec_create(e.db, ctx2_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, ctx2_id, e.sr_id, e.mr_id, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e3), ACTA_DB_OK);
@@ -612,8 +607,8 @@ static void test_exec_query_combined(void) {
 static void test_exec_query_null_q(void) {
     env_t e = env_open("test/acta_test_exec_q_null.db");
 
-    env_exec(&e, "Q", 0);
-    env_exec(&e, "Q", 0);
+    env_exec(&e, 0);
+    env_exec(&e, 0);
 
     int n = 0, err = 0;
     execution_t **items =
@@ -641,7 +636,7 @@ static void test_exec_count_all(void) {
     env_t e = env_open("test/acta_test_exec_cnt_all.db");
 
     for (int i = 0; i < 7; i++)
-        env_exec(&e, "Q", 0);
+        env_exec(&e, 0);
 
     int err = 0;
     TEST_ASSERT_EQ_INT(
@@ -652,9 +647,9 @@ static void test_exec_count_all(void) {
 static void test_exec_count_by_status(void) {
     env_t e = env_open("test/acta_test_exec_cnt_status.db");
 
-    int e1 = env_exec(&e, "Q", 0);
-    int e2 = env_exec(&e, "Q", 0);
-    env_exec(&e, "Q", 0);
+    int e1 = env_exec(&e, 0);
+    int e2 = env_exec(&e, 0);
+    env_exec(&e, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e2), ACTA_DB_OK);
 
@@ -680,10 +675,10 @@ static void test_exec_count_by_context(void) {
     TEST_ASSERT_EQ_INT(acta_db_context_create(e.db, &c2, &ctx2_id),
                        ACTA_DB_OK);
 
-    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, "Q", 0);
-    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, "Q", 0);
-    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, "Q", 0);
-    exec_create(e.db, ctx2_id,  e.sr_id, e.mr_id, "Q", 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, e.ctx_id, e.sr_id, e.mr_id, 0);
+    exec_create(e.db, ctx2_id, e.sr_id, e.mr_id, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.context_id = e.ctx_id;
@@ -698,9 +693,9 @@ static void test_exec_count_by_context(void) {
 static void test_exec_count_combined(void) {
     env_t e = env_open("test/acta_test_exec_cnt_combo.db");
 
-    int e1 = env_exec(&e, "Q", 0);
-    int e2 = env_exec(&e, "Q", 0);
-    int e3 = env_exec(&e, "Q", 0);
+    int e1 = env_exec(&e, 0);
+    int e2 = env_exec(&e, 0);
+    int e3 = env_exec(&e, 0);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e1), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e2), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, e3), ACTA_DB_OK);
@@ -721,7 +716,7 @@ static void test_exec_count_combined(void) {
 static void test_exec_count_zero(void) {
     env_t e = env_open("test/acta_test_exec_cnt_zero.db");
 
-    env_exec(&e, "Q", 0);
+    env_exec(&e, 0);
 
     execution_query_t q = ACTA_EXEC_QUERY_ANY;
     q.status = ACTA_EXEC_STATUS_COMPLETED;
@@ -742,7 +737,7 @@ static void test_exec_count_null_q(void) {
     env_t e = env_open("test/acta_test_exec_cnt_nullq.db");
 
     for (int i = 0; i < 3; i++)
-        env_exec(&e, "Q", 0);
+        env_exec(&e, 0);
 
     int err = 0;
     TEST_ASSERT_EQ_INT(acta_db_execution_count(e.db, NULL, &err), 3);
@@ -758,7 +753,7 @@ static void test_exec_query_pagination_loop(void) {
 
     int total_to_create = 25;
     for (int i = 0; i < total_to_create; i++)
-        env_exec(&e, "Q", 0);
+        env_exec(&e, 0);
 
     int err = 0;
     int total = acta_db_execution_count(e.db, &ACTA_EXEC_QUERY_ANY, &err);

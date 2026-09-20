@@ -39,9 +39,8 @@ static void env_close(env_t *e) {
 }
 
 /* Open env + create one execution, return its id. */
-static int env_exec(env_t *e, const char *prompt, int parent_id) {
-    int eid = exec_create(e->db, e->ctx_id, e->sr_id, e->mr_id,
-                          prompt, parent_id);
+static int env_exec(env_t *e, int parent_id) {
+    int eid = exec_create(e->db, e->ctx_id, e->sr_id, e->mr_id, parent_id);
     TEST_ASSERT(eid > 0);
     return eid;
 }
@@ -70,7 +69,7 @@ static int env_to_cancelled(env_t *e, int eid) {
 
 static void test_exec_delete_pending(void) {
     env_t e = env_open("test/acta_test_execdel_pending.db");
-    int eid = env_exec(&e, "P", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
 
@@ -85,7 +84,7 @@ static void test_exec_delete_pending(void) {
 
 static void test_exec_delete_completed(void) {
     env_t e = env_open("test/acta_test_execdel_completed.db");
-    int eid = env_exec(&e, "C", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(env_to_completed(&e, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
@@ -95,7 +94,7 @@ static void test_exec_delete_completed(void) {
 
 static void test_exec_delete_failed(void) {
     env_t e = env_open("test/acta_test_execdel_failed.db");
-    int eid = env_exec(&e, "F", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(env_to_failed(&e, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
@@ -105,7 +104,7 @@ static void test_exec_delete_failed(void) {
 
 static void test_exec_delete_cancelled(void) {
     env_t e = env_open("test/acta_test_execdel_cancelled.db");
-    int eid = env_exec(&e, "X", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(env_to_cancelled(&e, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
@@ -115,7 +114,7 @@ static void test_exec_delete_cancelled(void) {
 
 static void test_exec_delete_running_is_invalid(void) {
     env_t e = env_open("test/acta_test_execdel_running.db");
-    int eid = env_exec(&e, "R", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_start(e.db, eid), ACTA_DB_OK);
     /* deleting a running execution is forbidden */
@@ -135,7 +134,7 @@ static void test_exec_delete_running_is_invalid(void) {
 
 static void test_exec_delete_already_deleted_is_not_found(void) {
     env_t e = env_open("test/acta_test_execdel_twice.db");
-    int eid = env_exec(&e, "D2", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
     /* second delete: row exists but is already deleted → NOT_FOUND
@@ -167,7 +166,7 @@ static void test_exec_delete_null_db(void) {
 
 static void test_exec_restore_round_trip_preserves_status(void) {
     env_t e = env_open("test/acta_test_execrestore_round.db");
-    int eid = env_exec(&e, "FR", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(env_to_failed(&e, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
@@ -198,7 +197,7 @@ static void test_exec_restore_missing(void) {
 
 static void test_exec_restore_live_is_error(void) {
     env_t e = env_open("test/acta_test_execrestore_live.db");
-    int eid = env_exec(&e, "L", 0);
+    int eid = env_exec(&e, 0);
 
     /* strict: restoring a live row is NOT_FOUND (like context_restore) */
     TEST_ASSERT_EQ_INT(acta_db_execution_restore(e.db, eid),
@@ -224,7 +223,7 @@ static void test_exec_restore_null_db(void) {
 
 static void test_exec_reset_deleted_is_not_found(void) {
     env_t e = env_open("test/acta_test_execreset_deleted.db");
-    int eid = env_exec(&e, "RD", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(env_to_failed(&e, eid), ACTA_DB_OK);
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
@@ -242,7 +241,7 @@ static void test_exec_reset_deleted_is_not_found(void) {
 
 static void test_exec_create_deleted_context(void) {
     env_t e = env_open("test/acta_test_execcreate_deletedctx.db");
-    int eid = env_exec(&e, "DC", 0);
+    int eid = env_exec(&e, 0);
     (void)eid;
 
     TEST_ASSERT_EQ_INT(acta_db_context_delete(e.db, e.ctx_id), ACTA_DB_OK);
@@ -281,8 +280,8 @@ static void test_exec_create_missing_context(void) {
 
 static void test_exec_query_default_live_only(void) {
     env_t e = env_open("test/acta_test_execquery_live.db");
-    int a = env_exec(&e, "A", 0);
-    int b = env_exec(&e, "B", 0);
+    int a = env_exec(&e, 0);
+    int b = env_exec(&e, 0);
     (void)b;
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, a), ACTA_DB_OK);
@@ -306,8 +305,8 @@ static void test_exec_query_default_live_only(void) {
 
 static void test_exec_query_include_deleted(void) {
     env_t e = env_open("test/acta_test_execquery_wd.db");
-    int a = env_exec(&e, "A", 0);
-    int b = env_exec(&e, "B", 0);
+    int a = env_exec(&e, 0);
+    int b = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, a), ACTA_DB_OK);
 
@@ -339,8 +338,8 @@ static void test_exec_query_include_deleted(void) {
 
 static void test_exec_query_include_deleted_null_q(void) {
     env_t e = env_open("test/acta_test_execquery_wd_null.db");
-    int a = env_exec(&e, "A", 0);
-    int b = env_exec(&e, "B", 0);
+    int a = env_exec(&e, 0);
+    int b = env_exec(&e, 0);
     (void)b;
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, a), ACTA_DB_OK);
@@ -363,7 +362,7 @@ static void test_exec_query_include_deleted_null_q(void) {
 
 static void test_exec_get_deleted_row(void) {
     env_t e = env_open("test/acta_test_execget_deleted.db");
-    int eid = env_exec(&e, "G", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
 
@@ -384,7 +383,7 @@ static void test_exec_get_deleted_row(void) {
 
 static void test_exec_free_deleted_row(void) {
     env_t e = env_open("test/acta_test_execfree_deleted.db");
-    int eid = env_exec(&e, "F", 0);
+    int eid = env_exec(&e, 0);
 
     TEST_ASSERT_EQ_INT(acta_db_execution_delete(e.db, eid), ACTA_DB_OK);
 
