@@ -192,7 +192,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     TEST_STREQ(ctx, cj_str(root, "name"), "acta_cli");
     cJSON *ver = cJSON_GetObjectItem(root, "version");
     TEST(ctx, ver && cJSON_IsNumber(ver));
-    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 4);   /* v4: executions.prompt column fully dropped */
+    TEST_EQ(ctx, ver ? (int)ver->valuedouble : 0, 4);   /* schema v4 */
     TEST_NOT_NULL(ctx, cj_str(root, "usage"));
 
     cJSON *gf = cJSON_GetObjectItem(root, "global_flags");

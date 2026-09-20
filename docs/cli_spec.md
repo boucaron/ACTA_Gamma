@@ -93,9 +93,7 @@ rendering (~7 KB) of the same static table — positionals, flags (with `*`
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
-`success` is structured (the schema `version` field is 4; it was 3 after
-`exec create` dropped the `prompt` flag / JSON key, and became 4 when the
-`executions.prompt` column was fully dropped): a JSON object
+`success` is structured (the schema `version` field is 4): a JSON object
 `{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
 (`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
 per-action table above; `,"note": "…"` optional, carrying the
@@ -281,9 +279,7 @@ Notes on `exec`:
   `executions` table has no prompt column, so `exec get` / `exec list`
   never emit a `prompt` key, `--fields prompt` selects nothing and
   `--raw_out prompt` is an unknown-field error. The user message is
-  always `context.content` (see `docs/runner_contract.md`; plans:
-  `docs/plans/drop-execution-prompt.md`,
-  `docs/plans/drop-execution-prompt-column.md`).
+  always `context.content` (see `docs/runner_contract.md`).
 - **State machine** — the lifecycle transitions and their allowed source
   states; every other transition is refused:
 

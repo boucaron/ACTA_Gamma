@@ -563,7 +563,7 @@ This makes the execution self-describing and protects the audit trail if prompt-
 In the schema this is split in two:
 
 * The fully resolved prompt — the actual `system` and `user` messages sent to the backend — is recorded in the `prompt_resolved` event of `execution_logs` (`metadata` carries `system`, `user`, `system_bytes`, `user_bytes`). It is deliberately not duplicated into the `executions` row: contexts are immutable and already referenced by `context_id`, so the log row provides the audit artifact without storing large content in every execution row.
-* The `executions` table has **no `prompt` column**: an earlier version held an optional, user-entered instruction at creation time, but both that input and the column itself have been removed (see `docs/plans/drop-execution-prompt.md` and `docs/plans/drop-execution-prompt-column.md`); pre-removal DB files can be cleaned with `acta_gui/db/drop_execution_prompt.sh`.
+* The `executions` table has **no `prompt` column**: the user message is always `context.content`, and the skill revision's `prompt_template` is the only instruction source.
 
 ### Replay ?
 It is possible to replay a job, it creates a new job with the same parameters by defaults, or you can use another model

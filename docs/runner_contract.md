@@ -81,9 +81,7 @@ Implementation notes (where the spec left room):
   content`). The `prompt_resolved` log event
   records the fully resolved `system` and `user` strings (plus their
   byte counts) in its `metadata`, so each execution is self-describing.
-  The `executions` table has no prompt column (removal plans:
-  `docs/plans/drop-execution-prompt.md`,
-  `docs/plans/drop-execution-prompt-column.md`).
+  The `executions` table has no prompt column.
 - Preflight catalog (R8): after the `/v1/models` id match, the runner
   fetches the llama.cpp model catalog (`GET /`) and logs a
   `preflight_passed` event whose `metadata` carries `model_id`,
