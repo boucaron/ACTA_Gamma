@@ -1,6 +1,6 @@
 # Plan — remove `api_key` from the model `configuration` blob
 
-Status: **done** — all four work items complete: `acta_runner` (`3a0b072`), `acta_runner` test (`d0abfe6`), `acta_gui` (`9f02c60`), docs (`4c3fe27`). Verification: build + all C suites green (incl. `test_run.c` scenario 14 pinning a configuration carrying `api_key` as `EXIT_INVALID` unknown key), wire checks (old-style DB model fails with the unknown-key error; same model with the key removed and `$OPENAI_API_KEY` set completes), GUI smoke with `$OPENAI_API_KEY` only.
+Status: **done** — all four work items complete: `acta_runner` (`3a0b072`), `acta_runner` test (`d0abfe6`), `acta_gui` (`9f02c60`), docs (`4c3fe27`). Verification: build + all C suites green (incl. `test_run.c` scenario 14 pinning a configuration carrying `api_key` as `EXIT_INVALID` unknown key), wire checks (old-style DB model fails with the unknown-key error; same model with the key removed and `$OPENAI_API_KEY` set completes), GUI smoke with `$OPENAI_API_KEY` only. Post-verification follow-up (`dfa0333`): dropped a stale `--api_key`-flag reference from the `run.c` configuration comment (the flag itself was later removed by [`drop-runner-api-key-flag.md`](drop-runner-api-key-flag.md), `97fe915`) and renumbered `test_run.c` scenarios 14 (`api_key` unknown key) / 15 (empty context) — comment-only.
 
 Review point: "the `api_key` is a real secret stored in a plaintext SQLite
 file." Owner decision: the key is an environment variable (`$OPENAI_API_KEY`)
@@ -12,7 +12,9 @@ it, and all doc references to it.
 
 - `models.configuration` known keys: `temperature`, `max_tokens`, `top_k`,
   `supports_response_format` only.
-- Auth resolution, highest first:
+- Auth resolution, highest first (as of this change; the follow-up plan
+  `drop-runner-api-key-flag.md` later removed the flag, leaving
+  `$OPENAI_API_KEY` as the only source):
   - `acta_runner run`: `--api_key` flag → `$OPENAI_API_KEY`.
   - `acta_gui` (in-process pipeline, no `--api_key` flag): `$OPENAI_API_KEY`.
 - A `configuration` JSON carrying an `api_key` key is now an **unknown key**
@@ -65,8 +67,10 @@ it, and all doc references to it.
   the unknown-key error — that is the intended behavior (the secret is no
   longer read from the DB). The fix is to drop the key from the
   `configuration` blob and use `$OPENAI_API_KEY`.
-- `--api_key` flag, `$OPENAI_API_KEY`, the Bearer-header transport
+- `$OPENAI_API_KEY`, the Bearer-header transport
   (`acta_runner/src/backend.c`) and the `llama_smoke` test utility are
-  unchanged; `docs/known_issues.md` #8 (truncation fix) and
+  unchanged by this change; the `--api_key` flag was subsequently
+  removed by `drop-runner-api-key-flag.md` (`97fe915`).
+  `docs/known_issues.md` #8 (truncation fix) and
   `docs/llamacpp_server_contract.md` (401 handling) describe transport
   facts, not DB storage, and stay as-is.
