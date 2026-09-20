@@ -13,6 +13,31 @@ This is a PoC in progress, not a product. Three deliberate non-goals are baked i
 - **Not thread-safe by design.** One `db_t` is one SQLite connection, owned by a single thread. Concurrency is not shared through the library: the runner uses its own connection, the GUI uses its own connection (the in-app runner thread opens its own handle), and the CLI opens its own. WAL makes cross-process read/write work, but simultaneous writers on the same file are out of scope; there is no `busy_timeout` or retry logic in `acta_db`.
 - **One raw-SQL escape hatch.** `acta_db_exec` (`acta_db/include/db.h`) is the only public, non-parameterized path into the connection; every other API is prepared and bound. Its `sql` argument must be static or developer-supplied (DDL, migrations, schema scripts) — never composed from user-supplied input. It is intentionally kept because DDL cannot be parameterized; current callers are the GUI's first-launch schema application and the CLI `db exec` command, both operator-supplied SQL.
 
+## Data durability and maintenance
+
+**Minimum durability expectation.** ACTA Gamma persists to one private SQLite file; that file is the data. There is no replication, sync, or backup facility: if the file is lost, the skills, revisions, contexts, executions, and their logs are lost. The single rule: **copy the file before destructive operations** (schema changes via `db exec`, manual file operations, migrating to a new file).
+
+**WAL file lifecycle.** The database runs in WAL journal mode, so alongside `acta.db` you will see `acta.db-wal` and `acta.db-shm`. These are transient: SQLite deletes both when the last connection to the database closes cleanly. If a process dies mid-write, the `-wal` file remains and is replayed on the next open — the data is not lost by that. Two consequences:
+
+* Never delete or "clean up" the `-wal`/`-shm` files while any consumer (GUI, CLI, runner) has the database open.
+* The `.db` file alone is **not** a consistent snapshot while writers are active — committed data may still sit in the WAL.
+
+**Taking a consistent backup.** Close all consumers, then either copy `acta.db`, or run (with the DB open or closed):
+
+```
+sqlite3 acta.db "VACUUM INTO 'acta_backup_YYYYMMDD.db';"
+```
+
+`VACUUM INTO` produces a consistent single-file snapshot and also reclaims space; the `-wal`/`-shm` files do not need to be copied once all connections are closed.
+
+**Routine maintenance.**
+
+* `PRAGMA integrity_check;` — full structural verification of the file; run it after any suspicious failure, after copying, and before relying on an old backup. (`PRAGMA quick_check;` is the faster subset.)
+* `VACUUM;` — rewrites the file and reclaims space. With soft delete, deleted rows stay in the file forever, so file growth comes from retained blobs (`context.content`, `raw_response`, `result`) and `execution_log` rows, not from deletions.
+* `PRAGMA wal_checkpoint(TRUNCATE);` — moves WAL contents into the main file and truncates the WAL. Requires all other consumers to be closed (it fails while another connection is open).
+
+None of this requires replication; it is the stated minimum for a single-file, serverless store.
+
 ## The core model
 
 The important relationship is deliberately small:
