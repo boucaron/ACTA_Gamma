@@ -24,9 +24,9 @@ Context + Skill + Model
          Observation
 ```
 
-The workflow is one-shot: register a model, create a skill (a versioned prompt), create a context (the input), create an execution binding them, run it, read the result — the six commands in [Minimal end-to-end example](#minimal-end-to-end-example). **That is the whole first need.**
+The workflow is one-shot: register a model, create a skill (a versioned prompt), create a context (the input), create an execution binding them, run it, read the result — the six commands in [Minimal end-to-end example](#minimal-end-to-end-example).
 
-Everything else in this README serves a *second*, legitimate need: reproducing an execution six months later, or comparing outputs across prompt revisions and models. The versioning, immutability, and audit trail exist for that second need — the one-shot run itself only needs the runner and the database.
+The versioning, immutability, and audit trail are not a "second need" — they are part of the *same* operation. A result is only as good as your ability to prove what produced it: if a result is wrong, you want to show *exactly* which prompt revision, context, and model were sent. The one-shot run and the replay six months later are the same operation — the only difference is the clock — and comparing outputs across prompt revisions and models falls out of the same records.
 
 The runner drives the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next. ACTA Gamma is deliberately not an agent framework — at its core it is a runner over an OpenAI-compatible endpoint plus a SQLite audit log — the full point of view is in [`docs/PointOfView.md`](docs/PointOfView.md).
 
@@ -36,7 +36,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 
 **The workflow** — one-shot: register a model, create a skill, create a context, create an execution, run, read the result. No conversational state, no steps beyond that.
 
-**The supporting infrastructure** — for the second need (reproduction and comparison):
+**Why those records exist** — so the result is trustworthy (you can prove exactly what was sent), reproducible (the same operation, six months later), and comparable (across prompt revisions and models):
 
 * **Stateless** — every execution is independent and one-shot.
 * **Versioned skills** — prompts and output schemas are revisioned.

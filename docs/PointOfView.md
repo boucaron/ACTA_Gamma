@@ -39,12 +39,11 @@ One-shot LLM action
 Observation
 ```
 
-Two needs, in order:
+The workflow is four creates, a run, a read — and it is the same operation whether you read the result today or six months later; the only difference is the clock.
 
-1. **Run one skill against one context once, and read the result.** That is the entire workflow — four creates, a run, a read.
-2. **Reproduce that run later, or compare it against other skill revisions and models.** That is what the versioning, immutable contexts, and audit trail are for.
+The versioning, immutable contexts, and audit trail exist so the result is *trustworthy*: when a result is wrong, you can prove exactly which prompt revision, context, and model were sent. Reproducing the run later, and comparing outputs across skill revisions and models, fall out of the same records — they are not features layered on top of the one-shot run.
 
-The POC serves both, but need 1 is complete on its own: with one revision of each entity (created automatically), the one-shot run depends on nothing else in the system.
+The POC is complete on its own: with one revision of each entity (created automatically), the one-shot run depends on nothing else in the system.
 
 ## Why this matters
 
