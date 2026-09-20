@@ -194,4 +194,43 @@ static inline int emit_runner_error(int exit_code, const char *msg)
     return exit_code;
 }
 
+/* ── API key presence policy ──────────────────────────────────────── */
+/* Classify the $OPENAI_API_KEY environment variable, the ONLY API-key
+ * source (the --api_key flag is gone and the key is never read from the
+ * model configuration blob; see
+ * docs/plans/drop-model-config-api-key.md and
+ * docs/plans/drop-runner-api-key-flag.md):
+ *   NULL (unset)  -> KEY_UNSET_ERR  hard error, the run does not start;
+ *   "" (empty)    -> KEY_EMPTY_WARN warning only, no Authorization
+ *                     header (acceptable only for a keyless localhost
+ *                     server; a bad idea in general);
+ *   any other     -> KEY_OK.
+ * runner_api_key_message() carries the canonical message, shared by
+ * cmd_run (acta_runner) and the GUI runnerWorker so the two cannot
+ * drift. */
+enum { KEY_OK = 0, KEY_EMPTY_WARN = 1, KEY_UNSET_ERR = 2 };
+
+static inline int runner_api_key_status(const char *key)
+{
+    if (!key)
+        return KEY_UNSET_ERR;
+    if (key[0] == '\0')
+        return KEY_EMPTY_WARN;
+    return KEY_OK;
+}
+
+static inline const char *runner_api_key_message(int status)
+{
+    switch (status) {
+    case KEY_UNSET_ERR:
+        return "OPENAI_API_KEY is not set; set the environment variable";
+    case KEY_EMPTY_WARN:
+        return "warning: OPENAI_API_KEY is empty - no Authorization "
+               "header will be sent (acceptable only for a keyless "
+               "localhost server; a bad idea in general)";
+    default:
+        return NULL;
+    }
+}
+
 #endif /* ACTA_RUNNER_UTIL_H */

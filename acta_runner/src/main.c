@@ -81,7 +81,6 @@ static void help_print(FILE *out)
         "  --pending             Run pending executions instead of one id\n"
         "  --max <n>             Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec>       Backend timeout in seconds (default 300)\n"
-        "  --api_key <key>       API key override (default: $OPENAI_API_KEY)\n"
         "\n"
         "sweep flags:\n"
         "  --stale-seconds <n>   Seconds of inactivity before a `running`\n"

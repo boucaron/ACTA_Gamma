@@ -58,8 +58,7 @@ static void run_usage(FILE *out)
         "Flags:\n"
         "  --pending       Run pending executions instead of one id\n"
         "  --max <n>       Max executions to run with --pending (0 = no limit)\n"
-        "  --timeout <sec> Backend timeout in seconds (default 300)\n"
-        "  --api_key <key> API key override (default: $OPENAI_API_KEY)\n",
+        "  --timeout <sec> Backend timeout in seconds (default 300)\n",
         out);
 }
 
@@ -92,9 +91,21 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         }
     }
 
-    api_key = cmd_args_flag(ga, "api_key", 1);
-    if (!api_key)
-        api_key = getenv("OPENAI_API_KEY");
+    /* API key: $OPENAI_API_KEY only (the --api_key flag is gone; the key
+     * is never read from the model configuration blob — see
+     * docs/plans/drop-runner-api-key-flag.md and
+     * docs/plans/drop-model-config-api-key.md). Presence policy:
+     * unset -> hard error before any claim; empty -> warning, no
+     * Authorization header. */
+    api_key = getenv("OPENAI_API_KEY");
+    int key_status = runner_api_key_status(api_key);
+    if (key_status == KEY_UNSET_ERR) {
+        VLOG(1, "cmd_run: ERROR %s", runner_api_key_message(KEY_UNSET_ERR));
+        return emit_runner_error(EXIT_INVALID,
+                                 runner_api_key_message(KEY_UNSET_ERR));
+    }
+    if (key_status == KEY_EMPTY_WARN)
+        fprintf(stderr, "%s\n", runner_api_key_message(KEY_EMPTY_WARN));
 
     const char *id_str = cmd_args_next_positional(ga);
 

@@ -15,8 +15,11 @@ const global_opts_t *runner_gopts = nullptr;
 // The in-process pipeline (defined in acta_runner/src/run.c, compiled
 // into this app by src.pro). Same contract as the CLI's "run" action:
 // claim -> resolve -> preflight -> chat call -> record -> validate ->
-// complete/fail, one execution_log row per phase.
+// complete/fail, one execution_log row per phase. runner_util.h is a
+// pure C header (incl. the API key presence policy helpers shared with
+// the CLI runner), so it is included under C linkage.
 extern "C" {
+#include "runner_util.h"
 int run_execution(db_t *db, int executionId, int timeoutSec,
                    const char *apiKey);
 void backend_cancel_request(void);
@@ -89,15 +92,31 @@ void RunnerWorker::runInThread()
         return;
     }
 
-    // api_key resolution: $OPENAI_API_KEY only — the UI has no
-    // --api_key flag, and the pipeline never reads the key from the
-    // model configuration blob (docs/plans/drop-model-config-api-key.md).
+    // API key: $OPENAI_API_KEY only — the UI has no --api_key flag, and
+    // the pipeline never reads the key from the model configuration
+    // blob (docs/plans/drop-model-config-api-key.md and
+    // docs/plans/drop-runner-api-key-flag.md). Presence policy: unset
+    // -> hard error, the pipeline is not started; empty -> warning in
+    // the run result, no Authorization header.
     const char *apiKey = std::getenv("OPENAI_API_KEY");
+    if (runner_api_key_status(apiKey) == KEY_UNSET_ERR) {
+        Q_EMIT finished(EXIT_INVALID,
+                        tr("%1").arg(QString::fromUtf8(
+                            runner_api_key_message(KEY_UNSET_ERR))));
+        resetCancel();
+        return;
+    }
     const int exitCode =
         run_execution(db, m_executionId, m_timeoutSec, apiKey);
     resetCancel(); // don't leak the flag into the next run
-    const QString message =
-        exitCode == 0 ? QString() : lastErrorLogMessage(db, m_executionId);
+    QString message;
+    if (exitCode == 0) {
+        if (runner_api_key_status(apiKey) == KEY_EMPTY_WARN)
+            message = tr("%1").arg(QString::fromUtf8(
+                runner_api_key_message(KEY_EMPTY_WARN)));
+    } else {
+        message = lastErrorLogMessage(db, m_executionId);
+    }
 
     int closeRc = acta_db_close(db);
     if (closeRc != ACTA_DB_OK)

@@ -9,7 +9,7 @@
  *
  *   Pass 2 (cmd_args_*): per-action iteration. Known action flags:
  *           --pending (bool), --max <n>, --timeout <n>,
- *           --api_key <key>; value flags eat the next token unless it
+ *           --stale-seconds <n>; value flags eat the next token unless it
  *           is inline (--name=value) or itself a flag; boolean flags
  *           never eat the next token; cmd_args_validate rejects
  *           unknown long options.
@@ -263,13 +263,13 @@ int main(void)
     }
 
     {
-        char *av[] = { "--timeout", "30", "--api_key", "k", "42" };
+        char *av[] = { "--timeout", "30", "--max", "k", "42" };
         cmd_args_t it = p2(av, 5);
         const char *t = cmd_args_flag(&it, "timeout", 1);
-        const char *k = cmd_args_flag(&it, "api_key", 1);
+        const char *k = cmd_args_flag(&it, "max", 1);
         const char *pos = cmd_args_next_positional(&it);
         check(t && strcmp(t, "30") == 0, "--timeout value");
-        check(k && strcmp(k, "k") == 0, "--api_key value");
+        check(k && strcmp(k, "k") == 0, "--max value");
         check(pos && strcmp(pos, "42") == 0,
               "positional after two value flags");
     }

@@ -333,8 +333,36 @@ static int wait_status(db_t *db, int id, const char *want, int timeout_ms,
 
 /* ── main ─────────────────────────────────────────────────────────── */
 
+/* Set or unset an environment variable. setenv/unsetenv are POSIX and
+ * MinGW's stdlib.h does not declare them; _putenv removes the variable
+ * when given "name" without '=' and sets it to empty with "name=". */
+static void env_set_or_unset(const char *name, const char *value)
+{
+#ifdef _WIN32
+    char buf[256];
+    if (value)
+        snprintf(buf, sizeof buf, "%s=%s", name, value);
+    else
+        snprintf(buf, sizeof buf, "%s", name);
+    _putenv(buf);
+#else
+    if (value)
+        setenv(name, value, 1);
+    else
+        unsetenv(name);
+#endif
+}
+
 int main(void)
 {
+    /* The spawned acta_runner child inherits the environment: the API
+     * key presence policy requires $OPENAI_API_KEY to be SET
+     * (docs/plans/drop-runner-api-key-flag.md). Use a non-empty value:
+     * MSVCRT _putenv("name=") is not reliable for setting an empty
+     * string (it can remove the variable), and the stub server
+     * ignores the Authorization header, so any value works here. */
+    env_set_or_unset("OPENAI_API_KEY", "stub-key");
+
     const char *db_path = "tests/run/test_deadrunner.db";
     const int stale_seconds = 5;
 

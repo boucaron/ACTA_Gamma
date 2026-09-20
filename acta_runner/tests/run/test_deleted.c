@@ -210,6 +210,26 @@ static int cmd_run_argv(db_t *db, int argc, char **argv)
     return cmd_run(&ga, runner_gopts, db);
 }
 
+/* Set or unset an environment variable. setenv/unsetenv are POSIX and
+ * MinGW's stdlib.h does not declare them; _putenv removes the variable
+ * when given "name" without '=' and sets it to empty with "name=". */
+static void env_set_or_unset(const char *name, const char *value)
+{
+#ifdef _WIN32
+    char buf[256];
+    if (value)
+        snprintf(buf, sizeof buf, "%s=%s", name, value);
+    else
+        snprintf(buf, sizeof buf, "%s", name);
+    _putenv(buf);
+#else
+    if (value)
+        setenv(name, value, 1);
+    else
+        unsetenv(name);
+#endif
+}
+
 /* ── scenarios ────────────────────────────────────────────────────── */
 
 int main(void)
@@ -217,6 +237,13 @@ int main(void)
     /* Verbose level 1 so VLOG action summaries go to stderr. */
     static const global_opts_t gopts = { NULL, 1, 0, 0, 0, NULL };
     runner_gopts = &gopts;
+
+    /* API key presence policy: $OPENAI_API_KEY must be SET
+     * (docs/plans/drop-runner-api-key-flag.md). Use a non-empty value:
+     * MSVCRT _putenv("name=") is not reliable for setting an empty
+     * string (it can remove the variable), and the stub server
+     * ignores the Authorization header, so any value works here. */
+    env_set_or_unset("OPENAI_API_KEY", "stub-key");
 
     int err = ACTA_DB_OK;
     db_t *db = acta_db_open(":memory:", &err, ACTA_DB_OPEN_CREATE);

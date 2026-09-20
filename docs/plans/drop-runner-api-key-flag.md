@@ -1,6 +1,6 @@
 # Plan — remove the `--api_key` flag from `acta_runner` and make `$OPENAI_API_KEY` mandatory to set
 
-Status: **planned**.
+Status: **in progress** — all work items implemented (runner flag removal, `runner_util.h` policy helper, `cmd_run`/`runnerWorker` policy, re-pointed argparse test, new `test_api_key` suite with portable env control + stub reachability probe, docs). Remaining: full verification (build + all C suites green, wire checks, GUI smoke); Windows note: an empty `OPENAI_API_KEY` is not producible via `_putenv`, so the empty case in `test_api_key` is skipped there (unit-tested, exercised on POSIX).
 
 Follow-up to [`drop-model-config-api-key.md`](drop-model-config-api-key.md):
 the key is no longer a configuration-blob key, but the runner still

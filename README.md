@@ -128,11 +128,9 @@ Three steps before the example below:
 
 ## Environment variables
 
-* **`OPENAI_API_KEY`** — default API key for the backend's HTTP calls (preflight and chat). Resolution order:
-  * `acta_runner run`: `--api_key` flag → `$OPENAI_API_KEY`
-  * `acta_gui` (in-process pipeline; there is no `--api_key` flag): `$OPENAI_API_KEY`
-
-  The key is never stored in the database: a model `configuration` blob carrying an `api_key` key is rejected as an unknown key (`EXIT_INVALID`).
+* **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls (preflight and chat), used identically by `acta_runner` and `acta_gui` — the **only** key source (there is no CLI flag, and it is never stored in the database: a model `configuration` blob carrying an `api_key` key is rejected as an unknown key, `EXIT_INVALID`). It **must be set**:
+  * not set → the run does not start (runner: `ACTA_RUNNER_ERROR`, exit 4, before any execution is claimed; GUI: error shown in the run result);
+  * set but empty → warning, and no `Authorization` header is sent — acceptable only for a keyless localhost server, a bad idea in general.
 * **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given (fallback: `./acta.db`). The GUI does **not** read `$ACTA_DB` — its default is the platform app-data directory, and the file can be chosen in its *Choose database file* dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
 
 ## Minimal end-to-end example
@@ -155,7 +153,11 @@ acta_cli context create --json '{"type":"text","content":"The build system shipp
 # so every "1" below is the corresponding row id)
 acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
-# 5. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
+# 5. Set the API key environment variable (must be set; empty is fine
+# for the keyless localhost server from step 3)
+export OPENAI_API_KEY=
+
+# 6. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
 acta_runner run 1
 
 # 6. Inspect the result and the audit trail

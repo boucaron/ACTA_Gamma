@@ -126,7 +126,6 @@ static const flag_spec_t runner_flag_specs[] = {
     { "pending", 0 },
     { "max",     1 },
     { "timeout", 1 },
-    { "api_key", 1 },
     { "stale-seconds", 1 },
 };
 
