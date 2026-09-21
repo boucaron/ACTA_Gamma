@@ -2,6 +2,7 @@
 #define ACTA_DB_H
 
 #include "db.h"
+#include "conf.h"
 #include "model.h"
 #include "model_folder.h"
 #include "model_revision.h"

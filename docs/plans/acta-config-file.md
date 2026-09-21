@@ -1,8 +1,9 @@
 # Plan — optional config file: API key, database path, max_chars, default timeout
 
-Status: **open — not scheduled, no code work started.** This is a recorded
-future constraint, not a current requirement. It becomes relevant only if
-ACTA Gamma outgrows single-user, single-machine use.
+Status: **partially started — work item 1 (the JSON config parser) is
+implemented; the remaining work items are not started.** This remains a
+recorded future constraint, not a current requirement. It becomes relevant
+only if ACTA Gamma outgrows single-user, single-machine use.
 
 ## Context
 
@@ -39,6 +40,28 @@ stops being the sane operational story. A config file with explicit file
 permissions, read by all three binaries, would be the more operationally
 sound source.
 
+## Relationship and build order (with `max-chars-size-check.md`)
+
+This plan is the parent of `docs/plans/max-chars-size-check.md` along the
+`max_chars` axis. Build order:
+
+1. Ship the `max_chars` check first with the **built-in** default (100,000
+   chars) — self-contained, no file, no new I/O, no permission machinery.
+2. Land this config file next; its `max_chars` override plugs into the same
+   `run_execution` limit parameter the check introduced.
+
+The "shared resolution helper" named in both plans is **one component**
+(`acta_conf`), read by all three binaries (`acta_cli`, `acta_runner`,
+`acta_gui`), returning `{api_key, db, max_chars, timeout}`. Precedence is
+**per-setting, not a single uniform ladder**:
+
+| setting | precedence (top wins) | file's role |
+|---------|------------------------|-------------|
+| `api_key` | `$OPENAI_API_KEY` → file | fallback (never a second channel) |
+| `db` | `--db` → `$ACTA_DB` → file → app-data default → `./acta.db` | middle |
+| `max_chars` | file → built-in default | top override (no env/flag exists) |
+| `timeout` | `--timeout` → file → built-in default | middle |
+
 ## Trigger (when this becomes worth doing)
 
 Any of:
@@ -65,10 +88,29 @@ stay as-is.
   - `max_chars` — the maximum total chars of the prompt sent
     (`skill.prompt_template` + `context.content`);
   - `timeout` — the default per-call HTTP timeout (seconds).
-- **Permissions are part of the contract:** `0600` (owner read/write only)
-  on POSIX, and the equivalent single-user ACL on Windows. The tools refuse
-  to read a file with group/other read bits set (fail closed, same spirit
-  as the current "unset → hard error" key policy).
+- **Format: JSON.** A single JSON object with at most the four keys above:
+  `"api_key"` (string), `"db"` (string), `"max_chars"` (positive integer),
+  `"timeout"` (positive integer). Parsed with the same fail-closed style as
+  the model `configuration` blob: not-an-object, unknown key, wrong type,
+  or malformed JSON → hard error; the known-keys list mirrors the `known[]`
+  check in `run.c`. Chosen over INI because the JSON parser and the
+  unknown-key rejection pattern already exist in all three binaries (`cJSON`
+  in the runner, `acta_cli/src/json.c` in the CLI, `QJsonDocument` in the
+  GUI); INI would require a custom parser in each and weaker type safety.
+- **Permissions are part of the contract, split by platform.**
+  - **POSIX:** `0600` (owner read/write only). The resolver refuses a file
+    whose mode has group/other read bits set (`st.st_mode & (S_IRGRP |
+    S_IROTH)`), fail closed — the real enforcement gate.
+  - **Windows (MSYS2/MinGW):** the Unix mode bits are meaningless —
+    `_stat64` reports `0666` for every regular file regardless of
+    `icacls`/`chmod`, so the POSIX bit check cannot be used there (it would
+    refuse every file). The real check is the NTFS DACL (security
+    descriptor): refuse if `Users`/`Everyone` have read access. That is a
+    **separate, not-yet-implemented work item** (Win32 `GetFileSecurity`
+    from MinGW). In the first cut the resolver does **not** enforce the
+    permission guarantee on Windows; a file created in the user profile is
+    single-user by default, but this is documented as best-effort, not
+    verified.
 - **Key precedence:** `$OPENAI_API_KEY` (if set) wins over the file; the
   file is a fallback, not a second channel. Unset env + missing/unreadable
   file = the existing `ACTA_RUNNER_ERROR` "OPENAI_API_KEY is not set" hard
@@ -101,11 +143,18 @@ stay as-is.
   `test_api_key` suite notes), which is exactly why a file-based source is
   a cleaner fit there than env tricks.
 
-## Work items (TBD — none started)
+## Work items
 
-1. File format + parser (key + optional `db`, `max_chars`, `timeout`;
-   reject unknown/extra content with the same fail-closed error style as
-   the model `configuration` blob).
+1. **Done — JSON parser for the file.** Implemented as the shared `acta_conf`
+   helper in `acta_db` (`acta_db/include/conf.h`, `acta_db/src/conf.c`):
+   a single object with at most `api_key` (string), `db` (string),
+   `max_chars` (positive integer), `timeout` (positive integer); rejects
+   not-an-object, unknown key, wrong type (string vs integer), and malformed
+   JSON with the same fail-closed error style as the model `configuration`
+   blob (mirror of the `known[]` check in `run.c`). Exposed via `acta_db.h`;
+   cJSON added to the `acta_db` build. Read by `acta_cli` and `acta_runner`
+   (the GUI uses an equivalent Qt reader — work item 6). Not yet wired into
+   resolution (work items 2–4).
 2. Key precedence policy helper shared by `acta_runner` and `acta_gui`
    (mirror of `runner_api_key_status`).
 3. DB-path resolution: insert the file into `acta_dbpath.c` (both copies)
@@ -118,8 +167,11 @@ stay as-is.
    (`run_execution` gains the limit parameter; `cmd_run` already has
    `--timeout`, the GUI worker takes its timeout from the resolved
    default).
-5. Permission checks per platform (POSIX `stat` mode bits; Windows ACL /
-   `icacls`-equivalent check) — refuse group/other-readable files.
+5. Permission checks, platform-split:
+   - POSIX: `stat()` mode bits; refuse group/other-readable files.
+   - Windows: **not** via `st_mode` (meaningless, always `0666`). The NTFS
+     DACL check is a **separate follow-up work item**; the first cut does
+     not enforce the guarantee on Windows (documented as best-effort).
 6. GUI surface: same resolution as the runner (no separate GUI config;
    dialog choice stays on top).
 7. Tests: env-set-wins, file-fallback, bad-permissions refusal, missing

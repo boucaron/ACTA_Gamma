@@ -2,6 +2,14 @@ CC      ?= cc
 CFLAGS  ?= -Wall -Wextra -std=c11 -O2 -g
 LDLIBS ?= -lsqlite3
 
+# ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build) ----
+CJSON_DIR ?=
+CJSON_LIB ?= -lcjson
+ifneq ($(CJSON_DIR),)
+CFLAGS += -I$(CJSON_DIR)
+endif
+LDLIBS += $(CJSON_LIB)
+
 INC_DIR  := include
 SRC_DIR  := src
 OBJ_DIR  := build/obj
