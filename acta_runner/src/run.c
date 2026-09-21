@@ -91,20 +91,45 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         }
     }
 
-    /* API key: $OPENAI_API_KEY only (the --api_key flag is gone; the key
-     * is never read from the model configuration blob — see
-     * docs/runner_contract.md, decision 4). Presence policy:
-     * unset -> hard error before any claim; empty -> warning, no
-     * Authorization header. */
-    api_key = getenv("OPENAI_API_KEY");
-    int key_status = runner_api_key_status(api_key);
-    if (key_status == KEY_UNSET_ERR) {
-        VLOG(1, "cmd_run: ERROR %s", runner_api_key_message(KEY_UNSET_ERR));
-        return emit_runner_error(EXIT_INVALID,
-                                 runner_api_key_message(KEY_UNSET_ERR));
+    /* API key: $OPENAI_API_KEY (if set) -> config file "api_key"
+     * (docs/plans/acta-config-file.md, work item 2).  The key is never
+     * read from the model configuration blob — see
+     * docs/runner_contract.md, decision 4.  The file is a fallback, not a
+     * second channel: a set env var (even empty) always wins.  A
+     * readable-but-malformed config file is a hard error (fail-closed, the
+     * same rules as the model configuration blob); a missing or
+     * unreadable file is simply unavailable as a fallback.  Presence
+     * policy: no key anywhere -> hard error before any claim;
+     * empty key -> warning, no Authorization header. */
+    acta_conf_t conf;
+    int conf_missing = 0;
+    char *conf_err = NULL;
+    if (acta_conf_read(acta_conf_default_path(), &conf, &conf_missing,
+                       &conf_err) != 0) {
+        const char *what = conf_err ? conf_err : "config file is invalid";
+        VLOG(1, "cmd_run: ERROR %s", what);
+        int rc = emit_runner_error(EXIT_INVALID, what);
+        free(conf_err);
+        return rc;
     }
-    if (key_status == KEY_EMPTY_WARN)
-        fprintf(stderr, "%s\n", runner_api_key_message(KEY_EMPTY_WARN));
+
+    const char *env_key = getenv("OPENAI_API_KEY");
+    const char *file_key = conf.api_key; /* NULL: missing/absent key */
+    const char *key_msg = NULL;
+    int key_status = acta_conf_api_key_status(env_key, file_key, &key_msg);
+    if (key_status == ACTA_KEY_UNSET_ERR) {
+        VLOG(1, "cmd_run: ERROR %s", key_msg);
+        acta_conf_free(&conf);
+        return emit_runner_error(EXIT_INVALID, key_msg);
+    }
+    if (key_status == ACTA_KEY_EMPTY_WARN)
+        fprintf(stderr, "%s\n", key_msg);
+
+    api_key = (env_key != NULL) ? env_key : file_key;
+    /* When the env var is unset, api_key borrows conf.api_key, so conf
+     * must stay alive for the rest of cmd_run (freed at every return).
+     * (conf_missing is recorded for the log; the policy itself only
+     * needs the NULL/empty/non-empty distinction of file_key.) */
 
     const char *id_str = cmd_args_next_positional(ga);
 
@@ -112,12 +137,14 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         VLOG(1, "cmd_run: ERROR --pending conflicts with an execution-id positional");
         emit_error("--pending conflicts with an execution-id positional");
         run_usage(stderr);
+        acta_conf_free(&conf);
         return EXIT_INVALID;
     }
     if (!pending && !id_str) {
         VLOG(1, "cmd_run: ERROR missing <execution-id> (or use --pending)");
         emit_error("missing <execution-id>: pass an id or use --pending");
         run_usage(stderr);
+        acta_conf_free(&conf);
         return EXIT_INVALID;
     }
 
@@ -139,11 +166,14 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             acta_db_execution_query(db, &q, 0, max, &n, &err);
         /* rows is NULL for BOTH a genuine failure and an empty result
          * (n == 0 with err == ACTA_DB_OK); only the former is an error. */
-        if (rows == NULL && (err != ACTA_DB_OK || n != 0))
+        if (rows == NULL && (err != ACTA_DB_OK || n != 0)) {
+            acta_conf_free(&conf);
             return finish_op_error(db, err, "execution_query");
+        }
 
         if (n == 0) {
             VLOG(1, "cmd_run: no pending executions");
+            acta_conf_free(&conf);
             return EXIT_OK;
         }
 
@@ -155,6 +185,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
                 worst = rc;
         }
         acta_db_execution_list_free(rows, n);
+        acta_conf_free(&conf);
         return worst;
     }
 
@@ -166,10 +197,13 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         VLOG(1, "cmd_run: %s", msg);
         emit_error(msg);
         run_usage(stderr);
+        acta_conf_free(&conf);
         return EXIT_INVALID;
     }
 
-    return run_execution(db, id, timeout, api_key);
+    int rc = run_execution(db, id, timeout, api_key);
+    acta_conf_free(&conf);
+    return rc;
 }
 
 /* ── pipeline helpers ───────────────────────────────────────────────── */

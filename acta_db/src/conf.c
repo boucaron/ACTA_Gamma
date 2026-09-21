@@ -196,3 +196,137 @@ void acta_conf_free(acta_conf_t *conf)
     conf->max_chars = 0;
     conf->timeout = 0;
 }
+
+#define ACTA_CONFPATH_MAX 4096
+
+/* Platform app-data base directory (no trailing slash), or NULL when it
+ * cannot be resolved.  Same logic as appdata_base() in acta_dbpath.c
+ * (both copies); keep in lockstep. */
+static const char *conf_appdata_base(void)
+{
+#ifdef _WIN32
+    const char *p = getenv("APPDATA");
+    return (p && p[0]) ? p : NULL;
+#else
+    const char *p = getenv("XDG_DATA_HOME");
+    if (p && p[0])
+        return p;
+    const char *home = getenv("HOME");
+    if (!home || !home[0])
+        return NULL;
+    static char fallback[ACTA_CONFPATH_MAX];
+    size_t n = strlen(home);
+    if (n + 1 + sizeof("/.local/share") - 1 + 1 > sizeof fallback)
+        return NULL;
+    snprintf(fallback, sizeof fallback, "%s/.local/share", home);
+    return fallback;
+#endif
+}
+
+const char *acta_conf_default_path(void)
+{
+    static char path[ACTA_CONFPATH_MAX];
+    const char *base = conf_appdata_base();
+    if (!base)
+        return "./ACTA Gamma.conf";
+
+    size_t n = strlen(base);
+    if (n + 1 + sizeof("/ACTA Gamma/ACTA Gamma.conf") > sizeof path)
+        return "./ACTA Gamma.conf";
+
+#ifdef _WIN32
+    snprintf(path, sizeof path, "%s\\ACTA Gamma\\ACTA Gamma.conf", base);
+#else
+    snprintf(path, sizeof path, "%s/ACTA Gamma/ACTA Gamma.conf", base);
+#endif
+    return path;
+}
+
+/* Read a whole file into a malloc'd NUL-terminated buffer.  Returns 0 on
+ * success (the caller frees *out); -1 when the file cannot be opened or
+ * read, or on allocation failure (leaves *out NULL). */
+static int slurp_file(const char *path, char **out)
+{
+    *out = NULL;
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return -1;
+    char *buf = NULL;
+    size_t cap = 0, len = 0;
+    for (;;) {
+        if (len + 1 > cap) {
+            size_t ncap = cap ? cap * 2 : 4096;
+            char *nb = realloc(buf, ncap);
+            if (!nb) {
+                free(buf);
+                fclose(f);
+                return -1;
+            }
+            buf = nb;
+            cap = ncap;
+        }
+        size_t got = fread(buf + len, 1, cap - len - 1, f);
+        len += got;
+        if (got == 0)
+            break;
+    }
+    fclose(f);
+    buf[len] = '\0';
+    *out = buf;
+    return 0;
+}
+
+int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
+                   char **err_msg)
+{
+    if (err_msg)
+        *err_msg = NULL;
+    if (missing)
+        *missing = 0;
+    if (!path) {
+        set_err(err_msg, "config: NULL path");
+        return -1;
+    }
+
+    char *blob = NULL;
+    if (slurp_file(path, &blob) != 0) {
+        /* Missing or unreadable file: not an error, the file is simply
+         * unavailable as a fallback. */
+        if (missing)
+            *missing = 1;
+        return 0;
+    }
+    int rc = acta_conf_parse(blob, conf, err_msg);
+    free(blob);
+    return rc;
+}
+
+int acta_conf_api_key_status(const char *env_key, const char *file_key,
+                             const char **msg)
+{
+    /* Env wins when set -- even when set to the empty string; the file
+     * is a fallback, not a second channel. */
+    const char *key = (env_key != NULL) ? env_key : file_key;
+
+    if (key == NULL) {
+        if (msg)
+            *msg = "OPENAI_API_KEY is not set and the config file "
+                   "provides no \"api_key\"; set the environment variable "
+                   "or add \"api_key\" to the config file";
+        return ACTA_KEY_UNSET_ERR;
+    }
+    if (key[0] == '\0') {
+        if (msg)
+            *msg = (env_key != NULL)
+                ? "warning: OPENAI_API_KEY is empty - no Authorization "
+                  "header will be sent (acceptable only for a keyless "
+                  "localhost server; a bad idea in general)"
+                : "warning: the config file \"api_key\" is empty - no "
+                  "Authorization header will be sent (acceptable only "
+                  "for a keyless localhost server; a bad idea in general)";
+        return ACTA_KEY_EMPTY_WARN;
+    }
+    if (msg)
+        *msg = NULL;
+    return ACTA_KEY_OK;
+}

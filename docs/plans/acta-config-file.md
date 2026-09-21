@@ -1,7 +1,12 @@
 # Plan — optional config file: API key, database path, max_chars, default timeout
 
 Status: **partially started — work item 1 (the JSON config parser) is
-implemented; the remaining work items are not started.** This remains a
+implemented; work item 2 (the key precedence policy) is started: the
+shared helper (`acta_conf_api_key_status`, plus the file-read plumbing
+`acta_conf_read` / `acta_conf_default_path`) lives in `acta_db`
+(`conf.h` / `conf.c`) and is wired into the runner's `cmd_run`; the GUI
+side lands with its Qt reader in work item 6. The remaining work items
+are not started.** This remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
 
@@ -155,8 +160,17 @@ stay as-is.
    cJSON added to the `acta_db` build. Read by `acta_cli` and `acta_runner`
    (the GUI uses an equivalent Qt reader — work item 6). Not yet wired into
    resolution (work items 2–4).
-2. Key precedence policy helper shared by `acta_runner` and `acta_gui`
-   (mirror of `runner_api_key_status`).
+2. **In progress —** Key precedence policy helper shared by
+   `acta_runner` and `acta_gui` (mirror of `runner_api_key_status`).
+   Done so far: `acta_conf_api_key_status()` in `acta_db` (`conf.h` /
+   `conf.c`) — `$OPENAI_API_KEY` (if set, even empty) wins over the file's
+   `api_key`; canonical one-line messages for unset / empty / ok; plus
+   `acta_conf_read()` (file missing/unreadable = fallback unavailable,
+   readable-but-malformed = fail-closed hard error) and
+   `acta_conf_default_path()` (`ACTA Gamma.conf` next to the default DB
+   file). Wired into `cmd_run` (`acta_runner/src/run.c`). Remaining:
+   the `runnerWorker` side with the GUI's Qt-parsed key (work item 6),
+   and the tests (work item 7).
 3. DB-path resolution: insert the file into `acta_dbpath.c` (both copies)
    and `MainWindow::defaultDbPath` as the step between `$ACTA_DB` and the
    app-data default; keep the `acta_cli/tests/dbpath` suite as the pinning
