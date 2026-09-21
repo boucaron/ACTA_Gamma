@@ -29,6 +29,11 @@
 
 #include <climits>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+
 // Cached app logo (UR #28): the resource is loaded only once and
 // reused for both the window icon and the header row. QIcon scales
 // it to the platform icon size (devicePixelRatio aware).
@@ -75,6 +80,32 @@ static bool confPosInt(const QJsonValue &v, long *out)
 static ActaConfFile readActaConfFile(const QString &path)
 {
     ActaConfFile c;
+
+#ifndef _WIN32
+    /* POSIX permission gate (mirror of acta_conf_read in
+     * acta_db/src/conf.c, docs/plans/acta-config-file.md work item 5):
+     * the file may hold a secret ("api_key"), so it must be 0600
+     * (owner read/write only).  Group- or other-readable -> fail-closed
+     * BEFORE the contents are read.  stat failure (no file) falls
+     * through to the missing-file path below.  Windows: the mode-bit
+     * check is meaningless under MSYS2/MinGW (always 0666 regardless of
+     * the NTFS DACL); the DACL check is a separate follow-up, so the
+     * first cut does not enforce the guarantee there (documented
+     * best-effort, not verified). */
+    {
+        struct stat st;
+        if (stat(path.toLocal8Bit().constData(), &st) == 0 &&
+            (st.st_mode & (S_IRGRP | S_IROTH)) != 0) {
+            c.valid = false;
+            c.error =
+                QStringLiteral(
+                    "config file %1 is group- or other-readable; it must "
+                    "be 0600 (owner read/write only)")
+                    .arg(path);
+            return c;
+        }
+    }
+#endif
 
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {

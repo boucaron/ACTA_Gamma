@@ -170,6 +170,14 @@ static int write_file(const char *path, const char *content)
         return 0;
     fputs(content, f);
     fclose(f);
+#ifndef _WIN32
+    /* The resolver's POSIX permission gate (work item 5) refuses
+     * group/other-readable files; a default-umask (0644) file would be
+     * refused, so pin the contract mode 0600.  On Windows the mode bits
+     * are meaningless (always 0666) and the gate is not run. */
+    if (chmod(path, 0600) != 0)
+        return 0;
+#endif
     return 1;
 }
 

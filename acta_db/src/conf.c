@@ -25,6 +25,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+
 /* The exact wire keys of the config file. Any other top-level key is a
  * contract violation (mirror of the known[] check in run.c). */
 static const char *known_keys[] = { "api_key", "db", "max_chars", "timeout" };
@@ -287,6 +292,32 @@ int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
         set_err(err_msg, "config: NULL path");
         return -1;
     }
+
+#ifndef _WIN32
+    /* POSIX permission gate (work item 5 of
+     * docs/plans/acta-config-file.md): the file may hold a secret
+     * ("api_key"), so it must be 0600 (owner read/write only).  A file
+     * whose mode gives read access to group or other is refused
+     * fail-closed, BEFORE its contents are read.  stat failure (file
+     * not there yet) is not an error: the normal missing-file path
+     * below handles it.  Windows (MSYS2/MinGW): the Unix mode bits are
+     * meaningless -- _stat64 reports 0666 for every regular file
+     * regardless of the NTFS DACL -- so the bit check cannot run there;
+     * the DACL check is a separate follow-up work item and the first
+     * cut does not enforce the permission guarantee on Windows
+     * (documented as best-effort, not verified). */
+    {
+        struct stat st;
+        if (stat(path, &st) == 0 &&
+            (st.st_mode & (S_IRGRP | S_IROTH)) != 0) {
+            set_err(err_msg,
+                    "config file %s is group- or other-readable "
+                    "(mode has group/other read bits set); it must be "
+                    "0600 (owner read/write only)");
+            return -1;
+        }
+    }
+#endif
 
     char *blob = NULL;
     if (slurp_file(path, &blob) != 0) {

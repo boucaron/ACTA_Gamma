@@ -1,8 +1,9 @@
 # Plan — optional config file: API key, database path, max_chars, default timeout
 
 Status: **partially started — work items 1 (the JSON config parser), 2
-(the key precedence policy), 3 (DB-path resolution) and 4 (max_chars /
-timeout resolution) are implemented: the shared `acta_conf` helper
+(the key precedence policy), 3 (DB-path resolution), 4 (max_chars /
+timeout resolution) and 5 (the POSIX permission gate; the Windows DACL
+check remains a separate follow-up) are implemented: the shared `acta_conf` helper
 (`acta_conf_parse`, `acta_conf_api_key_status`, `acta_conf_read`,
 `acta_conf_default_path`, and the resolution helpers
 `acta_conf_resolve_max_chars` / `acta_conf_resolve_timeout` with the
@@ -15,9 +16,15 @@ extended for the file step; `cmd_run` now resolves `timeout` (--timeout
 flag → file → built-in 300 s) and `max_chars` (file → built-in 100,000
 chars) and passes both into the pipeline — `run_execution` gained the
 `max_chars` limit parameter (the preflight size check that consumes it
-lands with `docs/plans/max-chars-size-check.md`). The GUI runnerWorker
-key and timeout sides land with work item 6. The remaining work items are
-not started.** This remains a
+lands with `docs/plans/max-chars-size-check.md`); `acta_conf_read` now
+runs the POSIX permission gate (a file whose mode has group/other read
+bits set is refused fail-closed before its contents are read; on Windows
+the st_mode bit check is not run — meaningless under MSYS2/MinGW, the
+NTFS DACL check is a separate follow-up, first cut documented
+best-effort), mirrored by the GUI's Qt reader, and the dbpath suite pins
+the contract mode 0600. The GUI runnerWorker key and timeout sides land
+with work item 6. The remaining work items are not started.** This
+remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
 
@@ -214,11 +221,18 @@ stay as-is.
    preflight size check, `docs/plans/max-chars-size-check.md`); usage/help
    text updated. Remaining: the GUI worker taking its timeout from the
    resolved default (work item 6).
-5. Permission checks, platform-split:
-   - POSIX: `stat()` mode bits; refuse group/other-readable files.
-   - Windows: **not** via `st_mode` (meaningless, always `0666`). The NTFS
-     DACL check is a **separate follow-up work item**; the first cut does
-     not enforce the guarantee on Windows (documented as best-effort).
+5. **Done (POSIX) / follow-up (Windows) —** Permission checks,
+   platform-split:
+   - POSIX: **done** — `stat()` mode bits in `acta_conf_read` (checked
+     before the contents are read): a file whose mode has group/other
+     read bits set is refused fail-closed (the file must be `0600`,
+     owner read/write only); mirrored by the GUI's Qt reader
+     (`readActaConfFile`) so all three binaries refuse the same file;
+     the dbpath suite's `write_file` now pins the contract mode `0600`.
+   - Windows: **not** via `st_mode` (meaningless, always `0666` under
+     MSYS2/MinGW). The NTFS DACL check is a **separate follow-up work
+     item**; the first cut does not enforce the guarantee on Windows
+     (documented as best-effort).
 6. GUI surface: same resolution as the runner (no separate GUI config;
    dialog choice stays on top).
 7. Tests: env-set-wins, file-fallback, bad-permissions refusal, missing
