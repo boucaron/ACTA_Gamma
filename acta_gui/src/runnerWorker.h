@@ -34,7 +34,6 @@ class RunnerWorker : public QObject {
     Q_OBJECT
 public:
     explicit RunnerWorker(int executionId, const QString &dbPath,
-                          int timeoutSec = 300,
                           QObject *parent = nullptr);
 
     // The database file the worker opens its own handle on.
@@ -62,5 +61,4 @@ signals:
 private:
     int m_executionId;
     QString m_dbPath;
-    int m_timeoutSec;
 };

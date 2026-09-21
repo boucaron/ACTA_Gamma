@@ -2,8 +2,9 @@
 
 Status: **partially started — work items 1 (the JSON config parser), 2
 (the key precedence policy), 3 (DB-path resolution), 4 (max_chars /
-timeout resolution) and 5 (the POSIX permission gate; the Windows DACL
-check remains a separate follow-up) are implemented: the shared `acta_conf` helper
+timeout resolution), 5 (the POSIX permission gate; the Windows DACL
+check remains a separate follow-up) and 6 (the GUI surface) are
+implemented: the shared `acta_conf` helper
 (`acta_conf_parse`, `acta_conf_api_key_status`, `acta_conf_read`,
 `acta_conf_default_path`, and the resolution helpers
 `acta_conf_resolve_max_chars` / `acta_conf_resolve_timeout` with the
@@ -22,8 +23,14 @@ bits set is refused fail-closed before its contents are read; on Windows
 the st_mode bit check is not run — meaningless under MSYS2/MinGW, the
 NTFS DACL check is a separate follow-up, first cut documented
 best-effort), mirrored by the GUI's Qt reader, and the dbpath suite pins
-the contract mode 0600. The GUI runnerWorker key and timeout sides land
-with work item 6. The remaining work items are not started.** This
+the contract mode 0600; `RunnerWorker::runInThread` now does the same
+resolution as `cmd_run` — key via `acta_conf_api_key_status` with the
+Qt-parsed file key (absent = NULL, present-but-empty = ""), `timeout`
+file → built-in 300 s, and `max_chars` file → built-in 100,000 chars
+passed as the `run_execution` limit parameter — a malformed config file
+(or permission-gate failure) is a fail-closed hard error before any
+claim, and the Qt reader is shared with the GUI bootstrap via
+`confreader.h`. The remaining work items are not started.** This
 remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
@@ -188,7 +195,8 @@ stay as-is.
    `acta_conf_default_path()` (`ACTA Gamma.conf` next to the default DB
    file). Wired into `cmd_run` (`acta_runner/src/run.c`). Remaining:
    the `runnerWorker` side with the GUI's Qt-parsed key (work item 6),
-   and the tests (work item 7).
+   and the `runnerWorker` side landed with work item 6; remaining: the
+   tests (work item 7).
 3. **In progress —** DB-path resolution: insert the file into
    `acta_dbpath.c` (both copies) and `MainWindow::defaultDbPath` as the
    step between `$ACTA_DB` and the app-data default; keep the
@@ -219,8 +227,7 @@ stay as-is.
    after the conf read and passes them to `run_execution`, whose
    signature gains the `max_chars` limit parameter (consumed later by the
    preflight size check, `docs/plans/max-chars-size-check.md`); usage/help
-   text updated. Remaining: the GUI worker taking its timeout from the
-   resolved default (work item 6).
+   text updated; the GUI worker side landed with work item 6.
 5. **Done (POSIX) / follow-up (Windows) —** Permission checks,
    platform-split:
    - POSIX: **done** — `stat()` mode bits in `acta_conf_read` (checked
@@ -233,8 +240,22 @@ stay as-is.
      MSYS2/MinGW). The NTFS DACL check is a **separate follow-up work
      item**; the first cut does not enforce the guarantee on Windows
      (documented as best-effort).
-6. GUI surface: same resolution as the runner (no separate GUI config;
-   dialog choice stays on top).
+6. **Done —** GUI surface: same resolution as the runner (no separate
+   GUI config; dialog choice stays on top). Done: the Qt reader
+   (`readActaConfFile` + `ActaConfFile`) extracted from
+   `mainwindow.cpp` into `confreader.h` (shared by the GUI bootstrap
+   and the worker) and extended to consume `api_key` (with a
+   presence flag — the shared key policy distinguishes an absent key
+   from a present-but-empty one), `max_chars` and `timeout`;
+   `RunnerWorker::runInThread` reads the file at
+   `acta_conf_default_path()`, applies `acta_conf_api_key_status`
+   (env-set-wins, file fallback), resolves `timeout` (file → built-in
+   default; the `timeoutSec` constructor argument is gone, and
+   `ExecutionPanel` no longer passes a hard-coded 300) and `max_chars`
+   (file → built-in default), and calls the 5-argument
+   `run_execution` with both; a readable-but-malformed file (or one
+   failing the POSIX permission gate, already in the shared reader)
+   fails closed before any claim; `src.pro` lists `confreader.h`.
 7. Tests: env-set-wins, file-fallback, bad-permissions refusal, missing
    file + unset env → existing hard error; DB-path order with/without the
    file; `max_chars` / `timeout` file-over-builtin order.

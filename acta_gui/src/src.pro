@@ -34,6 +34,7 @@ SOURCES += \
     ../../acta_runner/src/argparse.c
 
 HEADERS += \
+    confreader.h \
     dbhandle.h \
     runnerWorker.h \
     mainWindow.h \

@@ -38,10 +38,6 @@ const int RoleLogId = Qt::UserRole + 1;
 // Soft-deleted marker on the execution list rows (true when the row's
 // deleted_at is set); only present when "Show trash" is checked.
 const int RoleExecutionDeleted = Qt::UserRole + 2;
-
-// Backend timeout for the in-process run, matching the CLI's default
-// (acta_runner help: --timeout, default 300).
-const int kRunnerTimeoutSec = 300;
 } // namespace
 
 ExecutionPanel::ExecutionPanel(db_t *db, QWidget *parent)
@@ -415,8 +411,7 @@ void ExecutionPanel::onRunBtnClicked()
     // emits finished() with the exit code and the failure message read
     // from the execution's log (no stderr parsing).
     m_runningExecutionId = executionId;
-    m_runnerWorker =
-        new RunnerWorker(executionId, m_dbPath, kRunnerTimeoutSec);
+    m_runnerWorker = new RunnerWorker(executionId, m_dbPath);
     m_runnerThread = new QThread(this);
     // moveToThread, not setParent: a QThread object *lives* on the
     // thread that created it (the GUI thread) and only *runs* on the
