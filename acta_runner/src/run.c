@@ -7,7 +7,10 @@
  *                   log execution_started.
  *   2. Resolve   — fetch context, skill revision, model revision;
  *                   log context_loaded / prompt_resolved.
- *   3. Preflight — GET /health (503 -> "model still loading"),
+ *   3. Preflight — prompt size check (strlen(system)+strlen(user) vs.
+ *                   the max_chars limit; over limit -> EXIT_INVALID
+ *                   before any backend call),
+ *                   GET /health (503 -> "model still loading"),
  *                   GET /v1/models (server model id must match),
  *                   GET / (llama.cpp model catalog; best-effort audit
  *                   source, logged as preflight_passed).
@@ -409,12 +412,9 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
 {
     /* max_chars: the resolved prompt size limit (config file -> built-in
      * default), resolved by the caller via acta_conf_resolve_max_chars
-     * (docs/plans/acta-config-file.md, work item 4).  The pipeline does
-     * not consume it yet: the preflight size check that compares
-     * strlen(prompt_template) + strlen(context.content) against it lands
-     * with docs/plans/max-chars-size-check.md.  The parameter exists now
-     * so that plan only adds the check, not the plumbing. */
-    (void)max_chars;
+     * (docs/plans/acta-config-file.md, work item 4); consumed by the
+     * preflight size check in step 3 below.
+     * (docs/plans/max-chars-size-check.md) */
 
     int exit_code_ = EXIT_OK;  /* set by FAIL, consumed at `done:` */
     char errmsg[512];           /* set by FAIL, consumed at `done:` */
@@ -668,7 +668,29 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
     if (backend_cancel_requested())
         CANCEL();
 
-    /* ---- 3. preflight: /health, /v1/models, / (catalog) ---- */
+    /* ---- 3. preflight: size check, /health, /v1/models, / (catalog) ---- */
+
+    /* 3a. Prompt size check (docs/plans/max-chars-size-check.md):
+     * The assembled prompt is exactly these two strings —
+     *   system = skill.prompt_template,  user = context.content —
+     * so a plain char count is deterministic and model-agnostic.
+     * It is a GUARD, not a window-fit guarantee: when the total is
+     * under the limit the backend's served max_context remains the
+     * final arbiter (still recorded in preflight_passed, not used
+     * here). Over the limit -> fail with EXIT_INVALID BEFORE any
+     * backend call — a deterministic local cause instead of an
+     * opaque backend 400 at chat time. */
+    {
+        long ctx_chars = (long)strlen(user);
+        long sys_chars = (long)strlen(system ? system : "");
+        long total_chars = ctx_chars + sys_chars;
+        if (total_chars > max_chars)
+            FAIL(EXIT_INVALID,
+                 "prompt too large: %ld chars total (context %ld + "
+                 "skill prompt %ld) exceeds max_chars %ld",
+                 total_chars, ctx_chars, sys_chars, max_chars);
+    }
+
     long max_ctx = 0;
     {
         char url[1024];
