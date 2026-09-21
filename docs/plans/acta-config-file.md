@@ -1,6 +1,6 @@
 # Plan — optional config file: API key, database path, max_chars, default timeout
 
-Status: **partially started — work items 1 (the JSON config parser), 2
+Status: **done — work items 1 (the JSON config parser), 2
 (the key precedence policy), 3 (DB-path resolution), 4 (max_chars /
 timeout resolution), 5 (the POSIX permission gate; the Windows DACL
 check remains a separate follow-up) and 6 (the GUI surface) are
@@ -53,10 +53,11 @@ lockstep list), `docs/runner_contract.md` decisions 4 (auth: env →
 file fallback, fail-closed) and 5 (timeout: flag → file → built-in),
 and the `max_chars` limit-source line in
 `docs/plans/max-chars-size-check.md` (file → built-in default, resolved
-by the shared helper). All work items are now implemented.** This
-remains a
-recorded future constraint, not a current requirement. It becomes relevant
-only if ACTA Gamma outgrows single-user, single-machine use.
+by the shared helper). All work items are now implemented, and the
+consumer side — the preflight size check that consumes the resolved
+`max_chars` limit — has also shipped with
+`docs/plans/max-chars-size-check.md`. The trigger section below remains
+the rationale for why the file exists at all.
 
 ## Context
 
@@ -74,13 +75,13 @@ Four per-machine settings today have no file source:
   runner) → `./acta.db` last resort (single source of truth:
   `docs/cli_spec.md`). The GUI additionally has a *Choose database file*
   dialog (remembered in QSettings) for non-default setups.
-- **The prompt size limit (`max_chars`).** There is currently no size check
-  anywhere: a context is a `TEXT` blob of any size, and an oversized
-  prompt+context only fails at the chat call (after the claim) with the
-  backend's error. The planned check (chars, not tokens — token cost varies
-  per model) and its default value are specified in
-  `docs/plans/max-chars-size-check.md`; the file holds the per-machine
-  override of that limit.
+- **The prompt size limit (`max_chars`).** The size check now ships in the
+  runner's preflight (`docs/plans/max-chars-size-check.md`, done):
+  `strlen(prompt_template) + strlen(context.content)` is compared against
+  the limit before any backend call, and the execution fails
+  `EXIT_INVALID` when over. It is a char count, not tokens (token cost
+  varies per model); the built-in default is 100,000 chars, and the file
+  holds the per-machine override of that limit.
 - **The default per-call timeout.** `acta_runner run --timeout` (default
   300 s) and the GUI's run timeout are flag/default only. A per-machine
   default belongs in the file for service-style deployments.
@@ -132,7 +133,7 @@ Any of:
 Until then: do nothing. The current key, DB-path, and timeout contracts
 stay as-is.
 
-## Target contract (proposed, to be refined when scheduled)
+## Target contract (implemented)
 
 - A single per-machine file, e.g. `ACTA Gamma.conf` in the same app-data
   directory as the default DB file, holding **at most**:
@@ -174,7 +175,7 @@ stay as-is.
   run that named its DB. The GUI's *Choose database file* dialog (QSettings)
   stays above the file: an explicit operator choice in the GUI wins.
 - **`max_chars` precedence:** config file → built-in default
-  (proposed: 100,000 chars; see `docs/plans/max-chars-size-check.md`).
+  (100,000 chars; see `docs/plans/max-chars-size-check.md`).
   No CLI flag in this plan (a `--max-chars` flag is a possible follow-up).
 - **`timeout` precedence:** `--timeout` flag → config file → built-in
   default (300 s). The file supplies the default, never a per-run
@@ -208,19 +209,18 @@ stay as-is.
    cJSON added to the `acta_db` build. Read by `acta_cli` and `acta_runner`
    (the GUI uses an equivalent Qt reader — work item 6). Not yet wired into
    resolution (work items 2–4).
-2. **In progress —** Key precedence policy helper shared by
+2. **Done —** Key precedence policy helper shared by
    `acta_runner` and `acta_gui` (mirror of `runner_api_key_status`).
-   Done so far: `acta_conf_api_key_status()` in `acta_db` (`conf.h` /
-   `conf.c`) — `$OPENAI_API_KEY` (if set, even empty) wins over the file's
+   `acta_conf_api_key_status()` in `acta_db` (`conf.h` / `conf.c`) —
+   `$OPENAI_API_KEY` (if set, even empty) wins over the file's
    `api_key`; canonical one-line messages for unset / empty / ok; plus
    `acta_conf_read()` (file missing/unreadable = fallback unavailable,
    readable-but-malformed = fail-closed hard error) and
    `acta_conf_default_path()` (`ACTA Gamma.conf` next to the default DB
-   file). Wired into `cmd_run` (`acta_runner/src/run.c`). Remaining:
-   the `runnerWorker` side with the GUI's Qt-parsed key (work item 6),
-   and the `runnerWorker` side landed with work item 6; remaining: the
-   tests (work item 7).
-3. **In progress —** DB-path resolution: insert the file into
+   file). Wired into `cmd_run` (`acta_runner/src/run.c`); the
+   `runnerWorker` side landed with work item 6 and the tests with work
+   item 7.
+3. **Done —** DB-path resolution: insert the file into
    `acta_dbpath.c` (both copies) and `MainWindow::defaultDbPath` as the
    step between `$ACTA_DB` and the app-data default; keep the
    `acta_cli/tests/dbpath` suite as the pinning mechanism (it already
@@ -242,14 +242,15 @@ stay as-is.
    built-in defaults; the runner passes the resolved values into the
    pipeline (`run_execution` gains the limit parameter; `cmd_run` already
    has `--timeout`, the GUI worker takes its timeout from the resolved
-   default). Done so far: `ACTA_CONF_DEFAULT_MAX_CHARS` (100,000) and
+   default). `ACTA_CONF_DEFAULT_MAX_CHARS` (100,000) and
    `ACTA_CONF_DEFAULT_TIMEOUT` (300) plus `acta_conf_resolve_max_chars()`
    (file → built-in default; no flag/env exists) and
    `acta_conf_resolve_timeout()` (--timeout flag → file → built-in
    default) in `acta_db` (`conf.h` / `conf.c`); `cmd_run` resolves both
    after the conf read and passes them to `run_execution`, whose
-   signature gains the `max_chars` limit parameter (consumed later by the
-   preflight size check, `docs/plans/max-chars-size-check.md`); usage/help
+   signature gains the `max_chars` limit parameter (consumed by the
+   preflight size check, now shipped —
+   `docs/plans/max-chars-size-check.md`, done); usage/help
    text updated; the GUI worker side landed with work item 6.
 5. **Done (POSIX) / follow-up (Windows) —** Permission checks,
    platform-split:
