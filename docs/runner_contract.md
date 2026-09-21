@@ -56,8 +56,10 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   `tests/run/test_deleted.c` (soft-delete claim: `run <id>` on a
   deleted row → not-found before claim; `run --pending` is live-only),
   `tests/run/test_sweep.c` (in-process sweep logic). The size-check
-  scenarios of docs/plans/max-chars-size-check.md (work item 4) land in
-  `tests/run/test_run.c`.
+  scenarios of docs/plans/max-chars-size-check.md (work item 4) are
+  `tests/run/test_run.c` scenarios 16 (over the limit: fails preflight,
+  no backend call, exact message) and 17 (at the limit: proceeds and
+  completes).
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server

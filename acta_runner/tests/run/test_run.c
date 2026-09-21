@@ -17,7 +17,12 @@
  *   11. unknown config key -> failed + EXIT_INVALID
  *   12. malformed config JSON -> failed + EXIT_INVALID
  *   13. wrong config key type -> failed + EXIT_INVALID
- *   14. empty context content -> failed + EXIT_INVALID
+ *   14. config carrying api_key -> failed + EXIT_INVALID (unknown key)
+ *   15. empty context content -> failed + EXIT_INVALID
+ *   16. prompt too large (total over max_chars, lowered limit via the
+ *   run_execution max_chars test hook) -> failed + EXIT_INVALID preflight,
+ *       no backend call reaches the stub, exact message
+ *   17. at the limit (total_chars == max_chars) -> completed
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
  * Exit code: 0 = all pass, 1 = at least one failure.
@@ -211,7 +216,7 @@ static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
                      const char *output_schema,
                      const char *model_config,
                      const char *ctx_content,
-                     int timeout_sec, int expect_exit,
+                     int timeout_sec, long max_chars, int expect_exit,
                      const char *expect_status,
                      const char *expect_raw,
                      const char *expect_err_substr,
@@ -236,8 +241,7 @@ static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
         return -1;
     }
 
-    int rc = run_execution(db, id, timeout_sec, ACTA_CONF_DEFAULT_MAX_CHARS,
-                           NULL);
+    int rc = run_execution(db, id, timeout_sec, max_chars, NULL);
     check(rc == expect_exit, "exit code");
 
     int err = ACTA_DB_OK;
@@ -305,7 +309,8 @@ int main(void)
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
         int sid = scenario("success", db, &cfg, NULL, NULL,
-                           "CTX-CONTENT", 30, EXIT_OK,
+                           "CTX-CONTENT", 30,
+                           ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_OK,
                            ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
                            EVT_FULL_SUCCESS, sizeof(EVT_FULL_SUCCESS) /
                            sizeof(EVT_FULL_SUCCESS[0]));
@@ -336,7 +341,7 @@ int main(void)
         cfg.chat_status = 200;
         cfg.chat_content = "stub-response";
         scenario("health 503", db, &cfg, NULL, NULL, "CTX-CONTENT",
-                 30, EXIT_HTTP,
+                 30, ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_HTTP,
                  ACTA_EXEC_STATUS_FAILED, NULL, "still loading", NULL, 0);
     }
 
@@ -351,7 +356,7 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("model mismatch", db, &cfg, NULL, NULL, "CTX-CONTENT",
-                 30, EXIT_HTTP,
+                 30, ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_HTTP,
                  ACTA_EXEC_STATUS_FAILED, NULL, "not served by server",
                  events, 1);
     }
@@ -368,7 +373,7 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "llm_request", "execution_failed" };
         scenario("chat 500", db, &cfg, NULL, NULL, "CTX-CONTENT", 30,
-                 EXIT_HTTP,
+                 ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_HTTP,
                  ACTA_EXEC_STATUS_FAILED, NULL, "500",
                  events, 2);
     }
@@ -384,7 +389,7 @@ int main(void)
         cfg.chat_content = "stub-response";
         cfg.delay_ms = 2500;
         scenario("timeout", db, &cfg, NULL, NULL, "CTX-CONTENT",
-                 1, EXIT_TIMEOUT,
+                 1, ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_TIMEOUT,
                  ACTA_EXEC_STATUS_FAILED, NULL, "timed out", NULL, 0);
     }
 
@@ -444,7 +449,8 @@ int main(void)
             "execution_failed",
         };
         scenario("schema validation failure", db, &cfg, schema,
-                 model_config, "CTX-CONTENT", 30, EXIT_INVALID,
+                 model_config, "CTX-CONTENT", 30,
+                 ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, "not-json-at-all",
                  "validation failed", events, 4);
     }
@@ -464,7 +470,8 @@ int main(void)
         const char *model_config = "{\"supports_response_format\":false}";
         const char *events[] = { "validation_started", "execution_completed" };
         scenario("schema validation success", db, &cfg, schema,
-                 model_config, "CTX-CONTENT", 30, EXIT_OK,
+                 model_config, "CTX-CONTENT", 30,
+                 ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_OK,
                  ACTA_EXEC_STATUS_COMPLETED, "{\"answer\":\"ok\"}", NULL,
                  events, 2);
     }
@@ -483,7 +490,7 @@ int main(void)
         const char *events[] = { "preflight_passed" };
         int cid = scenario("missing catalog", db, &cfg, NULL, NULL,
                            "CTX-CONTENT", 30,
-                           EXIT_OK,
+                           ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_OK,
                            ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
                            events, 1);
         if (cid > 0) {
@@ -505,7 +512,8 @@ int main(void)
         const char *events[] = { "execution_failed" };
         scenario("unknown config key", db, &cfg, NULL,
                  "{\"temperature\":0.7,\"temperatue\":1}",
-                 "CTX-CONTENT", 30, EXIT_INVALID,
+                 "CTX-CONTENT", 30, ACTA_CONF_DEFAULT_MAX_CHARS,
+                 EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "unknown model configuration keys", events, 1);
     }
@@ -521,7 +529,8 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("malformed config JSON", db, &cfg, NULL,
-                 "{\"temperature\":0.7", "CTX-CONTENT", 30, EXIT_INVALID,
+                 "{\"temperature\":0.7", "CTX-CONTENT", 30,
+                 ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "not valid JSON", events, 1);
     }
@@ -538,7 +547,7 @@ int main(void)
         const char *events[] = { "execution_failed" };
         scenario("wrong config key type", db, &cfg, NULL,
                  "{\"temperature\":\"high\"}", "CTX-CONTENT", 30,
-                 EXIT_INVALID,
+                 ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "must be a number", events, 1);
     }
@@ -557,7 +566,8 @@ int main(void)
         const char *events[] = { "execution_failed" };
         scenario("config api_key is an unknown key", db, &cfg, NULL,
                  "{\"api_key\":\"secret\",\"temperature\":0.7}",
-                 "CTX-CONTENT", 30, EXIT_INVALID,
+                 "CTX-CONTENT", 30, ACTA_CONF_DEFAULT_MAX_CHARS,
+                 EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL,
                  "unknown model configuration keys", events, 1);
     }
@@ -573,9 +583,67 @@ int main(void)
         cfg.chat_content = "stub-response";
         const char *events[] = { "execution_failed" };
         scenario("empty context content", db, &cfg, NULL, NULL,
-                 "", 30, EXIT_INVALID,
+                 "", 30, ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_INVALID,
                  ACTA_EXEC_STATUS_FAILED, NULL, "empty context content",
                  events, 1);
+    }
+
+    /* 16. prompt too large: the assembled prompt ("SYS-TEMPLATE" = 12
+     *     chars + "CTX-CONTENT" = 11 chars = 23 total) exceeds the
+     *     lowered max_chars limit (20), passed via the run_execution
+     *     max_chars parameter — the test hook the plan allows instead
+     *     of a 100,001-char fixture. The failure must happen in
+     *     preflight BEFORE any backend call: no preflight_passed, no
+     *     llm_request, and no /v1/chat/completions request reaches the
+     *     stub. (docs/plans/max-chars-size-check.md, work item 4) */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        const char *events[] = { "execution_failed" };
+        int cid = scenario("prompt too large", db, &cfg, NULL, NULL,
+                           "CTX-CONTENT", 30, 20, EXIT_INVALID,
+                           ACTA_EXEC_STATUS_FAILED, NULL,
+                           "exceeds max_chars", events, 1);
+        if (cid > 0) {
+            check(!log_has_event(db, cid, "preflight_passed"),
+                  "no preflight_passed (check fails before any backend "
+                  "call)");
+            check(!log_has_event(db, cid, "llm_request"),
+                  "no llm_request (no /v1/chat/completions request "
+                  "reached the stub)");
+            int err = ACTA_DB_OK;
+            execution_t *e = acta_db_execution_get(db, cid, &err);
+            check(e && e->error &&
+                      strcmp(e->error,
+                             "prompt too large: 23 chars total "
+                             "(context 11 + skill prompt 12) "
+                             "exceeds max_chars 20") == 0,
+                  "exact prompt-too-large message");
+            acta_db_execution_free(e);
+        }
+    }
+
+    /* 17. at the limit: 23 total chars against max_chars = 23 is NOT
+     *     over (the rule is total_chars > max_chars), so the execution
+     *     proceeds to the chat call and completes. */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        scenario("at the limit (== passes)", db, &cfg, NULL, NULL,
+                 "CTX-CONTENT", 30, 23, EXIT_OK,
+                 ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
+                 EVT_FULL_SUCCESS,
+                 sizeof(EVT_FULL_SUCCESS) / sizeof(EVT_FULL_SUCCESS[0]));
     }
 
     acta_db_close(db);

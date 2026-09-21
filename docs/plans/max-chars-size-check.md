@@ -1,17 +1,17 @@
 # Plan — `max_chars` size check at the execution level
 
-Status: **mostly done — the check, the config-file override, and the
-docs are in; the tests remain.** Companion of
+Status: **done.** Companion of
 `docs/plans/acta-config-file.md` (the per-machine override of the
-limit). Done so far: `run_execution` (carried by `cmd_run` and the GUI
+limit). Landed: `run_execution` (carried by `cmd_run` and the GUI
 worker) takes the `max_chars` limit parameter, the limit is resolved per
 the file-over-builtin order by the shared helper
 (`acta_conf_resolve_max_chars`, built-in default 100,000 chars; the
 file override, `docs/plans/acta-config-file.md` work item 4), and the
 preflight size check consumes the limit (work item 1). The docs
 (README "How a run is assembled" paragraph; `docs/runner_contract.md`
-decision 8 + pipeline step 3) landed with work item 3. Remaining: the
-tests (work item 4).
+decision 8 + pipeline step 3) landed with work item 3, and the tests
+(`acta_runner/tests/run/test_run.c` scenarios 16/17) landed with work
+item 4.
 
 ## Context
 
@@ -74,7 +74,7 @@ the chat call is what happens today and is what this plan removes.
   `max_context` is still read and recorded in `preflight_passed`; it is
   not used by the check.
 
-## Work items (partially started)
+## Work items
 
 1. **Done —** `acta_runner/src/run.c`: the check in preflight
    (post-resolve, before any backend call), consuming the resolved
@@ -90,11 +90,18 @@ the chat call is what happens today and is what this plan removes.
      guard and the backend `max_context` is the final arbiter);
    - `docs/runner_contract.md` — decision 8 (prompt size limit: rule,
      exit code, message, limit source) plus the step-3 preflight line.
-4. Tests (`acta_runner/tests/run/test_run.c`): a scenario with a prompt
-   over the built-in default (or a lowered limit via the test hook) →
-   execution fails preflight, **no** `/v1/chat/completions request reaches
-   the stub, message as specified; a just-under-limit scenario proceeds
-   to the call.
+4. **Done —** Tests (`acta_runner/tests/run/test_run.c`): the
+   `scenario()` helper gained a `max_chars` argument (the lowered-limit
+   test hook, no 100,001-char fixture) and all existing call sites pass
+   `ACTA_CONF_DEFAULT_MAX_CHARS`. Scenario 16: 23-char prompt
+   (`"SYS-TEMPLATE"` 12 + `"CTX-CONTENT"` 11) against a limit of 20 →
+   fails preflight with `EXIT_INVALID`, **no** `preflight_passed` /
+   `llm_request` log rows (no `/v1/chat/completions` request reaches the
+   stub), `execution_failed` row, and the exact message. Scenario 17:
+   the same prompt against a limit of 23 (total == limit is not over)
+   → proceeds to the call and completes. File header scenario list
+   updated to 1–17 (also fixing the pre-existing off-by-one numbering
+   of the `config api_key` / `empty context` blocks).
 5. The GUI needs no separate work (same pipeline function).
 
 ## Deliberately out of scope
