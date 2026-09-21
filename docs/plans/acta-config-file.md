@@ -1,16 +1,23 @@
 # Plan — optional config file: API key, database path, max_chars, default timeout
 
-Status: **partially started — work item 1 (the JSON config parser) is
-implemented; work items 2 (the key precedence policy) and 3 (DB-path
-resolution) are started: the shared key helper (`acta_conf_api_key_status`,
-plus the file-read plumbing `acta_conf_read` / `acta_conf_default_path`)
-lives in `acta_db` (`conf.h` / `conf.c`) and is wired into the runner's
-`cmd_run`; the config-file `db` step is in `acta_db_resolve_db_path`
-(both `acta_dbpath.c` copies) and `MainWindow::defaultDbPath` (Qt
-reader), wired into both `main.c` entry points and the GUI bootstrap,
-with the `acta_cli/tests/dbpath` suite extended for the file step; the
-GUI runnerWorker key side lands with work item 6. The remaining work
-items are not started.** This remains a
+Status: **partially started — work items 1 (the JSON config parser), 2
+(the key precedence policy), 3 (DB-path resolution) and 4 (max_chars /
+timeout resolution) are implemented: the shared `acta_conf` helper
+(`acta_conf_parse`, `acta_conf_api_key_status`, `acta_conf_read`,
+`acta_conf_default_path`, and the resolution helpers
+`acta_conf_resolve_max_chars` / `acta_conf_resolve_timeout` with the
+built-in defaults) lives in `acta_db` (`conf.h` / `conf.c`); the key
+policy is wired into the runner's `cmd_run`; the config-file `db` step is
+in `acta_db_resolve_db_path` (both `acta_dbpath.c` copies) and
+`MainWindow::defaultDbPath` (Qt reader), wired into both `main.c` entry
+points and the GUI bootstrap, with the `acta_cli/tests/dbpath` suite
+extended for the file step; `cmd_run` now resolves `timeout` (--timeout
+flag → file → built-in 300 s) and `max_chars` (file → built-in 100,000
+chars) and passes both into the pipeline — `run_execution` gained the
+`max_chars` limit parameter (the preflight size check that consumes it
+lands with `docs/plans/max-chars-size-check.md`). The GUI runnerWorker
+key and timeout sides land with work item 6. The remaining work items are
+not started.** This remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
 
@@ -193,11 +200,20 @@ stay as-is.
    default; flag/env still win over file; absent/empty key; malformed /
    unknown-key / wrong-type = hard error even with `$ACTA_DB` set; missing
    file = default).
-4. `max_chars` / `timeout` resolution: shared helper with the built-in
-   defaults; the runner passes the resolved values into the pipeline
-   (`run_execution` gains the limit parameter; `cmd_run` already has
-   `--timeout`, the GUI worker takes its timeout from the resolved
-   default).
+4. **Done —** `max_chars` / `timeout` resolution: shared helper with the
+   built-in defaults; the runner passes the resolved values into the
+   pipeline (`run_execution` gains the limit parameter; `cmd_run` already
+   has `--timeout`, the GUI worker takes its timeout from the resolved
+   default). Done so far: `ACTA_CONF_DEFAULT_MAX_CHARS` (100,000) and
+   `ACTA_CONF_DEFAULT_TIMEOUT` (300) plus `acta_conf_resolve_max_chars()`
+   (file → built-in default; no flag/env exists) and
+   `acta_conf_resolve_timeout()` (--timeout flag → file → built-in
+   default) in `acta_db` (`conf.h` / `conf.c`); `cmd_run` resolves both
+   after the conf read and passes them to `run_execution`, whose
+   signature gains the `max_chars` limit parameter (consumed later by the
+   preflight size check, `docs/plans/max-chars-size-check.md`); usage/help
+   text updated. Remaining: the GUI worker taking its timeout from the
+   resolved default (work item 6).
 5. Permission checks, platform-split:
    - POSIX: `stat()` mode bits; refuse group/other-readable files.
    - Windows: **not** via `st_mode` (meaningless, always `0666`). The NTFS

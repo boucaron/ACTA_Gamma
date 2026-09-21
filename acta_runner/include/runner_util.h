@@ -37,7 +37,7 @@ int cmd_sweep(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
  * POST /v1/chat/completions, set_raw_response, optional post-hoc
  * output_schema validation, complete/fail — logging an execution_log
  * row per phase. Returns the process exit code. */
-int run_execution(db_t *db, int exec_id, int timeout_sec,
+int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
                   const char *api_key);
 
 /* Parse a positive-integer id ("42") from a CLI argument.

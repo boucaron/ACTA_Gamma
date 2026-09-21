@@ -58,7 +58,8 @@ static void run_usage(FILE *out)
         "Flags:\n"
         "  --pending       Run pending executions instead of one id\n"
         "  --max <n>       Max executions to run with --pending (0 = no limit)\n"
-        "  --timeout <sec> Backend timeout in seconds (default 300)\n",
+        "  --timeout <sec> Backend timeout in seconds (default: config\n"
+        "                   file \"timeout\", else 300)\n",
         out);
 }
 
@@ -67,7 +68,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     (void)gopts;
     int pending = cmd_args_has_flag(ga, "pending");
     int max = 0;
-    int timeout = 300;
+    int timeout = 0; /* parsed --timeout; 0 = flag not given */
     const char *api_key = NULL;
     char msg[192];
 
@@ -131,6 +132,18 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
      * (conf_missing is recorded for the log; the policy itself only
      * needs the NULL/empty/non-empty distinction of file_key.) */
 
+    /* Per-machine settings resolution
+     * (docs/plans/acta-config-file.md, work item 4):
+     *   timeout:   --timeout flag -> config file "timeout"
+     *              -> built-in default (300 s);
+     *   max_chars: config file "max_chars" -> built-in default
+     *              (100,000 chars).  No flag/env for max_chars exists;
+     *              the value is passed into the pipeline (run_execution
+     *              limit parameter) and consumed by the preflight size
+     *              check (docs/plans/max-chars-size-check.md). */
+    timeout = acta_conf_resolve_timeout(&conf, timeout);
+    long max_chars = acta_conf_resolve_max_chars(&conf);
+
     const char *id_str = cmd_args_next_positional(ga);
 
     if (pending && id_str) {
@@ -180,7 +193,8 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         VLOG(1, "cmd_run: running %d pending execution(s)", n);
         int worst = EXIT_OK;
         for (int i = 0; i < n; i++) {
-            int rc = run_execution(db, rows[i]->id, timeout, api_key);
+            int rc = run_execution(db, rows[i]->id, timeout, max_chars,
+                                   api_key);
             if (rc != EXIT_OK && rc > worst)
                 worst = rc;
         }
@@ -201,7 +215,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         return EXIT_INVALID;
     }
 
-    int rc = run_execution(db, id, timeout, api_key);
+    int rc = run_execution(db, id, timeout, max_chars, api_key);
     acta_conf_free(&conf);
     return rc;
 }
@@ -390,9 +404,18 @@ static int schema_check(const cJSON *schema, const cJSON *value,
 
 /* ── single-execution pipeline ──────────────────────────────────────── */
 
-int run_execution(db_t *db, int exec_id, int timeout_sec,
+int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
                   const char *api_key)
 {
+    /* max_chars: the resolved prompt size limit (config file -> built-in
+     * default), resolved by the caller via acta_conf_resolve_max_chars
+     * (docs/plans/acta-config-file.md, work item 4).  The pipeline does
+     * not consume it yet: the preflight size check that compares
+     * strlen(prompt_template) + strlen(context.content) against it lands
+     * with docs/plans/max-chars-size-check.md.  The parameter exists now
+     * so that plan only adds the check, not the plumbing. */
+    (void)max_chars;
+
     int exit_code_ = EXIT_OK;  /* set by FAIL, consumed at `done:` */
     char errmsg[512];           /* set by FAIL, consumed at `done:` */
     cJSON *jr = NULL;           /* parsed response; freed at `done:` */

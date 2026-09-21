@@ -330,3 +330,27 @@ int acta_conf_api_key_status(const char *env_key, const char *file_key,
         *msg = NULL;
     return ACTA_KEY_OK;
 }
+
+/*
+ * Resolution helpers -- work item 4 of
+ * docs/plans/acta-config-file.md.  The file supplies per-machine
+ * defaults; it is never a per-run override.  acta_conf_parse already
+ * guarantees a present value is a positive integer, so 0 is exactly
+ * "absent from the file".
+ */
+
+long acta_conf_resolve_max_chars(const acta_conf_t *conf)
+{
+    if (conf && conf->max_chars > 0)
+        return conf->max_chars;
+    return ACTA_CONF_DEFAULT_MAX_CHARS;
+}
+
+int acta_conf_resolve_timeout(const acta_conf_t *conf, int flag_timeout)
+{
+    if (flag_timeout > 0)
+        return flag_timeout;
+    if (conf && conf->timeout > 0)
+        return (int)conf->timeout;
+    return ACTA_CONF_DEFAULT_TIMEOUT;
+}

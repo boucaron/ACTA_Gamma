@@ -236,7 +236,8 @@ static int scenario(const char *name, db_t *db, const stub_config_t *cfg,
         return -1;
     }
 
-    int rc = run_execution(db, id, timeout_sec, NULL);
+    int rc = run_execution(db, id, timeout_sec, ACTA_CONF_DEFAULT_MAX_CHARS,
+                           NULL);
     check(rc == expect_exit, "exit code");
 
     int err = ACTA_DB_OK;
@@ -403,9 +404,13 @@ int main(void)
             cfg.chat_status = 200;
             cfg.chat_content = "stub-response";
             if (id > 0 && stub_server_start(&cfg) == 0) {
-                int rc1 = run_execution(db, id, 30, NULL);
+                int rc1 =
+                    run_execution(db, id, 30, ACTA_CONF_DEFAULT_MAX_CHARS,
+                                 NULL);
                 check(rc1 == EXIT_OK, "first run succeeds");
-                int rc2 = run_execution(db, id, 30, NULL);
+                int rc2 =
+                    run_execution(db, id, 30, ACTA_CONF_DEFAULT_MAX_CHARS,
+                                 NULL);
                 check(rc2 == EXIT_INVALID, "second run rejected (not pending)");
             }
             stub_server_stop();
@@ -415,7 +420,8 @@ int main(void)
     /* 7. not found */
     {
         printf("== not found\n");
-        int rc = run_execution(db, 999999, 30, NULL);
+        int rc = run_execution(db, 999999, 30, ACTA_CONF_DEFAULT_MAX_CHARS,
+                               NULL);
         check(rc == EXIT_NOT_FOUND, "unknown id -> EXIT_NOT_FOUND");
     }
 

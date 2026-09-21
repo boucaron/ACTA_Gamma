@@ -121,6 +121,44 @@ const char *acta_conf_default_path(void);
 int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
                    char **err_msg);
 
+/*
+ * Built-in defaults for the two per-machine settings that have no
+ * flag/env source of their own (docs/plans/acta-config-file.md, work
+ * item 4; docs/plans/max-chars-size-check.md):
+ *   ACTA_CONF_DEFAULT_MAX_CHARS — maximum total chars of the prompt sent
+ *                                 (skill.prompt_template + context.content);
+ *   ACTA_CONF_DEFAULT_TIMEOUT   — default per-call HTTP timeout (seconds).
+ * The config file may override either; the file supplies defaults, never
+ * per-run overrides.
+ */
+#define ACTA_CONF_DEFAULT_MAX_CHARS 100000
+#define ACTA_CONF_DEFAULT_TIMEOUT 300
+
+/*
+ * Resolve the prompt size limit: config file -> built-in default.
+ * Precedence (docs/plans/acta-config-file.md): "max_chars" (file) ->
+ * ACTA_CONF_DEFAULT_MAX_CHARS. There is no env var or CLI flag for
+ * max_chars, so the file is the top rung.
+ *
+ * `conf` is a parsed acta_conf_t (e.g. from acta_conf_read()); it may be
+ * fully zeroed when the file was missing or unreadable, or NULL.
+ * acta_conf_parse guarantees the value, when present, is a positive
+ * integer, so "absent" is exactly 0.
+ */
+long acta_conf_resolve_max_chars(const acta_conf_t *conf);
+
+/*
+ * Resolve the default per-call HTTP timeout: --timeout flag -> config
+ * file -> built-in default.
+ * Precedence (docs/plans/acta-config-file.md): --timeout (per-run flag)
+ * -> "timeout" (file) -> ACTA_CONF_DEFAULT_TIMEOUT. The file supplies
+ * the default, never a per-run override.
+ *
+ * `flag_timeout` is the parsed --timeout value, or 0 when the flag was
+ * not given. `conf` as above. Returns a positive number of seconds.
+ */
+int acta_conf_resolve_timeout(const acta_conf_t *conf, int flag_timeout);
+
 #ifdef __cplusplus
 } 
 #endif
