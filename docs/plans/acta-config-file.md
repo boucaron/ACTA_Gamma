@@ -1,12 +1,16 @@
 # Plan — optional config file: API key, database path, max_chars, default timeout
 
 Status: **partially started — work item 1 (the JSON config parser) is
-implemented; work item 2 (the key precedence policy) is started: the
-shared helper (`acta_conf_api_key_status`, plus the file-read plumbing
-`acta_conf_read` / `acta_conf_default_path`) lives in `acta_db`
-(`conf.h` / `conf.c`) and is wired into the runner's `cmd_run`; the GUI
-side lands with its Qt reader in work item 6. The remaining work items
-are not started.** This remains a
+implemented; work items 2 (the key precedence policy) and 3 (DB-path
+resolution) are started: the shared key helper (`acta_conf_api_key_status`,
+plus the file-read plumbing `acta_conf_read` / `acta_conf_default_path`)
+lives in `acta_db` (`conf.h` / `conf.c`) and is wired into the runner's
+`cmd_run`; the config-file `db` step is in `acta_db_resolve_db_path`
+(both `acta_dbpath.c` copies) and `MainWindow::defaultDbPath` (Qt
+reader), wired into both `main.c` entry points and the GUI bootstrap,
+with the `acta_cli/tests/dbpath` suite extended for the file step; the
+GUI runnerWorker key side lands with work item 6. The remaining work
+items are not started.** This remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
 
@@ -171,11 +175,24 @@ stay as-is.
    file). Wired into `cmd_run` (`acta_runner/src/run.c`). Remaining:
    the `runnerWorker` side with the GUI's Qt-parsed key (work item 6),
    and the tests (work item 7).
-3. DB-path resolution: insert the file into `acta_dbpath.c` (both copies)
-   and `MainWindow::defaultDbPath` as the step between `$ACTA_DB` and the
-   app-data default; keep the `acta_cli/tests/dbpath` suite as the pinning
-   mechanism (it already asserts the exact per-platform default string and
-   resolution order).
+3. **In progress —** DB-path resolution: insert the file into
+   `acta_dbpath.c` (both copies) and `MainWindow::defaultDbPath` as the
+   step between `$ACTA_DB` and the app-data default; keep the
+   `acta_cli/tests/dbpath` suite as the pinning mechanism (it already
+   asserts the exact per-platform default string and resolution order).
+   Done so far: `acta_db_resolve_db_path(flag, &err_msg)` consults the
+   file's `db` (missing/unreadable skipped; readable-but-malformed = hard
+   error, `err_msg` malloc'd; empty value = absent) and new
+   `acta_db_default_db_path()` pins the lower rungs; both `main.c`
+   entry points hard-error on a malformed file, and the legacy
+   `./acta.db` hint now fires only when the default path was actually
+   used; `MainWindow::defaultDbPath(QString *error)` uses the Qt
+   (QJsonDocument) reader — same fail-closed rules as `acta_conf_parse` —
+   and the GUI bootstrap exits on a malformed file (dialog choice stays
+   on top); the dbpath suite gains the file-step cases (file wins over
+   default; flag/env still win over file; absent/empty key; malformed /
+   unknown-key / wrong-type = hard error even with `$ACTA_DB` set; missing
+   file = default).
 4. `max_chars` / `timeout` resolution: shared helper with the built-in
    defaults; the runner passes the resolved values into the pipeline
    (`run_execution` gains the limit parameter; `cmd_run` already has

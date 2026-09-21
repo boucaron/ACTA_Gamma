@@ -17,11 +17,17 @@
 #include <QMessageBox>
 #include <QPixMap>
 #include <QPushButton>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QJsonValue>
 #include <QSplitter>
 #include <QSettings>
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+
+#include <climits>
 
 // Cached app logo (UR #28): the resource is loaded only once and
 // reused for both the window icon and the header row. QIcon scales
@@ -32,7 +38,113 @@ static QPixmap logoPixmap()
     return pm;
 }
 
-QString MainWindow::defaultDbPath()
+namespace {
+
+/* Config-file contract (docs/plans/acta-config-file.md) — the Qt
+ * counterpart of acta_conf_parse in acta_db/conf.c: one JSON object
+ * with at most "api_key" (string), "db" (string), "max_chars" /
+ * "timeout" (positive integer).  Fail-closed on not-an-object, unknown
+ * key, wrong type, or malformed JSON — the same rules as the C parser,
+ * so all three binaries reject the same bad file.  Work item 6
+ * extends this to api_key / max_chars / timeout; today only "db" is
+ * consumed (defaultDbPath).
+ *
+ * A missing or unreadable file is NOT an error: the file is simply
+ * unavailable as a fallback (missing = true, valid = true).
+ */
+struct ActaConfFile {
+    QString db;         // "db" string; empty when absent
+    bool valid = true;  // false -> contract/parse error
+    bool missing = false;
+    QString error;      // one-line diagnostic when !valid
+};
+
+static bool confPosInt(const QJsonValue &v, long *out)
+{
+    if (!v.isDouble())
+        return false;
+    const double d = v.toDouble();
+    if (d <= 0.0 || d > (double)LONG_MAX)
+        return false;
+    if (d != (double)(long)d)
+        return false;
+    *out = (long)d;
+    return true;
+}
+
+static ActaConfFile readActaConfFile(const QString &path)
+{
+    ActaConfFile c;
+
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        c.missing = true; // missing or unreadable: unavailable, not an error
+        return c;
+    }
+    const QByteArray raw = f.readAll();
+
+    QJsonParseError pe;
+    const QJsonDocument doc = QJsonDocument::fromJson(raw, &pe);
+    if (pe.error != QJsonParseError::NoError) {
+        c.valid = false;
+        c.error = QStringLiteral("config is not valid JSON: %1")
+                        .arg(pe.errorString());
+        return c;
+    }
+    if (!doc.isObject()) {
+        c.valid = false;
+        c.error = QStringLiteral("config root is not an object");
+        return c;
+    }
+    const QJsonObject obj = doc.object();
+
+    // Unknown top-level key -> contract violation (mirror of the
+    // known[] check in acta_db/conf.c).
+    static const char *known[] = { "api_key", "db", "max_chars", "timeout" };
+    for (const QString &k : obj.keys()) {
+        bool ok = false;
+        for (const char *kn : known) {
+            if (k == QLatin1String(kn)) { ok = true; break; }
+        }
+        if (!ok) {
+            c.valid = false;
+            c.error = QStringLiteral("unknown config key: '%1'").arg(k);
+            return c;
+        }
+    }
+
+    if (obj.contains("api_key") && !obj["api_key"].isString()) {
+        c.valid = false;
+        c.error = QStringLiteral("config key 'api_key' must be a string");
+        return c;
+    }
+    if (obj.contains("db")) {
+        if (!obj["db"].isString()) {
+            c.valid = false;
+            c.error = QStringLiteral("config key 'db' must be a string");
+            return c;
+        }
+        c.db = obj["db"].toString();
+    }
+    long v = 0;
+    if (obj.contains("max_chars") && !confPosInt(obj["max_chars"], &v)) {
+        c.valid = false;
+        c.error = QStringLiteral(
+            "config key 'max_chars' must be a positive integer");
+        return c;
+    }
+    if (obj.contains("timeout") && !confPosInt(obj["timeout"], &v)) {
+        c.valid = false;
+        c.error = QStringLiteral(
+            "config key 'timeout' must be a positive integer");
+        return c;
+    }
+    return c;
+}
+
+} // namespace
+
+QString MainWindow::defaultDbPath(QString *error)
 {
     // Write the DB into a location we can actually write to (UR #9),
     // instead of next to the exe, which may be read-only.
@@ -53,6 +165,23 @@ QString MainWindow::defaultDbPath()
 #endif
     const QString baseDir = base + QStringLiteral("/ACTA Gamma");
     QDir().mkpath(baseDir);
+
+    // Config-file step (docs/plans/acta-config-file.md, work item 3):
+    // "db" in <app-data>/ACTA Gamma/ACTA Gamma.conf sits between explicit
+    // choices (the remembered dialog path; the --db/$ACTA_DB equivalents
+    // of the other binaries) and this platform default.  Missing or
+    // unreadable file -> skipped; readable-but-malformed -> hard error
+    // (empty return, *error set).
+    const ActaConfFile conf =
+        readActaConfFile(baseDir + QStringLiteral("/ACTA Gamma.conf"));
+    if (!conf.valid) {
+        if (error)
+            *error = conf.error;
+        return QString();
+    }
+    if (!conf.db.isEmpty())
+        return conf.db;
+
     return baseDir + QStringLiteral("/acta.db");
 }
 
@@ -258,7 +387,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // and apply the schema on first run. On a real failure this shows the
     // startup modal (create / pick location / exit) and leaves m_dbOk
     // false; the offline banner + Retry then keep the state visible.
-    m_dbPath = defaultDbPath();
+    // defaultDbPath consults the config file's "db" first
+    // (docs/plans/acta-config-file.md, work item 3); a readable-but-
+    // malformed config file is a hard error — no DB path is resolvable,
+    // so the operator must fix the file.
+    QString confError;
+    m_dbPath = defaultDbPath(&confError);
+    if (m_dbPath.isEmpty()) {
+        QMessageBox::critical(this, tr("Config file"),
+                              tr("%1").arg(confError));
+        QCoreApplication::exit(1);
+        return;
+    }
     // Prefer the database path remembered from a previous session (H6);
     // fall back to the default location when it is stale, in which case
     // the bootstrap modal above handles it as before.

@@ -75,8 +75,9 @@ static void help_print(FILE *out)
         "\n"
         "Global options:\n"
         "  --db <path>           Database file (default: $ACTA_DB, else the\n"
-        "                        platform app-data location — same file the\n"
-        "                        GUI uses; ./acta.db as a last resort)\n"
+        "                        config file's \"db\", else the platform\n"
+        "                        app-data location — same file the GUI uses;\n"
+        "                        ./acta.db as a last resort)\n"
         "  -v / --verbose        Stackable verbose level 0–3 (stderr)\n"
         "  --version             Print version and exit\n"
         "  --help                Print this help and exit\n"
@@ -148,9 +149,20 @@ int main(int argc, char **argv)
     }
 
     /* ---- resolve DB path ----
-     * --db → $ACTA_DB → platform app-data default (same file the GUI
-     * uses) → ./acta.db (last resort). See acta_dbpath.h. */
-    const char *db_path = acta_db_resolve_db_path(gopts.db);
+     * --db → $ACTA_DB → config file "db" → platform app-data default
+     * (same file the GUI uses) → ./acta.db (last resort).
+     * See acta_dbpath.h. A readable-but-malformed config file is a
+     * hard error (fail-closed; docs/plans/acta-config-file.md, work
+     * item 3). */
+    char *conf_err = NULL;
+    const char *db_path = acta_db_resolve_db_path(gopts.db, &conf_err);
+    if (!db_path) {
+        const char *what = conf_err ? conf_err : "config file is invalid";
+        VLOG(1, "main: ERROR %s", what);
+        free(conf_err);
+        free(gopts.argv);
+        return runner_error(ACTA_DB_ERR_INVALID, "%s", what);
+    }
 
     /* ---- open database ---- */
     int db_err = ACTA_DB_OK;
@@ -162,11 +174,11 @@ int main(int argc, char **argv)
                            "and that it is a valid SQLite database",
                            db_path, acta_db_strerror(db_err));
         /* Backward-compat: the default path was used (no --db, no
-         * $ACTA_DB), it cannot be opened, and a legacy ./acta.db exists
-         * in the working directory → point the user at it. */
-        const char *env = getenv("ACTA_DB");
+         * $ACTA_DB, no config-file "db"), it cannot be opened, and a
+         * legacy ./acta.db exists in the working directory → point the
+         * user at it. */
         if (db_err == ACTA_DB_ERR_INVALID_DB &&
-            !gopts.db && !(env && env[0])) {
+            strcmp(db_path, acta_db_default_db_path()) == 0) {
             char hint[256];
             if (acta_db_legacy_db_hint(hint, sizeof hint))
                 snprintf(msg + len, sizeof msg - (size_t)len, " %s", hint);

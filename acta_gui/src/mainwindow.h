@@ -50,7 +50,11 @@ private:
     QPushButton *m_retryButton = nullptr;
 
     // Default DB location: writable AppData dir, created if needed (UR #9).
-    static QString defaultDbPath();
+    // Consults the config file's "db" first (docs/plans/
+    // acta-config-file.md, work item 3); a readable-but-malformed
+    // config file is a hard error: returns an empty string and sets
+    // *error (may be NULL).
+    static QString defaultDbPath(QString *error = nullptr);
 
     // Preferences (H6): the database path remembered from a previous
     // session; empty when nothing is stored yet.

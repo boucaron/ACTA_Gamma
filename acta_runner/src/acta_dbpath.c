@@ -6,6 +6,8 @@
  */
 #include "acta_dbpath.h"
 
+#include <conf.h>   /* acta_conf_read / acta_conf_default_path (work item 3) */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,15 +46,8 @@ static const char *appdata_base(void)
 #endif
 }
 
-const char *acta_db_resolve_db_path(const char *flag)
+const char *acta_db_default_db_path(void)
 {
-    if (flag && flag[0])
-        return flag;
-
-    const char *env = getenv("ACTA_DB");
-    if (env && env[0])
-        return env;
-
     static char path[ACTA_DBPATH_MAX];
     const char *base = appdata_base();
     if (!base)
@@ -68,6 +63,58 @@ const char *acta_db_resolve_db_path(const char *flag)
     snprintf(path, sizeof path, "%s/ACTA Gamma/acta.db", base);
 #endif
     return path;
+}
+
+const char *acta_db_resolve_db_path(const char *flag, char **err_msg)
+{
+    if (err_msg)
+        *err_msg = NULL;
+    if (flag && flag[0])
+        return flag;
+
+    const char *env = getenv("ACTA_DB");
+    if (env && env[0])
+        return env;
+
+    /* Config-file step (docs/plans/acta-config-file.md, work item 3):
+     * "db" in ACTA Gamma.conf, in the same app-data directory as the
+     * default DB file.  A missing or unreadable file is simply
+     * unavailable (fall through to the platform default); a
+     * readable-but-malformed file is a hard error (fail-closed, the same
+     * rules as acta_conf_parse); an empty "db" value is treated as
+     * absent. */
+    acta_conf_t conf;
+    int missing = 0;
+    char *conf_err = NULL;
+    if (acta_conf_read(acta_conf_default_path(), &conf, &missing,
+                       &conf_err) != 0) {
+        if (err_msg)
+            *err_msg = conf_err; /* malloc'd; the caller frees */
+        else
+            free(conf_err);
+        return NULL;
+    }
+    if (conf.db && conf.db[0]) {
+        static char path[ACTA_DBPATH_MAX];
+        size_t n = strlen(conf.db);
+        if (n + 1 > sizeof path) {
+            char *m = (char *)malloc(256);
+            if (m)
+                snprintf(m, 256,
+                         "config file 'db' path is %zu bytes long; "
+                         "maximum is %d",
+                         n, (int)(sizeof path - 1));
+            acta_conf_free(&conf);
+            if (err_msg)
+                *err_msg = m;
+            return NULL;
+        }
+        snprintf(path, sizeof path, "%s", conf.db); /* copy before free */
+        acta_conf_free(&conf);
+        return path;
+    }
+    acta_conf_free(&conf);
+    return acta_db_default_db_path();
 }
 
 int acta_db_legacy_db_hint(char *hint, size_t hint_size)
