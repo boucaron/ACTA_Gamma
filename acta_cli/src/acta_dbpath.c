@@ -72,16 +72,15 @@ const char *acta_db_resolve_db_path(const char *flag, char **err_msg)
     if (flag && flag[0])
         return flag;
 
-    const char *env = getenv("ACTA_DB");
-    if (env && env[0])
-        return env;
-
     /* Config-file step (docs/plans/acta-config-file.md, work item 3):
      * "db" in ACTA Gamma.conf, in the same app-data directory as the
-     * default DB file.  A missing or unreadable file is simply
-     * unavailable (fall through to the platform default); a
-     * readable-but-malformed file is a hard error (fail-closed, the same
-     * rules as acta_conf_parse); an empty "db" value is treated as
+     * default DB file.  The file is consulted even when $ACTA_DB is
+     * set (a readable-but-malformed file is a fail-closed hard error,
+     * the same rules as acta_conf_parse; the precedence --db ->
+     * $ACTA_DB -> file -> platform default applies to the resolved
+     * value only, so a stray file can still never retarget a run that
+     * named its DB).  A missing or unreadable file is simply
+     * unavailable (fall through); an empty "db" value is treated as
      * absent. */
     acta_conf_t conf;
     int missing = 0;
@@ -94,6 +93,13 @@ const char *acta_db_resolve_db_path(const char *flag, char **err_msg)
             free(conf_err);
         return NULL;
     }
+
+    const char *env = getenv("ACTA_DB");
+    if (env && env[0]) {
+        acta_conf_free(&conf);
+        return env;
+    }
+
     if (conf.db && conf.db[0]) {
         static char path[ACTA_DBPATH_MAX];
         size_t n = strlen(conf.db);

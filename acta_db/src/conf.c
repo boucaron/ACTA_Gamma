@@ -288,6 +288,18 @@ int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
         *err_msg = NULL;
     if (missing)
         *missing = 0;
+    /* Contract (conf.h): on every non-success path the struct is left
+     * fully zeroed.  Zero it up front so the missing/unreadable-file
+     * path (which returns 0 with *missing set, after the file check
+     * below) cannot hand a caller an uninitialized struct -- callers
+     * such as cmd_run declare a plain `acta_conf_t conf;` and rely on
+     * this guarantee. */
+    if (conf) {
+        conf->api_key = NULL;
+        conf->db = NULL;
+        conf->max_chars = 0;
+        conf->timeout = 0;
+    }
     if (!path) {
         set_err(err_msg, "config: NULL path");
         return -1;

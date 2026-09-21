@@ -30,7 +30,21 @@ file → built-in 300 s, and `max_chars` file → built-in 100,000 chars
 passed as the `run_execution` limit parameter — a malformed config file
 (or permission-gate failure) is a fail-closed hard error before any
 claim, and the Qt reader is shared with the GUI bootstrap via
-`confreader.h`. The remaining work items are not started.** This
+`confreader.h`; work item 7 (the tests) is also implemented: the
+`acta_cli/tests/conf` suite pins the unit contract
+(`acta_conf_parse` fail-closed rules, `acta_conf_api_key_status`
+precedence — env-set-wins even when the env var is empty, file fallback,
+missing file + unset env = the existing hard error — `acta_conf_read`
+missing/malformed/bad-permissions behaviour, `acta_conf_default_path`,
+and the `max_chars`/`timeout` file-over-builtin resolution), and
+`acta_runner/tests/run/test_conf.c` pins the end-to-end `cmd_run`
+behaviour (file fallback sends the Bearer header with the file key,
+env-set-wins, empty-env-wins with no Authorization header, 0644
+refusal fail-closed before any claim on POSIX, malformed/unknown-key/
+wrong-type hard error before any claim; the stub server gained an
+`Authorization`-header capture for that) — the DB-path order
+with/without the file was already pinned by the `dbpath` suite
+(work item 3). Work item 8 (docs) remains not started.** This
 remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
@@ -256,9 +270,38 @@ stay as-is.
    `run_execution` with both; a readable-but-malformed file (or one
    failing the POSIX permission gate, already in the shared reader)
    fails closed before any claim; `src.pro` lists `confreader.h`.
-7. Tests: env-set-wins, file-fallback, bad-permissions refusal, missing
-   file + unset env → existing hard error; DB-path order with/without the
-   file; `max_chars` / `timeout` file-over-builtin order.
+7. **Done —** Tests: env-set-wins, file-fallback, bad-permissions
+   refusal, missing file + unset env → existing hard error; DB-path
+   order with/without the file; `max_chars` / `timeout` file-over-builtin
+   order. Implemented as two suites: `acta_cli/tests/conf` (auto
+   discovered by the acta_cli Makefile) — unit pins for
+   `acta_conf_parse` (at-most-four-keys, unknown key, wrong type,
+   fractional/zero/negative ints, malformed JSON, trailing garbage,
+   zeroed-struct-on-failure contract), `acta_conf_api_key_status`
+   (env-set-wins — even an empty env var; file fallback; missing file +
+   unset env = `ACTA_KEY_UNSET_ERR`), `acta_conf_read` (missing file =
+   fallback unavailable, not an error; readable-but-malformed =
+   fail-closed hard error; POSIX group/other-readable file refused
+   fail-closed before its contents are read — 0644/0604/0640/0444 all
+   refused, 0600 accepted), `acta_conf_default_path` per-platform
+   strings, and `acta_conf_resolve_max_chars`/`acta_conf_resolve_timeout`
+   file-over-builtin order (flag over file); and
+   `acta_runner/tests/run/test_conf.c` (new `CONF_TARGET` in the
+   acta_runner Makefile, in the `test` target) — end-to-end `cmd_run`
+   against the scratch `:memory:` DB + stub server, with the platform
+   app-data env var pointed at a scratch dir so
+   `acta_conf_default_path()` is controlled: missing file + unset env →
+   `EXIT_INVALID` with the row still pending (the existing hard error);
+   file fallback completes with the Bearer header carrying the FILE
+   key; env-set-wins sends the ENV key; empty env var (POSIX) wins with
+   no Authorization header; a 0644 file is refused fail-closed before
+   the claim (POSIX; the NTFS DACL check is the separate Windows
+   follow-up); malformed / unknown-key / wrong-type files are
+   fail-closed hard errors before any claim. The stub server gained
+   `stub_server_last_auth()` (captures the last `Authorization` header
+   value) so the key actually used is observable. The DB-path order
+   with/without the file was already pinned by the `dbpath` suite
+   (work item 3).
 8. Docs: README "Environment variables" section, `cli_spec.md` (the
    DB-path and key contracts), `runner_contract.md` decision 4, and the
    `max_chars` contract amended.

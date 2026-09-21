@@ -40,6 +40,7 @@ static int      g_running = 0;
 static int      g_listen = -1;
 static stub_config_t g_cfg;
 static int      g_port = 0;
+static char     g_last_auth[256]; /* Authorization value of last request */
 
 static void msleep(int ms)
 {
@@ -131,6 +132,30 @@ static const char *hdr_value(const char *hay, const char *field)
     return NULL;
 }
 
+/* Capture the Authorization header value (whitespace-trimmed) of one
+ * request, if present. */
+static void capture_auth(const char *req)
+{
+    const char *a = hdr_value(req, "Authorization:");
+    if (!a) {
+        g_last_auth[0] = '\0';
+        return;
+    }
+    while (*a == ' ' || *a == '\t')
+        a++;
+    size_t n = 0;
+    while (a[n] && a[n] != '\r' && a[n] != '\n' && n + 1 < sizeof g_last_auth) {
+        g_last_auth[n] = a[n];
+        n++;
+    }
+    g_last_auth[n] = '\0';
+}
+
+const char *stub_server_last_auth(void)
+{
+    return g_last_auth[0] ? g_last_auth : NULL;
+}
+
 /* Read the request (header + body) and serve one response. */
 static void handle_connection(int c, const stub_config_t *cfg)
 {
@@ -149,6 +174,8 @@ static void handle_connection(int c, const stub_config_t *cfg)
             break;
     }
     req[total] = '\0';
+
+    capture_auth(req);
 
     char method[16] = "", path[256] = "";
     if (sscanf(req, "%15s %255s", method, path) < 2) {
@@ -327,6 +354,7 @@ int stub_server_start(const stub_config_t *cfg)
     g_cfg = *cfg;
     if (g_cfg.catalog_status == 0)
         g_cfg.catalog_status = 200;
+    g_last_auth[0] = '\0';
     g_running = 1;
     if (pthread_create(&g_thread, NULL, server_main, NULL) != 0) {
         g_running = 0;

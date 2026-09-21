@@ -39,4 +39,12 @@ int stub_server_start(const stub_config_t *cfg);
  * listening socket. Safe to call after a failed start (no-op). */
 int stub_server_stop(void);
 
+/* The Authorization header value captured from the most recent request
+ * (e.g. "Bearer <key>"), or NULL when no request sent one (e.g. keyless
+ * run) or no request has arrived yet.  Reset on stub_server_start.
+ * Lets tests assert which API key the runner actually used
+ * (docs/plans/acta-config-file.md, work item 7: env-set-wins / file
+ * fallback). */
+const char *stub_server_last_auth(void);
+
 #endif /* ACTA_RUNNER_STUB_SERVER_H */

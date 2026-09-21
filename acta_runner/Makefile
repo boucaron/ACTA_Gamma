@@ -103,6 +103,15 @@ KEY_SRCS  := tests/run/test_api_key.c tests/stub_server.c \
 KEY_OBJS  := $(patsubst %.c, %.o, $(KEY_SRCS))
 KEY_TARGET := tests/run/test_api_key$(EXEEXT)
 
+# ---- config-file integration suite: env-set-wins, file fallback,
+#      bad-permissions refusal, missing-file hard error,
+#      max_chars/timeout resolution (docs/plans/acta-config-file.md,
+#      work item 7)
+CONF_SRCS  := tests/run/test_conf.c tests/stub_server.c \
+              src/run.c src/backend.c src/argparse.c
+CONF_OBJS  := $(patsubst %.c, %.o, $(CONF_SRCS))
+CONF_TARGET := tests/run/test_conf$(EXEEXT)
+
 # ---- dead-runner end-to-end suite: SIGKILL a real runner, sweep it ----
 # Spawns real acta_runner child processes (run, then sweep) against the
 # in-process stub server; scratch FILE db in tests/run/. ~10-15 s
@@ -165,6 +174,9 @@ $(DEL_TARGET): $(DEL_OBJS) $(ACTA_DB_LIB)
 $(KEY_TARGET): $(KEY_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(KEY_OBJS) $(TEST_LDLIBS)
 
+$(CONF_TARGET): $(CONF_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(CONF_OBJS) $(TEST_LDLIBS)
+
 $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDLIBS)
 
@@ -175,13 +187,14 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
 	$(SPAWN_PATH) $(SWEEP_TARGET)
 	$(SPAWN_PATH) $(DEL_TARGET)
 	$(SPAWN_PATH) $(KEY_TARGET)
+	$(SPAWN_PATH) $(CONF_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
 # acta_runner/ (the test spawns ./acta_runner[.exe] as child processes).
@@ -220,9 +233,12 @@ tests/run/test_deadrunner.o: tests/run/test_deadrunner.c tests/stub_server.h
 tests/run/test_api_key.o: tests/run/test_api_key.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
+tests/run/test_conf.o: tests/run/test_conf.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
         $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SWEEP_OBJS) \
         $(SWEEP_TARGET) $(DEL_OBJS) $(DEL_TARGET) $(DEAD_OBJS) \
-        $(DEAD_TARGET) $(KEY_OBJS) $(KEY_TARGET) \
-        $(SMOKE_OBJS) $(SMOKE_TARGET)
+        $(DEAD_TARGET) $(KEY_OBJS) $(KEY_TARGET) $(CONF_OBJS) \
+        $(CONF_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)
