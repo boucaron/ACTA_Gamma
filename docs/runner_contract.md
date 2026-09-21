@@ -6,7 +6,7 @@ skill + model + context, calls the OpenAI-compatible backend, and records
 the outcome (raw response, result, error, phase logs) back into the
 database.
 
-## Status: phase 2 shipped, in-app Run shipped, R8 shipped
+## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -33,6 +33,17 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   stub server serves `GET /` with a canned catalog
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
+- `src/run.c` preflight size check (docs/plans/max-chars-size-check.md,
+  work item 1): the assembled prompt is exactly `system =
+  skill.prompt_template` + `user = context.content`, so preflight compares
+  `strlen(prompt_template) + strlen(context.content)` against the
+  resolved `max_chars` limit (config file `"max_chars"` → built-in
+  default `ACTA_CONF_DEFAULT_MAX_CHARS` = 100,000 chars, resolved by
+  `acta_conf_resolve_max_chars`) and, over the limit, fails the
+  execution with `EXIT_INVALID` and `prompt too large: N chars total
+  (context X + skill prompt Y) exceeds max_chars Z` **before any backend
+  call** — a deterministic local cause instead of an opaque backend 400
+  at chat time (decision 8 below).
 - `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
   POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 13
   scenarios (success, health 503, model mismatch, chat 500, timeout,
@@ -44,7 +55,9 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   clamping, worst exit code across mixed outcomes),
   `tests/run/test_deleted.c` (soft-delete claim: `run <id>` on a
   deleted row → not-found before claim; `run --pending` is live-only),
-  `tests/run/test_sweep.c` (in-process sweep logic).
+  `tests/run/test_sweep.c` (in-process sweep logic). The size-check
+  scenarios of docs/plans/max-chars-size-check.md (work item 4) land in
+  `tests/run/test_run.c`.
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server
@@ -145,6 +158,23 @@ Implementation notes (where the spec left room):
    as `Authorization: Bearer <key>` on every request (preflight GETs and
    the chat POST); the header is optional on the server side when it has
    no `--api-key` set.
+8. **Prompt size limit (`max_chars`).** The assembled prompt is exactly
+   `system = skill.prompt_template` + `user = context.content`, so a
+   plain char count is a deterministic, model-agnostic guard: preflight
+   checks `total_chars = strlen(prompt_template) +
+   strlen(context.content)` against the resolved `max_chars` limit and,
+   if `total_chars > max_chars`, fails the execution **before any
+   backend call** with `EXIT_INVALID` and the message `prompt too large:
+   N chars total (context X + skill prompt Y) exceeds max_chars Z`
+   (same `pending → running → failed` + `execution_failed` log row as
+   the other preflight failures). The limit is resolved per-machine as
+   config file `"max_chars"` → built-in default
+   `ACTA_CONF_DEFAULT_MAX_CHARS` = 100,000 chars
+   (`acta_conf_resolve_max_chars`, `docs/plans/acta-config-file.md`); it
+   is a guard, not a window-fit guarantee — the backend's served
+   `max_context` remains the final arbiter for under-limit prompts and
+   keeps being recorded in `preflight_passed`; it is not used by the
+   check itself.
 5. **Timeouts / retries:** single request, per-call timeout resolved as
    `--timeout` (s, per-run flag) → the config file's `"timeout"` (s,
    per-machine default) → built-in default 300 s; no retries —
@@ -177,9 +207,14 @@ Implementation notes (where the spec left room):
    (`prompt_template`, `output_schema`), model revision (`base_url`,
    `model_identifier`, `configuration`); log `context_loaded`,
    `prompt_resolved`.
-3. **Preflight** (cheap, makes failures readable) — `GET /health`:
-   `503` → fail "model still loading". `GET /v1/models`: mismatched
-   `model_identifier` → fail "server is running a different model".
+3. **Preflight** (cheap, makes failures readable) — prompt size check
+   first: `total_chars = strlen(prompt_template) +
+   strlen(context.content)` vs. the resolved `max_chars` limit; over the
+   limit → `fail(EXIT_INVALID, "prompt too large: N chars total (context
+   X + skill prompt Y) exceeds max_chars Z")` before any backend call
+   (decision 8). `GET /health`: `503` → fail "model still loading".
+   `GET /v1/models`: mismatched `model_identifier` → fail "server is
+   running a different model".
    Then best-effort `GET /` (llama.cpp model catalog): the matched
    entry's `status.args` + `meta` (`n_ctx`, `n_params`, `size`, `ftype`)
    and `max_context` are recorded in a `preflight_passed` log event.
