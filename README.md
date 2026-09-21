@@ -143,12 +143,20 @@ Three steps before the example below:
 2. **Build** — from the repo root: `make all` (or per-component `make`; `make test` runs all C test suites).
 3. **Start the backend** — a llama.cpp `llama-server` in router mode, e.g. `llama-server --models-dir models -c 2048` on `127.0.0.1:8080` (canonical startup: [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1).
 
-## Environment variables
+## Environment variables and the per-machine config file
 
-* **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls (preflight and chat), used identically by `acta_runner` and `acta_gui` — the **only** key source (there is no CLI flag, and it is never stored in the database: a model `configuration` blob carrying an `api_key` key is rejected as an unknown key, `EXIT_INVALID`). It **must be set**:
-  * not set → the run does not start (runner: `ACTA_RUNNER_ERROR`, exit 4, before any execution is claimed; GUI: error shown in the run result);
-  * set but empty → warning, and no `Authorization` header is sent — acceptable only for a keyless localhost server, a bad idea in general.
-* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. When neither `--db` nor `$ACTA_DB` is set, both C binaries default to the **same** app-data file as the GUI (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA Gamma/acta.db`); `./acta.db` is only a last-resort fallback when the platform base directory is unresolvable. The GUI does **not** read `--db` or `$ACTA_DB` — it uses the same default file, and a different one can be chosen in its *Choose database file* dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
+* **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls (preflight and chat), used identically by `acta_runner` and `acta_gui`. Precedence: `$OPENAI_API_KEY` (if set — even to the empty string) → the `"api_key"` key of the per-machine config file below. The file is a fallback, not a second channel: a set environment variable always wins. There is no CLI flag, and the key is never stored in the database: a model `configuration` blob carrying an `api_key` key is rejected as an unknown key, `EXIT_INVALID`. Outcomes:
+  * env set, file key absent → the env key is used;
+  * env unset, file `"api_key"` present → the file key is used (fallback);
+  * neither present → the run does not start (runner: `ACTA_RUNNER_ERROR`, exit 4, before any execution is claimed; GUI: error shown in the run result);
+  * key empty (from either source) → warning, and no `Authorization` header is sent — acceptable only for a keyless localhost server, a bad idea in general.
+* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. Resolution order: `--db` → `$ACTA_DB` → the config file's `"db"` → the **same** app-data file as the GUI (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA Gamma/acta.db`) → `./acta.db` as a last-resort fallback when the platform base directory is unresolvable. The config file is consulted even when `$ACTA_DB` is set, so a readable-but-malformed file is a fail-closed hard error (CLI: `ACTA_CLI_ERR`, exit 10; runner: `ACTA_RUNNER_ERROR`, exit 4) rather than a silent retarget. The GUI does **not** read `--db` or `$ACTA_DB` — it uses the same default file, its config-file `"db"` step sits between the remembered *Choose database file* dialog choice and the app-data default, and a different file can still be chosen in that dialog (see [Your first session in the GUI](#your-first-session-in-the-gui)).
+* **`ACTA Gamma.conf`** — the per-machine config file: a single JSON object holding **at most** four operator settings, in the same app-data directory as the default DB file (`%APPDATA%\ACTA Gamma\ACTA Gamma.conf` on Windows, `$XDG_DATA_HOME/ACTA Gamma/ACTA Gamma.conf` on Linux, else `~/.local/share/ACTA Gamma/ACTA Gamma.conf`):
+  * `"api_key"` (string) — the key fallback above;
+  * `"db"` (string) — the database path step above;
+  * `"max_chars"` (positive integer) — the maximum total chars of the prompt sent (`skill.prompt_template` + `context.content`), per-machine override of the built-in default 100,000;
+  * `"timeout"` (positive integer, seconds) — the default per-call HTTP timeout, per-machine override of the built-in default 300 s (the `--timeout` flag, when given, still wins per run).
+  All three binaries read it through the same resolution helper (`acta_conf` in `acta_db`). Fail-closed, like the model `configuration` blob: not-an-object, unknown key, wrong type, or malformed JSON → hard error; on POSIX a file whose mode gives read access to group or other is refused before its contents are read (the file must be `0600`; on Windows the mode bits are meaningless and the NTFS DACL check is a documented follow-up, so the permission guarantee there is best-effort). Full contract: [`docs/plans/acta-config-file.md`](docs/plans/acta-config-file.md).
 
 ## Minimal end-to-end example
 
@@ -170,10 +178,12 @@ acta_cli context create --json '{"type":"text","content":"The build system shipp
 # so every "1" below is the corresponding row id)
 acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
-# 5. Set the API key environment variable.
-# The variable must exist in the environment; for a keyless localhost
-# server, setting it to empty is sufficient (no Authorization header will
-# be sent).
+# 5. Provide the API key: set the environment variable, or add an
+# "api_key" key to the config file (ACTA Gamma.conf in the same
+# app-data directory as the default DB file). The environment variable
+# wins when set (even to the empty string, which is sufficient for a
+# keyless localhost server — no Authorization header will be sent); with
+# the variable unset, the file key is the fallback.
 export OPENAI_API_KEY=
 
 # 6. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
@@ -188,7 +198,7 @@ Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --sta
 
 ## Your first session in the GUI
 
-Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). The default location is the platform app-data directory (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux) — not `./acta.db` next to the binary — and `acta_cli` / `acta_runner` resolve to the **same** file out of the box (`--db` → `$ACTA_DB` → that app-data file; `./acta.db` only as a last resort, with a hint naming such a legacy file when the default DB is missing). The GUI does not read `--db` or `$ACTA_DB`; its *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) remains for non-default setups, e.g. a legacy `./acta.db`. Then:
+Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). The default location is the platform app-data directory (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux) — not `./acta.db` next to the binary — and `acta_cli` / `acta_runner` resolve to the **same** file out of the box (`--db` → `$ACTA_DB` → the config file's `"db"` → that app-data file; `./acta.db` only as a last resort, with a hint naming such a legacy file when the default DB is missing). The GUI does not read `--db` or `$ACTA_DB`; its *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) remains for non-default setups, e.g. a legacy `./acta.db`. Then:
 
 1. **Model** — Models panel → *New…* → give it a name, the backend (`openai`), the router's address, and the model id (the GGUF file's name in your `--models-dir` folder).
 2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
@@ -232,9 +242,10 @@ Makefile overrides `CJSON_DIR` / `CJSON_LIB` / `CURL_INC` / `CURL_LIB` at a
 custom build if needed — see [`docs/building.md`](docs/building.md)):
 
 - **cJSON** ([DaveGamble/cJSON](https://github.com/DaveGamble/cJSON), MIT) —
-  used by `acta_cli/src/json.c` for the CLI's JSON input/output layer and
-  by `acta_runner/src/run.c` for request/response handling; the GUI compiles
-  `run.c` and reuses it.
+  used by `acta_cli/src/json.c` for the CLI's JSON input/output layer,
+  by `acta_db/src/conf.c` for the per-machine config-file parser, and
+  by `acta_runner/src/run.c` for request/response handling; the GUI
+  compiles `run.c` and reuses it.
 - **libcurl** ([curl](https://curl.se/), MIT-style "curl" license with an
   explicit patent grant) — used only by `acta_runner/src/backend.c`, the
   minimal wrapper around the curl easy interface for the preflight and chat

@@ -44,7 +44,16 @@ refusal fail-closed before any claim on POSIX, malformed/unknown-key/
 wrong-type hard error before any claim; the stub server gained an
 `Authorization`-header capture for that) — the DB-path order
 with/without the file was already pinned by the `dbpath` suite
-(work item 3). Work item 8 (docs) remains not started.** This
+(work item 3); work item 8 (docs) is also implemented: the README
+"Environment variables and the per-machine config file" section
+(key precedence, DB-path order including the file step, and the
+config-file contract), `docs/cli_spec.md`'s DB-file paragraph (the file
+step in the resolution order, the fail-closed hard-error rule, and the
+lockstep list), `docs/runner_contract.md` decisions 4 (auth: env →
+file fallback, fail-closed) and 5 (timeout: flag → file → built-in),
+and the `max_chars` limit-source line in
+`docs/plans/max-chars-size-check.md` (file → built-in default, resolved
+by the shared helper). All work items are now implemented.** This
 remains a
 recorded future constraint, not a current requirement. It becomes relevant
 only if ACTA Gamma outgrows single-user, single-machine use.
@@ -302,9 +311,25 @@ stay as-is.
    value) so the key actually used is observable. The DB-path order
    with/without the file was already pinned by the `dbpath` suite
    (work item 3).
-8. Docs: README "Environment variables" section, `cli_spec.md` (the
-   DB-path and key contracts), `runner_contract.md` decision 4, and the
-   `max_chars` contract amended.
+8. **Done —** Docs: README "Environment variables" section, `cli_spec.md`
+   (the DB-path and key contracts), `runner_contract.md` decision 4, and
+   the `max_chars` contract amended. Implemented as: the README section
+   retitled "Environment variables and the per-machine config file"
+   (key precedence env → file with the fallback-not-a-second-channel
+   rule, DB-path resolution `--db` → `$ACTA_DB` → file `"db"` → app-data
+   default → `./acta.db`, the four-key file contract with the 0600 /
+   fail-closed rules, and the file's role for `max_chars` / `timeout`);
+   the `cli_spec.md` DB-file paragraph amended with the file step, the
+   fail-closed hard-error rule (the file is consulted even when
+   `$ACTA_DB` is set; `ACTA_CLI_ERR` exit 10), and the lockstep list
+   including `acta_conf_default_path()` and `MainWindow::defaultDbPath`;
+   `runner_contract.md` decision 4 amended (env-set-wins, file fallback,
+   no key anywhere = the existing hard error, fail-closed malformed /
+   bad-permission file) and decision 5 amended (`--timeout` → file
+   `"timeout"` → built-in 300 s); `max-chars-size-check.md`'s limit
+   source amended (file → built-in 100,000 chars via
+   `acta_conf_resolve_max_chars`, status updated to partially started
+   with the resolution side done).
 
 ## Deliberately out of scope
 

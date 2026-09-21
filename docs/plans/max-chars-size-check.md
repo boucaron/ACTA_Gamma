@@ -1,9 +1,15 @@
 # Plan — `max_chars` size check at the execution level
 
-Status: **open — not started.** Companion of `docs/plans/acta-config-file.md`
-(the per-machine override of the limit); the check itself can be built
-first with the built-in default, and the file override lands with the
-config file.
+Status: **partially started — the limit plumbing is in, the check
+itself is not.** Companion of `docs/plans/acta-config-file.md` (the
+per-machine override of the limit). Done so far: `run_execution`
+(carried by `cmd_run` and the GUI worker) takes the `max_chars` limit
+parameter, and the limit is resolved per the file-over-builtin order
+by the shared helper (`acta_conf_resolve_max_chars`, built-in default
+100,000 chars; the file override, `docs/plans/acta-config-file.md`
+work item 4). Remaining: the preflight check that consumes the limit
+(work item 1), its tests (work item 4), and the docs (work item 3).
+The config-file resolution side (work item 2) is done.
 
 ## Context
 
@@ -55,21 +61,27 @@ the chat call is what happens today and is what this plan removes.
 - **Lifecycle:** the normal `pending → running → failed` with an
   `execution_failed` log row — same shape as the other preflight failures,
   with a deterministic local cause instead of a backend 400.
-- **Limit source:** built-in default (proposed: **100,000 chars**) →
-  per-machine override via the config file
-  (`docs/plans/acta-config-file.md`). No CLI flag in this plan (a
+- **Limit source:** config file `"max_chars"` → built-in default
+  (**100,000 chars**, `ACTA_CONF_DEFAULT_MAX_CHARS`): resolved by the
+  shared helper `acta_conf_resolve_max_chars()`
+  (`docs/plans/acta-config-file.md`, work item 4 — implemented), and the
+  resolved value is passed into `run_execution`'s limit parameter by
+  `cmd_run` and the GUI worker. No CLI flag in this plan (a
   `--max-chars` flag is a possible follow-up).
 - **Relation to `max_context`:** unchanged audit behavior — the served
   `max_context` is still read and recorded in `preflight_passed`; it is
   not used by the check.
 
-## Work items (TBD — none started)
+## Work items (partially started)
 
 1. `acta_runner/src/run.c` — the check in preflight (post-resolve), the
-   built-in default constant, and the failure path with the message above;
-   `run_execution` gains the limit parameter (default = built-in).
-2. Config-file override — with `docs/plans/acta-config-file.md` (shared
-   resolution helper).
+   built-in default constant, and the failure path with the message above.
+   Done so far: `run_execution` has the limit parameter and `cmd_run` /
+   the GUI worker pass the resolved value; the check itself is not
+   started.
+2. **Done —** Config-file override — with `docs/plans/acta-config-file.md`
+   (shared resolution helper: `acta_conf_resolve_max_chars`, file →
+   built-in 100,000 chars, passed into `run_execution`).
 3. Docs:
    - README "How a run is assembled" — a "prompt size limit" paragraph
      (what is counted, where the check happens, limit source, that it is a

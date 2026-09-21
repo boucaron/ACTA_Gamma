@@ -58,7 +58,8 @@ Implementation notes (where the spec left room):
 - The model `configuration` JSON keys the runner understands:
   `temperature`, `max_tokens`, `top_k`, and `supports_response_format`
   (bool, default `true`). The API key is NOT a configuration key — it
-  comes only from `$OPENAI_API_KEY` (decision 4);
+  comes only from `$OPENAI_API_KEY`, or, when that variable is unset,
+  the `"api_key"` key of the per-machine config file (decision 4);
   a `configuration` carrying `api_key` is rejected as an unknown key
   (`EXIT_INVALID`). `false` means the backend has no json_schema
   `response_format`: the field is not sent and the raw response is
@@ -124,20 +125,30 @@ Implementation notes (where the spec left room):
    (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
    makes the execution self-describing and protects the audit trail if
    prompt-resolution behavior changes later.
-4. **Auth:** the only key source is `$OPENAI_API_KEY` (there is no
-   `--api_key` flag, and the key is never read from the model
-   `configuration` blob — it must not be stored in the database; a
+4. **Auth:** the key sources are `$OPENAI_API_KEY` and, as a fallback,
+   the `"api_key"` key of the per-machine config file (`ACTA Gamma.conf`
+   in the app-data directory; `docs/plans/acta-config-file.md`) — there
+   is no `--api_key` flag, and the key is never read from the model
+   `configuration` blob (it must not be stored in the database; a
    `configuration` carrying an `api_key` key is rejected as an unknown
-   key and fails the execution with `EXIT_INVALID`). The variable must
-   be **set**: unset → the run does not start (runner: `ACTA_RUNNER_ERROR`,
-   exit 4, before any claim; GUI: error in the run result); empty →
-   warning and no `Authorization` header sent (acceptable only for a
-   keyless localhost server; a bad idea in general). When a key is
-   present it is sent as `Authorization: Bearer <key>` on every request
-   (preflight GETs and the chat POST); the header is optional on the
-   server side when it has no `--api-key` set.
-5. **Timeouts / retries:** single request, configurable `--timeout` (s),
-   no retries — failures are first-class artifacts here.
+   key and fails the execution with `EXIT_INVALID`). Precedence:
+   `$OPENAI_API_KEY` (if set — even to the empty string) wins over the
+   file; the file is a fallback, not a second channel. No key anywhere
+   (env unset + file key absent/missing) → the run does not start
+   (runner: `ACTA_RUNNER_ERROR`, exit 4, before any claim; GUI: error in
+   the run result); key empty (from either source) → warning and no
+   `Authorization` header sent (acceptable only for a keyless localhost
+   server; a bad idea in general). A readable-but-malformed config file
+   (or, on POSIX, one whose mode gives read access to group or other —
+   the file must be `0600`) is a fail-closed hard error before any claim,
+   even when `$OPENAI_API_KEY` is set. When a key is present it is sent
+   as `Authorization: Bearer <key>` on every request (preflight GETs and
+   the chat POST); the header is optional on the server side when it has
+   no `--api-key` set.
+5. **Timeouts / retries:** single request, per-call timeout resolved as
+   `--timeout` (s, per-run flag) → the config file's `"timeout"` (s,
+   per-machine default) → built-in default 300 s; no retries —
+   failures are first-class artifacts here.
 6. **Claim semantics:** the runner only acts on `pending`; `start()` is
    the atomic lock. Soft-deleted executions are never claimed: the
    `run --pending` batch queries live rows only (`include_deleted = 0`,
