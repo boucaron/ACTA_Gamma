@@ -111,16 +111,14 @@ const char *acta_conf_default_path(void);
  *                 *missing is set to 1; free nothing. A missing or
  *                 unreadable file is NOT an error: the file is simply
  *                 unavailable as a fallback.
- *   wrong permissions (-1, POSIX): the file exists but its mode gives
- *                 read access to group or other; fail-closed hard error
+ *   wrong permissions (-1): the file exists but its mode gives read
+ *                 access to group or other; fail-closed hard error
  *                 BEFORE the contents are read (the file may hold the
  *                 "api_key" secret and must be 0600, owner read/write
- *                 only).  On Windows (MSYS2/MinGW) the mode-bit check is
- *                 not run -- st_mode is meaningless there (always 0666
- *                 regardless of the NTFS DACL); the DACL check is a
- *                 separate follow-up work item, so the first cut does
- *                 not enforce the permission guarantee on Windows
- *                 (documented as best-effort, not verified).
+ *                 only).  On Windows (MSYS2/MinGW) the mode bits are
+ *                 meaningless (always 0666), so the gate warns on
+ *                 stderr and reads the file anyway (best-effort, not
+ *                 enforced).
  *   readable but malformed (-1): fail-closed hard error under exactly the
  *                 rules of acta_conf_parse; the struct is left fully
  *                 zeroed and *err_msg receives a malloc'd one-line

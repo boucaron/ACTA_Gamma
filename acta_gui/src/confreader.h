@@ -10,20 +10,21 @@
 // A missing or unreadable file is NOT an error: the file is simply
 // unavailable as a fallback (missing = true, valid = true).
 //
-// POSIX permission gate (work item 5, mirror of acta_conf_read in
+// Permission gate (work item 5, mirror of acta_conf_read in
 // acta_db/src/conf.c): the file may hold a secret ("api_key"), so it must
 // be 0600 (owner read/write only).  Group- or other-readable -> fail-closed
 // BEFORE the contents are read.  stat failure (no file) falls through to
-// the missing-file path.  Windows: the mode-bit check is meaningless under
-// MSYS2/MinGW (always 0666 regardless of the NTFS DACL); the DACL check is
-// a separate follow-up, so the first cut does not enforce the guarantee
-// there (documented best-effort, not verified).
+// the missing-file path.  On Windows (MSYS2/MinGW) the mode bits are
+// meaningless (always 0666), so the gate warns and reads the file anyway
+// (best-effort, not enforced).
 //
 // Shared by the two GUI read sites (work items 3 and 6):
 //   - MainWindow::defaultDbPath consumes "db" (work item 3);
 //   - RunnerWorker::runInThread consumes "api_key" / "max_chars" /
 //     "timeout" (work item 6), applying the shared key policy
 //     acta_conf_api_key_status from acta_db/conf.h.
+
+#include <cstdio>
 
 #include <QFile>
 #include <QJsonDocument>
@@ -34,10 +35,8 @@
 
 #include <climits>
 
-#ifndef _WIN32
 #include <sys/stat.h>
 #include <sys/types.h>
-#endif
 
 struct ActaConfFile {
     QString db;          // "db" string; empty when absent
@@ -70,11 +69,18 @@ inline ActaConfFile readActaConfFile(const QString &path)
 {
     ActaConfFile c;
 
-#ifndef _WIN32
     {
         struct stat st;
         if (stat(path.toLocal8Bit().constData(), &st) == 0 &&
             (st.st_mode & (S_IRGRP | S_IROTH)) != 0) {
+#ifdef _WIN32
+            fprintf(stderr,
+                    "warning: config file %s is group- or other-readable "
+                    "per its mode bits; the mode check is best-effort on "
+                    "Windows (MSYS2/MinGW always reports 0666), the file "
+                    "will be read anyway\n",
+                    path.toLocal8Bit().constData());
+#else
             c.valid = false;
             c.error =
                 QStringLiteral(
@@ -82,9 +88,9 @@ inline ActaConfFile readActaConfFile(const QString &path)
                     "be 0600 (owner read/write only)")
                     .arg(path);
             return c;
+#endif
         }
     }
-#endif
 
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {

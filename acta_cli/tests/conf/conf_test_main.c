@@ -51,8 +51,15 @@ static void check(int cond, const char *what)
     }
 }
 
+/* NULL-safe string equality: acta_conf_read leaves the struct fully
+ * zeroed on failure, so a failed read must not strcmp(NULL, ...). */
+static int str_eq(const char *a, const char *b)
+{
+    return a != NULL && b != NULL && strcmp(a, b) == 0;
+}
+
 #define T(cond)          check((cond) != 0, #cond)
-#define TSTREQ(a, b)     check(strcmp((a), (b)) == 0, #a " == " #b)
+#define TSTREQ(a, b)     check(str_eq((a), (b)), #a " == " #b)
 
 static void env_set(const char *k, const char *v)
 {
@@ -218,14 +225,10 @@ static int write_file(const char *path, const char *content, int mode)
         return 0;
     fputs(content, f);
     fclose(f);
-#ifdef _WIN32
-    (void)mode;    /* not applicable on Windows; POSIX-only gate below */
-#else
-    /* The POSIX permission gate refuses group/other-readable files;
-     * the tests pick the mode explicitly (0600 = contract mode). */
+    /* The permission gate refuses group/other-readable files; the tests
+     * pick the mode explicitly (0600 = contract mode). */
     if (chmod(path, mode) != 0)
         return 0;
-#endif
     return 1;
 }
 
@@ -248,6 +251,10 @@ static void test_read(void)
              "%s/acta_conf_test.conf", tmpdir
 #endif
              );
+
+    /* Start from a clean slate: a stale file left by a previously
+     * crashed run must not leak into the missing-file case. */
+    remove(path);
 
     acta_conf_t conf;
     int missing = 0;
@@ -284,9 +291,11 @@ static void test_read(void)
     T(conf.api_key == NULL && conf.db == NULL);
     T(conf.max_chars == 0 && conf.timeout == 0);
 
-    /* (POSIX) bad permissions: group/other-readable file is refused
-     * fail-closed BEFORE the contents are read, whatever their mode
-     * bits give read access to group or other. */
+    /* Bad permissions: a group/other-readable file is refused
+     * fail-closed BEFORE the contents are read, whatever its mode bits
+     * give read access to group or other.  POSIX-only assertion: on
+     * Windows the mode bits are meaningless (always 0666) and the gate
+     * warns and reads the file anyway (best-effort). */
 #ifndef _WIN32
     T(write_file(path, "{\"api_key\": \"k1\"}", 0644));
     err = NULL;
@@ -307,7 +316,6 @@ static void test_read(void)
     T(acta_conf_read(path, &conf, &missing, &err) == -1);
     free(err); err = NULL;
 #endif
-    /* (Windows) the mode-bit gate is not run: any mode reads. */
 
     remove(path);
 }

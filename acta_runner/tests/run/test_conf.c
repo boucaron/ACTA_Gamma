@@ -12,7 +12,9 @@
  *      a channel).
  *   5. (POSIX) bad-permissions refusal: a readable file whose mode gives
  *      group/other read access (not 0600) is refused fail-closed ->
- *      EXIT_INVALID before any claim; row stays pending.
+ *      EXIT_INVALID before any claim; row stays pending (on Windows the
+ *      gate warns and reads the file anyway, so the scenario is
+ *      POSIX-only).
  *   6. readable-but-malformed file -> EXIT_INVALID fail-closed before any
  *      claim; row stays pending.
  *   7. (unit) max_chars / timeout file-over-builtin resolution order
@@ -308,10 +310,9 @@ static int make_conf_locations(const char *tmpdir, char *base, size_t bs,
 }
 
 /* Write a config file with the contract mode 0600 (work item 5).
- * The POSIX permission gate refuses group/other-readable files, so a
+ * The permission gate refuses group/other-readable files, so a
  * default-umask (0644) file would be refused in every test that needs
- * the file to be readable.  On Windows the mode bits are meaningless
- * (always 0666) and the gate is not run. */
+ * the file to be readable. */
 static int write_conf(const char *path, const char *content)
 {
     FILE *f = fopen(path, "wb");
@@ -319,18 +320,13 @@ static int write_conf(const char *path, const char *content)
         return 0;
     fputs(content, f);
     fclose(f);
-#ifndef _WIN32
     if (chmod(path, 0600) != 0)
         return 0;
-#endif
     return 1;
 }
 
-/* POSIX-only: write a config file with an explicit (non-0600) mode,
- * to exercise the bad-permissions refusal.  (On Windows the mode bits
- * are meaningless -- always 0666 -- and the gate is not run, so the
- * helper has no callers and is not compiled there.) */
-#ifndef _WIN32
+/* Write a config file with an explicit (non-0600) mode, to exercise
+ * the bad-permissions refusal. */
 static int write_conf_mode(const char *path, const char *content,
                            int mode)
 {
@@ -343,7 +339,6 @@ static int write_conf_mode(const char *path, const char *content,
         return 0;
     return 1;
 }
-#endif
 
 static int run_stub(db_t *db, int id)
 {
@@ -521,13 +516,9 @@ int main(void)
     }
 #endif
 
-    /* 5. (POSIX) bad-permissions refusal: a readable file whose mode
-     *    gives group/other read access is refused fail-closed BEFORE
-     *    its contents are read -> EXIT_INVALID, row stays pending.
-     *    On Windows the mode bits are meaningless (always 0666) and the
-     *    gate is not run, so the scenario is skipped there (the NTFS
-     *    DACL check is a separate follow-up work item). */
-#ifndef _WIN32
+    /* 5. Bad-permissions refusal: a readable file whose mode gives
+     *    group/other read access is refused fail-closed BEFORE its
+     *    contents are read -> EXIT_INVALID, row stays pending. */
     {
         printf("== cmd_run: bad-permissions file (0644) refused\n");
         check(env_force("OPENAI_API_KEY", ENV_UNSET, NULL),
@@ -555,7 +546,6 @@ int main(void)
               "parse)");
         remove(confpath);
     }
-#endif
 
     /* 6. Readable-but-malformed file -> fail-closed hard error before
      *    any claim; row stays pending. */
