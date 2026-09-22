@@ -1,6 +1,13 @@
 # Plan — `acta_cli` backup action: atomic snapshot via `VACUUM INTO`
 
-Status: **done.** Option 2 was chosen at scheduling: the SQLite backup
+Status: **done** (implementation, schema, tests, docs) — but see
+**Current state & follow-ups** at the bottom: one open `test_tools`
+cross-check failure touches the `db.backup` entry, and the code review's limitations — the Windows backslash
+rejection, the naive self-backup guard, and the portability nit are
+now fixed; the TOCTOU caveat is deliberately accepted; and one
+`test_tools` cross-check failure remains open.
+
+Option 2 was chosen at scheduling: the SQLite backup
 C API (`sqlite3_backup_init` / `step` / `finish`) behind the small
 `acta_db` helper `acta_db_backup()` (`acta_db/include/db.h`,
 `acta_db/src/db.c`) — the target reaches SQLite only as a C API
@@ -8,7 +15,10 @@ argument, never as SQL text, and the same consistent-snapshot
 semantics hold (WAL state folded in, run against the open
 connection). The CLI action is `acta_cli db backup --to <target>` in
 `acta_cli/src/commands/db.c` (strict target validation: non-empty,
-no quote/semicolon/backslash, not the DB path itself — via the new
+no quote/semicolon characters — and no backslash on POSIX, while on
+Windows the backslash is the native separator and is allowed — not the
+same file as the DB path itself (canonicalized absolute-path
+comparison) — via the new
 `acta_db_main_path()` accessor, which stores the opened path in the
 `db_t` at `acta_db_open` — and not already existing; the `stat`
 probe doubles as the "path the process cannot create" check), payload
@@ -56,9 +66,13 @@ landed with work item 4.
      interpolation at all, same consistent-snapshot semantics, busy-safe.
      Preferred if the `acta_db` surface is touched anyway.
 - **No silent overwrite:** if `<target>` already exists the command fails
-  (standard error JSON, rc 1); there is no overwrite flag. Rotation is by
-  dated name (`acta_backup_YYYYMMDD.db`), so the operator names
-  generations.
+  as a CLI usage error (exit 10, `ACTA_CLI_ERR`, `code: -10`) — the same
+  class as the other validation failures, not a DB error; there is no
+  overwrite flag. Rotation is by dated name
+  (`acta_backup_YYYYMMDD.db`), so the operator names generations.
+- **No stdin input:** the global `--stdin` is a JSON-input flag and
+  `db backup` takes no input; passing it is rejected explicitly
+  (`ACTA_DB_ERR_INVALID`, exit 4), the same rule as `db exec`.
 - **Verification built in:** after the copy, open the backup on its own
   connection and run `PRAGMA quick_check;`; the result goes in the payload.
   A backup that does not check is reported as failed, not written-and-
@@ -103,7 +117,8 @@ landed with work item 4.
    complete database (same context row counts), `quick_check` ok in
    the payload; `--table` mode; missing `--to` → exit 10; existing
    target → rejected, file untouched; invalid characters (quote /
-   semicolon / backslash) and the DB path itself → rejected with
+   semicolon / backslash on POSIX — backslash excluded on Windows, the
+   native separator there) and the DB path itself → rejected with
    nothing written; uncreatable target → rejected.
 4. **Done —** Docs: README durability line re-pointed to
    `acta_cli db backup`; `docs/DBDesign.md` maintenance section gains
@@ -111,6 +126,44 @@ landed with work item 4.
    the frequency guidance (before destructive operations, end of
    sessions with executions, dated names outside the DB directory,
    restore by opening the backup).
+
+## Current state & follow-ups
+
+1. **Open: `test_tools` cross-check failure.**
+   `tests/tools/tools_test_main.c:451` (`TEST(rc != EXIT_CLI)`) fails for
+   exactly one of the 75 schema-generated entries, **in-process only**:
+   the same argv shapes run out-of-process (subprocess, fresh replica,
+   `./tmp` backup target) produce no `rc=10` anywhere. The `db.backup`
+   handler paths were reviewed line by line and none of its exit-10
+   branches fire for the cross-check argv (`--to ./tmp/acta_tools_backup_<pid>_<n>.db`):
+   flag present, allowed characters, ≠ db path, `stat` → ENOENT. The
+   remaining exit-10 sources are in the parse layer (`parse_globals` /
+   `cmd_args_validate`), which is where investigation continues. Until
+   this is fixed the `test_tools` suite is red even though every other
+   suite passes against the regenerated `acta_test_ref.db`.
+2. **Fixed — Windows backslash targets allowed.** The char validation
+   now bans `\` only on POSIX (`#ifndef _WIN32`); on Windows the
+   backslash is the native separator and passes. The error message is
+   platform-conditional (quote/semicolon on Windows; quote/semicolon/
+   backslash on POSIX). `db_test.c`'s `test_backup_invalid_chars`
+   excludes the backslash case on `_WIN32` accordingly, and the help
+   text (`usage_backup`) + cli_spec.md paragraph now state the
+   platform rule.
+3. **Fixed — self-backup guard compares files, not spellings.**
+   `cmd_db` now canonicalizes both sides (`canon_path`: resolve
+   relative paths against the cwd, drop trailing slashes) and compares
+   case-insensitively on Windows (`_stricmp`), so `./x`, `x`, an
+   absolute spelling, or a case variant of the DB path are all caught
+   by the DB-path-itself rule.
+4. **Accepted caveat — TOCTOU on "remove on failure".** The existence
+   check and the later open-with-`CREATE` are separate
+   moments; if another process creates the target in between, the backup
+   overwrites it and a failure would `remove()` that racing file rather
+   than only its own output. Deliberately accepted for a single-user
+   CLI; no code change.
+5. **Fixed — portability nit.** `acta_db_backup` now checks
+   `st.st_size == 0` (a zero-size backup is a failed copy) instead of
+   `st.st_size < 0`, which is ill-typed where `st_size` is unsigned.
 
 ## Deliberately out of scope
 

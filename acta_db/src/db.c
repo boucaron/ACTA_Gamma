@@ -319,7 +319,10 @@ int acta_db_backup(db_t *db, const char *target, long long *bytes_out,
 
     /* 2. The size of the written file (for the caller's payload). */
     struct stat st;
-    if (stat(target, &st) != 0 || st.st_size < 0) {
+    /* A valid backup is at least one page; a zero-size file is a
+     * failed copy.  `== 0` is used (not `< 0`) because st_size is
+     * unsigned on some platforms. */
+    if (stat(target, &st) != 0 || st.st_size == 0) {
         remove(target);
         db_set_error(db, "cannot stat the backup file");
         if (err) *err = ACTA_DB_ERR_SQL;

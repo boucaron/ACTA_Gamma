@@ -7,6 +7,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <ctype.h>
+#ifdef _WIN32
+#include <direct.h>   /* getcwd */
+#else
+#include <unistd.h>   /* getcwd */
+#endif
 
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
@@ -57,6 +63,43 @@ static void usage_exec(FILE *f)
 "\n", f);
 }
 
+/* ── path identity for the self-backup guard ──────────────────────
+ * Canonicalize `p` into `out` (caller-provided, outsz bytes): resolve
+ * relative paths against the cwd, drop trailing slashes.  Used to
+ * compare the backup target with the DB path as *files*, not as raw
+ * strings — otherwise equivalent spellings (`./x` vs `x`, absolute
+ * vs relative, case on Windows) would slip past the guard and back
+ * the live database up onto itself. */
+static void canon_path(const char *p, char *out, size_t outsz)
+{
+    size_t len = strlen(p);
+    int is_abs = (p[0] == '/') ||
+                 (len >= 3 && isalpha((unsigned char)p[0]) && p[1] == ':');
+    if (!is_abs) {
+        char cwd[256];
+        if (getcwd(cwd, sizeof cwd) == NULL) { out[0] = '\0'; return; }
+        snprintf(out, outsz, "%s/%s", cwd, p);
+    } else {
+        snprintf(out, outsz, "%s", p);
+    }
+    size_t n = strlen(out);
+    while (n > 1 && out[n - 1] == '/') out[--n] = '\0';
+}
+
+static int same_file_path(const char *a, const char *b)
+{
+    char ca[512], cb[512];
+    canon_path(a, ca, sizeof ca);
+    canon_path(b, cb, sizeof cb);
+    if (ca[0] == '\0' || cb[0] == '\0')
+        return 0;
+#ifdef _WIN32
+    return _stricmp(ca, cb) == 0;   /* case-insensitive on Windows */
+#else
+    return strcmp(ca, cb) == 0;
+#endif
+}
+
 static void usage_backup(FILE *f)
 {
     fputs(
@@ -72,8 +115,9 @@ static void usage_backup(FILE *f)
 "    --to <path> is required.  The target must NOT exist (no silent\n"
 "    overwrite); rotation is by dated name (acta_backup_YYYYMMDD.db).\n"
 "    The target is validated strictly: non-empty, no quote / semicolon\n"
-"    / backslash characters, not equal to the DB path itself, and a\n"
-"    path the process can create.\n"
+"    characters (plus no backslash on POSIX — on Windows the\n"
+"    backslash is the normal path separator), not the same file as\n"
+"    the DB path itself, and a path the process can create.\n"
 "    After the copy, the backup is reopened on its own connection and\n"
 "    PRAGMA quick_check is run; a backup that does not check is\n"
 "    reported as failed (and not kept).\n"
@@ -391,19 +435,35 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         /* Strict validation of the user-supplied target: reject the
          * characters that would be meaningful in SQL text (defense
          * in depth — the path reaches SQLite only via the backup C
-         * API, never as SQL text), and reject the DB path itself
-         * (backing the database up onto itself is a no-op trap). */
+         * API, never as SQL text).  Backslash is the native path
+         * separator on Windows, so it is allowed there; on POSIX it
+         * stays in the rejected set. */
         for (const char *p = target; *p; p++) {
-            if (*p == '\'' || *p == '"' || *p == ';' || *p == '\\') {
+            int bad = (*p == '\'' || *p == '"' || *p == ';');
+#ifndef _WIN32
+            bad = bad || (*p == '\\');
+#endif
+            if (bad) {
                 VLOG(1, "  ERROR: invalid character in target");
                 return emit_cli_error(
+#ifdef _WIN32
+                    "db backup target is invalid: quote or semicolon "
+                    "characters are not allowed"
+#else
                     "db backup target is invalid: quote, semicolon or "
-                    "backslash characters are not allowed");
+                    "backslash characters are not allowed"
+#endif
+                );
             }
         }
 
+        /* Reject the DB path itself (backing the database up onto
+         * itself is a no-op trap).  Compared as canonicalized
+         * absolute paths, not by raw spelling: `./x`, `x`, an absolute
+         * spelling, and (on Windows) case differences all name the
+         * same file. */
         const char *dbpath = acta_db_main_path(db);
-        if (dbpath && strcmp(target, dbpath) == 0) {
+        if (dbpath && same_file_path(target, dbpath)) {
             VLOG(1, "  ERROR: target is the DB path itself");
             return emit_cli_error(
                 "db backup target must not be the database path itself");

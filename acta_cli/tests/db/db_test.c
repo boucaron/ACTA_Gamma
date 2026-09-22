@@ -479,10 +479,16 @@ static void test_backup_existing_target(stest_ctx_t *ctx)
 
 static void test_backup_invalid_chars(stest_ctx_t *ctx)
 {
-    /* Quote / semicolon / backslash targets are rejected before any
-     * write; nothing is left behind on failure. */
+    /* Quote / semicolon (and backslash on POSIX) targets are rejected
+     * before any write; nothing is left behind on failure.  On
+     * Windows the backslash is the native path separator and is a
+     * valid target character, so the backslash case is excluded there. */
+#ifndef _WIN32
     const char *bad[] = { "bad'name.db", "a;b.db", "a\\b.db", "a\"b.db" };
-    for (size_t i = 0; i < 4; i++) {
+#else
+    const char *bad[] = { "bad'name.db", "a;b.db", "a\"b.db" };
+#endif
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
         global_opts_t g = gopts_default();
         cmd_args_t   *a = targs_new();
         targs_flag(a, "to", bad[i], &g);

@@ -59,9 +59,12 @@ the target is passed to the C API, never interpolated into SQL text).
 It has the same consistency guarantee as `VACUUM INTO` but runs
 against the open connection: no need to close the GUI / CLI / runner
 first, and the WAL state is folded into the snapshot. The target is
-validated strictly — non-empty, no quote / semicolon / backslash
-characters, not equal to the DB path itself, a path the process can
-create, and not already existing (no silent overwrite) — and any
+validated strictly — non-empty, no quote / semicolon characters (plus
+no backslash on POSIX; on Windows the backslash is the normal path
+separator and is allowed), not the same file as the DB path itself
+(compared as canonicalized absolute paths, so equivalent spellings are
+catched), a path the process can create, and not already existing (no
+silent overwrite) — and any
 validation failure is a CLI usage error (exit 10). After the copy the
 backup is reopened on its own connection and `PRAGMA quick_check` is
 run; a backup that does not check is reported as failure and nothing is

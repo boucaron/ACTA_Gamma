@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>   /* getpid() — unique ./tmp/ backup target name */
 
 #define REF_DB  "acta_test_ref.db"
 #define TOOLS_MAX_LEN (1 << 18)
@@ -390,6 +391,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
         char *argv[32];
         char *owned[32];
         int argc = 0, n_owned = 0;
+        char *to_path = NULL;    /* db.backup temp target, removed after run */
         argv[argc++] = (char *)"acta_cli";
         argv[argc++] = (char *)entity;
         argv[argc++] = (char *)action;
@@ -417,13 +419,35 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
                 char *nm = strdup(name);
                 argv[argc++]   = nm;
                 owned[n_owned++] = nm;
-                if (hv && hv->valuedouble != 0.0)
-                    argv[argc++] = (char *)"x";
+                if (hv && hv->valuedouble != 0.0) {
+                    if (strcmp(fname, "to") == 0) {
+                        /* db.backup: a bare dummy value ("x") would be
+                         * created in the cwd and persist across runs,
+                         * making re-runs fail with "target already
+                         * exists" (EXIT_CLI).  Use a unique ./tmp/ target
+                         * and remove it after the run. */
+                        static int to_counter = 0;
+                        char path[128];
+                        snprintf(path, sizeof path,
+                                 "./tmp/acta_tools_backup_%d_%d.db",
+                                 (int)getpid(), to_counter++);
+                        remove(path);   /* leftover from an earlier run */
+                        to_path = strdup(path);
+                        argv[argc++]   = to_path;
+                        owned[n_owned++] = to_path;
+                    } else
+                        argv[argc++] = (char *)"x";
+                }
             }
 
         /* rc != EXIT_CLI ⇔ accepted by the parse layer; handler-side
          * failures (e.g. atoi("x") → exit 4) are expected and fine. */
         int rc = stest_run_argv(ctx, fn, argc, argv, NULL);
+        if (to_path) {           /* keep the cwd clean for the next run */
+            remove(to_path);
+            free(to_path);
+            to_path = NULL;
+        }
         TEST(ctx, rc != EXIT_CLI);
 
         if (action && strcmp(action, "help") == 0)

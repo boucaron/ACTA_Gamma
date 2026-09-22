@@ -218,7 +218,9 @@ static int write_file(const char *path, const char *content, int mode)
         return 0;
     fputs(content, f);
     fclose(f);
-#ifndef _WIN32
+#ifdef _WIN32
+    (void)mode;    /* not applicable on Windows; POSIX-only gate below */
+#else
     /* The POSIX permission gate refuses group/other-readable files;
      * the tests pick the mode explicitly (0600 = contract mode). */
     if (chmod(path, mode) != 0)
