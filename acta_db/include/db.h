@@ -192,6 +192,39 @@ const char *acta_db_last_error(db_t *db);
  * treat "not an error" as "no detail". */
 const char *acta_db_errmsg(db_t *db);
 
+/* Returns the file path this connection was opened with, exactly as
+ * passed to acta_db_open (e.g. "acta.db", or ":memory:").  Valid for the
+ * lifetime of the db_t; NULL if db is NULL.  Used by the CLI `db backup`
+ * action to reject a target equal to the DB path itself. */
+const char *acta_db_main_path(const db_t *db);
+
+/* Atomic, consistent snapshot of the open database into a brand-new
+ * file `target`, via the SQLite backup C API
+ * (sqlite3_backup_init / step / finish) — the target is passed to the
+ * C API, never interpolated into SQL text.  Same consistency guarantee
+ * as `VACUUM INTO`, but it runs against the open connection: no need to
+ * close the GUI / CLI / runner first, and WAL state is folded into the
+ * snapshot.
+ *
+ *   `target` must NOT already exist — the caller validates (existence
+ *   check, strict character rules) before calling; this function never
+ *   overwrites.
+ *
+ * On success:
+ *   `*bytes_out` — the size of the written file in bytes
+ *   `*err`       — ACTA_DB_OK
+ * On failure:
+ *   `*err` — ACTA_DB_ERR_SQL (snapshot / check failure; detail in
+ *            acta_db_last_error(db)) or ACTA_DB_ERR_INVALID (bad
+ *            argument), returned as the function value
+ *   the partially-written target is removed — nothing is left behind.
+ *
+ * Verification is built in: after the copy, the file is reopened on its
+ * own connection and PRAGMA quick_check is run; a backup that does not
+ * check is deleted and reported as failed, not kept. */
+int acta_db_backup(db_t *db, const char *target, long long *bytes_out,
+                   int *err);
+
 /* Run a transaction: begins, runs the callback, commits (or rolls back).
  * The callback receives the db handle and user_data.
  * Returns ACTA_DB_OK on success, a negative error code if the callback

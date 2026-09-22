@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
@@ -55,6 +57,37 @@ static void usage_exec(FILE *f)
 "\n", f);
 }
 
+static void usage_backup(FILE *f)
+{
+    fputs(
+"== backup ========================================================\n"
+"  Atomic, consistent snapshot of the open database into <target>.\n"
+"  Written via the SQLite backup C API while the database stays open\n"
+"  (WAL state is folded into the snapshot) — no need to close the\n"
+"  GUI / CLI / runner first.\n"
+"\n"
+"    acta_cli db backup --to /path/to/acta_backup_YYYYMMDD.db\n"
+"\n"
+"  Rules:\n"
+"    --to <path> is required.  The target must NOT exist (no silent\n"
+"    overwrite); rotation is by dated name (acta_backup_YYYYMMDD.db).\n"
+"    The target is validated strictly: non-empty, no quote / semicolon\n"
+"    / backslash characters, not equal to the DB path itself, and a\n"
+"    path the process can create.\n"
+"    After the copy, the backup is reopened on its own connection and\n"
+"    PRAGMA quick_check is run; a backup that does not check is\n"
+"    reported as failed (and not kept).\n"
+"\n"
+"  Options:\n"
+"    --to <path>      backup target file (required)\n"
+"    --table          print '<target> <N> bytes' instead of JSON\n"
+"\n"
+"  stdout on success: {\"target\":\"<path>\",\"bytes\":<size>,\n"
+"  \"quick_check\":\"ok\"}\n"
+"  stderr on failure: single-line JSON (exit code mapped from rc)\n"
+"\n", f);
+}
+
 static void usage_version(FILE *f)
 {
     fputs(
@@ -76,10 +109,12 @@ void db_usage(FILE *f)
 "Actions:\n"
 "  exec      Execute mutating SQL (INSERT, UPDATE, DELETE, DDL, etc.)\n"
 "  version   Print SQLite library version\n"
+"  backup    Atomic snapshot of the DB into --to <target>\n"
 "  help <action>  Show help for a single action (no arg = full help)\n"
 "\n", f);
     usage_exec(f);
     usage_version(f);
+    usage_backup(f);
     fputs(
 "Global options:\n"
 "  --table          columnar / plain output instead of JSON\n"
@@ -92,6 +127,7 @@ int db_help_for_action(const char *action, FILE *out)
 {
     if (strcmp(action, "exec") == 0)      usage_exec(out);
     else if (strcmp(action, "version") == 0) usage_version(out);
+    else if (strcmp(action, "backup") == 0) usage_backup(out);
     else return -1;
     return 0;
 }
@@ -144,6 +180,7 @@ static void exec_output(const global_opts_t *gopts)
 static const action_def_t db_actions[] = {
     { "exec",    "execute mutating SQL (no SELECT)" },
     { "version", "print SQLite library version"     },
+    { "backup",  "atomic snapshot of the DB into --to <target>" },
     { "help",   "show this help"                   },
 };
 
@@ -326,6 +363,90 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stdout, "SQLite %s\n", ver);
         else
             fprintf(stdout, "{\"version\":\"%s\"}\n", ver);
+        return EXIT_OK;
+    }
+
+    /* ── backup ───────────────────────────────────────────────────── */
+    if (strcmp(action, "backup") == 0) {
+        const char *target = cmd_args_flag(ga, "to", 1);
+
+        VLOG(1, "db backup: to=%s", target ? target : "(null)");
+
+        /* The global --stdin is a JSON-input flag; db backup takes no
+         * input.  Reject it explicitly instead of letting it fall
+         * through (same rule as db exec). */
+        if (gopts->from_stdin) {
+            VLOG(1, "  ERROR: global --stdin used; db backup takes no input");
+            return finish_db_error(ACTA_DB_ERR_INVALID,
+                "global --stdin is a JSON-input flag; db backup takes no "
+                "input");
+        }
+
+        if (!target || *target == '\0') {
+            VLOG(1, "  ERROR: missing --to");
+            return emit_cli_error(
+                "db backup requires --to <target>");
+        }
+
+        /* Strict validation of the user-supplied target: reject the
+         * characters that would be meaningful in SQL text (defense
+         * in depth — the path reaches SQLite only via the backup C
+         * API, never as SQL text), and reject the DB path itself
+         * (backing the database up onto itself is a no-op trap). */
+        for (const char *p = target; *p; p++) {
+            if (*p == '\'' || *p == '"' || *p == ';' || *p == '\\') {
+                VLOG(1, "  ERROR: invalid character in target");
+                return emit_cli_error(
+                    "db backup target is invalid: quote, semicolon or "
+                    "backslash characters are not allowed");
+            }
+        }
+
+        const char *dbpath = acta_db_main_path(db);
+        if (dbpath && strcmp(target, dbpath) == 0) {
+            VLOG(1, "  ERROR: target is the DB path itself");
+            return emit_cli_error(
+                "db backup target must not be the database path itself");
+        }
+
+        /* No silent overwrite: the target must not exist.  The stat
+         * probe doubles as the "path the process cannot create" check:
+         * a stat failure other than ENOENT (bad directory, no
+         * permission) means the target cannot be created either. */
+        struct stat st;
+        if (stat(target, &st) == 0) {
+            VLOG(1, "  ERROR: target exists");
+            return emit_cli_error(
+                "db backup target already exists: no silent overwrite "
+                "(choose a new name, e.g. acta_backup_YYYYMMDD.db)");
+        }
+        if (errno != ENOENT) {
+            VLOG(1, "  ERROR: cannot probe target");
+            return emit_cli_error(
+                "cannot access db backup target (check the path and "
+                "permissions)");
+        }
+
+        int err = 0;
+        long long bytes = 0;
+        int rc = acta_db_backup(db, target, &bytes, &err);
+
+        if (rc != ACTA_DB_OK) {
+            const char *msg = acta_db_last_error(db);
+            VLOG(1, "  FAILED rc=%d (%s)", rc,
+                 msg ? msg : "(no detail)");
+            return finish_db_error(rc, msg ? msg : "backup failed");
+        }
+
+        VLOG(1, "  ok: %s (%lld bytes, quick_check ok)", target, bytes);
+        if (gopts->table)
+            fprintf(stdout, "%s %lld bytes\n", target, bytes);
+        else {
+            fputs("{\"target\":", stdout);
+            json_str(stdout, target);
+            fprintf(stdout, ",\"bytes\":%lld,\"quick_check\":\"ok\"}\n",
+                     bytes);
+        }
         return EXIT_OK;
     }
 

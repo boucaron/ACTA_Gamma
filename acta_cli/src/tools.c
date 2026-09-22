@@ -85,6 +85,9 @@ static const tool_pos_t p_sf_parent[] =
 static const tool_flag_t f_db_exec[] = {
     { "sql", 1, 0 }, { "file", 1, 0 }, { "sql_stdin", 0, 0 },
 };
+static const tool_flag_t f_db_backup[] = {
+    { "to", 1, 1 }, { "table", 0, 0 },
+};
 static const tool_flag_t f_table[]   = { { "table", 0, 0 } };
 
 static const tool_flag_t f_ctx_create[] = {
@@ -280,6 +283,10 @@ static const tool_success_t suc_db_exec        =
     { "json", ks_status, 1, "--table -> ok" };
 static const tool_success_t suc_db_version     =
     { "json", ks_version, 1, "--table -> SQLite <ver>" };
+static const char *const ks_db_backup[] =
+    { "target", "bytes", "quick_check" };
+static const tool_success_t suc_db_backup    =
+    { "json", ks_db_backup, 3, "--table -> <target> <N> bytes" };
 static const tool_success_t suc_exec_create    =
     { "json", ks_id, 1, "row always created 'pending'" };
 static const tool_success_t suc_status_running =
@@ -323,7 +330,7 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 74 entries = 64 actions + 10 help actions              */
+/*  the table: 75 entries = 65 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {
@@ -342,6 +349,19 @@ static const tool_entry_t tool_table[] = {
       NULL, 0, f_table, 1, "none",
       NULL, 0, NULL, 0,
       &suc_db_version },
+
+    { "db.backup", "db", "backup", NULL, 0,
+      "Atomic, consistent snapshot of the open database into --to "
+      "<target> (SQLite backup C API; WAL state folded in, no need to "
+      "close consumers first). The target must not exist (no silent "
+      "overwrite); the target is validated strictly (non-empty, no "
+      "quote/semicolon/backslash, not the DB path itself, creatable by "
+      "the process). After the copy, PRAGMA quick_check is run on the "
+      "backup; a failed check is reported as failure and the backup is "
+      "not kept.",
+      NULL, 0, f_db_backup, 2, "flags",
+      NULL, 0, NULL, 0,
+      &suc_db_backup },
 
     { "db.help", "db", "help", NULL, 0,
       "Show the db usage text.",

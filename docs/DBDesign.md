@@ -15,20 +15,32 @@ This is a PoC in progress, not a product. Three deliberate non-goals are baked i
 
 ## Data durability and maintenance
 
-**Minimum durability expectation.** ACTA Gamma persists to one private SQLite file; that file is the data. There is no replication, sync, or backup facility: if the file is lost, the skills, revisions, contexts, executions, and their logs are lost. The single rule: **copy the file before destructive operations** (schema changes via `db exec`, manual file operations, migrating to a new file).
+**Minimum durability expectation.** ACTA Gamma persists to one private SQLite file; that file is the data. There is no replication or sync: if the file is lost, the skills, revisions, contexts, executions, and their logs are lost. The single rule: **take a backup before destructive operations** (schema changes via `db exec`, manual file operations, migrating to a new file) — the working path is the `acta_cli db backup --to <target>` action (below); the manual procedure stays as the reference.
 
 **WAL file lifecycle.** The database runs in WAL journal mode, so alongside `acta.db` you will see `acta.db-wal` and `acta.db-shm`. These are transient: SQLite deletes both when the last connection to the database closes cleanly. If a process dies mid-write, the `-wal` file remains and is replayed on the next open — the data is not lost by that. Two consequences:
 
 * Never delete or "clean up" the `-wal`/`-shm` files while any consumer (GUI, CLI, runner) has the database open.
 * The `.db` file alone is **not** a consistent snapshot while writers are active — committed data may still sit in the WAL.
 
-**Taking a consistent backup.** Close all consumers, then either copy `acta.db`, or run (with the DB open or closed):
+**Taking a consistent backup.** The working path is the CLI action, which runs against the open database and needs no consumer closed:
+
+```
+acta_cli db backup --to /path/to/acta_backup_YYYYMMDD.db
+```
+
+It writes a complete, self-contained, consistent snapshot through the SQLite backup C API (WAL state folded in) and verifies it with `PRAGMA quick_check` on its own connection before reporting success. The target must not exist (no silent overwrite); rotation is by dated name. The manual procedure — close all consumers, then copy `acta.db` or run
 
 ```
 sqlite3 acta.db "VACUUM INTO 'acta_backup_YYYYMMDD.db';"
 ```
 
-`VACUUM INTO` produces a consistent single-file snapshot and also reclaims space; the `-wal`/`-shm` files do not need to be copied once all connections are closed.
+— remains the reference for contexts without the CLI (e.g. a bare `sqlite3` install). `VACUUM INTO` produces a consistent single-file snapshot and also reclaims space; the `-wal`/`-shm` files do not need to be copied once all connections are closed.
+
+**Backup frequency (minimum, guidance only).**
+
+* **Before any destructive operation** — schema changes via `db exec`, manual file operations, migrating to a new file.
+* **At the end of any session that produced executions** — executions and their logs are the high-value records (soft delete means they stay in the file forever and are never recoverable from the live file alone if the file is lost).
+* Keep backups **outside the DB directory**; name them `acta_backup_YYYYMMDD.db`; keep the last ~7 by deleting older ones manually (no retention enforcement). Restoring is not a special command: open the backup with `acta_cli --db acta_backup_YYYYMMDD.db …` or the GUI's *Choose database file* dialog, and verify a restored file with `PRAGMA integrity_check` (full) before relying on it.
 
 **Routine maintenance.**
 

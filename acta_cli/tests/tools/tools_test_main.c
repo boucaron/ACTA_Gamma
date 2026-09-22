@@ -8,7 +8,7 @@
  *   2. the top-level global section is intact: name/version/usage,
  *      18 global_flags, entity_aliases, 3 input_sources, 7 exit codes,
  *      error contract with the `code == -exit` invariant;
- *   3. the tools array has exactly 74 entries covering all 10 entities
+ *   3. the tools array has exactly 75 entries covering all 10 entities
  *      and the full action set from cli_spec.md (incl. the 10 help
  *      actions); exactly the 8 JSON-capable commands carry json_keys;
  *   4. cross-check: for every entry, a command generated from the
@@ -16,7 +16,7 @@
  *      is fed through the raw-argv path (stest_run_argv:
  *      parse_globals → apply_flag_aliases → cmd_args_validate →
  *      handler) and must not be rejected (rc != EXIT_CLI).  This pins
- *      the T3 "flags ⊆ entity_flag_specs" invariant for all 74 entries
+ *      the T3 "flags ⊆ entity_flag_specs" invariant for all 75 entries
  *      and exercises the S2 global-parse seam.  The 8 flags|json
  *      entries are additionally run with a --json blob built from their
  *      json_keys.required, and --stdin/--from_file smoke runs pin the
@@ -24,7 +24,7 @@
  *      (M6): exec entries carry ["execution"], log entries carry
  *      ["execution_log"], every other entry carries [].
  *
- * The suite consumes the parsed output as data — the 74-entry table is
+ * The suite consumes the parsed output as data — the 75-entry table is
  * NOT duplicated here; only the small expected sets from cli_spec.md
  * (spec = source of truth for the action inventory) are hardcoded.
  */
@@ -59,7 +59,7 @@ static const struct {
 
 /* expected per-entity action sets — cli_spec.md is the source of truth */
 static const char *const EXP_DB[]           =
-    { "exec", "version", "help" };
+    { "exec", "version", "backup", "help" };
 static const char *const EXP_CONTEXT[]      =
     { "create", "get", "delete", "restore", "list", "count", "help" };
 static const char *const EXP_MODEL[]        =
@@ -89,7 +89,7 @@ static const struct {
     const char *const *actions;
     size_t n_actions;
 } expected[] = {
-    { "db",            EXP_DB,           3  },
+    { "db",            EXP_DB,           4  },
     { "context",       EXP_CONTEXT,      7  },
     { "model",         EXP_MODEL,        9  },
     { "model_folder",  EXP_MODEL_FOLDER, 9  },
@@ -240,7 +240,7 @@ static void check_structure(stest_ctx_t *ctx, cJSON *root)
     /* ── tools array: count + per-entity action coverage ── */
     cJSON *tools = cJSON_GetObjectItem(root, "tools");
     TEST(ctx, cJSON_IsArray(tools));
-    TEST_EQ(ctx, cJSON_GetArraySize(tools), 74);
+    TEST_EQ(ctx, cJSON_GetArraySize(tools), 75);
 
     for (size_t e = 0; e < sizeof(expected) / sizeof(expected[0]); e++)
         for (size_t a = 0; a < expected[e].n_actions; a++)
@@ -496,7 +496,7 @@ int run_tools_test(void)
         if (root) {
             check_structure(&ctx, root);
             cross_check(&ctx, cJSON_GetObjectItem(root, "tools"));
-            /* raw-argv cross-check (74-entry tools array, not the root) */
+            /* raw-argv cross-check (75-entry tools array, not the root) */
             cJSON_Delete(root);
         }
     }

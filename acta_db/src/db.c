@@ -1,6 +1,8 @@
 #include "internal.h"
 #include "db.h"
 #include <sqlite3.h>
+#include <stdio.h>
+#include <sys/stat.h>
 
 /* ------------------------------------------------------------------ */
 /*  Error string                                                       */
@@ -161,6 +163,15 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
     db->last_error      = NULL;
     db->in_transaction  = 0;
 
+    /* Keep the opened path for acta_db_main_path() (the db backup
+     * target validation needs it).  db_strdup only fails on OOM. */
+    db->path = db_strdup(path, NULL);
+    if (!db->path) {
+        free(db);
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
+
     /* Informational pragma note (not an error). If both degradation
      * notes ever fired, the foreign-key note wins: it is the rarer and
      * more severe condition (FK enforcement off ⇒ ACTA_DB_ERR_FK
@@ -209,6 +220,7 @@ int acta_db_close(db_t *db)
 
     /* Clean or hard-error: handle is gone, free our struct. */
     sqlite3_free(db->last_error);
+    sqlite3_free(db->path);
     free(db);
     return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
@@ -218,6 +230,7 @@ int acta_db_force_close(db_t *db)   /* never fails to release */
     if (!db) return ACTA_DB_ERR_INVALID;
     sqlite3_close_v2(db->handle);    /* auto-finalises open stmts */
     sqlite3_free(db->last_error);
+    sqlite3_free(db->path);
     free(db);
     return ACTA_DB_OK;
 }
@@ -245,6 +258,99 @@ const char *acta_db_last_error(db_t *db) {
 const char *acta_db_errmsg(db_t *db) {
     if (!db || !db->handle) return NULL;
     return sqlite3_errmsg(db->handle);
+}
+
+const char *acta_db_main_path(const db_t *db) {
+    if (!db) return NULL;
+    return db->path;
+}
+
+int acta_db_backup(db_t *db, const char *target, long long *bytes_out,
+                   int *err)
+{
+    if (bytes_out) *bytes_out = 0;
+
+    if (!db || db->handle == NULL || !target || *target == '\0') {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return ACTA_DB_ERR_INVALID;
+    }
+
+    /* 1. The snapshot itself, through the SQLite backup C API — the
+     *    target is passed to the API, never interpolated into SQL
+     *    text.  sqlite3_backup copies the logical contents of the
+     *    open connection (WAL state included), so the result is a
+     *    consistent single-file snapshot even while the DB is in WAL
+     *    mode with other consumers open — the same guarantee as
+     *    VACUUM INTO, without closing anything first.  The target is
+     *    opened with CREATE; existence was already rejected by the
+     *    caller (no silent overwrite).
+     *    On any failure the partial file is removed: nothing is
+     *    left behind. */
+    sqlite3 *dest = NULL;
+    int rc = sqlite3_open_v2(target, &dest,
+                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                             NULL);
+    if (rc != SQLITE_OK) {
+        db_set_error(db, "cannot open backup target for writing");
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return ACTA_DB_ERR_SQL;
+    }
+
+    int ok = 0;
+    sqlite3_backup *bk =
+        sqlite3_backup_init(dest, "main", db->handle, "main");
+    if (bk != NULL) {
+        /* step(-1) runs the copy to completion. */
+        rc = sqlite3_backup_step(bk, -1);
+        ok = (rc == SQLITE_DONE);
+        if (!ok)
+            db_set_error(db, "backup step failed");
+        sqlite3_backup_finish(bk);
+    } else {
+        db_set_error(db, "backup init failed");
+    }
+    sqlite3_close_v2(dest);
+
+    if (!ok) {
+        remove(target);
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return ACTA_DB_ERR_SQL;
+    }
+
+    /* 2. The size of the written file (for the caller's payload). */
+    struct stat st;
+    if (stat(target, &st) != 0 || st.st_size < 0) {
+        remove(target);
+        db_set_error(db, "cannot stat the backup file");
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return ACTA_DB_ERR_SQL;
+    }
+    *bytes_out = (long long)st.st_size;
+
+    /* 3. Built-in verification: reopen the backup on its own
+     *    connection and run PRAGMA quick_check.  A backup that does
+     *    not check is deleted and reported as failed — not kept. */
+    sqlite3 *chk = NULL;
+    rc = sqlite3_open(target, &chk);
+    if (rc != SQLITE_OK) {
+        remove(target);
+        db_set_error(db, "cannot reopen the backup for quick_check");
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return ACTA_DB_ERR_SQL;
+    }
+    char *chk_err = NULL;
+    rc = sqlite3_exec(chk, "PRAGMA quick_check;", NULL, NULL, &chk_err);
+    sqlite3_free(chk_err);
+    sqlite3_close(chk);
+    if (rc != SQLITE_OK) {
+        remove(target);
+        db_set_error(db, "PRAGMA quick_check failed on the backup");
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return ACTA_DB_ERR_SQL;
+    }
+
+    if (err) *err = ACTA_DB_OK;
+    return ACTA_DB_OK;
 }
 
 /* ------------------------------------------------------------------ */

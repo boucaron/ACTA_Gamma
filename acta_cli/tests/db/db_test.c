@@ -1,5 +1,7 @@
 #include "test_helpers.h"
 
+#include <sys/stat.h>
+
 #define REF_DB "acta_test_ref.db"
 
 /* ── local helper ─────────────────────────────────────────────────── */
@@ -291,6 +293,7 @@ static void test_help(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, stest_stdout(ctx), "Usage:");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "exec");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "version");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "backup");
     targs_free(a, &g);
 }
 
@@ -365,6 +368,159 @@ static void test_exec_select_behavior_pinned(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ *  db backup
+ * ═══════════════════════════════════════════════════════════════════ */
+
+#define BACKUP_TARGET "acta_test_backup.db"
+
+static void backup_cleanup(void)
+{
+    remove(BACKUP_TARGET);
+    remove(BACKUP_TARGET "-wal");
+    remove(BACKUP_TARGET "-shm");
+}
+
+/* --- success ------------------------------------------------------- */
+
+static void test_backup_success(stest_ctx_t *ctx)
+{
+    backup_cleanup();
+
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "to", BACKUP_TARGET, &g);
+
+    int rc = do_db(ctx, "backup", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx),
+                  "\"target\":\"acta_test_backup.db\"");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"bytes\":");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"quick_check\":\"ok\"");
+    targs_free(a, &g);
+
+    /* The backup must open as a complete database with the same row
+     * counts as the live DB — taken while the test connection (and
+     * its WAL) is still open. */
+    int err = 0;
+    int live = acta_db_context_count(ctx->db, NULL, &err);
+    TEST_EQ(ctx, err, ACTA_DB_OK);
+
+    db_t *bk = acta_db_open(BACKUP_TARGET, &err, ACTA_DB_OPEN_EXISTING);
+    TEST_NOT_NULL(ctx, bk);
+    if (bk) {
+        int n = acta_db_context_count(bk, NULL, &err);
+        TEST_EQ(ctx, err, ACTA_DB_OK);
+        TEST_EQ(ctx, n, live);
+        acta_db_close(bk);
+    }
+
+    backup_cleanup();
+}
+
+static void test_backup_table(stest_ctx_t *ctx)
+{
+    backup_cleanup();
+
+    global_opts_t g = gopts_table();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "to", BACKUP_TARGET, &g);
+
+    int rc = do_db(ctx, "backup", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST(ctx, strstr(stest_stdout(ctx), "\"target\"") == NULL);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), BACKUP_TARGET);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "bytes");
+    targs_free(a, &g);
+
+    backup_cleanup();
+}
+
+/* --- error paths --------------------------------------------------- */
+
+static void test_backup_missing_to(stest_ctx_t *ctx)
+{
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+
+    int rc = do_db(ctx, "backup", a, g);
+    TEST_EQ(ctx, rc, EXIT_CLI);
+    targs_free(a, &g);
+}
+
+static void test_backup_existing_target(stest_ctx_t *ctx)
+{
+    /* Pre-create the target with known content: the command must be
+     * rejected (no silent overwrite) and the file left untouched. */
+    FILE *fp = fopen(BACKUP_TARGET, "w");
+    TEST_NOT_NULL(ctx, fp);
+    if (fp) { fputs("sentinel", fp); fclose(fp); }
+
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "to", BACKUP_TARGET, &g);
+
+    int rc = do_db(ctx, "backup", a, g);
+    TEST_EQ(ctx, rc, EXIT_CLI);
+
+    fp = fopen(BACKUP_TARGET, "r");
+    TEST_NOT_NULL(ctx, fp);
+    if (fp) {
+        char buf[64];
+        size_t n = fread(buf, 1, sizeof buf - 1, fp);
+        buf[n] = '\0';
+        TEST_STREQ(ctx, buf, "sentinel");
+        fclose(fp);
+    }
+    targs_free(a, &g);
+
+    backup_cleanup();
+}
+
+static void test_backup_invalid_chars(stest_ctx_t *ctx)
+{
+    /* Quote / semicolon / backslash targets are rejected before any
+     * write; nothing is left behind on failure. */
+    const char *bad[] = { "bad'name.db", "a;b.db", "a\\b.db", "a\"b.db" };
+    for (size_t i = 0; i < 4; i++) {
+        global_opts_t g = gopts_default();
+        cmd_args_t   *a = targs_new();
+        targs_flag(a, "to", bad[i], &g);
+        TEST_EQ(ctx, do_db(ctx, "backup", a, g), EXIT_CLI);
+        targs_free(a, &g);
+
+        struct stat st;
+        TEST(ctx, stat(bad[i], &st) != 0);   /* nothing written */
+    }
+}
+
+static void test_backup_target_is_db_path(stest_ctx_t *ctx)
+{
+    /* Backing the database up onto its own path is rejected. */
+    const char *dbpath = acta_db_main_path(ctx->db);
+    TEST_NOT_NULL(ctx, dbpath);
+
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "to", dbpath, &g);
+
+    int rc = do_db(ctx, "backup", a, g);
+    TEST_EQ(ctx, rc, EXIT_CLI);
+    targs_free(a, &g);
+}
+
+static void test_backup_uncreatable_target(stest_ctx_t *ctx)
+{
+    /* A path in a non-existent directory: rejected, nothing written. */
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+    targs_flag(a, "to", "/nonexistent_dir_xyz/backup.db", &g);
+
+    int rc = do_db(ctx, "backup", a, g);
+    TEST(ctx, rc != EXIT_OK);
+    targs_free(a, &g);
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_db_test_all(void)
@@ -397,6 +553,15 @@ int run_db_test_all(void)
 
     /* help */
     test_help(&ctx);
+
+    /* backup */
+    test_backup_success(&ctx);
+    test_backup_table(&ctx);
+    test_backup_missing_to(&ctx);
+    test_backup_existing_target(&ctx);
+    test_backup_invalid_chars(&ctx);
+    test_backup_target_is_db_path(&ctx);
+    test_backup_uncreatable_target(&ctx);
 
     /* unknown action */
     test_unknown_action(&ctx);

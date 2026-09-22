@@ -285,6 +285,7 @@ static const flag_spec_t entity_flag_specs[] = {
     { "sql_stdin", 0 },
     { "status", 1 },
     { "stream", 0 },
+    { "to", 1 },
     { "type", 1 },
 };
 

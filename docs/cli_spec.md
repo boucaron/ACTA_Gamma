@@ -34,6 +34,7 @@ Wire-format decisions settled here:
 | `{"id":N,"status":"<s>"}` | exec transition success (`s` ∈ running, cancelled, completed, failed); `set-raw` echoes the unchanged current status, which can also be `pending` |
 | `{"status":"ok"}` | `db exec` success |
 | `{"version":"<ver>"}` | `db version` success |
+| `{"target":"<path>","bytes":<N>,"quick_check":"ok"}` | `db backup` success |
 | `[ {…}, … ]` / `[]` | list success (empty list → `[]`) |
 | bare integer | `--count` on list, and `count` actions |
 
@@ -51,6 +52,21 @@ modifiers). `--id_only` is a single-row modifier for `create` /
 `SELECT` (after leading whitespace, stray `;`, and `--` / `/* */`
 comments) is rejected with exit 4 before execution, so the "no
 SELECT" help claim is enforced, not just documented.
+
+`db backup` makes an atomic, consistent snapshot of the open database
+into `--to <target>` via the SQLite backup C API (`sqlite3_backup_*` —
+the target is passed to the C API, never interpolated into SQL text).
+It has the same consistency guarantee as `VACUUM INTO` but runs
+against the open connection: no need to close the GUI / CLI / runner
+first, and the WAL state is folded into the snapshot. The target is
+validated strictly — non-empty, no quote / semicolon / backslash
+characters, not equal to the DB path itself, a path the process can
+create, and not already existing (no silent overwrite) — and any
+validation failure is a CLI usage error (exit 10). After the copy the
+backup is reopened on its own connection and `PRAGMA quick_check` is
+run; a backup that does not check is reported as failure and nothing is
+left behind. Snapshot failure is the standard error JSON with a
+non-zero rc.
 
 Stream output: `--stream` turns any `list` action's array output
 into NDJSON — one JSON object per line, no array wrapper, empty result
@@ -162,6 +178,7 @@ changed) snapshots nothing. Revision rows are read via the
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
 | `db exec` | `sql` (or one of the flags) | `--sql`, `--file` (≤64 KiB), `--sql_stdin` (≤64 KiB) — mutually exclusive, first wins | positional / flag, never JSON | `{"status":"ok"}` (`--table` → `ok`) |
+| `db backup` | — | `--to <target>*` (must not exist), `--table` | — | `{"target":"<path>","bytes":<N>,"quick_check":"ok"}` (`--table` → `<target> <N> bytes`) |
 | `db version` | — | `--table` | — | `{"version":"<ver>"}` (`--table` → `SQLite <ver>`) |
 
 ## context

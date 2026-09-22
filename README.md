@@ -94,7 +94,7 @@ The whole lifecycle: create/update the parent, revisions are snapshotted automat
 
 Rows are never hard-deleted: `delete` sets a `deleted_at` timestamp and `restore` clears it (there is no purge — a new DB file is the clean-state path). `model`, `model_folder`, `skill`, `skill_folder`, `context`, and `exec` all have `delete` / `restore` actions; `list` / `count` default to live-only rows everywhere, with `--include_deleted` / `--deleted` to opt back in on the entity, revision, and context/exec listers (the folder listers are live-only with no opt-in flag). Deleted rows are skipped by `get` / `get-latest` (context, model, skill, exec, model_revision — skill_revision has no deleted filter), `context create` refuses deleted contexts, `exec reset` refuses deleted executions, and the runner's claim step ignores deleted executions. The GUI surfaces the same lifecycle as trash views in the context and execution panels with per-row Delete/Restore (Retry disabled for deleted executions).
 
-(Durability: the DB file is the data — copy it before destructive operations; WAL lifecycle, `PRAGMA integrity_check` / `VACUUM` procedure, and the backup rule are in [`DBDesign.md`](docs/DBDesign.md), "Data durability and maintenance".)
+(Durability: the DB file is the data — take a backup with `acta_cli db backup --to <target>` before destructive operations; WAL lifecycle, `PRAGMA integrity_check` / `VACUUM` procedure, the backup frequency guidance, and the manual reference are in [`DBDesign.md`](docs/DBDesign.md), "Data durability and maintenance".)
 
 ## How a run is assembled
 

@@ -11,6 +11,12 @@
 struct db_t {
     sqlite3 *handle;
     /*
+     * The file path this connection was opened with, exactly as passed
+     * to acta_db_open (e.g. "acta.db", or ":memory:").  Stored once at
+     * open; valid for the lifetime of the db_t (see acta_db_main_path).
+     */
+    char    *path;
+    /*
      * Owned by the db layer; updated on every SQL error.
      * acta_db_last_error() returns a const char * pointing here.
      * The pointer is valid only until the next SQL operation on this

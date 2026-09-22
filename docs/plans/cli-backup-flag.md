@@ -1,9 +1,31 @@
 # Plan — `acta_cli` backup action: atomic snapshot via `VACUUM INTO`
 
-Status: **open — not started.** Small feature; complements the
-"Data durability and maintenance" section in `docs/DBDesign.md`, which
-today documents the manual `sqlite3 acta.db "VACUUM INTO …"` procedure but
-gives the tool no working backup path of its own.
+Status: **done.** Option 2 was chosen at scheduling: the SQLite backup
+C API (`sqlite3_backup_init` / `step` / `finish`) behind the small
+`acta_db` helper `acta_db_backup()` (`acta_db/include/db.h`,
+`acta_db/src/db.c`) — the target reaches SQLite only as a C API
+argument, never as SQL text, and the same consistent-snapshot
+semantics hold (WAL state folded in, run against the open
+connection). The CLI action is `acta_cli db backup --to <target>` in
+`acta_cli/src/commands/db.c` (strict target validation: non-empty,
+no quote/semicolon/backslash, not the DB path itself — via the new
+`acta_db_main_path()` accessor, which stores the opened path in the
+`db_t` at `acta_db_open` — and not already existing; the `stat`
+probe doubles as the "path the process cannot create" check), payload
+`{"target": …, "bytes": …, "quick_check": "ok"}`; the built-in
+verification (reopen the backup on its own connection, `PRAGMA
+quick_check`, a failed check is deleted and reported as failure) lives
+in `acta_db_backup` itself; nothing is left behind on any failure.
+The `--tools` schema gained the `db.backup` entry (75 entries now,
+`to` added to `entity_flag_specs`), the tests are the `backup` section
+of `acta_cli/tests/db/db_test.c` (success with equal row counts while
+the live connection and its WAL are open, `--table` mode, missing
+`--to`, existing target rejected with the file untouched, invalid
+characters / DB-path target rejected with nothing written,
+uncreatable target rejected), and the docs (cli_spec.md `db` table row
++ contract paragraph, DBDesign.md maintenance section with the working
+path and the frequency guidance, README durability line re-pointed)
+landed with work item 4.
 
 ## Context
 
@@ -65,19 +87,30 @@ gives the tool no working backup path of its own.
   file* dialog pointed at the backup file. Verify a restored file with
   `PRAGMA integrity_check` (full) before relying on it.
 
-## Work items (TBD — none started)
+## Work items
 
-1. Choose implementation (option 1 vs 2 above); implement the command in
-   `acta_cli` (and the `acta_db` helper if option 2).
-2. `--tools` schema entry + per-action help + `cli_spec.md` row.
-3. Tests: fresh DB with rows → backup while the CLI connection (and its
-   WAL) is open → the backup opens as a complete database (same row
-   counts), `quick_check` ok in the payload; existing target → rejected;
-   invalid target (quotes / DB path itself) → rejected; nothing written
-   on failure.
-4. Docs: README durability line → `acta_cli db backup` (+ frequency
-   pointer); `docs/DBDesign.md` maintenance section gains the working
-   path and the frequency guidance.
+1. **Done —** Option 2 implemented: `acta_db_backup()` +
+   `acta_db_main_path()` in `acta_db` (backup C API, no SQL
+   interpolation; built-in `quick_check` verification; partial target
+   removed on any failure) and the `db backup` action in
+   `acta_cli/src/commands/db.c` (strict target validation, no silent
+   overwrite, payload `{"target","bytes","quick_check"}`).
+2. **Done —** `--tools` schema entry `db.backup` (75-entry table),
+   `--to` added to `entity_flag_specs`, per-action help section
+   (`usage_backup`), `cli_spec.md` row + contract paragraph.
+3. **Done —** Tests in `acta_cli/tests/db/db_test.c`: backup while the
+   live connection (and its WAL) is open → the backup opens as a
+   complete database (same context row counts), `quick_check` ok in
+   the payload; `--table` mode; missing `--to` → exit 10; existing
+   target → rejected, file untouched; invalid characters (quote /
+   semicolon / backslash) and the DB path itself → rejected with
+   nothing written; uncreatable target → rejected.
+4. **Done —** Docs: README durability line re-pointed to
+   `acta_cli db backup`; `docs/DBDesign.md` maintenance section gains
+   the working path, the manual procedure demoted to reference, and
+   the frequency guidance (before destructive operations, end of
+   sessions with executions, dated names outside the DB directory,
+   restore by opening the backup).
 
 ## Deliberately out of scope
 
