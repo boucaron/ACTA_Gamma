@@ -401,7 +401,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
             for (int p = 0; p < cJSON_GetArraySize(pos); p++) {
                 cJSON *pe = cJSON_GetArrayItem(pos, p);
                 cJSON *req = cJSON_GetObjectItem(pe, "required");
-                if (req && req->valuedouble != 0.0)
+                if (cJSON_IsTrue(req))
                     argv[argc++] = (char *)"1";
             }
 
@@ -411,7 +411,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
                 cJSON *fe = cJSON_GetArrayItem(fl, f);
                 cJSON *req = cJSON_GetObjectItem(fe, "required");
                 cJSON *hv  = cJSON_GetObjectItem(fe, "has_value");
-                if (!(req && req->valuedouble != 0.0)) continue;
+                if (!cJSON_IsTrue(req)) continue;
                 const char *fname = cj_str(fe, "name");
                 if (!fname) continue;
                 char name[64];
@@ -419,7 +419,7 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
                 char *nm = strdup(name);
                 argv[argc++]   = nm;
                 owned[n_owned++] = nm;
-                if (hv && hv->valuedouble != 0.0) {
+                if (cJSON_IsTrue(hv)) {
                     if (strcmp(fname, "to") == 0) {
                         /* db.backup: a bare dummy value ("x") would be
                          * created in the cwd and persist across runs,
@@ -443,9 +443,9 @@ static void cross_check(stest_ctx_t *ctx, cJSON *tools)
         /* rc != EXIT_CLI ⇔ accepted by the parse layer; handler-side
          * failures (e.g. atoi("x") → exit 4) are expected and fine. */
         int rc = stest_run_argv(ctx, fn, argc, argv, NULL);
-        if (to_path) {           /* keep the cwd clean for the next run */
+        if (to_path) {           /* keep the cwd clean for the next run;
+                                 * freed in the owned[] loop below */
             remove(to_path);
-            free(to_path);
             to_path = NULL;
         }
         TEST(ctx, rc != EXIT_CLI);
