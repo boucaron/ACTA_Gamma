@@ -326,7 +326,10 @@ static int write_conf(const char *path, const char *content)
 }
 
 /* Write a config file with an explicit (non-0600) mode, to exercise
- * the bad-permissions refusal. */
+ * the bad-permissions refusal.  POSIX-only: its only callers are in the
+ * POSIX-only section 5, so it is not compiled on Windows (where the
+ * mode bits are meaningless and the gate only warns). */
+#ifndef _WIN32
 static int write_conf_mode(const char *path, const char *content,
                            int mode)
 {
@@ -339,6 +342,7 @@ static int write_conf_mode(const char *path, const char *content,
         return 0;
     return 1;
 }
+#endif
 
 static int run_stub(db_t *db, int id)
 {
