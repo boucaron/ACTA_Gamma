@@ -341,6 +341,15 @@ stay as-is.
 - No per-entity settings in the file (model URLs, per-model limits,
   per-execution overrides) — those belong to the DB or the execution;
   `max_chars` and `timeout` are per-machine defaults.
-- Nothing changes until the trigger above is real; the POC contract
-  (`$OPENAI_API_KEY` only, current DB-path resolution, `--timeout` flag)
-  stays as-is.
+- The trigger is real: all work items are implemented (see the Status
+  header), so the current contract is `$OPENAI_API_KEY` or, when that
+  variable is unset, the config file's `"api_key"` key; the config
+  file's `"db"` step in DB-path resolution; the `--timeout` flag; and
+  the `max_chars` / `timeout` per-machine file overrides.
+- **Both key sources are kept deliberately (owner decision).** The env
+  var remains the primary channel for scripted/programmatic use, and the
+  file key is the per-machine fallback for GUI and no-shell-environment
+  setups. The "env var only" alternative was considered and rejected:
+  the fallback costs one precedence rule and removes the need to export
+  a secret on machines where the GUI is the primary interface. The file
+  stays a fallback, never a second channel (a set env var always wins).

@@ -50,13 +50,12 @@ cd ../acta_gui      && qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile
 make
 ```
 
-Or, from the repository root, build everything in dependency order with the
- top-level Makefile — the Qt 6 GUI is built too when `qmake6` is on `PATH`:
+Or, from the repository root, build the core in dependency order with the
+ top-level Makefile — the Qt 6 GUI is **optional and not built by default**:
 
 ```sh
-make all     # acta_db -> acta_cli -> acta_runner, then the GUI
-                                # (GUI skipped with a warning if qmake6 is missing)
-make gui     # GUI only; errors if qmake6 is not installed
+make all     # acta_db -> acta_cli -> acta_runner (core; the GUI is not built)
+make gui     # GUI only; explicit, errors if qmake6 is not installed
 make test    # all three C test suites
 make -C acta_runner test-e2e    # optional: dead-runner end-to-end suite
                                 # (real runner processes; ~10-15 s)
@@ -76,10 +75,26 @@ cd ../acta_cli   && make test   # per-entity CLI tests
 cd ../acta_runner && make test   # pipeline tests against a local stub backend
 ```
 
-The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and `make smoke` (manual check of `tests/llama_smoke` against a LIVE OpenAI-compatible server; `llama_smoke` takes the key as a CLI argument, or `-` for no auth). For real use — `acta_runner run` or the GUI — the API key must come from `$OPENAI_API_KEY` or, when that variable is unset, the `"api_key"` key of the config file (`ACTA Gamma.conf` in the app-data directory; no key anywhere → hard error, empty key → warning; see the README *Environment variables and the per-machine config file* section).
+The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and `make smoke` (manual check of `tests/llama_smoke` against a LIVE llama.cpp `llama-server`; `llama_smoke` takes the key as a CLI argument, or `-` for no auth). For real use — `acta_runner run` or the GUI — the API key must come from `$OPENAI_API_KEY` or, when that variable is unset, the `"api_key"` key of the config file (`ACTA Gamma.conf` in the app-data directory; no key anywhere → hard error, empty key → warning; see the README *Environment variables and the per-machine config file* section).
 
 ## Build notes
 
 - `CC ?= cc` picks up gcc/clang unchanged on Linux and Xcode clang on macOS; `EXEEXT` is empty under POSIX make and `.exe` under Windows (mingw) make, so the same Makefiles build on both.
 - The Makefiles link `-lsqlite3`, `-lcjson`, and `-lcurl` straight from the system packages above.
 - If a dependency lives elsewhere, override the paths: `make CJSON_DIR=/opt/cjson/include CJSON_LIB=/opt/cjson/lib/libcjson.a` (CLI/runner), `make CURL_INC=... CURL_LIB=...` (runner).
+
+## GUI–runner source coupling (hard constraint)
+
+The GUI's qmake project (`acta_gui/acta_gui.pro`) compiles the runner's own
+source files `acta_runner/src/run.c` and `acta_runner/src/backend.c`
+directly, so the in-app **Run** button executes the same pipeline as
+`acta_runner` without building the `acta_runner` binary. There is a single
+pipeline codebase, not a second copy: the atomic `pending → running` claim
+and the state-transition logic are shared, not duplicated — both paths use
+the single `acta_db_execution_start` in `acta_db`.
+
+**Constraint: `acta_runner/src/run.c` and `acta_runner/src/backend.c` may not
+be moved or renamed without updating `acta_gui/acta_gui.pro`.** The qmake
+project references them by path; moving them (e.g. into a `pipeline/`
+directory) breaks the GUI build — the C targets still build fine, only the
+`qmake6`/`make` step in `acta_gui/` fails.

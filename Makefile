@@ -1,19 +1,14 @@
 # Top-level convenience wrapper for the ACTA Gamma targets.
-# Builds in dependency order: acta_db -> acta_cli -> acta_runner,
-# then the Qt 6 GUI. The GUI is skipped with a warning when qmake6
-# is not on PATH; `make gui` always requires Qt 6 and errors if qmake6
-# is missing (see docs/building.md).
+# `make all` builds the core in dependency order: acta_db -> acta_cli ->
+# acta_runner. The Qt 6 GUI is optional and is NOT built by default:
+# `make gui` builds it (requires Qt 6; errors if qmake6 is missing).
+# See docs/building.md.
 
 QMAKE6 := $(shell command -v qmake6 2>/dev/null)
 
 .PHONY: all db cli runner gui test clean
 
 all: db cli runner
-	@if [ -n "$(QMAKE6)" ]; then \
-		$(MAKE) gui; \
-	else \
-		echo "WARNING: qmake6 not found - skipping GUI build (install Qt 6, see docs/building.md; 'make gui' builds it)"; \
-	fi
 
 db:
 	$(MAKE) -C acta_db

@@ -133,13 +133,23 @@ The model is another independent dimension of an execution.
 Context × Skill Revision × Model
 ```
 
-The initial implementation can use llama.cpp through its OpenAI-compatible API, but the runner should not depend on llama.cpp itself.
+The backend is llama.cpp, accessed through the OpenAI-compatible API it exposes; the runner contains no llama.cpp code and speaks only that HTTP surface. That is the extent of the backend story: llama.cpp is the backend, full stop.
 
-A local model can be replaced by another local model or a cloud model without changing the skill system.
+A local model can be replaced by another local model without changing the skill system.
 
 This makes model upgrades much less disruptive.
 
 Instead of asking whether a new model "seems better", existing contexts and skills can be replayed against it.
+
+### Replay caveat
+
+A replay resends exactly the same request (context content, skill prompt revision, model revision). It does not promise the same output, because three things it cannot track may have changed:
+
+- the **weights behind the `model_identifier`** — the same name may now point to a re-quantized or replaced GGUF; ACTA does not hash the weights, so a replay six months later is a run with "the same inputs", not a bit-for-bit reproduction;
+- the **server instance** — different flags (`-c`, sampling, …) or a rebuilt engine. The preflight catalog fetch records the serving instance's launch args and `n_ctx`/`n_params`/`size`/`ftype` in the execution log when available (best-effort; `"catalog":null` is recorded when the catalog is unavailable), so a *change in server configuration* is visible when comparing logs — a *change in the weights behind the same identifier* is not;
+- the **inference engine itself** — the LLM call is probabilistic; even a byte-identical setup is not guaranteed to produce bit-reproducible output.
+
+So "I re-ran execution 47 with the same inputs and got a different output" is a valid, expected outcome. The audit trail tells you exactly what was sent and what the server *reported* at the time; explaining *why* the output differed may require the backend's own logs, which ACTA does not retain.
 
 ## Auditability
 

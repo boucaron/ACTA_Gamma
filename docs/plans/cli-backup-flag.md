@@ -1,11 +1,11 @@
 # Plan — `acta_cli` backup action: atomic snapshot via `VACUUM INTO`
 
-Status: **done** (implementation, schema, tests, docs) — but see
-**Current state & follow-ups** at the bottom: one open `test_tools`
-cross-check failure touches the `db.backup` entry, and the code review's limitations — the Windows backslash
-rejection, the naive self-backup guard, and the portability nit are
-now fixed; the TOCTOU caveat is deliberately accepted; and one
-`test_tools` cross-check failure remains open.
+Status: **done** (implementation, schema, tests, docs). The code
+review's limitations — the Windows backslash rejection, the naive
+self-backup guard, and the portability nit — and the in-process
+`test_tools` cross-check failure are all fixed; the TOCTOU caveat is
+deliberately accepted. See **Current state & follow-ups** at the
+bottom for what changed.
 
 Option 2 was chosen at scheduling: the SQLite backup
 C API (`sqlite3_backup_init` / `step` / `finish`) behind the small
@@ -129,18 +129,19 @@ landed with work item 4.
 
 ## Current state & follow-ups
 
-1. **Open: `test_tools` cross-check failure.**
-   `tests/tools/tools_test_main.c:451` (`TEST(rc != EXIT_CLI)`) fails for
-   exactly one of the 75 schema-generated entries, **in-process only**:
-   the same argv shapes run out-of-process (subprocess, fresh replica,
-   `./tmp` backup target) produce no `rc=10` anywhere. The `db.backup`
-   handler paths were reviewed line by line and none of its exit-10
-   branches fire for the cross-check argv (`--to ./tmp/acta_tools_backup_<pid>_<n>.db`):
-   flag present, allowed characters, ≠ db path, `stat` → ENOENT. The
-   remaining exit-10 sources are in the parse layer (`parse_globals` /
-   `cmd_args_validate`), which is where investigation continues. Until
-   this is fixed the `test_tools` suite is red even though every other
-   suite passes against the regenerated `acta_test_ref.db`.
+1. **Fixed: `test_tools` cross-check failure (commit `fd1e1a4`).**
+   The in-process failure (`tests/tools/tools_test_main.c:451`,
+   `TEST(rc != EXIT_CLI)`, on the `db.backup` entry of the 75
+   schema-generated entries) was a double free in the test's own
+   `cross_check` helper: the `db.backup` temp target was `strdup`'d and
+   stored in both `argv` and `owned[]`, but the post-run cleanup freed
+   it before the per-entry `free(owned[o])` loop — a second free of the
+   same pointer, which fastfailed (`SIGTRAP`) under msvcrt. The fix
+   drops the early `free` and lets the `owned[]` loop be the single free
+   (the `remove` stays, keeping the `./tmp/` target out of the way). The
+   in-process cross-check now runs clean and the `test_tools` suite is
+   green; out-of-process runs of the same argv shapes were clean all
+   along, which is why the failure looked environment-dependent.
 2. **Fixed — Windows backslash targets allowed.** The char validation
    now bans `\` only on POSIX (`#ifndef _WIN32`); on Windows the
    backslash is the native separator and passes. The error message is

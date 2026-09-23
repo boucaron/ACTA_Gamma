@@ -2,7 +2,7 @@
 
 Distilled from the llama.cpp server README (the full auto-generated
 server reference in the upstream llama.cpp repository; only the
-runner-relevant subset is kept here).
+runner-relevant subset is kept here). Tested on **llama.cpp 0.4.x** (router mode); compatibility with later versions is not guaranteed — if the router surface changes, the preflight and catalog-fetch steps need re-validation.
 
 ## 1. Server startup (canonical: router mode)
 
@@ -74,8 +74,8 @@ The llama.cpp server also serves its model catalog at `GET /` (the
 
 The runner fetches it during preflight and records the matched entry in
 the `preflight_passed` log event. This is **best-effort audit data**:
-non-llama OpenAI-compatible backends have no catalog, so a failure
-there never fails the execution (`"catalog":null` is recorded instead).
+a fetch failure never fails the execution (`"catalog":null` is recorded
+instead).
 
 ## 4. The call: `POST /v1/chat/completions`
 

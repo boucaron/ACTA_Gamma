@@ -122,6 +122,13 @@ For example:
 
 The runner should treat the backend as an interchangeable implementation.
 
+Revision rows (`model_revisions`, `skill_revisions`) are written **only** by
+the schema triggers below — there is no application-level "snapshot" call,
+and even raw SQL against the parent tables (e.g. via `db exec`) fires the
+triggers, so the revision sequence cannot be skipped at the application
+layer. A revision row, once written, is immutable: the schema provides no
+`UPDATE`/`DELETE` path for it.
+
 ```sql
 -- Model Folders
 -- (parent_id, name) uniqueness is enforced per level via the partial

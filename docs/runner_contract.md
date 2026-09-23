@@ -122,9 +122,9 @@ Implementation notes (where the spec left room):
    the GUI event loop, freezing the UI for the whole run. Ownership is
    therefore manual: `stopRunner()` posts `deleteLater()` to the
    worker's queue before `quit()` + `wait()` (see `runnerWorker.h`).
-2. **Server lifecycle is user-managed.** The user launches
-   `llama-server` (or any OpenAI-compatible backend) manually with
-   whatever model they want. The runner is a pure HTTP client: it never
+2. **Server lifecycle is user-managed.** The user launches the
+   llama.cpp `llama-server` (router mode) manually with whatever model
+   they want. The runner is a pure HTTP client: it never
    spawns, loads, unloads, or terminates a server. The DB model record
    (`base_url`, `model_identifier`, `configuration`) is the only link to
    the server instance.
@@ -148,7 +148,14 @@ Implementation notes (where the spec left room):
    `configuration` carrying an `api_key` key is rejected as an unknown
    key and fails the execution with `EXIT_INVALID`). Precedence:
    `$OPENAI_API_KEY` (if set — even to the empty string) wins over the
-   file; the file is a fallback, not a second channel. No key anywhere
+   file; the file is a fallback, not a second channel. Having **both**
+   sources is a deliberate owner decision, not an accident: the env var
+   is the primary channel for scripted and programmatic use (and stays the
+   only source for a machine without a config file); the file key is the
+   per-machine fallback for GUI and no-shell-environment setups. An
+   "env var only" policy was considered and rejected — the file fallback
+   costs one precedence rule and removes the need to export a secret on
+   machines where the GUI is the primary interface. No key anywhere
    (env unset + file key absent/missing) → the run does not start
    (runner: `ACTA_RUNNER_ERROR`, exit 4, before any claim; GUI: error in
    the run result); key empty (from either source) → warning and no
@@ -222,8 +229,7 @@ Implementation notes (where the spec left room):
    entry's `status.args` + `meta` (`n_ctx`, `n_params`, `size`, `ftype`)
    and `max_context` are recorded in a `preflight_passed` log event.
    A missing/unparseable catalog never fails the execution — it records
-   `"catalog":null` (non-llama OpenAI-compatible backends have no
-   catalog; the runner must not depend on llama.cpp itself).
+   `"catalog":null`.
 4. **Call** — `POST /v1/chat/completions` with `messages = [system:
    prompt_template, user: context.content]`, `model =
    model_identifier`, params from `configuration`, and
@@ -233,7 +239,8 @@ Implementation notes (where the spec left room):
 5. **Record** — `set_raw_response(choices[0].message.content)`; log
    `llm_response` (HTTP status, latency, `usage` tokens, `timings`).
 6. **Validate** — if `output_schema` is set and `response_format` was
-   not used (non-llama backend), parse/validate post-hoc; log
+   not used (i.e. the model record has `supports_response_format: false`),
+   parse/validate post-hoc; log
    `validation_started` / `validation_failed`.
 7. **Close** — `complete(result)` or `fail(error)`; log
    `execution_completed` / `execution_failed`. `run --pending` processes
