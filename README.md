@@ -12,6 +12,8 @@ This is not an agent framework. It is a runner that makes one LLM call and recor
 
 The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
+**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode serving at least one GGUF model. Everything else is in this repo — see [Quick start](#quick-start).
+
 ## Current status
 
 Early prototype / POC. The core pipeline is complete: entity model and persistence, versioned skills/models, execution lifecycle with `execution_log`, the standalone runner, the GUI, soft-delete/restore, `sweep`, and the `db backup --to` atomic snapshot. Retry is manual by design (a failed execution is reset explicitly with `exec reset` or the GUI Retry button), and streaming responses are out of scope by design — an execution is a single, non-interactive call. These are product decisions, not missing features. Full detail in [`docs/status.md`](docs/status.md); the issue tracker is [`docs/known_issues.md`](docs/known_issues.md).
@@ -81,6 +83,8 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
         Observation              Audit
 ```
 
+In the diagram, **Observation** is the LLM's response recorded verbatim as the execution's `raw_response`; **Audit** is the `execution_log` phase rows (including the resolved prompt) plus the raw response and the recorded result.
+
 ## Revisions and lifecycle
 
 The whole lifecycle: create/update the parent, revisions are snapshotted automatically, executions reference revision ids. Concretely:
@@ -88,7 +92,7 @@ The whole lifecycle: create/update the parent, revisions are snapshotted automat
 - **How revisions are created.** A DB trigger inserts a new revision row (per-parent sequence 1, 2, 3, …) every time the parent row is created, updated, or soft-deleted (`acta_cli skill create` / `skill update` / `skill delete`, same for `model`). The soft-delete trigger snapshots a final revision carrying `deleted_at`. There is no separate "snapshot" command.
 - **Immutability.** Revision rows cannot be edited or deleted — they can only be read (`skill_revision get` / `get-latest` / `list` / `count`, same for `model_revision`). Contexts are likewise immutable (a trigger rejects updates), which is what makes replay inputs exact.
 - **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its user message is exactly `context.content`. The request inputs are exactly reproducible with all three inputs: the context, the skill revision, and the model revision.
-- **Replay caveat — input determinism, not output determinism.** A replay resends exactly the same request inputs, but does not guarantee identical outputs, because the model weights, the server instance configuration, and LLM sampling are not pinned. Full treatment in [`PointOfView.md`](docs/PointOfView.md), "Replay caveat".
+- **Replay caveat — input determinism, not output determinism.** A replay resends exactly the same request inputs, but does not guarantee identical outputs, because the model weights, the server instance configuration, and LLM sampling are not pinned. Full treatment in [`PointOfView.md`](docs/PointOfView.md), "Replay caveat". Mechanically, a replay is just a second `exec create` with the same `context_id`, `skill_revision_id`, and `model_revision_id` (optionally `--parent_execution_id <id>` to link the new row to the one being replayed) — there is no dedicated replay command, and GUI Retry re-runs only *failed* executions.
 - **No promote / deprecate.** There is deliberately no `active` or `current` flag: the "current" revision is simply the latest one, and choosing what to run is done by pointing the execution at the revision id you want.
 - **Editing creates, not modifies.** Updating a skill or model parent inserts a new immutable revision; it does not modify the existing one, and existing executions keep pointing at the revision they were bound to. `skill update` takes a **partial** payload (at least one field):
 
@@ -112,7 +116,7 @@ The whole lifecycle: create/update the parent, revisions are snapshotted automat
 
 Rows are never hard-deleted: `delete` sets a `deleted_at` timestamp and `restore` clears it (there is no purge — a new DB file is the clean-state path). `model`, `model_folder`, `skill`, `skill_folder`, `context`, and `exec` all have `delete` / `restore` actions; `list` / `count` default to live-only rows everywhere, with `--include_deleted` / `--deleted` to opt back in on the entity, revision, and context/exec listers (the folder listers are live-only with no opt-in flag). Deleted rows are skipped by `get` / `get-latest` (context, model, skill, exec, model_revision — skill_revision has no deleted filter), `context create` refuses deleted contexts, `exec reset` refuses deleted executions, and the runner's claim step ignores deleted executions. The GUI surfaces the same lifecycle as trash views in the context and execution panels with per-row Delete/Restore (Retry disabled for deleted executions).
 
-(Durability: the DB file is the data — take a backup with `acta_cli db backup --to <target>` before destructive operations; WAL lifecycle, `PRAGMA integrity_check` / `VACUUM` procedure, the backup frequency guidance, and the manual reference are in [`DBDesign.md`](docs/DBDesign.md), "Data durability and maintenance".)
+(Durability: the DB file is the data — take a backup with `acta_cli db backup --to <target>` before destructive operations; the file is a plain SQLite database you can inspect with `sqlite3 acta.db` (WAL lifecycle, `PRAGMA integrity_check` / `VACUUM` procedure, the backup frequency guidance, the manual reference, and the full schema are in [`DBDesign.md`](docs/DBDesign.md)).)
 
 ## How a run is assembled
 
@@ -123,7 +127,7 @@ The runner assembles the chat call from the bound revisions:
 
 There is no per-execution prompt field: the skill's prompt template is the only instruction source, and the context is the user message content. An empty context content fails the execution. The `executions` table has no prompt column.
 
-**Prompt size limit.** The execution's preflight checks `strlen(prompt_template) + strlen(context.content)` against the `max_chars` limit (the per-machine config file's `"max_chars"` key, defaulting to the built-in 100,000 chars — a conservative cross-model floor; raise it in the config file if your model's context window is larger and you send long contexts) and, if the total exceeds it, fails the execution with `EXIT_INVALID` ("prompt too large: N chars total (context X + skill prompt Y) exceeds max_chars Z") **before any backend call**.
+**Prompt size limit.** The execution's preflight checks `strlen(prompt_template) + strlen(context.content)` against the `max_chars` limit (the per-machine config file's `"max_chars"` key, defaulting to the built-in 100,000 chars — a conservative cross-model ceiling; raise it in the config file if your model's context window is larger and you send long contexts) and, if the total exceeds it, fails the execution with `EXIT_INVALID` ("prompt too large: N chars total (context X + skill prompt Y) exceeds max_chars Z") **before any backend call**.
 
 - It is a deterministic char-count guard, not a token or context-window calculation — the assembled prompt is exactly these two strings, so a char count is a sufficient, model-agnostic check.
 - For prompts *under* the limit, the backend's served `max_context` remains the final arbiter (recorded in the `preflight_passed` log row, but not used by the check itself).
@@ -159,7 +163,7 @@ Any deviation from that contract — an unknown key (typo), a wrong value type, 
 
 **Preflight** (the `preflight` step of the pipeline) verifies the backend before the chat call: `GET /health` must return 200 (503 means the model is still loading → execution `failed`), `GET /v1/models` must list the model record's `model_identifier` (if not, the execution fails with the ids the server actually serves), and the matched entry's `max_context` is read. As a best-effort audit step, the router's model catalog (`GET /`, models.json format) records the matched model's launch args and meta (`n_ctx`, `n_params`, `size`, `ftype`, …) into the execution timeline, so the server-instance configuration is part of the audit trail — the same model id can be served under different server flags. Success is logged as `preflight_passed`.
 
-**Output-schema validation** is post-hoc: it runs only when the backend did not apply the schema itself, i.e. when `supports_response_format` is false (the schema is then checked against the raw response after the call). If the response does not match the skill's `output_schema`, the execution **fails** with a `validation_failed` log row (`EXIT_INVALID`) — there is no "complete with a flag" mode. The validator is a hand-rolled subset check, not full JSON Schema: it validates `type`, `required`, `properties`, and `items` recursively (depth-capped), and ignores `pattern`, `enum`, length constraints, `format`, and `oneOf`/`anyOf` — an `output_schema` that relies on any of those constrains nothing. Full contract: [`docs/runner_contract.md`](docs/runner_contract.md).
+**Output-schema validation** is post-hoc: it runs only when the backend did not apply the schema itself, i.e. when `supports_response_format` is false (the schema is then checked against the raw response after the call). The `output_schema` is a JSON field on the skill, set with `skill create` / `skill update`, e.g. `"output_schema": {"type":"object","required":["label"],"properties":{"label":{"type":"string"},"confidence":{"type":"number"}}}`. If the response does not match the skill's `output_schema`, the execution **fails** with a `validation_failed` log row (`EXIT_INVALID`) — there is no "complete with a flag" mode. The validator is a hand-rolled subset check, not full JSON Schema: it validates `type`, `required`, `properties`, and `items` recursively (depth-capped), and ignores `pattern`, `enum`, length constraints, `format`, and `oneOf`/`anyOf` — an `output_schema` that relies on any of those constrains nothing. Full contract: [`docs/runner_contract.md`](docs/runner_contract.md).
 
 Concurrency: the SQLite connection uses WAL journal mode, and the runner's claim step is an optimistic `UPDATE … WHERE status = 'pending'` (checked for affected rows), so two runner processes cannot claim the same execution. Sequential use is the normal pattern. Running two `acta_runner` processes simultaneously is safe for claiming (the atomic claim prevents double-claim), but the per-execution processing order across two processes is not guaranteed — if you need ordering, run them sequentially.
 
@@ -173,13 +177,25 @@ Three steps before the example below:
 
 1. **Install dependencies** — SQLite, curl, cJSON (plus Qt 6 for the GUI): one command block per platform in [`docs/building.md`](docs/building.md).
 2. **Build** — from the repo root: `make all` (or per-component `make`; `make test` runs all C test suites).
-3. **Start the backend** — a llama.cpp `llama-server` in **router mode**: launched **without** `-m`, every GGUF in `--models-dir` becomes a served model and each request is routed to the matching one. Single-model mode (`llama-server -m model.gguf`) loads exactly one model at start and is not what ACTA expects — but one model is fine: point `--models-dir` at a folder containing that one GGUF. E.g. `llama-server --models-dir models -c 2048` on `127.0.0.1:8080` (canonical startup: [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1).
+3. **Start the backend** — a llama.cpp `llama-server` in **router mode** (launched **without** `-m`: every GGUF in `--models-dir` becomes a served model and each request is routed to the matching one):
+
+   ```sh
+   llama-server --models-dir models -c 2048
+   ```
+
+   This serves every GGUF in `models/` at `http://127.0.0.1:8080` (OpenAI-compatible `GET /health`, `GET /v1/models`, `POST /v1/chat/completions`) — it is the llama.cpp router, not a generic OpenAI endpoint (full contract: [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1). One model is fine: point `--models-dir` at a folder containing that one GGUF — GGUF model files are downloadable, e.g., from Hugging Face; if you don't have llama.cpp yet, [`docs/building.md`](docs/building.md) covers install/build.
 
 ## Environment variables and the per-machine config file
 
 * **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls, used identically by `acta_runner` and `acta_gui`. Resolution: `$OPENAI_API_KEY` (if set — even to the empty string) → the config file's `"api_key"` key. Both sources are deliberate, not redundant: the env var is the primary channel for scripted/programmatic use; the file key is a per-machine fallback for GUI and no-shell setups (the "env var only" alternative was considered and rejected — see [`docs/runner_contract.md`](docs/runner_contract.md), decision 4). There is no CLI flag, and the key is never stored in the database (a model `configuration` blob carrying an `api_key` key is rejected as an unknown key, `EXIT_INVALID`). If the key is present in neither source, the run does not start; an empty key is a warning and sends no `Authorization` header — acceptable only for a keyless localhost server.
 * **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. Resolution order: `--db` → `$ACTA_DB` → the config file's `"db"` → the **same** app-data file as the GUI (`%APPDATA%\ACTA_Gamma\acta.db` on Windows, `~/.local/share/ACTA_Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA_Gamma/acta.db`) → `./acta.db` as a last-resort fallback. A readable-but-malformed config file is a fail-closed hard error, never a silent retarget. The GUI does **not** read `--db` or `$ACTA_DB` — it uses the same default file, and its *Choose database file* dialog covers non-default setups (see [Your first session in the GUI](#your-first-session-in-the-gui)).
-* **`ACTA_Gamma.conf`** — the per-machine config file: a flat JSON object with **at most** four keys, in the same app-data directory as the default DB file (renamed from the old space-bearing `ACTA Gamma` directory and `ACTA Gamma.conf` file — move or recreate any existing files):
+* **`ACTA_Gamma.conf`** — the per-machine config file: a flat JSON object with **at most** four keys, in the same app-data directory as the default DB file (renamed from the old space-bearing `ACTA Gamma` directory and `ACTA Gamma.conf` file — move or recreate any existing files). Default locations:
+
+  | Platform | Default DB | Config file |
+  |---|---|---|
+  | Windows | `%APPDATA%\ACTA_Gamma\acta.db` | `%APPDATA%\ACTA_Gamma\ACTA_Gamma.conf` |
+  | Linux | `~/.local/share/ACTA_Gamma/acta.db` | `~/.local/share/ACTA_Gamma/ACTA_Gamma.conf` |
+  | Linux, `$XDG_DATA_HOME` set | `$XDG_DATA_HOME/ACTA_Gamma/acta.db` | `$XDG_DATA_HOME/ACTA_Gamma/ACTA_Gamma.conf` |
 
   | Key | Type | Meaning |
   |---|---|---|
@@ -204,6 +220,8 @@ Against the running `llama-server` router from the quick start:
 acta_cli model create --json '{"name":"llama-local","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"qwen3-8b"}'
 
 # 2. Create a versioned skill (prompt template + optional output schema)
+# ("prompt_template" is the skill's instruction text — it is sent as the
+#  system message of the chat call)
 acta_cli skill create --json '{"name":"sentiment","prompt_template":"Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}"}'
 
 # 3. Create an immutable context (the input snapshot)
@@ -232,6 +250,8 @@ acta_cli exec get 1
 acta_cli log list 1
 ```
 
+The example assumes a fresh `acta.db` (which is why every id is `1`); if you already have a database, substitute your actual row ids in the four create commands.
+
 What the output looks like (abbreviated — real timestamps, and a full `raw_response`, in practice):
 
 ```sh
@@ -256,7 +276,9 @@ $ acta_cli log list 1
 ]
 ```
 
-`raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent.
+`raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`, [`docs/cli_spec.md`](docs/cli_spec.md)); it is `null` for a root execution.
+
+A failed backend call (server down, connection error, or the per-call `--timeout` exceeded — default 300 s) leaves the execution in `failed` with the error recorded in `error`; the manual reset path below is the same recovery.
 
 Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose newest activity (latest `execution_log` row, or `started_at`) is older than `N` seconds (`--stale-seconds` is required, positive integer). A failed execution is retried manually with `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button.
 
@@ -274,7 +296,7 @@ Prefer not to use the command line? Once the backend is running (see Quick start
 
 ## CLI ergonomics
 
-For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else the app-data file shared with the GUI), and the machine-readable `--tools` JSON schema (currently version 4). `db exec` is the developer-facing static-SQL escape hatch: it executes a single mutating statement (DDL / migrations) whose SQL must be a developer-written literal, never composed from runtime input; a `SELECT` is rejected **before the DB is touched** by a first-statement keyword check (exit 4) — a first-keyword blocklist, not a full parse. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else the app-data file shared with the GUI), and the machine-readable `--tools` JSON schema (currently version 4). `db exec` is the developer-facing static-SQL escape hatch: it executes a single mutating statement (DDL / migrations) whose SQL must be a developer-written literal, never composed from runtime input; a `SELECT` is rejected **before the DB is touched** (enforcement details in [`docs/cli_spec.md`](docs/cli_spec.md)). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 Components and their reference docs:
 
