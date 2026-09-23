@@ -518,7 +518,11 @@ int main(void)
 
     /* 5. Bad-permissions refusal: a readable file whose mode gives
      *    group/other read access is refused fail-closed BEFORE its
-     *    contents are read -> EXIT_INVALID, row stays pending. */
+     *    contents are read -> EXIT_INVALID, row stays pending.
+     *    POSIX-only: on Windows the mode bits are meaningless (always
+     *    0666) and the gate warns and reads the file anyway
+     *    (best-effort), so the refusal cannot be exercised there. */
+#ifndef _WIN32
     {
         printf("== cmd_run: bad-permissions file (0644) refused\n");
         check(env_force("OPENAI_API_KEY", ENV_UNSET, NULL),
@@ -546,6 +550,7 @@ int main(void)
               "parse)");
         remove(confpath);
     }
+#endif
 
     /* 6. Readable-but-malformed file -> fail-closed hard error before
      *    any claim; row stays pending. */

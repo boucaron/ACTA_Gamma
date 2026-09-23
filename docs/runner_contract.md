@@ -154,9 +154,10 @@ Implementation notes (where the spec left room):
    the run result); key empty (from either source) → warning and no
    `Authorization` header sent (acceptable only for a keyless localhost
    server; a bad idea in general). A readable-but-malformed config file
-   (or, on POSIX, one whose mode gives read access to group or other —
-   the file must be `0600`) is a fail-closed hard error before any claim,
-   even when `$OPENAI_API_KEY` is set. When a key is present it is sent
+   (or one whose mode gives read access to group or other — the file
+   must be `0600`; on Windows the mode bits are meaningless and the
+   check only warns, so the file is read anyway) is a fail-closed hard
+   error before any claim, even when `$OPENAI_API_KEY` is set. When a key is present it is sent
    as `Authorization: Bearer <key>` on every request (preflight GETs and
    the chat POST); the header is optional on the server side when it has
    no `--api-key` set.

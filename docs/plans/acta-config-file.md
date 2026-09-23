@@ -2,8 +2,9 @@
 
 Status: **done — work items 1 (the JSON config parser), 2
 (the key precedence policy), 3 (DB-path resolution), 4 (max_chars /
-timeout resolution), 5 (the POSIX permission gate; the Windows DACL
-check remains a separate follow-up) and 6 (the GUI surface) are
+timeout resolution), 5 (the permission gate: the `0600` mode check —
+hard refusal on POSIX, warning + read-anyway on Windows) and 6 (the
+GUI surface) are
 implemented: the shared `acta_conf` helper
 (`acta_conf_parse`, `acta_conf_api_key_status`, `acta_conf_read`,
 `acta_conf_default_path`, and the resolution helpers
@@ -18,11 +19,11 @@ flag → file → built-in 300 s) and `max_chars` (file → built-in 100,000
 chars) and passes both into the pipeline — `run_execution` gained the
 `max_chars` limit parameter (the preflight size check that consumes it
 lands with `docs/plans/max-chars-size-check.md`); `acta_conf_read` now
-runs the POSIX permission gate (a file whose mode has group/other read
-bits set is refused fail-closed before its contents are read; on Windows
-the st_mode bit check is not run — meaningless under MSYS2/MinGW, the
-NTFS DACL check is a separate follow-up, first cut documented
-best-effort), mirrored by the GUI's Qt reader, and the dbpath suite pins
+runs the permission gate (a file whose mode has group/other read bits
+set is refused fail-closed before its contents are read; on Windows the
+mode bits are meaningless — `_stat64` always reports 0666 — so the gate
+warns on stderr and reads the file anyway, best-effort and not
+enforced), mirrored by the GUI's Qt reader, and the dbpath suite pins
 the contract mode 0600; `RunnerWorker::runInThread` now does the same
 resolution as `cmd_run` — key via `acta_conf_api_key_status` with the
 Qt-parsed file key (absent = NULL, present-but-empty = ""), `timeout`
@@ -151,20 +152,20 @@ stay as-is.
   unknown-key rejection pattern already exist in all three binaries (`cJSON`
   in the runner, `acta_cli/src/json.c` in the CLI, `QJsonDocument` in the
   GUI); INI would require a custom parser in each and weaker type safety.
-- **Permissions are part of the contract, split by platform.**
-  - **POSIX:** `0600` (owner read/write only). The resolver refuses a file
-    whose mode has group/other read bits set (`st.st_mode & (S_IRGRP |
-    S_IROTH)`), fail closed — the real enforcement gate.
+- **Permissions are part of the contract: one `0600` mode check, with a
+  platform-degraded behaviour on Windows.**
+  - The resolver runs `stat()` and refuses a file whose mode has
+    group/other read bits set (`st.st_mode & (S_IRGRP | S_IROTH)`), fail
+    closed, BEFORE the contents are read — the file must be `0600`
+    (owner read/write only). This is the single check; the GUI's Qt
+    reader mirrors it, so all three binaries apply the same gate.
   - **Windows (MSYS2/MinGW):** the Unix mode bits are meaningless —
     `_stat64` reports `0666` for every regular file regardless of
-    `icacls`/`chmod`, so the POSIX bit check cannot be used there (it would
-    refuse every file). The real check is the NTFS DACL (security
-    descriptor): refuse if `Users`/`Everyone` have read access. That is a
-    **separate, not-yet-implemented work item** (Win32 `GetFileSecurity`
-    from MinGW). In the first cut the resolver does **not** enforce the
-    permission guarantee on Windows; a file created in the user profile is
-    single-user by default, but this is documented as best-effort, not
-    verified.
+    `icacls`/`chmod` — so the check cannot refuse there; it degrades to a
+    warning on stderr and the file is read anyway (best-effort, not
+    enforced). The NTFS DACL check (Win32 `GetFileSecurity` from MinGW:
+    refuse if `Users`/`Everyone` have read access) remains an **optional
+    follow-up**, not part of the contract.
 - **Key precedence:** `$OPENAI_API_KEY` (if set) wins over the file; the
   file is a fallback, not a second channel. Unset env + missing/unreadable
   file = the existing `ACTA_RUNNER_ERROR` "OPENAI_API_KEY is not set" hard
@@ -252,18 +253,16 @@ stay as-is.
    preflight size check, now shipped —
    `docs/plans/max-chars-size-check.md`, done); usage/help
    text updated; the GUI worker side landed with work item 6.
-5. **Done (POSIX) / follow-up (Windows) —** Permission checks,
-   platform-split:
-   - POSIX: **done** — `stat()` mode bits in `acta_conf_read` (checked
-     before the contents are read): a file whose mode has group/other
-     read bits set is refused fail-closed (the file must be `0600`,
-     owner read/write only); mirrored by the GUI's Qt reader
-     (`readActaConfFile`) so all three binaries refuse the same file;
-     the dbpath suite's `write_file` now pins the contract mode `0600`.
-   - Windows: **not** via `st_mode` (meaningless, always `0666` under
-     MSYS2/MinGW). The NTFS DACL check is a **separate follow-up work
-     item**; the first cut does not enforce the guarantee on Windows
-     (documented as best-effort).
+5. **Done —** Permission checks: the plain `0600` mode check in
+   `acta_conf_read` (checked before the contents are read): a file whose
+   mode has group/other read bits set is refused fail-closed (the file
+   must be `0600`, owner read/write only); mirrored by the GUI's Qt
+   reader (`readActaConfFile`) so all three binaries apply the same
+   check; the dbpath suite's `write_file` pins the contract mode `0600`.
+   On Windows (MSYS2/MinGW) the mode bits are meaningless (always
+   `0666`), so the gate warns on stderr and reads the file anyway
+   (best-effort, not enforced); the NTFS DACL check remains an optional
+   follow-up.
 6. **Done —** GUI surface: same resolution as the runner (no separate
    GUI config; dialog choice stays on top). Done: the Qt reader
    (`readActaConfFile` + `ActaConfFile`) extracted from
@@ -278,7 +277,7 @@ stay as-is.
    `ExecutionPanel` no longer passes a hard-coded 300) and `max_chars`
    (file → built-in default), and calls the 5-argument
    `run_execution` with both; a readable-but-malformed file (or one
-   failing the POSIX permission gate, already in the shared reader)
+   failing the permission gate, already in the shared reader)
    fails closed before any claim; `src.pro` lists `confreader.h`.
 7. **Done —** Tests: env-set-wins, file-fallback, bad-permissions
    refusal, missing file + unset env → existing hard error; DB-path
@@ -305,9 +304,10 @@ stay as-is.
    file fallback completes with the Bearer header carrying the FILE
    key; env-set-wins sends the ENV key; empty env var (POSIX) wins with
    no Authorization header; a 0644 file is refused fail-closed before
-   the claim (POSIX; the NTFS DACL check is the separate Windows
-   follow-up); malformed / unknown-key / wrong-type files are
-   fail-closed hard errors before any claim. The stub server gained
+   the claim (POSIX-only assertion — on Windows the gate warns and
+   reads the file anyway, so the refusal cannot be exercised there);
+   malformed / unknown-key / wrong-type files are fail-closed hard
+   errors before any claim. The stub server gained
    `stub_server_last_auth()` (captures the last `Authorization` header
    value) so the key actually used is observable. The DB-path order
    with/without the file was already pinned by the `dbpath` suite

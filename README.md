@@ -158,7 +158,7 @@ Three steps before the example below:
   * `"db"` (string) — the database path step above;
   * `"max_chars"` (positive integer) — the maximum total chars of the prompt sent (`skill.prompt_template` + `context.content`), per-machine override of the built-in default 100,000;
   * `"timeout"` (positive integer, seconds) — the default per-call HTTP timeout, per-machine override of the built-in default 300 s (the `--timeout` flag, when given, still wins per run).
-  All three binaries read it through the same resolution helper (`acta_conf` in `acta_db`). Fail-closed, like the model `configuration` blob: not-an-object, unknown key, wrong type, or malformed JSON → hard error; on POSIX a file whose mode gives read access to group or other is refused before its contents are read (the file must be `0600`; on Windows the mode bits are meaningless and the NTFS DACL check is a documented follow-up, so the permission guarantee there is best-effort). Full contract: [`docs/plans/acta-config-file.md`](docs/plans/acta-config-file.md).
+  All three binaries read it through the same resolution helper (`acta_conf` in `acta_db`). Fail-closed, like the model `configuration` blob: not-an-object, unknown key, wrong type, or malformed JSON → hard error; a file whose mode gives read access to group or other is refused before its contents are read (the file must be `0600`, owner read/write only) — on Windows the mode bits are meaningless (`_stat64` always reports `0666`), so the check degrades to a warning and the file is read anyway (best-effort, not enforced). Full contract: [`docs/plans/acta-config-file.md`](docs/plans/acta-config-file.md).
 
 ## Minimal end-to-end example
 
