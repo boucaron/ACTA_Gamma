@@ -99,10 +99,10 @@ static void order_env_wins(void)
     env_set("ACTA_DB", "");
 #ifdef _WIN32
     TSTREQ(acta_db_resolve_db_path(NULL, NULL),
-           "C:/Users/t/AppData/Roaming\\ACTA Gamma\\acta.db");
+           "C:/Users/t/AppData/Roaming\\ACTA_Gamma\\acta.db");
 #else
     TSTREQ(acta_db_resolve_db_path(NULL, NULL),
-           "/srv/data/ACTA Gamma/acta.db");
+           "/srv/data/ACTA_Gamma/acta.db");
 #endif
     env_set("ACTA_DB", NULL);
 #ifdef _WIN32
@@ -122,9 +122,9 @@ static void default_windows(void)
     env_set("HOME", "C:/Users/t");
     env_set("APPDATA", "C:/Users/t/AppData/Roaming");
     TSTREQ(acta_db_resolve_db_path(NULL, NULL),
-           "C:/Users/t/AppData/Roaming\\ACTA Gamma\\acta.db");
+           "C:/Users/t/AppData/Roaming\\ACTA_Gamma\\acta.db");
     TSTREQ(acta_db_default_db_path(),
-           "C:/Users/t/AppData/Roaming\\ACTA Gamma\\acta.db");
+           "C:/Users/t/AppData/Roaming\\ACTA_Gamma\\acta.db");
     /* no org-name segment anywhere in the path */
     T(strstr(acta_db_resolve_db_path(NULL, NULL), "boucaron") == NULL);
     env_set("APPDATA", NULL);
@@ -143,13 +143,13 @@ static void default_posix(void)
     env_set("XDG_DATA_HOME", NULL);
     /* $HOME/.local/share fallback */
     TSTREQ(acta_db_resolve_db_path(NULL, NULL),
-           "/home/t/.local/share/ACTA Gamma/acta.db");
+           "/home/t/.local/share/ACTA_Gamma/acta.db");
     TSTREQ(acta_db_default_db_path(),
-           "/home/t/.local/share/ACTA Gamma/acta.db");
+           "/home/t/.local/share/ACTA_Gamma/acta.db");
     /* $XDG_DATA_HOME wins over $HOME */
     env_set("XDG_DATA_HOME", "/srv/data");
-    TSTREQ(acta_db_resolve_db_path(NULL, NULL), "/srv/data/ACTA Gamma/acta.db");
-    TSTREQ(acta_db_default_db_path(), "/srv/data/ACTA Gamma/acta.db");
+    TSTREQ(acta_db_resolve_db_path(NULL, NULL), "/srv/data/ACTA_Gamma/acta.db");
+    TSTREQ(acta_db_default_db_path(), "/srv/data/ACTA_Gamma/acta.db");
     /* no org-name segment anywhere in the path */
     T(strstr(acta_db_resolve_db_path(NULL, NULL), "boucaron") == NULL);
     env_set("XDG_DATA_HOME", NULL);
@@ -181,7 +181,7 @@ static int write_file(const char *path, const char *content)
     return 1;
 }
 
-/* Create <tmpdir>/acta_dbpath_conf/ and its "ACTA Gamma" subdir;
+/* Create <tmpdir>/acta_dbpath_conf/ and its "ACTA_Gamma" subdir;
  * stores the base dir in base and the full config-file path in conf.
  * Existing dirs (from a previous run) are tolerated.  Returns 1 ok, 0
  * failure. */
@@ -191,24 +191,24 @@ static int make_conf_locations(const char *tmpdir, char *base, size_t bs,
     char gamma[600];
 #ifdef _WIN32
     snprintf(base, bs, "%s\\acta_dbpath_conf", tmpdir);
-    snprintf(gamma, sizeof gamma, "%s\\ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s\\ACTA_Gamma", base);
     errno = 0;
     int r1 = _mkdir(base);
     errno = 0;
     int r2 = _mkdir(gamma);
     if ((r1 != 0 && errno != EEXIST) || (r2 != 0 && errno != EEXIST))
         return 0;
-    snprintf(conf, cs, "%s\\ACTA Gamma.conf", gamma);
+    snprintf(conf, cs, "%s\\ACTA_Gamma.conf", gamma);
 #else
     snprintf(base, bs, "%s/acta_dbpath_conf", tmpdir);
-    snprintf(gamma, sizeof gamma, "%s/ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s/ACTA_Gamma", base);
     errno = 0;
     int r1 = mkdir(base, 0755);
     errno = 0;
     int r2 = mkdir(gamma, 0755);
     if ((r1 != 0 && errno != EEXIST) || (r2 != 0 && errno != EEXIST))
         return 0;
-    snprintf(conf, cs, "%s/ACTA Gamma.conf", gamma);
+    snprintf(conf, cs, "%s/ACTA_Gamma.conf", gamma);
 #endif
     return 1;
 }
@@ -247,9 +247,9 @@ static void conf_db_step(void)
     /* The expected platform default under this scratch base. */
     char expected[700];
 #ifdef _WIN32
-    snprintf(expected, sizeof expected, "%s\\ACTA Gamma\\acta.db", base);
+    snprintf(expected, sizeof expected, "%s\\ACTA_Gamma\\acta.db", base);
 #else
-    snprintf(expected, sizeof expected, "%s/ACTA Gamma/acta.db", base);
+    snprintf(expected, sizeof expected, "%s/ACTA_Gamma/acta.db", base);
 #endif
 
     char *err = NULL;
@@ -299,11 +299,11 @@ static void conf_db_step(void)
     /* clean up */
     char gamma[600];
 #ifdef _WIN32
-    snprintf(gamma, sizeof gamma, "%s\\ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s\\ACTA_Gamma", base);
     _rmdir(gamma);
     _rmdir(base);
 #else
-    snprintf(gamma, sizeof gamma, "%s/ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s/ACTA_Gamma", base);
     rmdir(gamma);
     rmdir(base);
 #endif

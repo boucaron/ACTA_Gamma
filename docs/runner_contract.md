@@ -141,7 +141,7 @@ Implementation notes (where the spec left room):
    makes the execution self-describing and protects the audit trail if
    prompt-resolution behavior changes later.
 4. **Auth:** the key sources are `$OPENAI_API_KEY` and, as a fallback,
-   the `"api_key"` key of the per-machine config file (`ACTA Gamma.conf`
+   the `"api_key"` key of the per-machine config file (`ACTA_Gamma.conf`
    in the app-data directory; `docs/plans/acta-config-file.md`) — there
    is no `--api_key` flag, and the key is never read from the model
    `configuration` blob (it must not be stored in the database; a

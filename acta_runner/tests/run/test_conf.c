@@ -277,7 +277,7 @@ static int port_reachable(int port)
 
 /* ── scratch config-file location (controls acta_conf_default_path) ── */
 
-/* Create <tmpdir>/acta_conf_conf/ and its "ACTA Gamma" subdir so the
+/* Create <tmpdir>/acta_conf_conf/ and its "ACTA_Gamma" subdir so the
  * platform app-data env var points at a fully controlled scratch base.
  * Stores the full config-file path in confpath.  Returns 1 ok, 0
  * failure. */
@@ -287,24 +287,24 @@ static int make_conf_locations(const char *tmpdir, char *base, size_t bs,
     char gamma[600];
 #ifdef _WIN32
     snprintf(base, bs, "%s\\acta_conf_conf", tmpdir);
-    snprintf(gamma, sizeof gamma, "%s\\ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s\\ACTA_Gamma", base);
     errno = 0;
     int r1 = _mkdir(base);
     errno = 0;
     int r2 = _mkdir(gamma);
     if ((r1 != 0 && errno != EEXIST) || (r2 != 0 && errno != EEXIST))
         return 0;
-    snprintf(confpath, cs, "%s\\ACTA Gamma.conf", gamma);
+    snprintf(confpath, cs, "%s\\ACTA_Gamma.conf", gamma);
 #else
     snprintf(base, bs, "%s/acta_conf_conf", tmpdir);
-    snprintf(gamma, sizeof gamma, "%s/ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s/ACTA_Gamma", base);
     errno = 0;
     int r1 = mkdir(base, 0755);
     errno = 0;
     int r2 = mkdir(gamma, 0755);
     if ((r1 != 0 && errno != EEXIST) || (r2 != 0 && errno != EEXIST))
         return 0;
-    snprintf(confpath, cs, "%s/ACTA Gamma.conf", gamma);
+    snprintf(confpath, cs, "%s/ACTA_Gamma.conf", gamma);
 #endif
     return 1;
 }
@@ -626,12 +626,12 @@ int main(void)
     acta_db_close(db);
     char gamma[600];
 #ifdef _WIN32
-    snprintf(gamma, sizeof gamma, "%s\\ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s\\ACTA_Gamma", base);
     _rmdir(gamma);
     _rmdir(base);
     env_force("APPDATA", ENV_UNSET, NULL);
 #else
-    snprintf(gamma, sizeof gamma, "%s/ACTA Gamma", base);
+    snprintf(gamma, sizeof gamma, "%s/ACTA_Gamma", base);
     rmdir(gamma);
     rmdir(base);
     env_force("XDG_DATA_HOME", ENV_UNSET, NULL);

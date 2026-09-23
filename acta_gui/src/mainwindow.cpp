@@ -59,17 +59,17 @@ QString MainWindow::defaultDbPath(QString *error)
     if (base.isEmpty())
         base = QDir::homePath() + QStringLiteral("/.local/share");
 #endif
-    const QString baseDir = base + QStringLiteral("/ACTA Gamma");
+    const QString baseDir = base + QStringLiteral("/ACTA_Gamma");
     QDir().mkpath(baseDir);
 
     // Config-file step (docs/plans/acta-config-file.md, work item 3):
-    // "db" in <app-data>/ACTA Gamma/ACTA Gamma.conf sits between explicit
+    // "db" in <app-data>/ACTA_Gamma/ACTA_Gamma.conf sits between explicit
     // choices (the remembered dialog path; the --db/$ACTA_DB equivalents
     // of the other binaries) and this platform default.  Missing or
     // unreadable file -> skipped; readable-but-malformed -> hard error
     // (empty return, *error set).
     const ActaConfFile conf =
-        readActaConfFile(baseDir + QStringLiteral("/ACTA Gamma.conf"));
+        readActaConfFile(baseDir + QStringLiteral("/ACTA_Gamma.conf"));
     if (!conf.valid) {
         if (error)
             *error = conf.error;

@@ -12,6 +12,10 @@ This is not an agent framework. It is a runner that makes one LLM call and recor
 
 The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
+## Current status
+
+Early prototype / POC. The core pipeline is complete: entity model and persistence, versioned skills/models, execution lifecycle with `execution_log`, the standalone runner, the GUI, soft-delete/restore, `sweep`, and the `db backup --to` atomic snapshot. Retry is manual by design (a failed execution is reset explicitly with `exec reset` or the GUI Retry button), and streaming responses are out of scope by design — an execution is a single, non-interactive call. These are product decisions, not missing features. Full detail in [`docs/status.md`](docs/status.md); the issue tracker is [`docs/known_issues.md`](docs/known_issues.md).
+
 ## What is ACTA Gamma?
 
 ACTA Gamma treats an LLM as a single controlled action in a larger deterministic flow.
@@ -174,8 +178,8 @@ Three steps before the example below:
 ## Environment variables and the per-machine config file
 
 * **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls, used identically by `acta_runner` and `acta_gui`. Resolution: `$OPENAI_API_KEY` (if set — even to the empty string) → the config file's `"api_key"` key. Both sources are deliberate, not redundant: the env var is the primary channel for scripted/programmatic use; the file key is a per-machine fallback for GUI and no-shell setups (the "env var only" alternative was considered and rejected — see [`docs/runner_contract.md`](docs/runner_contract.md), decision 4). There is no CLI flag, and the key is never stored in the database (a model `configuration` blob carrying an `api_key` key is rejected as an unknown key, `EXIT_INVALID`). If the key is present in neither source, the run does not start; an empty key is a warning and sends no `Authorization` header — acceptable only for a keyless localhost server.
-* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. Resolution order: `--db` → `$ACTA_DB` → the config file's `"db"` → the **same** app-data file as the GUI (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA Gamma/acta.db`) → `./acta.db` as a last-resort fallback. A readable-but-malformed config file is a fail-closed hard error, never a silent retarget. The GUI does **not** read `--db` or `$ACTA_DB` — it uses the same default file, and its *Choose database file* dialog covers non-default setups (see [Your first session in the GUI](#your-first-session-in-the-gui)).
-* **`ACTA Gamma.conf`** — the per-machine config file: a flat JSON object with **at most** four keys, in the same app-data directory as the default DB file (the name contains a space — quote the path in shell commands, especially on Windows):
+* **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. Resolution order: `--db` → `$ACTA_DB` → the config file's `"db"` → the **same** app-data file as the GUI (`%APPDATA%\ACTA_Gamma\acta.db` on Windows, `~/.local/share/ACTA_Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA_Gamma/acta.db`) → `./acta.db` as a last-resort fallback. A readable-but-malformed config file is a fail-closed hard error, never a silent retarget. The GUI does **not** read `--db` or `$ACTA_DB` — it uses the same default file, and its *Choose database file* dialog covers non-default setups (see [Your first session in the GUI](#your-first-session-in-the-gui)).
+* **`ACTA_Gamma.conf`** — the per-machine config file: a flat JSON object with **at most** four keys, in the same app-data directory as the default DB file (renamed from the old space-bearing `ACTA Gamma` directory and `ACTA Gamma.conf` file — move or recreate any existing files):
 
   | Key | Type | Meaning |
   |---|---|---|
@@ -213,7 +217,7 @@ acta_cli context create --json '{"type":"text","content":"The build system shipp
 acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revision_id":1}'
 
 # 5. Provide the API key: set the environment variable, or add an
-# "api_key" key to the config file (ACTA Gamma.conf in the same
+# "api_key" key to the config file (ACTA_Gamma.conf in the same
 # app-data directory as the default DB file). The environment variable
 # wins when set (even to the empty string, which is sufficient for a
 # keyless localhost server — no Authorization header will be sent); with
@@ -260,7 +264,7 @@ Stale-run cleanup: if a runner process dies mid-flight, `acta_runner sweep --sta
 
 The GUI is a convenience layer for humans: paste inputs, watch a run, read results without terminal JSON. It targets engineers and analysts who operate ACTA Gamma interactively — programs and scripted use should use the CLI (`acta_cli` + `acta_runner`), which is the complete surface; every GUI operation has a CLI equivalent.
 
-Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` (built with `make gui` — the GUI is optional and not part of `make all`) — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). The default location is the platform app-data directory (`%APPDATA%\ACTA Gamma\acta.db` on Windows, `~/.local/share/ACTA Gamma/acta.db` on Linux) — not `./acta.db` next to the binary — and `acta_cli` / `acta_runner` resolve to the **same** file out of the box (`--db` → `$ACTA_DB` → the config file's `"db"` → that app-data file; `./acta.db` only as a last resort, with a hint naming such a legacy file when the default DB is missing). The GUI does not read `--db` or `$ACTA_DB`; its *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) remains for non-default setups, e.g. a legacy `./acta.db`. Then:
+Prefer not to use the command line? Once the backend is running (see Quick start), launch `acta_gui` (built with `make gui` — the GUI is optional and not part of `make all`) — on first start it creates the `acta.db` database file for you (schema applied automatically; no setup step). The default location is the platform app-data directory (`%APPDATA%\ACTA_Gamma\acta.db` on Windows, `~/.local/share/ACTA_Gamma/acta.db` on Linux) — not `./acta.db` next to the binary — and `acta_cli` / `acta_runner` resolve to the **same** file out of the box (`--db` → `$ACTA_DB` → the config file's `"db"` → that app-data file; `./acta.db` only as a last resort, with a hint naming such a legacy file when the default DB is missing). The GUI does not read `--db` or `$ACTA_DB`; its *Choose database file* dialog (the choice is remembered in QSettings and reused on next start) remains for non-default setups, e.g. a legacy `./acta.db`. Then:
 
 1. **Model** — Models panel → *New…* → give it a name, the backend (`openai`), the router's address, and the model id (the GGUF file's name in your `--models-dir` folder).
 2. **Skill** — Skills panel → *New…* → a name and the prompt template — the instruction describing the action.
@@ -271,10 +275,6 @@ Prefer not to use the command line? Once the backend is running (see Quick start
 ## CLI ergonomics
 
 For the high-volume payload data (context `content`; execution `raw_response` / `result` / `error`) the CLI has dedicated flags: light-projection listers with `--full`, file in/out (`--out`, `--raw_out`, `--content_file`, `--raw_file`, `--result_file`), NDJSON `--stream`, global output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), `--db` (default `$ACTA_DB`, else the app-data file shared with the GUI), and the machine-readable `--tools` JSON schema (currently version 4). `db exec` is the developer-facing static-SQL escape hatch: it executes a single mutating statement (DDL / migrations) whose SQL must be a developer-written literal, never composed from runtime input; a `SELECT` is rejected **before the DB is touched** by a first-statement keyword check (exit 4) — a first-keyword blocklist, not a full parse. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
-
-## Current status
-
-Early prototype / POC. The core pipeline is complete: entity model and persistence, versioned skills/models, execution lifecycle with `execution_log`, the standalone runner, the GUI, soft-delete/restore, `sweep`, and the `db backup --to` atomic snapshot. Retry is manual by design (a failed execution is reset explicitly with `exec reset` or the GUI Retry button), and streaming responses are out of scope by design — an execution is a single, non-interactive call. These are product decisions, not missing features. Full detail in [`docs/status.md`](docs/status.md); the issue tracker is [`docs/known_issues.md`](docs/known_issues.md).
 
 Components and their reference docs:
 

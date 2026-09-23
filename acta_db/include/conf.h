@@ -92,11 +92,11 @@ int acta_conf_api_key_status(const char *env_key, const char *file_key,
 
 /*
  * Default location of the config file: the same app-data directory as
- * the default DB file ("ACTA Gamma.conf" next to "acta.db"):
- *   Windows : %APPDATA%\ACTA Gamma\ACTA Gamma.conf
- *   POSIX   : $XDG_DATA_HOME/ACTA Gamma/ACTA Gamma.conf
- *             (else $HOME/.local/share/ACTA Gamma/ACTA Gamma.conf)
- *   base unresolvable -> "./ACTA Gamma.conf" as a last resort.
+ * the default DB file ("ACTA_Gamma.conf" next to "acta.db"):
+ *   Windows : %APPDATA%\ACTA_Gamma\ACTA_Gamma.conf
+ *   POSIX   : $XDG_DATA_HOME/ACTA_Gamma/ACTA_Gamma.conf
+ *             (else $HOME/.local/share/ACTA_Gamma/ACTA_Gamma.conf)
+ *   base unresolvable -> "./ACTA_Gamma.conf" as a last resort.
  * Same platform-base logic as acta_dbpath.c (both copies) -- keep in
  * lockstep. Returns a pointer valid until the next call (static buffer).
  */

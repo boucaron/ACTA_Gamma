@@ -71,8 +71,8 @@ Four per-machine settings today have no file source:
   answer: no key in the DB, no key in argv, one conventional secret
   channel. Set it in `.bashrc` and move on.
 - **The database path.** Resolution is `--db` → `$ACTA_DB` → the shared
-  app-data default (`%APPDATA%\ACTA Gamma\acta.db` /
-  `~/.local/share/ACTA Gamma/acta.db`, the same file for GUI, CLI, and
+  app-data default (`%APPDATA%\ACTA_Gamma\acta.db` /
+  `~/.local/share/ACTA_Gamma/acta.db`, the same file for GUI, CLI, and
   runner) → `./acta.db` last resort (single source of truth:
   `docs/cli_spec.md`). The GUI additionally has a *Choose database file*
   dialog (remembered in QSettings) for non-default setups.
@@ -136,7 +136,7 @@ stay as-is.
 
 ## Target contract (implemented)
 
-- A single per-machine file, e.g. `ACTA Gamma.conf` in the same app-data
+- A single per-machine file, e.g. `ACTA_Gamma.conf` in the same app-data
   directory as the default DB file, holding **at most**:
   - the API key;
   - the database file path;
@@ -217,7 +217,7 @@ stay as-is.
    `api_key`; canonical one-line messages for unset / empty / ok; plus
    `acta_conf_read()` (file missing/unreadable = fallback unavailable,
    readable-but-malformed = fail-closed hard error) and
-   `acta_conf_default_path()` (`ACTA Gamma.conf` next to the default DB
+   `acta_conf_default_path()` (`ACTA_Gamma.conf` next to the default DB
    file). Wired into `cmd_run` (`acta_runner/src/run.c`); the
    `runnerWorker` side landed with work item 6 and the tests with work
    item 7.

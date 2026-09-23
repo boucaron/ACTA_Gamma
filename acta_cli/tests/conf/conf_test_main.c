@@ -200,19 +200,19 @@ static void test_default_path(void)
 #ifdef _WIN32
     env_set("APPDATA", "C:/Users/t/AppData/Roaming");
     TSTREQ(acta_conf_default_path(),
-           "C:/Users/t/AppData/Roaming\\ACTA Gamma\\ACTA Gamma.conf");
+           "C:/Users/t/AppData/Roaming\\ACTA_Gamma\\ACTA_Gamma.conf");
     env_set("APPDATA", NULL);
-    /* Platform base unresolvable -> last-resort ./ACTA Gamma.conf. */
-    TSTREQ(acta_conf_default_path(), "./ACTA Gamma.conf");
+    /* Platform base unresolvable -> last-resort ./ACTA_Gamma.conf. */
+    TSTREQ(acta_conf_default_path(), "./ACTA_Gamma.conf");
 #else
     env_set("XDG_DATA_HOME", "/srv/data");
-    TSTREQ(acta_conf_default_path(), "/srv/data/ACTA Gamma/ACTA Gamma.conf");
+    TSTREQ(acta_conf_default_path(), "/srv/data/ACTA_Gamma/ACTA_Gamma.conf");
     env_set("XDG_DATA_HOME", NULL);
     env_set("HOME", "/home/t");
     TSTREQ(acta_conf_default_path(),
-           "/home/t/.local/share/ACTA Gamma/ACTA Gamma.conf");
+           "/home/t/.local/share/ACTA_Gamma/ACTA_Gamma.conf");
     env_set("HOME", NULL);
-    TSTREQ(acta_conf_default_path(), "./ACTA Gamma.conf");
+    TSTREQ(acta_conf_default_path(), "./ACTA_Gamma.conf");
 #endif
 }
 

@@ -54,13 +54,13 @@ const char *acta_db_default_db_path(void)
         return "./acta.db";
 
     size_t n = strlen(base);
-    if (n + 1 + sizeof("/ACTA Gamma/acta.db") > sizeof path)
+    if (n + 1 + sizeof("/ACTA_Gamma/acta.db") > sizeof path)
         return "./acta.db";
 
 #ifdef _WIN32
-    snprintf(path, sizeof path, "%s\\ACTA Gamma\\acta.db", base);
+    snprintf(path, sizeof path, "%s\\ACTA_Gamma\\acta.db", base);
 #else
-    snprintf(path, sizeof path, "%s/ACTA Gamma/acta.db", base);
+    snprintf(path, sizeof path, "%s/ACTA_Gamma/acta.db", base);
 #endif
     return path;
 }
@@ -73,7 +73,7 @@ const char *acta_db_resolve_db_path(const char *flag, char **err_msg)
         return flag;
 
     /* Config-file step (docs/plans/acta-config-file.md, work item 3):
-     * "db" in ACTA Gamma.conf, in the same app-data directory as the
+     * "db" in ACTA_Gamma.conf, in the same app-data directory as the
      * default DB file.  The file is consulted even when $ACTA_DB is
      * set (a readable-but-malformed file is a fail-closed hard error,
      * the same rules as acta_conf_parse; the precedence --db ->

@@ -231,16 +231,16 @@ const char *acta_conf_default_path(void)
     static char path[ACTA_CONFPATH_MAX];
     const char *base = conf_appdata_base();
     if (!base)
-        return "./ACTA Gamma.conf";
+        return "./ACTA_Gamma.conf";
 
     size_t n = strlen(base);
-    if (n + 1 + sizeof("/ACTA Gamma/ACTA Gamma.conf") > sizeof path)
-        return "./ACTA Gamma.conf";
+    if (n + 1 + sizeof("/ACTA_Gamma/ACTA_Gamma.conf") > sizeof path)
+        return "./ACTA_Gamma.conf";
 
 #ifdef _WIN32
-    snprintf(path, sizeof path, "%s\\ACTA Gamma\\ACTA Gamma.conf", base);
+    snprintf(path, sizeof path, "%s\\ACTA_Gamma\\ACTA_Gamma.conf", base);
 #else
-    snprintf(path, sizeof path, "%s/ACTA Gamma/ACTA Gamma.conf", base);
+    snprintf(path, sizeof path, "%s/ACTA_Gamma/ACTA_Gamma.conf", base);
 #endif
     return path;
 }
