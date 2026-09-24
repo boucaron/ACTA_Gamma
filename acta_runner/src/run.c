@@ -96,9 +96,8 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     }
 
     /* API key: $OPENAI_API_KEY (if set) -> config file "api_key"
-     * (docs/plans/acta-config-file.md, work item 2).  The key is never
-     * read from the model configuration blob — see
-     * docs/runner_contract.md, decision 4.  The file is a fallback, not a
+     * (docs/runner_contract.md, decision 4).  The key is never
+     * read from the model configuration blob.  The file is a fallback, not a
      * second channel: a set env var (even empty) always wins.  A
      * readable-but-malformed config file is a hard error (fail-closed, the
      * same rules as the model configuration blob); a missing or
@@ -136,14 +135,14 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
      * needs the NULL/empty/non-empty distinction of file_key.) */
 
     /* Per-machine settings resolution
-     * (docs/plans/acta-config-file.md, work item 4):
+     * (docs/runner_contract.md, decisions 5 and 8):
      *   timeout:   --timeout flag -> config file "timeout"
      *              -> built-in default (300 s);
      *   max_chars: config file "max_chars" -> built-in default
      *              (100,000 chars).  No flag/env for max_chars exists;
      *              the value is passed into the pipeline (run_execution
      *              limit parameter) and consumed by the preflight size
-     *              check (docs/plans/max-chars-size-check.md). */
+     *              check (docs/runner_contract.md, decision 8). */
     timeout = acta_conf_resolve_timeout(&conf, timeout);
     long max_chars = acta_conf_resolve_max_chars(&conf);
 
@@ -412,9 +411,8 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
 {
     /* max_chars: the resolved prompt size limit (config file -> built-in
      * default), resolved by the caller via acta_conf_resolve_max_chars
-     * (docs/plans/acta-config-file.md, work item 4); consumed by the
-     * preflight size check in step 3 below.
-     * (docs/plans/max-chars-size-check.md) */
+     * (docs/runner_contract.md, decision 8); consumed by the
+     * preflight size check in step 3 below. */
 
     int exit_code_ = EXIT_OK;  /* set by FAIL, consumed at `done:` */
     char errmsg[512];           /* set by FAIL, consumed at `done:` */
@@ -670,7 +668,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
 
     /* ---- 3. preflight: size check, /health, /v1/models, / (catalog) ---- */
 
-    /* 3a. Prompt size check (docs/plans/max-chars-size-check.md):
+    /* 3a. Prompt size check (docs/runner_contract.md, decision 8):
      * The assembled prompt is exactly these two strings —
      *   system = skill.prompt_template,  user = context.content —
      * so a plain char count is deterministic and model-agnostic.

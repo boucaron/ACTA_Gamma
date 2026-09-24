@@ -5,8 +5,8 @@
  *   1. the --db path passed by the caller (used as-is)
  *   2. $ACTA_DB, if set and non-empty
  *   3. the config file's "db" — ACTA_Gamma.conf in the same app-data
- *      directory as the default DB file (docs/plans/acta-config-file.md,
- *      work item 3): a missing/unreadable file is skipped, a
+ *      directory as the default DB file (docs/cli_spec.md, DB-file
+ *      resolution): a missing/unreadable file is skipped, a
  *      readable-but-malformed one is a hard error, an empty value is
  *      treated as absent
  *   4. the platform app-data default — the same file the GUI uses:

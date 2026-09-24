@@ -33,8 +33,8 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   stub server serves `GET /` with a canned catalog
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
-- `src/run.c` preflight size check (docs/plans/max-chars-size-check.md,
-  work item 1): the assembled prompt is exactly `system =
+- `src/run.c` preflight size check (decision 8 below): the assembled
+  prompt is exactly `system =
   skill.prompt_template` + `user = context.content`, so preflight compares
   `strlen(prompt_template) + strlen(context.content)` against the
   resolved `max_chars` limit (config file `"max_chars"` → built-in
@@ -45,18 +45,19 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   call** — a deterministic local cause instead of an opaque backend 400
   at chat time (decision 8 below).
 - `tests/` — in-process stub OpenAI server (`tests/stub_server.{h,c}`,
-  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 13
+  POSIX sockets + pthread / winsock) and `tests/run/test_run.c`: 17
   scenarios (success, health 503, model mismatch, chat 500, timeout,
   non-pending, not-found, schema validation fail/pass, missing
   catalog, unknown config key, malformed config JSON, wrong config
-  key type), check count printed at runtime, green under `make test`,
-  on a scratch `:memory:` DB. Batch/claim/cleanup suites alongside:
+  key type, config api_key unknown key, empty context content,
+  prompt-too-large, at-limit), check count printed at runtime, green
+  under `make test`, on a scratch `:memory:` DB. Batch/claim/cleanup suites alongside:
   `tests/run/test_pending.c` (R3: `run --pending` loop, `--max`
   clamping, worst exit code across mixed outcomes),
   `tests/run/test_deleted.c` (soft-delete claim: `run <id>` on a
   deleted row → not-found before claim; `run --pending` is live-only),
   `tests/run/test_sweep.c` (in-process sweep logic). The size-check
-  scenarios of docs/plans/max-chars-size-check.md (work item 4) are
+  scenarios are
   `tests/run/test_run.c` scenarios 16 (over the limit: fails preflight,
   no backend call, exact message) and 17 (at the limit: proceeds and
   completes).
@@ -142,7 +143,7 @@ Implementation notes (where the spec left room):
    prompt-resolution behavior changes later.
 4. **Auth:** the key sources are `$OPENAI_API_KEY` and, as a fallback,
    the `"api_key"` key of the per-machine config file (`ACTA_Gamma.conf`
-   in the app-data directory; `docs/plans/acta-config-file.md`) — there
+   in the app-data directory) — there
    is no `--api_key` flag, and the key is never read from the model
    `configuration` blob (it must not be stored in the database; a
    `configuration` carrying an `api_key` key is rejected as an unknown
@@ -168,23 +169,6 @@ Implementation notes (where the spec left room):
    as `Authorization: Bearer <key>` on every request (preflight GETs and
    the chat POST); the header is optional on the server side when it has
    no `--api-key` set.
-8. **Prompt size limit (`max_chars`).** The assembled prompt is exactly
-   `system = skill.prompt_template` + `user = context.content`, so a
-   plain char count is a deterministic, model-agnostic guard: preflight
-   checks `total_chars = strlen(prompt_template) +
-   strlen(context.content)` against the resolved `max_chars` limit and,
-   if `total_chars > max_chars`, fails the execution **before any
-   backend call** with `EXIT_INVALID` and the message `prompt too large:
-   N chars total (context X + skill prompt Y) exceeds max_chars Z`
-   (same `pending → running → failed` + `execution_failed` log row as
-   the other preflight failures). The limit is resolved per-machine as
-   config file `"max_chars"` → built-in default
-   `ACTA_CONF_DEFAULT_MAX_CHARS` = 100,000 chars
-   (`acta_conf_resolve_max_chars`, `docs/plans/acta-config-file.md`); it
-   is a guard, not a window-fit guarantee — the backend's served
-   `max_context` remains the final arbiter for under-limit prompts and
-   keeps being recorded in `preflight_passed`; it is not used by the
-   check itself.
 5. **Timeouts / retries:** single request, per-call timeout resolved as
    `--timeout` (s, per-run flag) → the config file's `"timeout"` (s,
    per-machine default) → built-in default 300 s; no retries —
@@ -208,6 +192,22 @@ Implementation notes (where the spec left room):
    (R8): the matched model id, `max_context`, and the catalog entry's
    launch `args` + `meta`. Best-effort: a missing catalog logs
    `"catalog":null` and never fails the execution.
+8. **Prompt size limit (`max_chars`).** The assembled prompt is exactly
+   `system = skill.prompt_template` + `user = context.content`, so a
+   plain char count is a deterministic, model-agnostic guard: preflight
+   checks `total_chars = strlen(prompt_template) +
+   strlen(context.content)` against the resolved `max_chars` limit and,
+   if `total_chars > max_chars`, fails the execution **before any
+   backend call** with `EXIT_INVALID` and the message `prompt too large:
+   N chars total (context X + skill prompt Y) exceeds max_chars Z`
+   (same `pending → running → failed` + `execution_failed` log row as
+   the other preflight failures). The limit is resolved per-machine as
+   config file `"max_chars"` → built-in default
+   `ACTA_CONF_DEFAULT_MAX_CHARS` = 100,000 chars
+   (`acta_conf_resolve_max_chars`); it is a guard, not a window-fit
+   guarantee — the backend's served `max_context` remains the final
+   arbiter for under-limit prompts and keeps being recorded in
+   `preflight_passed`; it is not used by the check itself.
 
 ## Phase 2 pipeline (spec for `run_execution`)
 

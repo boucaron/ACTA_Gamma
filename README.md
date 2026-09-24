@@ -204,7 +204,7 @@ Three steps before the example below:
   | `"max_chars"` | positive integer | max total prompt chars (`skill.prompt_template` + `context.content`); default 100,000 |
   | `"timeout"` | positive integer, seconds | default per-call HTTP timeout; default 300 s (the `--timeout` flag still wins per run) |
 
-  All three binaries read it through the same helper (`acta_conf` in `acta_db`). Fail-closed, like the model `configuration` blob: not-an-object, unknown key, wrong type, or malformed JSON → hard error; the file must be `0600` (on Windows the mode check degrades to a warning). Full contract: [`docs/plans/acta-config-file.md`](docs/plans/acta-config-file.md).
+  All three binaries read it through the same helper (`acta_conf` in `acta_db`). Fail-closed, like the model `configuration` blob: not-an-object, unknown key, wrong type, or malformed JSON → hard error; the file must be `0600` (on Windows the mode check degrades to a warning). Full contract: [`docs/runner_contract.md`](docs/runner_contract.md) (decision 4) and [`docs/cli_spec.md`](docs/cli_spec.md) (DB-file resolution).
 
 ## Minimal end-to-end example
 

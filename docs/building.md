@@ -5,7 +5,7 @@
 - C compiler (MinGW/MSYS2 or gcc/clang)
 - SQLite 3
 - Qt 6 (Core, Widgets) — GUI only
-- cJSON — CLI, runner + GUI
+- cJSON — acta_db (config-file parser), CLI, runner + GUI
 - curl — runner + GUI
 - llama.cpp — local backend server (`llama-server` in router mode), runtime only
 

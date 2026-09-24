@@ -2,7 +2,7 @@
  * test_run.c — phase-2 pipeline tests against the in-process stub
  * OpenAI-compatible server (tests/stub_server.c).
  *
- * Covers (docs/runner_contract.md, "Code shape in acta_runner/"):
+ * Covers (docs/runner_contract.md, "Phase 2 pipeline"):
  *   1. success            -> completed + full phase log
  *   2. /health 503        -> failed ("model still loading") + EXIT_HTTP
  *   3. model mismatch     -> failed + EXIT_HTTP
@@ -595,7 +595,7 @@ int main(void)
      *     of a 100,001-char fixture. The failure must happen in
      *     preflight BEFORE any backend call: no preflight_passed, no
      *     llm_request, and no /v1/chat/completions request reaches the
-     *     stub. (docs/plans/max-chars-size-check.md, work item 4) */
+     *     stub. (docs/runner_contract.md, decision 8) */
     {
         stub_config_t cfg;
         memset(&cfg, 0, sizeof cfg);

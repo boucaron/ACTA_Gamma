@@ -1,6 +1,6 @@
 /* Config-file helper unit tests (acta_conf, acta_db) — no DB, no argv.
  *
- * Pins docs/plans/acta-config-file.md work items 1–5 at the unit level:
+ * Pins the per-machine config-file contract at the unit level:
  *   - acta_conf_parse: at-most-four-keys contract, fail-closed on
  *     not-an-object / unknown key / wrong type / malformed JSON
  *     (mirror of the model `configuration` blob check in run.c);

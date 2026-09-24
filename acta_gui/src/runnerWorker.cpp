@@ -11,7 +11,7 @@
 // Pure C headers: runner_util.h declares the in-process pipeline
 // (run_execution) and conf.h the shared per-machine config-file
 // helpers (default path, API key precedence policy, built-in defaults)
-// used by the CLI runner's cmd_run (docs/plans/acta-config-file.md).
+// used by the CLI runner's cmd_run (docs/runner_contract.md, decision 4).
 // Both are C, so they are included under C linkage.
 extern "C" {
 #include "runner_util.h"
@@ -95,7 +95,7 @@ void RunnerWorker::runInThread()
     }
 
     // Per-machine settings resolution
-    // (docs/plans/acta-config-file.md, work items 2 / 4 / 6): the same
+    // (docs/runner_contract.md, decisions 4, 5, and 8): the same
     // resolution as the runner's cmd_run, through the shared helper.
     // The GUI has no --timeout flag and no separate GUI config, so the
     // file supplies both values, falling back to the built-in defaults:
@@ -108,7 +108,7 @@ void RunnerWorker::runInThread()
     //              (100,000 chars); passed into the pipeline
     //              (run_execution limit parameter) and consumed by the
     //              preflight size check
-    //              (docs/plans/max-chars-size-check.md).
+    //              (docs/runner_contract.md, decision 8).
     // A missing or unreadable file is simply unavailable as a fallback;
     // a readable-but-malformed file (or one that fails the POSIX
     // permission gate) is a fail-closed hard error before any claim.

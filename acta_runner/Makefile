@@ -97,7 +97,7 @@ DEL_TARGET := tests/run/test_deleted$(EXEEXT)
 # $(SOCK_LIBS) is set, since := expands immediately).
 
 # ---- API key presence policy test suite: unset -> error, empty ->
-#      warning (docs/plans/drop-runner-api-key-flag.md)
+#      warning (docs/runner_contract.md, decision 4)
 KEY_SRCS  := tests/run/test_api_key.c tests/stub_server.c \
              src/run.c src/backend.c src/argparse.c
 KEY_OBJS  := $(patsubst %.c, %.o, $(KEY_SRCS))
@@ -105,8 +105,8 @@ KEY_TARGET := tests/run/test_api_key$(EXEEXT)
 
 # ---- config-file integration suite: env-set-wins, file fallback,
 #      bad-permissions refusal, missing-file hard error,
-#      max_chars/timeout resolution (docs/plans/acta-config-file.md,
-#      work item 7)
+#      max_chars/timeout resolution (docs/runner_contract.md,
+#      decisions 5 and 8)
 CONF_SRCS  := tests/run/test_conf.c tests/stub_server.c \
               src/run.c src/backend.c src/argparse.c
 CONF_OBJS  := $(patsubst %.c, %.o, $(CONF_SRCS))

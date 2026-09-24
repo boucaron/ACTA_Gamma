@@ -62,7 +62,7 @@ QString MainWindow::defaultDbPath(QString *error)
     const QString baseDir = base + QStringLiteral("/ACTA_Gamma");
     QDir().mkpath(baseDir);
 
-    // Config-file step (docs/plans/acta-config-file.md, work item 3):
+    // Config-file step (docs/cli_spec.md, DB-file resolution):
     // "db" in <app-data>/ACTA_Gamma/ACTA_Gamma.conf sits between explicit
     // choices (the remembered dialog path; the --db/$ACTA_DB equivalents
     // of the other binaries) and this platform default.  Missing or
@@ -284,7 +284,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // startup modal (create / pick location / exit) and leaves m_dbOk
     // false; the offline banner + Retry then keep the state visible.
     // defaultDbPath consults the config file's "db" first
-    // (docs/plans/acta-config-file.md, work item 3); a readable-but-
+    // (docs/cli_spec.md, DB-file resolution); a readable-but-
     // malformed config file is a hard error — no DB path is resolvable,
     // so the operator must fix the file.
     QString confError;

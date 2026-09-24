@@ -692,7 +692,7 @@ static const tool_entry_t tool_table[] = {
 
     { "skill_revision.list", "skill_revision", "list", NULL, 0,
       "List revisions of a skill.",
-      p_skill_id, 1, f_rev_list, 6, "positional|flags",
+      p_skill_id, 1, f_rev_list, 7, "positional|flags",
       NULL, 0, NULL, 0,
       &suc_arr },
 

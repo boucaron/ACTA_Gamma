@@ -1,6 +1,6 @@
 #pragma once
 
-// Qt reader for the per-machine config file (docs/plans/acta-config-file.md)
+// Qt reader for the per-machine config file (docs/runner_contract.md, decision 4)
 // — the GUI's counterpart of acta_conf_parse in acta_db/src/conf.c: one
 // JSON object with at most "api_key" (string), "db" (string),
 // "max_chars" / "timeout" (positive integer).  Fail-closed on

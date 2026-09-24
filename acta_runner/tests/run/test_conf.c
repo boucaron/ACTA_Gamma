@@ -1,6 +1,6 @@
 /*
  * test_conf.c — config-file integration suite
- * (docs/plans/acta-config-file.md, work item 7):
+ * (docs/runner_contract.md, decision 4):
  *   1. missing file + $OPENAI_API_KEY unset -> the existing hard error
  *      (EXIT_INVALID) before any claim; the seeded row stays `pending`.
  *   2. file fallback: env unset, file "api_key" present -> the execution

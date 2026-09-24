@@ -5,7 +5,7 @@
  *   default → ./acta.db
  * plus the exact per-platform default string (which must match the
  * GUI's MainWindow::defaultDbPath byte-for-byte), the config-file step
- * (docs/plans/acta-config-file.md, work item 3), and the legacy
+ * (docs/cli_spec.md, DB-file resolution), and the legacy
  * ./acta.db hint behaviour.
  */
 #include "acta_dbpath.h"

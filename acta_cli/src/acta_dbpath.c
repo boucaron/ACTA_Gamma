@@ -72,7 +72,7 @@ const char *acta_db_resolve_db_path(const char *flag, char **err_msg)
     if (flag && flag[0])
         return flag;
 
-    /* Config-file step (docs/plans/acta-config-file.md, work item 3):
+    /* Config-file step (docs/cli_spec.md, DB-file resolution):
      * "db" in ACTA_Gamma.conf, in the same app-data directory as the
      * default DB file.  The file is consulted even when $ACTA_DB is
      * set (a readable-but-malformed file is a fail-closed hard error,

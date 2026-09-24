@@ -152,8 +152,7 @@ int main(int argc, char **argv) {
      * --db → $ACTA_DB → config file "db" → platform app-data default
      * (same file the GUI uses) → ./acta.db (last resort).
      * See acta_dbpath.h. A readable-but-malformed config file is a
-     * hard error (fail-closed; docs/plans/acta-config-file.md, work
-     * item 3). */
+     * hard error (fail-closed; docs/cli_spec.md, DB-file resolution). */
     char *conf_err = NULL;
     const char *db_path = acta_db_resolve_db_path(gopts.db, &conf_err);
     if (!db_path) {

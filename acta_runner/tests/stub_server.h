@@ -43,7 +43,7 @@ int stub_server_stop(void);
  * (e.g. "Bearer <key>"), or NULL when no request sent one (e.g. keyless
  * run) or no request has arrived yet.  Reset on stub_server_start.
  * Lets tests assert which API key the runner actually used
- * (docs/plans/acta-config-file.md, work item 7: env-set-wins / file
+ * (docs/runner_contract.md, decision 4: env-set-wins / file
  * fallback). */
 const char *stub_server_last_auth(void);
 
