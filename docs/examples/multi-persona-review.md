@@ -58,9 +58,6 @@ the five skills, the context, the runs, the audit trail — works unchanged.
 
 ## 1. Prepare a working copy of the database
 
-Copy the database with a proper WAL checkpoint (not a raw file copy), and
-point both tools at it:
-
 The `acta.db` bundled with this page is a snapshot — never run against it
 directly. Copy it (with a proper WAL checkpoint, not a raw file copy) into
 your working folder, and point both tools at the copy:

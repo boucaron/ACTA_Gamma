@@ -70,7 +70,8 @@ A model record is what the runner needs to make its call: `backend`,
 `base_url`, `model_identifier`, plus an optional JSON `configuration`
 (`temperature`, `max_tokens`, `top_k`, `supports_response_format`).
 `model_revision list 12` / `get-latest 12` work the same way as
-`skill_revision`.
+`skill_revision`. (The stored `backend` label — here `"llamacpp"` — is
+informational; the runner only uses `base_url` to make its HTTP call.)
 
 ## Contexts
 

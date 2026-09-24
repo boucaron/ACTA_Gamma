@@ -85,8 +85,9 @@ difference is the prompt revision. If you run both (backend required, see
 prompt revision alone, and each execution's `execution_log` records exactly
 which revision was sent.
 
-(Any earlier executions that pointed at revision 1 are untouched — they
-still point at 25, whatever the parent now says.)
+(Any earlier executions that pointed at revision 1 of this skill are
+untouched — their `skill_revision_id` still points at revision row 25,
+whatever the parent now says.)
 
 ## Soft-delete also snapshots
 
