@@ -12,7 +12,7 @@ This is not an agent framework. It is a runner that makes one LLM call and recor
 
 The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
-**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode serving at least one GGUF model. Everything else is in this repo — see [Quick start](#quick-start).
+**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode serving at least one GGUF model. Everything else is in this repo — if you just want a run on screen, skip to [Quick start](#quick-start).
 
 ## Current status
 
@@ -58,7 +58,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 |---|---|
 | Runs **one** versioned, replayable, auditable LLM action against an immutable context | Not an agent: no self-orchestration, no conversational state, no delegation, no workflow composition between skills (a higher-level program chains the executions — [`PointOfView.md`](docs/PointOfView.md)) |
 | Versioned skills & models; immutable revision snapshots; immutable contexts | No automatic retries (owner decision — retry is manual: `exec reset` / GUI Retry) and no streaming responses (owner decision — [`status.md`](docs/status.md)) |
-| Standalone runner + GUI (Run/Cancel), soft-delete lifecycle, stale-execution `sweep` | No users, permissions, organizations, queues, vector DBs, datasets — no server process: one private local SQLite file ([`DBDesign.md`](docs/DBDesign.md)); no hard delete / purge; no prompt-injection defense — the context reaches the model verbatim as the user message, so sanitizing untrusted content is the operator's job |
+| Standalone runner + GUI (Run/Cancel), soft-delete lifecycle, stale-execution `sweep`, atomic DB snapshot (`acta_cli db backup --to <path>`) | No users, permissions, organizations, queues, vector DBs, datasets — no server process: one private local SQLite file ([`DBDesign.md`](docs/DBDesign.md)); no hard delete / purge; no prompt-injection defense — the context reaches the model verbatim as the user message, so sanitizing untrusted content is the operator's job |
 | Multi-model via a llama.cpp `llama-server` router — the only supported backend (see [Implementation](#implementation)) | No server manager mode — the backend is user-launched and user-managed ([`runner_contract.md`](docs/runner_contract.md)) |
 
 ## Architecture
@@ -118,7 +118,7 @@ See [`docs/building.md`](docs/building.md) for dependencies, platform-specific s
 Three steps before the example below:
 
 1. **Install dependencies** — SQLite, curl, cJSON (plus Qt 6 for the GUI): one command block per platform in [`docs/building.md`](docs/building.md).
-2. **Build** — from the repo root: `make all` (or per-component `make`; `make test` runs all C test suites).
+2. **Build** — from the repo root: `make all` (add `make gui` if you want the desktop app — it is optional and not part of `make all`), or per-component `make`; `make test` runs all C test suites.
 3. **Start the backend** — a llama.cpp `llama-server` in **router mode** (launched **without** `-m`: every GGUF in `--models-dir` becomes a served model and each request is routed to the matching one):
 
    ```sh
@@ -193,7 +193,7 @@ $ acta_cli log list 1
 
 `raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
-A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset: `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button. If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` that went quiet (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
+A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset: `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button. If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` that went quiet — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
 
 For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 
