@@ -101,7 +101,7 @@ void RunnerWorker::runInThread()
     // file supplies both values, falling back to the built-in defaults:
     //   api_key:   $OPENAI_API_KEY (if set) -> config file "api_key";
     //              the file is a fallback, not a second channel.
-    //   timeout:   config file "timeout" -> built-in default (300 s);
+    //   timeout:   config file "timeout" -> built-in default (600 s);
     //              the file supplies the default, never a per-run
     //              override.
     //   max_chars: config file "max_chars" -> built-in default

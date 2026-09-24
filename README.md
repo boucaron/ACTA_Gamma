@@ -139,7 +139,7 @@ Three steps before the example below:
   | `"api_key"` | string | key fallback for `$OPENAI_API_KEY` |
   | `"db"` | string | database path step |
   | `"max_chars"` | positive integer | max total prompt size in **UTF-8 bytes** (`skill.prompt_template` + `context.content`); default 100,000 |
-  | `"timeout"` | positive integer, seconds | default per-call HTTP timeout; default 300 s (the `--timeout` flag still wins per run) |
+  | `"timeout"` | positive integer, seconds | default per-call HTTP timeout; default 600 s (the `--timeout` flag still wins per run) |
 
 ## Minimal end-to-end example
 
@@ -177,7 +177,7 @@ acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revisi
 export OPENAI_API_KEY=""
 
 # 6. Run it (blocks until the execution reaches a terminal state; exit 0 on success,
-#    non-zero on failure; hard per-call HTTP timeout: --timeout, default 300 s)
+#    non-zero on failure; hard per-call HTTP timeout: --timeout, default 600 s)
 acta_runner run 1
 
 # 7. Inspect the result and the audit trail
@@ -211,7 +211,7 @@ $ acta_cli log list 1
 
 `raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. If the response does not match the skill's `output_schema`, the execution is `failed` with a `validation_failed` log row — there is no "completed with a flag" mode. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
-A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last activity — the newest of its `execution_log` rows and `started_at` — is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 300` → `--stale-seconds 350` or more) so a live run is never swept. Note the limit: sweep judges staleness by last activity, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
+A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last activity — the newest of its `execution_log` rows and `started_at` — is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 600` → `--stale-seconds 650` or more) so a live run is never swept. Note the limit: sweep judges staleness by last activity, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
 
 For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 

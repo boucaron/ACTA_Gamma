@@ -140,7 +140,7 @@ int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
  * per-run overrides.
  */
 #define ACTA_CONF_DEFAULT_MAX_CHARS 100000
-#define ACTA_CONF_DEFAULT_TIMEOUT 300
+#define ACTA_CONF_DEFAULT_TIMEOUT 600
 
 /*
  * Resolve the prompt size limit: config file -> built-in default.

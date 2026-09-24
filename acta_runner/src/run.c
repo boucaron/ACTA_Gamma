@@ -62,7 +62,7 @@ static void run_usage(FILE *out)
         "  --pending       Run pending executions instead of one id\n"
         "  --max <n>       Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec> Backend timeout in seconds (default: config\n"
-        "                   file \"timeout\", else 300)\n",
+        "                   file \"timeout\", else 600)\n",
         out);
 }
 
@@ -137,7 +137,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     /* Per-machine settings resolution
      * (docs/runner_contract.md, decisions 5 and 8):
      *   timeout:   --timeout flag -> config file "timeout"
-     *              -> built-in default (300 s);
+     *              -> built-in default (600 s);
      *   max_chars: config file "max_chars" -> built-in default
      *              (100,000 chars).  No flag/env for max_chars exists;
      *              the value is passed into the pipeline (run_execution

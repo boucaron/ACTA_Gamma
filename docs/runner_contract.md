@@ -171,7 +171,7 @@ Implementation notes (where the spec left room):
    no `--api-key` set.
 5. **Timeouts / retries:** single request, per-call timeout resolved as
    `--timeout` (s, per-run flag) → the config file's `"timeout"` (s,
-   per-machine default) → built-in default 300 s; no retries —
+   per-machine default) → built-in default 600 s; no retries —
    failures are first-class artifacts here.
 6. **Claim semantics:** the runner only acts on `pending`; `start()` is
    the atomic lock. Soft-deleted executions are never claimed: the

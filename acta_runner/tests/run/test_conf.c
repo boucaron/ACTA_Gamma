@@ -602,7 +602,7 @@ int main(void)
               "NULL conf -> built-in max_chars default");
         check(acta_conf_resolve_timeout(&conf, 0) ==
                   ACTA_CONF_DEFAULT_TIMEOUT,
-              "absent timeout, no flag -> built-in default (300)");
+              "absent timeout, no flag -> built-in default (600)");
 
         /* File value wins over the built-in default. */
         conf.max_chars = 42;
