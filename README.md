@@ -79,7 +79,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
         Observation              Audit
 ```
 
-In the diagram, **Observation** is the LLM's response recorded verbatim as the execution's `raw_response`; **Audit** is the `execution_log` phase rows (including the resolved prompt) plus the raw response and the recorded result.
+In the diagram, **Observation** is the LLM's response recorded verbatim as the execution's `raw_response`; **Audit** is the `execution_log` phase rows (including the resolved prompt) plus the raw response and the recorded result. `Skill @ n` and `Model @ n` mean "the skill/model revision *n* bound to this execution."
 
 ## Revisions, executions, and soft delete
 
@@ -131,7 +131,7 @@ Three steps before the example below:
 
 * **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls, used identically by `acta_runner` and `acta_gui`. Resolution: `$OPENAI_API_KEY` (if set — even to the empty string, which is enough for a keyless localhost server) → the config file's `"api_key"` key. There is no CLI flag, and the key is never stored in the database. If the key is present in neither source, the run does not start; an empty key sends no `Authorization` header. Full policy: [`docs/runner_contract.md`](docs/runner_contract.md), decision 4.
 * **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. Resolution order: `--db` → `$ACTA_DB` → the config file's `"db"` → the **same** app-data file as the GUI (`%APPDATA%\ACTA_Gamma\acta.db` on Windows, `~/.local/share/ACTA_Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA_Gamma/acta.db`) → `./acta.db` as a last-resort fallback. The GUI does **not** read `--db` or `$ACTA_DB`; its *Choose database file* dialog covers non-default setups (see [Your first session in the GUI](#your-first-session-in-the-gui)). The resolution contract is in [`docs/cli_spec.md`](docs/cli_spec.md).
-* **`ACTA_Gamma.conf`** — the per-machine config file: a flat JSON object with at most the four keys below, in the same app-data directory as the default DB file. All three binaries read it through the same helper; a malformed file or an unknown key is a fail-closed hard error.
+* **`ACTA_Gamma.conf`** — the per-machine config file: a flat JSON object with at most the four keys below, in the same app-data directory as the default DB file. All three binaries read it through the same helper; a malformed file or an unknown key is a fail-closed hard error. It may hold an `api_key` at rest, so treat it as sensitive: on POSIX a file that is not user-only readable is refused (hard error), on Windows a warning is printed and the file is read anyway.
 
   | Key | Type | Meaning |
   |---|---|---|
@@ -142,7 +142,7 @@ Three steps before the example below:
 
 ## Minimal end-to-end example
 
-Against the running `llama-server` router from the quick start (fresh `acta.db`, so every id is `1`):
+Against the running `llama-server` router from the quick start (fresh `acta.db` — by default the platform app-data location, see [Environment variables](#environment-variables-and-the-per-machine-config-file); so every id is `1`):
 
 ```sh
 # 1. Register the model
@@ -151,10 +151,14 @@ Against the running `llama-server` router from the quick start (fresh `acta.db`,
 acta_cli model create --json '{"name":"llama-local","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"qwen3-8b"}'
 
 # 2. Create a versioned skill (prompt template + optional output schema)
-acta_cli skill create --json '{"name":"sentiment","prompt_template":"Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}"}'
+# output_schema is a JSON-schema-style object (type/required/properties/items are checked;
+# extra fields in the response are allowed). Omit it for free-text outputs.
+acta_cli skill create --json '{"name":"sentiment","prompt_template":"Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}","output_schema":{"type":"object","required":["label","confidence"],"properties":{"label":{"type":"string"},"confidence":{"type":"number"}}}}'
 
 # 3. Create an immutable context (the input snapshot)
 # (for large inputs, `context create` accepts --content_file <path>)
+# type is a free-form string, not an enum — use whatever labels your contexts need
+# (e.g. "text", "code", "log"), or filter by it later with `context list --type <T>`
 acta_cli context create --json '{"type":"text","content":"The build system shipped on time and the release went smoothly."}'
 
 # 4. Create an execution binding context + skill revision + model revision
@@ -164,7 +168,8 @@ acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revisi
 # "api_key" key to ACTA_Gamma.conf (see above).
 export OPENAI_API_KEY=
 
-# 6. Run it (hard per-call HTTP timeout: --timeout, default 300 s)
+# 6. Run it (blocks until the execution reaches a terminal state; exit 0 on success,
+#    non-zero on failure; hard per-call HTTP timeout: --timeout, default 300 s)
 acta_runner run 1
 
 # 7. Inspect the result and the audit trail
@@ -198,7 +203,7 @@ $ acta_cli log list 1
 
 `raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. If the response does not match the skill's `output_schema`, the execution is `failed` with a `validation_failed` log row — there is no "completed with a flag" mode. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
-A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset: `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button. If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` that went quiet — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
+A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last log row is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 300` → `--stale-seconds 350` or more) so a live run is never swept (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
 
 For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 
@@ -216,7 +221,7 @@ Once the backend is running (see [Quick start](#quick-start)), launch `acta_gui`
 
 ## CLI ergonomics
 
-The CLI offers file in/out (`--content_file`, `--out`, `--raw_out`), NDJSON `--stream`, output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), light-projection listers with `--full` for the high-volume blob fields, and the machine-readable `--tools` JSON schema. `db exec` is the developer-facing static-SQL escape hatch. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+All three binaries support `--version` and `--help`. The CLI offers file in/out (`--content_file`, `--out`, `--raw_out`), NDJSON `--stream`, output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), light-projection listers with `--full` for the high-volume blob fields, and the machine-readable `--tools` JSON schema (e.g. `acta_cli skill list --table --fields name,revision`). `db exec` is the developer-facing static-SQL escape hatch — raw SQL, no parameter binding; the caller is responsible for safe statement construction. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 Components and their reference docs:
 
