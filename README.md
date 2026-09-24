@@ -250,7 +250,7 @@ acta_cli exec get 1
 acta_cli log list 1
 ```
 
-The example assumes a fresh `acta.db` (which is why every id is `1`); if you already have a database, substitute your actual row ids in the four create commands.
+The example assumes a fresh `acta.db` (which is why every id is `1`); if you already have a database, substitute your actual row ids in the four create commands. For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 
 What the output looks like (abbreviated — real timestamps, and a full `raw_response`, in practice):
 
