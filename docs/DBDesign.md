@@ -40,7 +40,7 @@ sqlite3 acta.db "VACUUM INTO 'acta_backup_YYYYMMDD.db';"
 
 * **Before any destructive operation** — schema changes via `db exec`, manual file operations, migrating to a new file.
 * **At the end of any session that produced executions** — executions and their logs are the high-value records (soft delete means they stay in the file forever and are never recoverable from the live file alone if the file is lost).
-* Keep backups **outside the DB directory**; name them `acta_backup_YYYYMMDD.db`; keep the last ~7 by deleting older ones manually (no retention enforcement). Restoring is not a special command: open the backup with `acta_cli --db acta_backup_YYYYMMDD.db …` or the GUI's *Choose database file* dialog, and verify a restored file with `PRAGMA integrity_check` (full) before relying on it.
+* Keep backups **outside the DB directory**; name them `acta_backup_YYYYMMDD.db`; keep the last ~7 by deleting older ones manually (no retention enforcement). Prefer a **different physical volume** where possible: a backup on the same disk does not survive a disk failure. Restoring is not a special command: open the backup with `acta_cli --db acta_backup_YYYYMMDD.db …` or the GUI's *Choose database file* dialog, and verify a restored file with `PRAGMA integrity_check` (full) before relying on it.
 
 **Routine maintenance.**
 
