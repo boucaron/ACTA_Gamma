@@ -12,7 +12,7 @@ This is not an agent framework. It is a runner that makes one LLM call and recor
 
 The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
-**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode serving at least one GGUF model. Everything else is in this repo — if you just want a run on screen, skip to [Quick start](#quick-start).
+**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode serving at least one GGUF model. Everything else is in this repo — if you just want a run on screen, skip to [Quick start](#quick-start) (step 2 there covers the optional `make gui` build).
 
 ## Current status
 
@@ -58,7 +58,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 |---|---|
 | Runs **one** versioned, replayable, auditable LLM action against an immutable context | Not an agent: no self-orchestration, no conversational state, no delegation, no workflow composition between skills (a higher-level program chains the executions — [`PointOfView.md`](docs/PointOfView.md)) |
 | Versioned skills & models; immutable revision snapshots; immutable contexts | No automatic retries (operator decision — retry is manual: `exec reset` / GUI Retry) and no streaming responses (operator decision — [`status.md`](docs/status.md)) |
-| Standalone runner + GUI (Run/Cancel), soft-delete lifecycle, stale-execution `sweep`, atomic DB snapshot (`acta_cli db backup --to <path>`) | No users, permissions, organizations, queues, vector DBs, datasets — no server process: one private local SQLite file ([`DBDesign.md`](docs/DBDesign.md)); no hard delete / purge; no prompt-injection defense — the context reaches the model verbatim as the user message, so sanitizing untrusted content is the operator's job |
+| Standalone runner + GUI (Run/Cancel), soft-delete lifecycle, stale-execution `sweep`, atomic DB snapshot (`acta_cli db backup --to <path>`) | No users, permissions, organizations, queues, vector DBs, datasets — no server process: one private local SQLite file ([`DBDesign.md`](docs/DBDesign.md)); no batch mode: running the same skill over N contexts is N `exec create` + N `run` commands, looped by the operator's script or a higher-level program; no hard delete / purge; no prompt-injection defense — the context reaches the model verbatim as the user message, so sanitizing untrusted content is the operator's job |
 | Multi-model via a llama.cpp `llama-server` router — the only supported backend (see [Implementation](#implementation)) | No server manager mode — the backend is user-launched and user-managed ([`runner_contract.md`](docs/runner_contract.md)) |
 
 ## Architecture
@@ -85,16 +85,17 @@ In the diagram, **Observation** is the LLM's response recorded verbatim as the e
 
 The short version of the lifecycle:
 
-- **Revisions.** Creating, updating, or soft-deleting a skill or model parent auto-snapshots a new immutable revision row via a DB trigger — there is no separate "snapshot" command, and no `active`/`current` flag: the "current" revision is simply the latest one. Editing *creates, not modifies*: existing executions keep pointing at the revision they were bound to.
+- **Revisions.** Skill folders and model folders are optional organizational groupings for list display; they do not affect execution. Creating, updating, or soft-deleting a skill or model parent auto-snapshots a new immutable revision row via a DB trigger — there is no separate "snapshot" command, and no `active`/`current` flag: the "current" revision is simply the latest one. Editing *creates, not modifies*: existing executions keep pointing at the revision they were bound to.
 - **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its user message is exactly `context.content` — so a replay (a second `exec create` with the same three ids, optionally linked via `--parent_execution_id`) resends byte-identical request inputs.
 - **States.** `pending → running → completed`, with `failed` (manual reset via `exec reset`) and `cancelled` (allowed from `pending` or `running`).
+- **Concurrency.** The claim is atomic: `start()` is a single conditional `UPDATE … WHERE id=? AND status='pending'`, so two processes can never both own the same execution — the loser's claim matches zero rows and it exits with an error. The database runs in WAL mode; concurrent readers are fine, but simultaneous *writers* on the same file are **not supported in the current implementation** (no `busy_timeout`/retry in `acta_db`) — single-writer is the expected usage pattern. Details: [`docs/DBDesign.md`](docs/DBDesign.md).
 - **Soft delete.** Rows are never hard-deleted: `delete` sets a `deleted_at` timestamp, `restore` clears it, listers are live-only by default (`--include_deleted` / `--deleted` to opt back in), and a new DB file is the clean-state path.
 
 The full treatment — triggers, the state machine, soft-delete rules, and the durability/backup guidance — is in [`docs/DBDesign.md`](docs/DBDesign.md); worked examples are in [`docs/examples/create-and-revise.md`](docs/examples/create-and-revise.md) (revision snapshots) and [`docs/examples/playground.md`](docs/examples/playground.md) (soft-delete tour, no backend needed).
 
 ## How a run is assembled
 
-The runner builds the chat call from the bound revisions: `system` = the skill's `prompt_template`, `user` = `context.content` — there is no per-execution prompt field, and an empty context content fails the execution at preflight, before any backend call. Preflight enforces a deterministic `max_chars` char-count guard on the two strings before any backend call (default 100,000 chars, configurable). It counts characters, not tokens — the backend's own context window (the router's `-c`) is a separate, final constraint. Full pipeline — claim, resolve, preflight, call, validate, record — and the backend contract are in [`docs/runner_contract.md`](docs/runner_contract.md); the llama.cpp router surface is in [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md).
+The runner builds the chat call from the bound revisions: `system` = the skill's `prompt_template`, `user` = `context.content` — there is no per-execution prompt field, and an empty context content fails the execution at preflight, before any backend call. Preflight enforces a deterministic `max_chars` guard on the two strings before any backend call (default 100,000, configurable): the count is the **UTF-8 byte length** of `prompt_template` + `context.content` (a `strlen` of the stored text), not Unicode codepoints and not tokens — multibyte text (CJK, emoji) consumes more bytes per character, and the backend's own context window (the router's `-c`, in tokens) is a separate, final constraint. Full pipeline — claim, resolve, preflight, call, validate, record — and the backend contract are in [`docs/runner_contract.md`](docs/runner_contract.md); the llama.cpp router surface is in [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md).
 
 ## Implementation
 
@@ -107,7 +108,7 @@ The implementation is C/C++ on top of SQLite:
 | `acta_runner/` | C11 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend, with `execution_log` phase rows (uses curl + cJSON) |
 | `acta_gui/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app **Run** button runs the runner's pipeline in-process — single pipeline codebase, not a second copy; the source coupling is a hard build constraint, see [`docs/building.md`](docs/building.md), "GUI–runner source coupling"). While a run is in flight the button toggles into **Cancel**, which cooperatively cancels the in-flight pipeline and transitions the row to `cancelled` |
 
-The backend is a llama.cpp `llama-server` running in **router mode** (launched without a model, e.g. with `--models-dir` pointing at local GGUF files) — it is the **only** supported backend, tested on llama.cpp 0.4.x. The pipeline talks to it through the OpenAI-compatible HTTP surface (`GET /health`, `GET /v1/models`, `POST /v1/chat/completions`), but that surface is the interface, not a portability promise; ACTA Gamma is not a generic OpenAI client.
+The backend is a llama.cpp `llama-server` running in **router mode** (launched without a model, e.g. with `--models-dir` pointing at local GGUF files) — it is the **only** supported backend. llama.cpp **≥ 0.4.x** (router mode) is a hard requirement: the OpenAI-compatible surface is pinned to that version's behavior, the runner does no version negotiation, and the router API is not guaranteed stable across major versions; dropping a new GGUF into `--models-dir` while the server runs is not covered by the contract. The pipeline talks to it through the OpenAI-compatible HTTP surface (`GET /health`, `GET /v1/models`, `POST /v1/chat/completions`), but that surface is the interface, not a portability promise; ACTA Gamma is not a generic OpenAI client.
 
 ### Building
 
@@ -129,7 +130,7 @@ Three steps before the example below:
 
 ## Environment variables and the per-machine config file
 
-* **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls, used identically by `acta_runner` and `acta_gui`. Resolution: `$OPENAI_API_KEY` (if set — even to the empty string, which is enough for a keyless localhost server) → the config file's `"api_key"` key. There is no CLI flag, and the key is never stored in the database. If the key is present in neither source, the run does not start; an empty key sends no `Authorization` header. Full policy: [`docs/runner_contract.md`](docs/runner_contract.md), decision 4.
+* **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls, used identically by `acta_runner` and `acta_gui`. Resolution: `$OPENAI_API_KEY` (if set — even to the empty string, which is enough for a keyless localhost server) → the config file's `"api_key"` key. There is no CLI flag, and the key is never stored in the database. If the key is present in neither source, the run does not start; an empty key sends no `Authorization` header. Note the precedence: a set environment variable (even empty) **shadows** the config file's `"api_key"` — a stray `export OPENAI_API_KEY=` in your shell profile silently disables a key stored in the config file. If the key must not persist on disk, set it in your shell profile instead of putting it in `ACTA_Gamma.conf`. Full policy: [`docs/runner_contract.md`](docs/runner_contract.md), decision 4.
 * **`ACTA_DB`** — database file path used by `acta_cli` and `acta_runner` when `--db` is not given. Resolution order: `--db` → `$ACTA_DB` → the config file's `"db"` → the **same** app-data file as the GUI (`%APPDATA%\ACTA_Gamma\acta.db` on Windows, `~/.local/share/ACTA_Gamma/acta.db` on Linux, or `$XDG_DATA_HOME/ACTA_Gamma/acta.db`) → `./acta.db` as a last-resort fallback. The GUI does **not** read `--db` or `$ACTA_DB`; its *Choose database file* dialog covers non-default setups (see [Your first session in the GUI](#your-first-session-in-the-gui)). The resolution contract is in [`docs/cli_spec.md`](docs/cli_spec.md).
 * **`ACTA_Gamma.conf`** — the per-machine config file: a flat JSON object with at most the four keys below, in the same app-data directory as the default DB file. All three binaries read it through the same helper; a malformed file or an unknown key is a fail-closed hard error. It may hold an `api_key` at rest, so treat it as sensitive: on POSIX a file that is not user-only readable is refused (hard error), on Windows a warning is printed and the file is read anyway.
 
@@ -137,7 +138,7 @@ Three steps before the example below:
   |---|---|---|
   | `"api_key"` | string | key fallback for `$OPENAI_API_KEY` |
   | `"db"` | string | database path step |
-  | `"max_chars"` | positive integer | max total prompt chars (`skill.prompt_template` + `context.content`); default 100,000 |
+  | `"max_chars"` | positive integer | max total prompt size in **UTF-8 bytes** (`skill.prompt_template` + `context.content`); default 100,000 |
   | `"timeout"` | positive integer, seconds | default per-call HTTP timeout; default 300 s (the `--timeout` flag still wins per run) |
 
 ## Minimal end-to-end example
@@ -147,7 +148,8 @@ Against the running `llama-server` router from the quick start (fresh `acta.db` 
 ```sh
 # 1. Register the model
 # ("backend" is a protocol family: "openai" = OpenAI-compatible HTTP,
-#  served here by the llama-server router — currently the only value)
+#  served here by the llama-server router — currently the only value;
+#  model_identifier = the GGUF file's filename in your --models-dir)
 acta_cli model create --json '{"name":"llama-local","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"qwen3-8b"}'
 
 # 2. Create a versioned skill (prompt template + optional output schema)
@@ -166,7 +168,9 @@ acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revisi
 
 # 5. Provide the API key: set the environment variable, or add an
 # "api_key" key to ACTA_Gamma.conf (see above).
-export OPENAI_API_KEY=
+# For a keyless localhost llama-server, an empty value is intentional —
+# it just means no Authorization header is sent.
+export OPENAI_API_KEY=""
 
 # 6. Run it (blocks until the execution reaches a terminal state; exit 0 on success,
 #    non-zero on failure; hard per-call HTTP timeout: --timeout, default 300 s)
@@ -203,7 +207,7 @@ $ acta_cli log list 1
 
 `raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. If the response does not match the skill's `output_schema`, the execution is `failed` with a `validation_failed` log row — there is no "completed with a flag" mode. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
-A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last log row is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 300` → `--stale-seconds 350` or more) so a live run is never swept (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
+A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last log row is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 300` → `--stale-seconds 350` or more) so a live run is never swept. Note the limit: sweep judges staleness by the age of the execution's last log row, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
 
 For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 
@@ -221,7 +225,7 @@ Once the backend is running (see [Quick start](#quick-start)), launch `acta_gui`
 
 ## CLI ergonomics
 
-All three binaries support `--version` and `--help`. The CLI offers file in/out (`--content_file`, `--out`, `--raw_out`), NDJSON `--stream`, output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), light-projection listers with `--full` for the high-volume blob fields, and the machine-readable `--tools` JSON schema (e.g. `acta_cli skill list --table --fields name,revision`). `db exec` is the developer-facing static-SQL escape hatch — raw SQL, no parameter binding; the caller is responsible for safe statement construction. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+All three binaries support `--version` and `--help`. The CLI offers file in/out (`--content_file`, `--out`, `--raw_out`), NDJSON `--stream`, output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), light-projection listers with `--full` for the high-volume blob fields, and the machine-readable `--tools` JSON schema (e.g. `acta_cli skill list --table --fields name,revision`). `db exec` is the developer-facing static-SQL escape hatch — raw SQL, no parameter binding; the caller is responsible for safe statement construction. A `--select-only` guardrail is a known improvement candidate; until then treat it as developer-only. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 Components and their reference docs:
 
