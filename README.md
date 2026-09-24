@@ -4,7 +4,7 @@
 
 **LLMs as actions, not agents.**
 
-A small, stateless runner for versioned skills and reproducible LLM actions.
+A small runner that makes one LLM call and records the result — each execution is stateless and one-shot; the SQLite file is a versioned, auditable store behind it.
 
 This is not an agent framework. It is a runner that makes one LLM call and records the result.
 
@@ -57,7 +57,7 @@ Terms used throughout this README: a **skill** is a versioned prompt template wi
 | Does | Deliberately does **not** (on purpose) |
 |---|---|
 | Runs **one** versioned, replayable, auditable LLM action against an immutable context | Not an agent: no self-orchestration, no conversational state, no delegation, no workflow composition between skills (a higher-level program chains the executions — [`PointOfView.md`](docs/PointOfView.md)) |
-| Versioned skills & models; immutable revision snapshots; immutable contexts | No automatic retries (owner decision — retry is manual: `exec reset` / GUI Retry) and no streaming responses (owner decision — [`status.md`](docs/status.md)) |
+| Versioned skills & models; immutable revision snapshots; immutable contexts | No automatic retries (operator decision — retry is manual: `exec reset` / GUI Retry) and no streaming responses (operator decision — [`status.md`](docs/status.md)) |
 | Standalone runner + GUI (Run/Cancel), soft-delete lifecycle, stale-execution `sweep`, atomic DB snapshot (`acta_cli db backup --to <path>`) | No users, permissions, organizations, queues, vector DBs, datasets — no server process: one private local SQLite file ([`DBDesign.md`](docs/DBDesign.md)); no hard delete / purge; no prompt-injection defense — the context reaches the model verbatim as the user message, so sanitizing untrusted content is the operator's job |
 | Multi-model via a llama.cpp `llama-server` router — the only supported backend (see [Implementation](#implementation)) | No server manager mode — the backend is user-launched and user-managed ([`runner_contract.md`](docs/runner_contract.md)) |
 
@@ -94,7 +94,7 @@ The full treatment — triggers, the state machine, soft-delete rules, and the d
 
 ## How a run is assembled
 
-The runner builds the chat call from the bound revisions: `system` = the skill's `prompt_template`, `user` = `context.content` — there is no per-execution prompt field, and an empty context content fails the execution. Preflight enforces a deterministic `max_chars` char-count guard on the two strings before any backend call (default 100,000 chars, configurable). Full pipeline — claim, resolve, preflight, call, validate, record — and the backend contract are in [`docs/runner_contract.md`](docs/runner_contract.md); the llama.cpp router surface is in [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md).
+The runner builds the chat call from the bound revisions: `system` = the skill's `prompt_template`, `user` = `context.content` — there is no per-execution prompt field, and an empty context content fails the execution at preflight, before any backend call. Preflight enforces a deterministic `max_chars` char-count guard on the two strings before any backend call (default 100,000 chars, configurable). It counts characters, not tokens — the backend's own context window (the router's `-c`) is a separate, final constraint. Full pipeline — claim, resolve, preflight, call, validate, record — and the backend contract are in [`docs/runner_contract.md`](docs/runner_contract.md); the llama.cpp router surface is in [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md).
 
 ## Implementation
 
@@ -147,7 +147,7 @@ Against the running `llama-server` router from the quick start (fresh `acta.db`,
 ```sh
 # 1. Register the model
 # ("backend" is a protocol family: "openai" = OpenAI-compatible HTTP,
-#  served here by the llama-server router)
+#  served here by the llama-server router — currently the only value)
 acta_cli model create --json '{"name":"llama-local","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"qwen3-8b"}'
 
 # 2. Create a versioned skill (prompt template + optional output schema)
@@ -187,11 +187,16 @@ $ acta_cli exec get 1
 $ acta_cli log list 1
 [
  {"id":1,"execution_id":1,"level":"info","event":"execution_started","created_at":"…"},
- …   # context_loaded, prompt_resolved, preflight_passed, llm_request, llm_response, execution_completed
+ {"id":2,"execution_id":1,"level":"info","event":"context_loaded","created_at":"…"},
+ {"id":3,"execution_id":1,"level":"info","event":"prompt_resolved","created_at":"…"},
+ {"id":4,"execution_id":1,"level":"info","event":"preflight_passed","created_at":"…"},
+ {"id":5,"execution_id":1,"level":"info","event":"llm_request","created_at":"…"},
+ {"id":6,"execution_id":1,"level":"info","event":"llm_response","created_at":"…"},
+ {"id":7,"execution_id":1,"level":"info","event":"execution_completed","created_at":"…"}
 ]
 ```
 
-`raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
+`raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. If the response does not match the skill's `output_schema`, the execution is `failed` with a `validation_failed` log row — there is no "completed with a flag" mode. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
 A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset: `acta_cli exec reset <id>` (`failed → pending`) or the GUI Retry button. If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` that went quiet — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
 
