@@ -300,9 +300,9 @@ char **acta_db_user_tables(db_t *db, int *out_count, int *err)
 
     int capacity = 16;
     int count = 0;
-    char **names = NULL;
-    int failed = 0;
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    char **names = malloc((size_t)capacity * sizeof *names);
+    int failed = (names == NULL);
+    while (!failed && sqlite3_step(stmt) == SQLITE_ROW) {
         const char *name = (const char *)sqlite3_column_text(stmt, 0);
         if (!name) { failed = 1; break; }
         if (count == capacity) {
@@ -317,6 +317,10 @@ char **acta_db_user_tables(db_t *db, int *out_count, int *err)
     }
     sqlite3_finalize(stmt);
 
+    /* An empty database is a valid result, not a failure: the buffer was
+     * allocated up front, so `names[count] = NULL` below always lands and
+     * callers get a NULL-terminated (possibly zero-length) array, distinct
+     * from NULL-on-failure. */
     if (failed) {
         for (int i = 0; i < count; i++) free(names[i]);
         free(names);

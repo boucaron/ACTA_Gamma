@@ -44,7 +44,7 @@ typedef struct {
 } help_case_t;
 
 static const help_case_t cases[] = {
-    { cmd_db,            "exec",      "== exec",       "== version"    },
+    { cmd_db,            "init",      "== init",       "== version"    },
     { cmd_context,       "create",    "== create",     "== list"       },
     { cmd_context,       "list",      "== list",       "== create"     },
     { cmd_model,         "create",    "== create",     "== move"       },
@@ -86,7 +86,7 @@ static void test_full_help(stest_ctx_t *ctx)
     rc = do_help(ctx, cmd_db, NULL);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "Actions:");
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "== exec");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "== init");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "== version");
 }
 

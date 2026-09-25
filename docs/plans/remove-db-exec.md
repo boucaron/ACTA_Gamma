@@ -1,9 +1,14 @@
 # Plan: remove the raw-SQL `db exec` action from `acta_cli`
 
-Status: done (implemented; see `docs/tasks_continuation.md` sessions 1-4 —
-including the session-4 fix of the unterminated `ACTA_SCHEMA_SQL` declaration
-in the generated `schema_sql.h`, which broke the first `make all` at
-`sqlite3.h:188`; build/test verification is with the user)
+Status: done (implemented and verified — see `docs/tasks_continuation.md`
+sessions 1-6: session 4 fixed the unterminated `ACTA_SCHEMA_SQL`
+declaration in the generated `schema_sql.h` (broke the first `make all` at
+`sqlite3.h:188`), session 5 fixed the `acta_db_user_tables` empty-result
+handling, the two stale `exec` pins in `tests/help/help_test.c`, and the
+74 → 75 tools-entry miscount; session 6 fixed the missing initial
+allocation in `acta_db_user_tables` that segfaulted `test_db` and
+`test_tools`; full `make all` / `make test` run verified green by the
+user)
 
 ## Context
 
@@ -31,10 +36,10 @@ Both jobs can be done without accepting arbitrary SQL.
 - Handler in `acta_cli/src/commands/db.c` (`cmd_db` `exec` branch,
   `usage_exec`, the `{"exec", ...}` tools-table row, the `--sql` / `--file` /
   `--sql_stdin` plumbing, the 64 KiB cap, the KI-5 SELECT guard).
-- The `db.exec` entry in `acta_cli/src/tools.c` (table drops 75 → 74 entries;
-  bump the `--tools` schema `version` 2 → 3 and update the `tools` test
-  expectations, including the 75-entry count in
-  `acta_cli/tests/tools/tools_test.c`).
+- The `db.exec` entry in `acta_cli/src/tools.c` (replaced by `db.init`, so
+  the table stays at 75 entries = 65 actions + 10 help; bump the `--tools`
+  schema `version` and update the `tools` test expectations, including
+  the entry count in `acta_cli/tests/tools/tools_test_main.c`).
 - Tests in `acta_cli/tests/db/db_test.c` that drive `db exec` (positional
   form, `--sql`, `--file`, `--sql_stdin`, KI-1, KI-5 regression pins).
 
@@ -143,7 +148,7 @@ paths become:
 - Scripts that used `db exec --file ...schema.sql` to bootstrap a fresh DB
   switch to `acta_cli db init`.
 - `--tools` consumers (any scripted surface) must bump their expectations
-  (version 3, 74 entries).
+  (version 5, 75 entries).
 
 ## Open questions
 

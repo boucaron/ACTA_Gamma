@@ -326,7 +326,7 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 74 entries = 64 actions + 10 help actions              */
+/*  the table: 75 entries = 65 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {

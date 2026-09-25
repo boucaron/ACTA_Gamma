@@ -1,9 +1,9 @@
 # Task continuation: remove `db exec` / add `db init`
 
-Resume prompt: **Read `docs/plans/remove-db-exec.md` and `docs/tasks_continuation.md`. All edits
-are done and the grep audit is complete (session 3); only the build + test
-step remains (`make all`, `make test`, `make gui` + `acta_gui/db/smoke_test.sh`).
-Do not compile, do not commit — the user reviews.**
+Status: **done.** All code and doc edits are complete (sessions 1-6) and
+the user verified the full build + test run green
+(`make all`, `make test` — every suite PASS; `make gui` +
+`acta_gui/db/smoke_test.sh` per the plan). Committed; see the git log.
 
 ## Done (session 1)
 
@@ -148,14 +148,78 @@ verified content byte-exact but not C-validity).
       assumption in both the rule's and the header's comments would then
       silently emit a broken header again.
 
-## Remaining (user verifies)
+## Done (session 5 — first full test run, three failing suites fixed)
 
-1. **Build + test** (not done in the agent sessions — no compilation):
-   - `make all` (the session-3 tree failed at `db.c` due to item 18;
-     re-run after the fix)
-   - `make test` (all suites, incl. updated `db` and `tools` suites)
+First full `make test` run after the session-4 fix; everything was green
+except three suites, each with a distinct cause:
+
+19. **`acta_db/src/db.c` — `acta_db_user_tables` empty-result bug**
+    (test_db FAILs `db_test.c:60` / `:67` / `:89`: `db init` on a fresh
+    file printed `{"error":"ACTA_DB_ERR_INVALID","code":0,"message":"cannot
+    list user tables: (no detail)"}`). With zero user tables the
+    row loop never allocates `names`, so the function returned `NULL`
+    with `*err = ACTA_DB_OK` — the `init` branch's `err != ACTA_DB_OK ||
+    tables == NULL` test treated a valid empty result as a failure (and
+    the `ACTA_DB_OK` = 0 `err` explains the `"code":0` in the error JSON).
+    Fix: when the result set is empty, `calloc` a one-slot array so the
+    `names[count] = NULL` terminator lands at `names[0]` — an empty
+    table list is a valid result, distinct from NULL-on-failure.
+20. **`acta_cli/tests/help/help_test.c` — two stale `exec` pins** the
+    session-3 audit missed (it checked user-facing strings, not test
+    pins): the H1 case-table row
+    `{ cmd_db, "exec", "== exec", "== version" }` →
+    `{ cmd_db, "init", "== init", "== version" }` (running `db help exec`
+    now rc 10, unknown action), and the H2 full-help pin
+    `TEST_CONTAINS(..., "== exec")` → `"== init"`.
+21. **The tools entry count was a miscount — 74 → 75**: `db init`
+    *replaces* `db exec` (one action in, one out), so the table keeps
+    75 entries = 65 actions + 10 help; the session-2 "74 / 64" figure
+    (item 8, item 10, item 13) was wrong. Corrected in:
+    `acta_cli/src/tools.c` table comment ("75 entries = 65 actions +
+    10 help actions"); `tools_test_main.c` (the
+    `cJSON_GetArraySize(tools)` assertion 74 → 75 + all comment
+    mentions); `EXP_EXEC` `n_actions` 12 → 13 (the `EXP_EXEC` literal
+    always carried 13 entries incl. `help` — with `n_actions` 12 the
+    coverage loop silently skipped the last one, `help`); and
+    `docs/status.md` ("75 entries").
+
+## Done (session 6 — segfault in `acta_db_user_tables`)
+
+The session-5 re-run got every suite green except `test_db` and
+`test_tools`, which produced **no output at all** and killed `make test`
+(SIGSEGV; the stdout buffer is lost on crash, so the suites looked
+empty). GDB backtrace: `names[count] = strdup(name)` in
+`acta_db_user_tables` (`acta_db/src/db.c`), first call with a
+non-empty result — `test_init_fresh` after `db init` re-lists the 9
+schema'd tables; `test_tools`'s in-process cross-check runs `db.init`
+on a schema'd DB, same path.
+
+Root cause: the function never allocated its initial buffer — `names`
+started `NULL` and only grew via `realloc` when `count == capacity`
+(16), which is never reached from `count = 0` with `names == NULL`, so
+the first row wrote `names[0]` on NULL. The bug could only surface once
+item 19 let an empty result pass (fresh-file `db init` now succeeds and
+the follow-up list call returns 9 rows).
+
+22. **`acta_db/src/db.c` — `acta_db_user_tables`**: up-front
+    `malloc(capacity * sizeof *names)` with `failed = (names == NULL)`
+    and the row loop guarded by `!failed`; this subsumes the session-5
+    `calloc` zero-length workaround (deleted) — the terminator
+    `names[count] = NULL` now always lands, empty list ≢ error, and the
+    failure path frees a possibly-partial buffer correctly. The
+    `db.h` contract comment now states the zero-length-but-valid
+    empty result explicitly.
+    (Leftover `acta_test_init_fresh.db{-shm,-wal}` files from the
+    crashed run removed from `acta_cli/`.)
+
+## Remaining — verified by the user (all green)
+
+1. **Build + test** — verified green after the session-6 fix:
+   - `make all` (item 18 fix)
+   - `make test` — every suite PASS (`test_db`, `test_help` and
+     `test_tools` were the last failures — items 19-22)
    - `make gui` (regenerates the `:/db/schema.sql` Qt resource from the
-     moved file) + `acta_gui/db/smoke_test.sh`.
+     moved file) + `acta_gui/db/smoke_test.sh`
 2. ~~**Grep audit** for leftover user-facing `db exec`~~ — **done in
    session 3** (see above); the `json.h:31` cosmetic cleanup was applied.
 

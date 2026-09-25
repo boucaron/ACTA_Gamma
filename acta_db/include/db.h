@@ -203,8 +203,10 @@ const char *acta_db_main_path(const db_t *db);
 
 /* Return a heap-allocated, NULL-terminated array of strdup'd user-table
  * names (sqlite_master type='table', excluding sqlite_ internals);
- * *out_count receives the count. NULL on failure with *err set to
- * ACTA_DB_ERR_SQL / ACTA_DB_ERR_ALLOC. Free with acta_db_user_tables_free. */
+ * *out_count receives the count. With no user tables the array is
+ * zero-length but still valid (never NULL); NULL on failure with *err
+ * set to ACTA_DB_ERR_SQL / ACTA_DB_ERR_ALLOC. Free with
+ * acta_db_user_tables_free. */
 char **acta_db_user_tables(db_t *db, int *out_count, int *err);
 
 /* Free the array (and each name string) returned by acta_db_user_tables.
