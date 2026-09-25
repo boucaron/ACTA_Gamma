@@ -156,6 +156,12 @@ bool MainWindow::createDatabase()
         m_db.close();
         return false;
     }
+    // Record the schema version (PRAGMA user_version; 0.1 -> 1) so a
+    // later `db migrate` on the GUI-created file is a clean no-op.
+    const int vrc = acta_db_set_schema_version(m_db.handle(), 1);
+    if (vrc != ACTA_DB_OK)
+        qWarning("setting PRAGMA user_version=1 failed: %s",
+                 acta_db_strerror(vrc));
     return true;
 }
 

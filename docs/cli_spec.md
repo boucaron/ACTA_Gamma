@@ -33,6 +33,7 @@ Wire-format decisions settled here:
 | `{"deleted":true}` | `model_folder delete` / `skill_folder delete` success |
 | `{"id":N,"status":"<s>"}` | exec transition success (`s` ∈ running, cancelled, completed, failed); `set-raw` echoes the unchanged current status, which can also be `pending` |
 | `{"status":"ok"}` | `db init` success |
+| `{"status":"ok","schema_version":"<v>"}` | `db migrate` success (`v` like `0.1`) |
 | `{"version":"<ver>"}` | `db version` success |
 | `{"target":"<path>","bytes":<N>,"quick_check":"ok"}` | `db backup` success |
 | `[ {…}, … ]` / `[]` | list success (empty list → `[]`) |
@@ -55,6 +56,21 @@ applied or foreign file is a fail-closed hard error (exit 4) — the
 schema is never re-run on top of existing tables. It takes no SQL
 input of any kind (positional, `--sql`, `--file`, `--sql_stdin`, and
 the global `--stdin` are all rejected).
+
+`db migrate` applies the pending repo-static schema migrations: one
+static DDL file per schema version (`acta_db/migrations/<version>.sql`,
+embedded as `include/migrations_sql.h` — the repo files are the source of
+truth); there is no SQL input of any kind. `PRAGMA user_version` is the
+recorded schema version (integer, `0.1` → `1`); each migration newer than
+the file's version is applied in ascending order, each in its own
+`BEGIN … COMMIT` transaction, and `user_version` is set after each applied
+migration. A failing migration rolls back itself, the file keeps its
+prior version, and the action exits `4` with the failing migration named
+in the error. `user_version = 0` with no user tables migrates from `0.1`;
+`user_version = 0` with user tables present (foreign or pre-migration
+file) fails closed ("not an ACTA Gamma database"). An already up-to-date
+file is an idempotent no-op. `--table` prints `ok`; exit `4` covers
+invalid (fail-closed / failing migration), `1` not-found.
 
 `db backup` makes an atomic, consistent snapshot of the open database
 into `--to <target>` via the SQLite backup C API (`sqlite3_backup_*` —
@@ -184,6 +200,7 @@ changed) snapshots nothing. Revision rows are read via the
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
 | `db init` | — | `--table` | — | `{"status":"ok"}` (`--table` → `ok`) |
+| `db migrate` | — | `--table` | — | `{"status":"ok","schema_version":"<v>"}` (`--table` → `ok`) |
 | `db backup` | — | `--to <target>*` (must not exist), `--table` | — | `{"target":"<path>","bytes":<N>,"quick_check":"ok"}` (`--table` → `<target> <N> bytes`) |
 | `db version` | — | `--table` | — | `{"version":"<ver>"}` (`--table` → `SQLite <ver>`) |
 

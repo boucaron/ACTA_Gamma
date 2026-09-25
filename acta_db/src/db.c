@@ -65,6 +65,20 @@ static int pragma_capture_first(void *ctx, int ncol, char **vals, char **names)
     return 0;
 }
 
+/* Read PRAGMA user_version (the recorded schema version) from an open
+ * handle. 0 on success (*out set), -1 on failure. */
+static int read_pragma_user_version(sqlite3 *h, int *out)
+{
+    char *v = NULL;
+    int rc = sqlite3_exec(h, "PRAGMA user_version;",
+                          pragma_capture_first, &v, NULL);
+    if (rc != SQLITE_OK)
+        return -1;
+    *out = v ? atoi(v) : 0;
+    sqlite3_free(v);
+    return 0;
+}
+
 /* ── Open a database ───────────────────────────────────────────────
  *
  *  ACTA_DB_OPEN_EXISTING: verify the file is a non-empty SQLite DB
@@ -196,7 +210,30 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
             "may be off on this connection, making ACTA_DB_ERR_FK mapping "
             "unreliable. Informational note, not an error.", rc_fk);
     }
-    db->last_error = note;   /* NULL when both pragmas took effect */
+    /* Report the effective recorded schema version (PRAGMA user_version;
+     * 0 = no schema / pre-migration) in the informational open-time
+     * note, alongside the pragma degradation notes.  A zero version
+     * leaves last_error untouched. */
+    int uv = 0;
+    if (read_pragma_user_version(handle, &uv) == 0 && uv != 0) {
+        char *uvnote = sqlite3_mprintf(
+            " Schema version: 0.%d (PRAGMA user_version=%d). "
+            "Informational note, not an error.", uv, uv);
+        if (uvnote) {
+            if (note) {
+                /* Both present: combine, free the two source buffers. */
+                char *combined = sqlite3_mprintf("%s%s", note, uvnote);
+                sqlite3_free(note);
+                sqlite3_free(uvnote);
+                note = combined;
+            } else {
+                /* No pragma-degradation note: take ownership of uvnote
+                 * (do NOT free it — it now IS the note). */
+                note = uvnote;
+            }
+        }
+    }
+    db->last_error = note;   /* NULL when both pragmas took effect and uv is 0 */
 
     if (err) *err = ACTA_DB_OK;
     return db;
@@ -343,6 +380,31 @@ void acta_db_user_tables_free(char **names, int count)
     for (int i = 0; names[i]; i++)
         free(names[i]);
     free(names);
+}
+
+/* Read the recorded schema version (PRAGMA user_version). */
+int acta_db_schema_version(db_t *db, int *out)
+{
+    if (!db || !db->handle || !out) return ACTA_DB_ERR_INVALID;
+    int v = 0;
+    if (read_pragma_user_version(db->handle, &v) != 0) {
+        db_set_error(db, "failed to read PRAGMA user_version");
+        return ACTA_DB_ERR_SQL;
+    }
+    *out = v;
+    return ACTA_DB_OK;
+}
+
+/* Set the recorded schema version (PRAGMA user_version). */
+int acta_db_set_schema_version(db_t *db, int version)
+{
+    if (!db || !db->handle || version < 0) return ACTA_DB_ERR_INVALID;
+    char sql[48];
+    snprintf(sql, sizeof sql, "PRAGMA user_version = %d;", version);
+    int rc = acta_db_exec(db, sql);
+    if (rc != ACTA_DB_OK)
+        db_set_error(db, "failed to set PRAGMA user_version");
+    return rc;
 }
 
 int acta_db_backup(db_t *db, const char *target, long long *bytes_out,

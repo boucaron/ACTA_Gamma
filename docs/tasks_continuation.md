@@ -240,8 +240,9 @@ the follow-up list call returns 9 rows).
 # Task continuation 2: token-free runner health check (`acta_runner check`)
 
 Source plan: `docs/plans/runner-health-check.md` (plan 1 of the three open
-plans; plans 2-3 — schema migration, Windows config permissions — are
-still proposals, not started).
+plans; plan 2 — schema migration — is now done, see "Task continuation 3"
+below; plan 3 — Windows config permissions — is still a proposal, not
+started).
 
 Status: **verified; committed.** Session 1 was edit-only; session 2 ran
 `make all` / `make test` / `make gui` and fixed the failures found (see
@@ -392,3 +393,130 @@ and fixed, then everything green:
 
 - a `check` "would-run" `max_chars` dry run;
 - a GUI "Check backend" button.
+
+---
+
+# Task continuation 3: schema migrations (`acta_cli db migrate`)
+
+Source plan: `docs/plans/schema-migration.md` (plan 2; follow-up to the
+`remove-db-exec` task — fills the "no operator path for evolving an
+existing database" gap left by the `db exec` removal).
+
+Status: **verified; committed.** Session 1 was edit-only; session 2 ran
+the builds and fixed the failures found (see "Done (session 2)"), then
+everything was green and committed.
+
+## Done (session 1, edit-only)
+
+1. **`acta_db/migrations/0.1.sql`** (new) — verbatim copy of
+   `acta_db/schema.sql`; the versioning path starts from a copy of the
+   canonical schema (9 baseline tables, indexes, triggers).
+2. **`acta_db/Makefile`** — new `MIGRATIONS_H := include/migrations_sql.h`
+   generation rule (one C string literal per migration file, same escaping
+   as `schema_sql.h`), added to `all` and `clean`; atomic write
+   (`> .tmp && mv`, `|| rm -f` on failure) so a partial file can never be
+   observed. The header comment avoids any `*/` sequence (the glob is
+   written `migrations/ 0.*.sql`) and the comment block is explicitly
+   closed before `#ifndef`.
+3. **`acta_db/include/migrations_sql.h`** (new, generated) —
+   `typedef struct { int version; const char *sql; } acta_migration_t;`
+   + `static const acta_migration_t ACTA_MIGRATIONS[]` (one row per
+   version, `{0, NULL}` sentinel); payload verified byte-exact against
+   `schema.sql`.
+4. **`acta_db/include/db.h` / `src/db.c`** — new `acta_db_schema_version`
+   (read `PRAGMA user_version`) and `acta_db_set_schema_version` (set it);
+   `acta_db_open`'s informational open-time note now appends
+   `" Schema version: 0.N (PRAGMA user_version=N). Informational note,
+   not an error."` when the recorded version is nonzero (combined with
+   the pragma-degradation notes; ownership handled so the note buffer is
+   freed exactly once — see the session-2 UAF fix); `acta_db_exec` doc
+   lists all three DDL callers (GUI first launch, `db init`, `db
+   migrate`).
+5. **`acta_cli/src/commands/db.c`** — `usage_migrate` + `migrate` in
+   `db_usage` / `db_help_for_action` / `db_actions`; `db_migrate_apply()`
+   (declared in `commands.h`, defined here, callable from tests with
+   synthetic fixtures): each pending migration in its own `BEGIN…COMMIT`,
+   `PRAGMA user_version` set AFTER the commit (it is a no-op inside a
+   transaction), failing migration rolls back itself and the file keeps
+   its prior version, `*out_version` set on both success and failure
+   (failure → last successfully applied version), fail message
+   `"migration 0.N failed: <detail>"`. The `init` branch sets
+   `user_version = 1` after a fresh schema apply and adopts legacy
+   `user_version = 0` files that are already fully schema'd. The `migrate`
+   branch: rejects any SQL input (positional / `--sql` / `--file` /
+   `--sql_stdin` / global `--stdin` → exit 4); `user_version = 0` with no
+   user tables → migrate from 0.1; `user_version = 0` with user tables →
+   fail closed ("not an ACTA Gamma database"); success
+   `{"status":"ok","schema_version":"0.N"}` (`--table` → `ok`).
+6. **`acta_cli/include/commands.h`** — `db_migrate_apply` declaration +
+   `migrations_sql.h` include.
+7. **`acta_cli/src/tools.c`** — `db.migrate` entry (`input: "none"`,
+   success keys `status` + `schema_version`); 75 → 76 entries; `--tools`
+   schema `version` 5 → 6; compact header `v4` → `v5`.
+8. **Tests** — `acta_cli/tests/db/db_test.c`: migrate fresh / no-op /
+   foreign / failing-migration fixture / ordering / input-rejection
+   scenarios + `db help` lists `migrate`; `acta_cli/tests/tools/
+   tools_test_main.c`: 76 entries, 5 `db` actions, `db.migrate` in the
+   input-"none" invariant, `version` 6; `acta_db/tests/test_db.c`:
+   `user_version` set/read cycle + open-note reporting tests.
+9. **`acta_cli/Makefile`** — the generated acta_db headers
+   (`schema_sql.h`, `migrations_sql.h`) are now explicit prerequisites of
+   `ACTA_DB_LIB` with sub-make regeneration recipes, so a `make clean`
+   is self-healing even when `acta_cli` is built on its own.
+10. **GUI** — `MainWindow::createDatabase` sets `user_version = 1` after
+    the schema application (warning on failure, non-fatal);
+    `acta_gui/db/smoke_test.sh` sets `PRAGMA user_version=1` after schema
+    application.
+11. **Docs** — `docs/DBDesign.md` (versioning paragraph replaces "No
+    schema versioning", version ledger table with the 9 baseline tables,
+    sole-callers and durability wording), `docs/cli_spec.md` (Common-
+    shapes row, `db migrate` paragraph, `## db` table row), `README.md`
+    (fresh-database paragraph), `acta_cli/Makefile` comment.
+
+## Done (session 2 — verification + fixes)
+
+User ran the builds (session 1 stayed edit-only); the failures found and
+fixed, then everything green:
+
+12. **Generated-header comment broke C parsing** (first `make all`,
+    `commands.o`): the header's first comment contained the glob
+    `migrations/*.sql` — the `*/` inside it terminated the comment early,
+    swallowing `#ifndef`/`#define`, so `#endif` had no matching `#if`
+    (`'/*' within comment` warnings pointed at it). The user hand-fixed
+    the header first; the fix then landed in the Makefile recipe itself:
+    the comment is reworded (glob written `migrations/ 0.*.sql`) so no `*/`
+    sequence occurs inside it, and the comment block is explicitly closed
+    with `*/` before `#ifndef`. A first regeneration attempt was missing
+    that closing `*/` (caught before the build); the regenerated header is
+    byte-exact against `schema.sql`.
+13. **`acta_db` test crash, exit 127** (`test_db`, SIGTRAP in
+    `acta_db_close` via sqlite heap validation; gdb backtrace): the
+    `acta_db_open` note-combining code freed the version note buffer it had
+    just assigned to `last_error` (use-after-free) whenever the
+    pragma-degradation note was NULL; the test's `strstr` reads then hit
+    freed memory (two false `ASSERT FAILED` lines) and `acta_db_close`'s
+    `sqlite3_free(db->last_error)` tripped `RtlValidateHeap`. Fixed in
+    `acta_db/src/db.c`: when the pragma note is NULL the code takes
+    ownership of the version note instead of freeing it (and guards
+    `mprintf` NULL-on-OOM). Verified with gdb + a direct `sqlite3`
+    `PRAGMA user_version` read of the leftover test file (the set itself
+    had always persisted correctly).
+14. **`test_db` single assertion** (`db_test.c:337`,
+    `test_migrate_failing_migration`: `uv == 1 (got -1, want 1)`):
+    `db_migrate_apply` did not set `*out_version` on the failure path, so
+    the test's `-1` init value survived. Fixed: `*out_version` is now set
+    on failure too (the version the file is currently at — the last
+    successfully applied migration, i.e. the prior version); doc comments
+    in `db.c` and `commands.h` state the exact contract.
+
+After the fixes: `make all`, `make test` (every suite PASS) and `make gui`
+all green; docs status lines updated; committed.
+
+## Deferred (plan open questions, NOT part of this task)
+
+- whether migrations ever include `UPDATE` (data) statements — DDL only
+  for now;
+- semver-like version strings (`0.10`) — the integer `PRAGMA
+  user_version` with a minor-bump convention is the chosen design; a
+  `schema_version TEXT` table row would be the alternative;
+- a future `db schema-version` action printing the version ledger.

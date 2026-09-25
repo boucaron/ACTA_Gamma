@@ -2,6 +2,7 @@
 #include "argparse.h"
 #include "cli_util.h"
 #include "schema_sql.h"
+#include "migrations_sql.h"
 #include <sqlite3.h>
 #include <string.h>
 #include <stdio.h>
@@ -53,6 +54,39 @@ static void usage_init(FILE *f)
 "  \"code\":<rc>,\"message\":\"...\"} (exit code mapped from rc)\n"
 "\n", f);
 }
+static void usage_migrate(FILE *f)
+{
+    fputs(
+"== migrate ========================================================\n"
+"  Apply the pending repo-static schema migrations (one static DDL\n"
+"  file per version, acta_db/migrations/<version>.sql, embedded)\n"
+"  to an existing database.  PRAGMA user_version is the recorded\n"
+"  schema version (0.1 -> 1); each migration newer than the file's\n"
+"  version is applied in ascending order, in its own BEGIN..COMMIT\n"
+"  transaction, and sets user_version on success.  A failing\n"
+"  migration rolls back itself; the file keeps its prior version.\n"
+"  Takes no SQL input of any kind.\n"
+"\n"
+"    acta_cli db migrate\n"
+"\n"
+"  Behaviour:\n"
+"    - Fresh file (user_version 0, no user tables): migrations apply\n"
+"      from the first (0.1).\n"
+"    - Already up to date: idempotent no-op, current version printed.\n"
+"    - User tables present without a recorded version (foreign or\n"
+"      pre-migration file): fail closed with a clear error (exit 4)\n"
+"      — no migration is applied.\n"
+"\n"
+"  Options:\n"
+"    --table            print 'ok' instead of JSON\n"
+"    --verbose [N]      debug level 0-3 (stderr)\n"
+"\n"
+"  stdout on success: {\"status\":\"ok\",\"schema_version\":\"<v>\"}\n"
+"  stderr on failure: single-line JSON (exit 4, failing migration\n"
+"  named in the message)\n"
+"\n", f);
+}
+
 /* ── path identity for the self-backup guard ──────────────────────
  * Canonicalize `p` into `out` (caller-provided, outsz bytes): resolve
  * relative paths against the cwd, drop trailing slashes.  Used to
@@ -142,11 +176,13 @@ void db_usage(FILE *f)
 "\n"
 "Actions:\n"
 "  init      Apply the canonical schema to a fresh database file\n"
+"  migrate   Apply pending repo-static schema migrations\n"
 "  version   Print SQLite library version\n"
 "  backup    Atomic snapshot of the DB into --to <target>\n"
 "  help <action>  Show help for a single action (no arg = full help)\n"
 "\n", f);
     usage_init(f);
+    usage_migrate(f);
     usage_version(f);
     usage_backup(f);
     fputs(
@@ -160,12 +196,72 @@ void db_usage(FILE *f)
 int db_help_for_action(const char *action, FILE *out)
 {
     if (strcmp(action, "init") == 0)      usage_init(out);
+    else if (strcmp(action, "migrate") == 0) usage_migrate(out);
     else if (strcmp(action, "version") == 0) usage_version(out);
     else if (strcmp(action, "backup") == 0) usage_backup(out);
     else return -1;
     return 0;
 }
 
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  Static migration apply                                             */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/* Apply the pending migrations from `migs` (ascending `version`,
+ * `n` entries) whose version is newer than the file's recorded
+ * PRAGMA user_version.  Each migration runs in its own BEGIN..COMMIT
+ * transaction; the user_version is set AFTER the commit (PRAGMA
+ * user_version is a no-op inside a transaction).  A failing migration
+ * rolls back itself, the file keeps its prior user_version, and
+ * ACTA_DB_ERR_INVALID is returned with "migration <name> failed:
+ * <detail>" written into `fail_msg` (when non-NULL).
+ * *out_version receives the PRAGMA user_version integer (0.1 -> 1)
+ * the file is at when the call returns: on success (ACTA_DB_OK) the
+ * final applied version; on failure the last successfully applied
+ * version (i.e. the prior version, unchanged).  The fresh-vs-foreign user_version-0 policy (no user
+ * tables vs. user tables present) is the caller's decision — the
+ * caller owns the table listing. */
+int db_migrate_apply(db_t *db, const acta_migration_t *migs, int n,
+                     int *out_version, char *fail_msg, size_t failmsgsz)
+{
+    if (!db || !out_version || (n > 0 && !migs))
+        return ACTA_DB_ERR_INVALID;
+
+    int uv = 0;
+    if (acta_db_schema_version(db, &uv) != ACTA_DB_OK)
+        return ACTA_DB_ERR_SQL;
+
+    for (int i = 0; i < n; i++) {
+        if (migs[i].sql == NULL || migs[i].version <= uv)
+            continue;
+
+        int rc = acta_db_begin(db);
+        if (rc == ACTA_DB_OK)
+            rc = acta_db_exec(db, migs[i].sql);
+        if (rc == ACTA_DB_OK)
+            rc = acta_db_commit(db);
+        if (rc == ACTA_DB_OK)
+            rc = acta_db_set_schema_version(db, migs[i].version);
+        if (rc != ACTA_DB_OK) {
+            acta_db_rollback(db);   /* no-op when the commit already ran */
+            if (fail_msg && failmsgsz > 0) {
+                char ver[8];
+                snprintf(ver, sizeof ver, "0.%d", migs[i].version);
+                const char *detail = acta_db_last_error(db);
+                snprintf(fail_msg, failmsgsz, "migration %s failed: %s",
+                         ver, detail ? detail : "(no detail)");
+            }
+            /* Report the version the file is currently at (the last
+             * successfully applied migration; unchanged if none). */
+            *out_version = uv;
+            return ACTA_DB_ERR_INVALID;
+        }
+        uv = migs[i].version;
+    }
+    *out_version = uv;
+    return ACTA_DB_OK;
+}
 
 
 /* ══════════════════════════════════════════════════════════════════ */
@@ -174,6 +270,7 @@ int db_help_for_action(const char *action, FILE *out)
 
 static const action_def_t db_actions[] = {
     { "init",    "apply the canonical schema to a fresh database file" },
+    { "migrate", "apply pending repo-static schema migrations"        },
     { "version", "print SQLite library version"     },
     { "backup",  "atomic snapshot of the DB into --to <target>" },
     { "help",   "show this help"                   },
@@ -255,15 +352,28 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 }
         }
 
+        /* Record the schema version (PRAGMA user_version; 0.1 -> 1)
+         * whenever the canonical schema ends up in place: a fresh
+         * file gets it on application, and a legacy file that was
+         * schema'd before versioning was introduced (uv 0, all
+         * canonical tables present) is adopted here.  `db migrate`
+         * is then a clean no-op on both. */
+        int uv = 0;
+        acta_db_schema_version(db, &uv);
+
         int rc;
         if (n == 0) {
             VLOG(1, "  fresh file: applying canonical schema");
             rc = acta_db_exec(db, ACTA_SCHEMA_SQL);
+            if (rc == ACTA_DB_OK)
+                rc = acta_db_set_schema_version(db, 1);
         } else if (have_canon == n_canon) {
             /* Already schema'd: short-circuit no-op (the shipped schema
              * uses bare CREATE TABLE, so it must not be re-run). */
             VLOG(1, "  already schema'd: no-op (%d user tables)", n);
             rc = ACTA_DB_OK;
+            if (uv == 0)
+                rc = acta_db_set_schema_version(db, 1);
         } else {
             VLOG(1, "  partial/foreign file: %d of %d canonical tables",
                  have_canon, n_canon);
@@ -289,6 +399,75 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             fprintf(stdout, "ok\n");
         else
             fprintf(stdout, "{\"status\":\"ok\"}\n");
+        return EXIT_OK;
+    }
+
+    /* ── migrate ─────────────────────────────────────────────────── */
+    if (strcmp(action, "migrate") == 0) {
+        /* db migrate takes no SQL input: reject any SQL-carrying
+         * source explicitly instead of letting it fall through
+         * (same rule as db init). */
+        const char *pos_sql   = cmd_args_next_positional(ga);
+        const char *sql       = cmd_args_flag(ga, "sql",   1);
+        const char *fpath     = cmd_args_flag(ga, "file",  1);
+        const int   use_stdin = cmd_args_has_flag(ga, "sql_stdin");
+
+        if (gopts->from_stdin || pos_sql || sql || fpath || use_stdin) {
+            VLOG(1, "  ERROR: SQL input rejected");
+            return finish_db_error(ACTA_DB_ERR_INVALID,
+                "db migrate takes no arguments: it applies the "
+                "repo-static schema migrations — there is no SQL to "
+                "supply");
+        }
+
+        int uv = 0;
+        if (acta_db_schema_version(db, &uv) != ACTA_DB_OK)
+            return finish_op_error(db, ACTA_DB_ERR_SQL,
+                                   "schema_version read");
+
+        /* user_version 0 = "no schema recorded": a truly fresh file has
+         * no user tables (migrations apply from 0.1); any user tables
+         * without a recorded version (foreign or pre-migration file)
+         * fail closed instead of double-applying. */
+        if (uv == 0) {
+            int err = 0, nt = 0;
+            char **tabs = acta_db_user_tables(db, &nt, &err);
+            if (err != ACTA_DB_OK || tabs == NULL) {
+                acta_db_user_tables_free(tabs, nt);
+                return finish_db_error(err != ACTA_DB_OK ? err
+                                    : ACTA_DB_ERR_SQL,
+                                    "cannot list user tables");
+            }
+            if (nt > 0) {
+                acta_db_user_tables_free(tabs, nt);
+                VLOG(1, "  ERROR: user_version 0 with %d user tables",
+                     nt);
+                return finish_db_error(ACTA_DB_ERR_INVALID,
+                    "file has user tables but no recorded schema version "
+                    "(PRAGMA user_version = 0): not an ACTA Gamma database "
+                    "(or a pre-migration file) — fail closed, no "
+                    "migration applied");
+            }
+            acta_db_user_tables_free(tabs, nt);
+        }
+
+        const int n_migs =
+            (int)(sizeof ACTA_MIGRATIONS / sizeof ACTA_MIGRATIONS[0] - 1);
+        int out_v = 0;
+        char fail[256];
+        int rc = db_migrate_apply(db, ACTA_MIGRATIONS, n_migs,
+                                 &out_v, fail, sizeof fail);
+        if (rc != ACTA_DB_OK) {
+            VLOG(1, "  FAILED rc=%d (%s)", rc, fail[0] ? fail : "(no detail)");
+            return finish_db_error(rc, fail[0] ? fail : "migration failed");
+        }
+
+        VLOG(1, "  ok: schema version 0.%d", out_v);
+        if (gopts->table)
+            fprintf(stdout, "ok\n");
+        else
+            fprintf(stdout,
+                     "{\"status\":\"ok\",\"schema_version\":\"0.%d\"}\n", out_v);
         return EXIT_OK;
     }
 

@@ -109,10 +109,12 @@ typedef struct db_t db_t;
  * On a successful open, acta_db_last_error() may be non-NULL: it then
  * holds an informational note that a best-effort pragma did not take
  * effect (WAL unsupported by the backend, e.g. :memory: databases or
- * some filesystems, or PRAGMA foreign_keys=ON failing). This is NOT
- * an error — the return code is ACTA_DB_OK and the connection is fully
- * usable; callers may log the note. Any later acta_db_exec* call
- * clears it, like any other error string. */
+ * some filesystems, or PRAGMA foreign_keys=ON failing). The effective
+ * recorded schema version (PRAGMA user_version, when non-zero) is also
+ * reported in this note. This is NOT an error — the return code is
+ * ACTA_DB_OK and the connection is fully usable; callers may log the
+ * note. Any later acta_db_exec* call clears it, like any other error
+ * string. */
 db_t *acta_db_open(const char *path, int *err, int creationMode);
 
 /* Close the database and free the handle.
@@ -175,12 +177,13 @@ int acta_db_force_close(db_t *db);
  * prepared-statement APIs (acta_db_*_query, acta_db_*_create, ...), not
  * this function.
  *
- * Sole caller: schema application at first GUI launch
+ * Sole callers: schema application at first GUI launch
  * (the canonical schema, acta_db/schema.sql, embedded as the Qt
- * resource :/db/schema.sql). The CLI no longer exposes a raw-SQL path
- * (`db init` applies the same embedded schema via this same primitive,
- * but the schema text is static developer-supplied data, not
- * user input). */
+ * resource :/db/schema.sql), the CLI `db init` (the same embedded
+ * canonical schema on a fresh file), and the CLI `db migrate` (the
+ * repo-static migration DDL, acta_db/migrations/<version>.sql).
+ * In every case the text is static developer-supplied data, not
+ * user input; there is no raw-SQL path. */
 int acta_db_exec(db_t *db, const char *sql);
 
 /* Returns the last error message for this connection. */
@@ -212,6 +215,17 @@ char **acta_db_user_tables(db_t *db, int *out_count, int *err);
 /* Free the array (and each name string) returned by acta_db_user_tables.
  * NULL-safe. */
 void acta_db_user_tables_free(char **names, int count);
+
+/* Read the recorded schema version: PRAGMA user_version
+ * (0 = no schema / pre-migration; 0.1 -> 1, 0.2 -> 2, ...).
+ * *out receives the integer. ACTA_DB_OK on success, a negative
+ * ACTA_DB_ERR_* code on failure. */
+int acta_db_schema_version(db_t *db, int *out);
+
+/* Set the recorded schema version (PRAGMA user_version). `version` is
+ * the integer schema version (0.1 -> 1). ACTA_DB_OK on success, a
+ * negative ACTA_DB_ERR_* code on failure. */
+int acta_db_set_schema_version(db_t *db, int version);
 
 /* Atomic, consistent snapshot of the open database into a brand-new
  * file `target`, via the SQLite backup C API

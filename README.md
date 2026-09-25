@@ -147,7 +147,7 @@ Three steps before the example below:
 
 Against the running `llama-server` router from the quick start (fresh `acta.db` — by default the platform app-data location, see [Environment variables](#environment-variables-and-the-per-machine-config-file); so every id is `1`).
 
-**Fresh databases need the schema first.** `acta_cli`/`acta_runner` never create the schema themselves: run `acta_cli db init` — it applies the canonical schema (`acta_db/schema.sql`, embedded statically in the CLI; the GUI embeds the same file, and launching the GUI once applies it as well). The schema is applied once at creation; there is no schema versioning or migration path (see [`docs/DBDesign.md`](docs/DBDesign.md)) — a fresh DB file is the clean-state path. A fresh file without the schema fails with `no such table`.
+**Fresh databases need the schema first.** `acta_cli`/`acta_runner` never create the schema themselves: run `acta_cli db init` — it applies the canonical schema (`acta_db/schema.sql`, embedded statically in the CLI; the GUI embeds the same file, and launching the GUI once applies it as well) and records the schema version in `PRAGMA user_version` (0.1 → 1). After that, schema changes are migrated in place by `acta_cli db migrate`: it applies the pending repo-static migrations — one static DDL file per version, `acta_db/migrations/<version>.sql` (the version ledger is in [`docs/DBDesign.md`](docs/DBDesign.md)) — in ascending order, each in its own transaction, and records the applied version. A `user_version = 0` file with no user tables migrates from 0.1; one with user tables is not an ACTA Gamma database and fails closed. A fresh file without the schema fails with `no such table`.
 
 ```sh
 # 1. Register the model

@@ -664,6 +664,57 @@ static void test_db_close_returns_ok(void) {
     remove(path);
 }
 
+/* ---------- schema version (PRAGMA user_version) ---------- */
+static void test_db_schema_version_set_read(void) {
+    const char *path = "test/acta_test_schema_version.db";
+    remove(path);
+    int err = 0;
+    db_t *db = acta_db_open(path, &err, ACTA_DB_OPEN_CREATE);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+
+    int uv = -1;
+    TEST_ASSERT_EQ_INT(acta_db_schema_version(db, &uv), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(uv, 0);   /* fresh file: no schema recorded */
+
+    TEST_ASSERT_EQ_INT(acta_db_set_schema_version(db, 1), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_schema_version(db, &uv), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(uv, 1);   /* 0.1 -> 1 */
+
+    TEST_ASSERT_EQ_INT(acta_db_set_schema_version(db, 2), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(acta_db_schema_version(db, &uv), ACTA_DB_OK);
+    TEST_ASSERT_EQ_INT(uv, 2);
+
+    TEST_ASSERT_EQ_INT(acta_db_schema_version(db, NULL), ACTA_DB_ERR_INVALID);
+    TEST_ASSERT_EQ_INT(acta_db_set_schema_version(db, -1), ACTA_DB_ERR_INVALID);
+
+    acta_db_close(db);
+    remove(path);
+}
+
+/* ---------- open-time note reports the recorded schema version ---------- */
+static void test_db_open_note_reports_schema_version(void) {
+    const char *path = "test/acta_test_schema_note.db";
+    remove(path);
+    int err = 0;
+    db_t *db = acta_db_open(path, &err, ACTA_DB_OPEN_CREATE);
+    TEST_ASSERT_NOT_NULL(db);
+    create_simple_table(db);
+    TEST_ASSERT_EQ_INT(acta_db_set_schema_version(db, 1), ACTA_DB_OK);
+    acta_db_close(db);
+
+    db = acta_db_open(path, &err, ACTA_DB_OPEN_EXISTING);
+    TEST_ASSERT_NOT_NULL(db);
+    const char *note = acta_db_last_error(db);
+    TEST_ASSERT_NOT_NULL(note);   /* informational note, not an error */
+    TEST_ASSERT_EQ_INT(err, ACTA_DB_OK);
+    TEST_ASSERT_TRUE(note && strstr(note, "0.1") != NULL);
+    TEST_ASSERT_TRUE(note && strstr(note, "user_version") != NULL);
+
+    acta_db_close(db);
+    remove(path);
+}
+
 /* ================================================================== */
 /*  Runner                                                            */
 /* ================================================================== */
@@ -706,6 +757,8 @@ int run_db_tests(void) {
     test_db_rollback_null();
     test_db_rollback_no_txn();
     test_db_implicit_rollback_on_close();
+    test_db_schema_version_set_read();
+    test_db_open_note_reports_schema_version();
     test_db_multi_op_commit();
     test_db_multi_op_rollback();
     test_db_exec_error_then_rollback();

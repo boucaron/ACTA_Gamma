@@ -4,6 +4,7 @@
 #include "json.h"
 #include "argparse.h"
 #include "cli_util.h"
+#include "migrations_sql.h"
 
 #include <acta_db.h>
 
@@ -41,6 +42,20 @@ int entity_help(const char *entity, const char *action, FILE *out);
 
 /* P0: per-entity action→help-section lookup. Prints the section for
  * `action` to `out`; returns 0 if printed, -1 if the action is unknown. */
+/* Apply the pending repo-static schema migrations from `migs`
+ * (ascending `version`, `n` entries; the caller owns the fresh-vs-
+ * foreign user_version-0 table check) — see the definition in
+ * src/commands/db.c.  One BEGIN..COMMIT transaction per migration,
+ * user_version set after each commit; a failing migration rolls back
+ * and the file keeps its prior version (ACTA_DB_ERR_INVALID, with
+ * "migration <name> failed: <detail>" in `fail_msg` when non-NULL).
+ * *out_version receives the PRAGMA user_version integer (0.1 -> 1) the
+ * file is at when the call returns: on success the final applied
+ * version; on failure the last successfully applied version (i.e. the
+ * prior version, unchanged). */
+int db_migrate_apply(db_t *db, const acta_migration_t *migs, int n,
+                     int *out_version, char *fail_msg, size_t failmsgsz);
+
 int db_help_for_action(const char *action, FILE *out);
 int context_help_for_action(const char *action, FILE *out);
 int model_help_for_action(const char *action, FILE *out);

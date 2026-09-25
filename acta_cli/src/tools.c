@@ -10,7 +10,7 @@
  *   M3  skill_folder list/count filter by an optional positional
  *       <parent_id | all>, not a --parent_id flag
  *
- * Success shapes are structured (P1; the emitted `version` field is 5):
+ * Success shapes are structured (P1; the emitted `version` field is 6):
  * `success` is a JSON
  * object `{"kind":"json"|"json_object"|"json_array"|"bare_int"|
  * "plain_text"(,"keys":[...])(,"note":"...")}`; kind "json" carries
@@ -277,6 +277,10 @@ static const tool_success_t suc_plain          =
     { "plain_text", NULL, 0, NULL };
 static const tool_success_t suc_db_init        =
     { "json", ks_status, 1, "--table -> ok" };
+static const char *const ks_db_migrate[] =
+    { "status", "schema_version" };
+static const tool_success_t suc_db_migrate   =
+    { "json", ks_db_migrate, 2, "--table -> ok" };
 static const tool_success_t suc_db_version     =
     { "json", ks_version, 1, "--table -> SQLite <ver>" };
 static const char *const ks_db_backup[] =
@@ -326,7 +330,7 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 75 entries = 65 actions + 10 help actions              */
+/*  the table: 76 entries = 66 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {
@@ -341,6 +345,24 @@ static const tool_entry_t tool_table[] = {
       NULL, 0, f_table, 1, "none",
       NULL, 0, NULL, 0,
       &suc_db_init },
+
+    { "db.migrate", "db", "migrate", NULL, 0,
+      "Apply the pending repo-static schema migrations (acta_db/"
+      "migrations/<version>.sql, one static DDL file per version, "
+      "embedded) to an existing database: PRAGMA user_version is the "
+      "recorded schema version (0.1 -> 1); each migration newer than "
+      "the file's version is applied in ascending order, in its own "
+      "BEGIN..COMMIT transaction, and sets user_version on success - a "
+      "failing migration rolls back and the file keeps its prior "
+      "version. Takes no SQL input of any kind: positional, --sql, "
+      "--file, --sql_stdin, and the global --stdin are all rejected. "
+      "Fresh file (no user tables) -> migrations apply from 0.1; "
+      "already up to date -> idempotent no-op; user tables without a "
+      "recorded version (foreign or pre-migration file) -> fail "
+      "closed (exit 4).",
+      NULL, 0, f_table, 1, "none",
+      NULL, 0, NULL, 0,
+      &suc_db_migrate },
 
     { "db.version", "db", "version", NULL, 0,
       "Print the SQLite library version.",
@@ -1257,7 +1279,7 @@ static void compact_pos(FILE *f, const tool_pos_t *p, size_t n)
 
 int tools_print_compact(FILE *out)
 {
-    fputs("# acta_cli tools v4 (compact); full JSON: --tools\n", out);
+    fputs("# acta_cli tools v5 (compact); full JSON: --tools\n", out);
     fputs("usage: acta_cli [global flags] <entity> <action> [args]\n", out);
     fputs("globals: --db --fields --no_nulls --id_only --count --table "
           "--pretty --json --stdin --from_file --out --raw_out "
@@ -1322,7 +1344,7 @@ int tools_print(FILE *out, int pretty)
     fputs(pretty ? "{\n" : "{", out);
 
     jf_str(out, "name", "acta_cli", pretty, 1, &i, top_n);
-    jf_num(out, "version", 5, pretty, 1, &i, top_n);
+    jf_num(out, "version", 6, pretty, 1, &i, top_n);
     jf_str(out, "usage",
            "acta_cli [global flags] <entity> <action> [args]",
            pretty, 1, &i, top_n);

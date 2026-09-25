@@ -15,7 +15,8 @@
 #   tests/model/          model CLI tests
 #   tests/model_folder/   model_folder CLI tests
 #   tests/context/        context CLI tests
-#   tests/db/             db (exec / version / help) CLI tests
+#   tests/db/             db (init / migrate / version / backup / help)
+#                         CLI tests
 #   tests/execution_log/  execution_log CLI tests
 #   tests/exec/           execution CLI tests
 #   tests/tools/          --tools (T4) schema contract tests
@@ -103,7 +104,18 @@ $(foreach s,$(TEST_SUITES),$(eval $(call TEST_SUITE,$(s))))
 
 # Rebuild the lib when missing or when any of its sources changed.
 # (Must stay below `all` or it would become the default goal.)
-$(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h)
+# The generated acta_db headers (single source of truth: acta_db —
+# schema.sql -> include/schema_sql.h, migrations/*.sql ->
+# include/migrations_sql.h, via the acta_db Makefile rules) are explicit
+# prerequisites so a `make clean` (which removes them) is self-healing
+# when acta_cli is built on its own.
+../acta_db/include/schema_sql.h:
+	$(MAKE) -C ../acta_db include/schema_sql.h
+../acta_db/include/migrations_sql.h:
+	$(MAKE) -C ../acta_db include/migrations_sql.h
+
+$(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h) \
+	../acta_db/include/schema_sql.h ../acta_db/include/migrations_sql.h
 	$(MAKE) -C ../acta_db libacta_db.a
 
 $(TARGET): $(OBJS) $(ACTA_DB_LIB)

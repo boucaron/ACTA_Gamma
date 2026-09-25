@@ -1,4 +1,5 @@
 #include "test_helpers.h"
+#include "migrations_sql.h"
 
 #include <sys/stat.h>
 
@@ -213,6 +214,211 @@ static void test_exec_removed(stest_ctx_t *ctx)
     TEST_EQ(ctx, do_db(ctx, "exec", a, g), EXIT_CLI);
     targs_free(a, &g);
 }
+/* ═══════════════════════════════════════════════════════════════════
+ *  db migrate
+ * ═══════════════════════════════════════════════════════════════════ */
+
+#define MIGRATE_FRESH_DB "acta_test_migrate_fresh.db"
+#define MIGRATE_FOREIGN_DB "acta_test_migrate_foreign.db"
+
+static void test_migrate_fresh(stest_ctx_t *ctx)
+{
+    /* fresh empty file (user_version 0, no user tables): the 0.1
+     * migration applies, user_version becomes 1, exit 0 */
+    int err = 0;
+    db_t *db = open_scratch(ctx, MIGRATE_FRESH_DB, &err);
+    if (!db) return;
+
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+
+    stest_capture_begin(ctx);
+    int rc = cmd_db("migrate", a, &g, db);
+    stest_capture_end(ctx);
+
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"schema_version\":\"0.1\"");
+    targs_free(a, &g);
+
+    int uv = -1;
+    TEST_EQ(ctx, acta_db_schema_version(db, &uv), ACTA_DB_OK);
+    TEST_EQ(ctx, uv, 1);
+    int n = 0, e2 = 0;
+    char **tabs = acta_db_user_tables(db, &n, &e2);
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+    TEST_EQ(ctx, n, 9);   /* the 0.1 baseline schema tables */
+    acta_db_user_tables_free(tabs, n);
+
+    acta_db_close(db);
+    scratch_cleanup(MIGRATE_FRESH_DB);
+}
+
+static void test_migrate_noop(stest_ctx_t *ctx)
+{
+    /* db init (schema + user_version 1) then db migrate: idempotent
+     * no-op, exit 0, current version printed */
+    int err = 0;
+    db_t *db = open_scratch(ctx, MIGRATE_FRESH_DB, &err);
+    if (!db) return;
+
+    global_opts_t g = gopts_default();
+
+    cmd_args_t *a = targs_new();
+    stest_capture_begin(ctx);
+    int rc = cmd_db("init", a, &g, db);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    targs_free(a, &g);
+
+    a = targs_new();
+    stest_capture_begin(ctx);
+    rc = cmd_db("migrate", a, &g, db);
+    stest_capture_end(ctx);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"schema_version\":\"0.1\"");
+    targs_free(a, &g);
+
+    acta_db_close(db);
+    scratch_cleanup(MIGRATE_FRESH_DB);
+}
+
+static void test_migrate_foreign(stest_ctx_t *ctx)
+{
+    /* user_version 0 with a non-ACTA table: fail closed, exit 4,
+     * nothing applied */
+    int err = 0;
+    db_t *db = open_scratch(ctx, MIGRATE_FOREIGN_DB, &err);
+    if (!db) return;
+
+    int e2 = acta_db_exec(db,
+        "CREATE TABLE foreign_tbl (id INTEGER PRIMARY KEY)");
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+
+    global_opts_t g = gopts_default();
+    cmd_args_t *a = targs_new();
+
+    stest_capture_begin(ctx);
+    int rc = cmd_db("migrate", a, &g, db);
+    stest_capture_end(ctx);
+
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST(ctx, strstr(stest_stdout(ctx), "\"status\"") == NULL);
+    int uv = -1;
+    TEST_EQ(ctx, acta_db_schema_version(db, &uv), ACTA_DB_OK);
+    TEST_EQ(ctx, uv, 0);   /* version unchanged */
+    targs_free(a, &g);
+
+    acta_db_close(db);
+    scratch_cleanup(MIGRATE_FOREIGN_DB);
+}
+
+static void test_migrate_failing_migration(stest_ctx_t *ctx)
+{
+    /* fixture: 0.1 succeeds, 0.2 fails midway — 0.2 rolls back,
+     * user_version keeps the prior value (1), the failure names the
+     * migration */
+    int err = 0;
+    db_t *db = open_scratch(ctx, MIGRATE_FRESH_DB, &err);
+    if (!db) return;
+
+    static const acta_migration_t migs[] = {
+        { 1, "CREATE TABLE m01_t (id INTEGER PRIMARY KEY);\n" },
+        { 2, "CREATE TABLE m02_t (id INTEGER PRIMARY KEY);\n"
+              "SELECT * FROM table_that_does_not_exist;\n" },
+        { 0, NULL }   /* sentinel, not part of the count */
+    };
+
+    int uv = -1;
+    char fail[256];
+    int rc = db_migrate_apply(db, migs, 2, &uv, fail, sizeof fail);
+    TEST_EQ(ctx, rc, ACTA_DB_ERR_INVALID);
+    TEST(ctx, strstr(fail, "0.2") != NULL);
+    TEST_EQ(ctx, uv, 1);   /* 0.1 applied; 0.2 rolled back */
+
+    int n = 0, e2 = 0;
+    char **tabs = acta_db_user_tables(db, &n, &e2);
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+    int have_01 = 0, have_02 = 0;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(tabs[i], "m01_t") == 0) have_01 = 1;
+        if (strcmp(tabs[i], "m02_t") == 0) have_02 = 1;
+    }
+    TEST_EQ(ctx, have_01, 1);
+    TEST_EQ(ctx, have_02, 0);
+    acta_db_user_tables_free(tabs, n);
+
+    acta_db_close(db);
+    scratch_cleanup(MIGRATE_FRESH_DB);
+}
+
+static void test_migrate_ordering(stest_ctx_t *ctx)
+{
+    /* fixture: two pending migrations apply in ascending order */
+    int err = 0;
+    db_t *db = open_scratch(ctx, MIGRATE_FRESH_DB, &err);
+    if (!db) return;
+
+    static const acta_migration_t migs[] = {
+        { 1, "CREATE TABLE m_ord_1 (id INTEGER PRIMARY KEY);\n" },
+        { 2, "CREATE TABLE m_ord_2 (id INTEGER PRIMARY KEY);\n" },
+        { 0, NULL }
+    };
+
+    int uv = -1;
+    char fail[256];
+    int rc = db_migrate_apply(db, migs, 2, &uv, fail, sizeof fail);
+    TEST_EQ(ctx, rc, ACTA_DB_OK);
+    TEST_EQ(ctx, uv, 2);
+
+    int n = 0, e2 = 0;
+    char **tabs = acta_db_user_tables(db, &n, &e2);
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+    int have_1 = 0, have_2 = 0;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(tabs[i], "m_ord_1") == 0) have_1 = 1;
+        if (strcmp(tabs[i], "m_ord_2") == 0) have_2 = 1;
+    }
+    TEST_EQ(ctx, have_1, 1);
+    TEST_EQ(ctx, have_2, 1);
+    acta_db_user_tables_free(tabs, n);
+
+    acta_db_close(db);
+    scratch_cleanup(MIGRATE_FRESH_DB);
+}
+
+static void test_migrate_rejects_input(stest_ctx_t *ctx)
+{
+    /* db migrate takes no SQL input: positional / --sql / --file /
+     * --sql_stdin / global --stdin are all rejected with exit 4 */
+    global_opts_t g = gopts_default();
+
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "ALTER TABLE models ADD COLUMN x TEXT;", &g);
+    TEST_EQ(ctx, do_db(ctx, "migrate", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag(a, "sql", "SELECT 1;", &g);
+    TEST_EQ(ctx, do_db(ctx, "migrate", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag(a, "file", "x.sql", &g);
+    TEST_EQ(ctx, do_db(ctx, "migrate", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag_bool(a, "sql_stdin", &g);
+    TEST_EQ(ctx, do_db(ctx, "migrate", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    g.from_stdin = 1;
+    a = targs_new();
+    TEST_EQ(ctx, do_db(ctx, "migrate", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+}
+
 /* ── version ──────────────────────────────────────────────────────── */
 
 static void test_version_json(stest_ctx_t *ctx)
@@ -248,6 +454,7 @@ static void test_help(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "Usage:");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "init");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "migrate");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "version");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "backup");
     targs_free(a, &g);
@@ -452,6 +659,14 @@ int run_db_test_all(void)
     test_init_foreign(&ctx);
     test_init_rejects_input(&ctx);
     test_exec_removed(&ctx);
+
+    /* migrate */
+    test_migrate_fresh(&ctx);
+    test_migrate_noop(&ctx);
+    test_migrate_foreign(&ctx);
+    test_migrate_failing_migration(&ctx);
+    test_migrate_ordering(&ctx);
+    test_migrate_rejects_input(&ctx);
 
     /* version */
     test_version_json(&ctx);

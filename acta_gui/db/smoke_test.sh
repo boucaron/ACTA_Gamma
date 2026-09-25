@@ -1,6 +1,8 @@
 
 rm engine.db
 sqlite3 engine.db < schema.sql
+# Record the schema version (mirrors the GUI first launch / db init).
+sqlite3 engine.db "PRAGMA user_version=1;"
 sqlite3 -header -column engine.db < smoke_test.sql
 
 # Soft delete on contexts and executions (new): setting/clearing deleted_at must
