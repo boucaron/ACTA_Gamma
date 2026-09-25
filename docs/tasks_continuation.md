@@ -234,3 +234,161 @@ the follow-up list call returns 9 rows).
 - `db init` takes no SQL input: positional / `--sql` / `--file` /
   `--sql_stdin` / global `--stdin` all rejected with exit 4; `db exec` in any
   form is an unknown action (exit 10).
+
+---
+
+# Task continuation 2: token-free runner health check (`acta_runner check`)
+
+Source plan: `docs/plans/runner-health-check.md` (plan 1 of the three open
+plans; plans 2-3 — schema migration, Windows config permissions — are
+still proposals, not started).
+
+Status: **verified; committed.** Session 1 was edit-only; session 2 ran
+`make all` / `make test` / `make gui` and fixed the failures found (see
+"Done (session 2)"), then everything was green and committed.
+
+## Done (session 1, edit-only)
+
+1. **`acta_runner/src/backend.h`** — added `preflight_result_t` (10 codes:
+   `PREFLIGHT_OK`, `PREFLIGHT_CANCELED`, `PREFLIGHT_HEALTH_{TIMEOUT,
+   TRANSPORT, NOT_200}`, `PREFLIGHT_MODELS_{TIMEOUT, TRANSPORT, NOT_200,
+   UNPARSEABLE}`, `PREFLIGHT_MODEL_NOT_SERVED`), `backend_preflight_t`
+   (`brc`, `http_status`, `max_context`, `available_ids[512]`) and
+   `int backend_preflight(base_url, model_id, api_key, timeout_sec, out)`.
+2. **`acta_runner/src/backend.c`** — `#include <cjson/cJSON.h>`; static
+   `build_url` copy; `backend_preflight()` implementation: GET /health
+   (timeout / transport / non-200 classified, 503 carried in
+   `http_status`), then GET /v1/models **only after** /health is 200;
+   scans the whole `data` array for `model_id`; fills `max_context` and
+   `available_ids`. `api_key` is forwarded to `backend_request` — the run
+   pipeline still sends the key on its preflight GETs (decision 4
+   unchanged); `check` passes NULL (keyless by design).
+3. **`acta_runner/src/run.c`** — the inline /health + /v1/models preflight
+   blocks replaced by one `backend_preflight()` call; the classification
+   maps to the **exact same** `FAIL` messages as before (same exit codes,
+   same wording — pinned by `test_run.c` scenarios 2/3/5). The best-effort
+   catalog `GET /` stays inline (not part of the token-free preflight).
+4. **`acta_runner/src/check.c`** (new) — `cmd_check(ga, gopts, db)`:
+   - `--timeout` must be a positive integer; timeout resolution is the
+     existing `--timeout` → config file `"timeout"` → built-in 600 s. The
+     config file is read **only** when the flag is absent (the flag wins
+     outright); a readable-but-malformed file is a fail-closed hard error
+     like everywhere else.
+   - DB mode: positional `<model-record-id>`; read-only
+     `acta_db_model_get_live` (soft-deleted rows → not found); unknown id →
+     `EXIT_NOT_FOUND`; missing `base_url` / `model_identifier` →
+     `EXIT_INVALID`. No execution is created, claimed or logged.
+   - Standalone mode: `--base-url` + `--model-identifier` (mutually
+     exclusive with the positional; one flag alone → `EXIT_INVALID`); the
+     `db` handle is NULL and must not be touched.
+   - Result contract: one JSON line on stdout — success
+     `{"ok":true,"model":...,"max_context":N,"base_url":...}`; failure
+     `{"ok":false,"model":...,"base_url":...,"verdict":...}` with verdict
+     `model still loading` / `server unreachable` (incl. /health
+     timeout + transport + any non-200-non-503) / `model not served` /
+     `catalog unreachable` (models timeout → `EXIT_TIMEOUT`, other
+     catalog failures → `EXIT_HTTP`).
+   - Exit codes 0 / 1 / 4 / 12 / 13 — the existing runner code space, no
+     new numbers. No `POST /v1/chat/completions`, no DB writes, no
+     streaming, no retry loop.
+5. **`acta_runner/include/runner_util.h`** — `cmd_check` declaration with
+   the db-NULL-in-standalone-mode contract documented.
+6. **`acta_runner/src/argparse.c`** — `runner_flag_specs` gained
+   `{ "base-url", 1 }, { "model-identifier", 1 }` (known value flags for
+   `cmd_args_validate` / `cmd_args_flag` / positional skipping).
+7. **`acta_runner/src/main.c`** — `check` dispatch in
+   `commands_dispatch`; **standalone-mode branch before DB resolution**:
+   `check` with both `--base-url` and `--model-identifier` is dispatched
+   with a NULL `db` handle (DB path is neither resolved nor opened, so a
+   machine without any database file can still probe a server); help text
+   (check action lines + `check flags:` section) and the file header
+   comment updated.
+8. **`acta_runner/tests/stub_server.{h,c}`** — `stub_config_t` gained
+   `models_status` (default 200; non-200 → canned error body) and
+   `max_context` (0 = field omitted from the /v1/models entry); new
+   `stub_server_chat_requests()` counter (reset on `stub_server_start`,
+   incremented per POST /v1/chat/completions) — the zero-token assertion
+   hook. Existing tests are unaffected (zeroed configs → default
+   behavior).
+9. **`acta_runner/tests/check/test_check.c`** (new, port 8921) — 9
+   scenarios: (1) DB-mode success (exit 0; stdout carries `ok:true`,
+   `model`, `max_context:162000`, `base_url`), (2) /health 503 →
+   `model still loading` + EXIT_HTTP, (3) model not in catalog →
+   `model not served` + EXIT_HTTP, (4) catalog endpoint 500 →
+   `catalog unreachable` + EXIT_HTTP, (5) connection refused (no stub) →
+   `server unreachable` + EXIT_HTTP, (6) slow /health (delay 2500) +
+   `--timeout 1` → EXIT_TIMEOUT, (7) unknown `<model-record-id>` →
+   EXIT_NOT_FOUND, (8) standalone mode with **NULL db handle** → exit 0,
+   (9) argument conflicts (one standalone flag only / flags + positional /
+   no args) → EXIT_INVALID. **Every** scenario asserts
+   `stub_server_chat_requests() == 0` and that no execution rows exist
+   (the zero-token / no-DB-writes guarantee). Stdout verdicts are
+   captured with dup/dup2 + mkstemp (POSIX + MSYS2/MinGW-safe, no
+   freopen).
+10. **`acta_runner/Makefile`** — new `tests/check/test_check` suite
+    (`CHK_SRCS` = test_check.c + stub_server.c + src/check.c +
+    src/backend.c + src/argparse.c, `TEST_LDLIBS`), added to the `test`
+    target (runs after `test_conf`) and to `clean`; compile rule with the
+    `tests/stub_server.h` dependency; header comment updated.
+11. **Docs**
+    - `docs/runner_contract.md`: status line gains "`check` token-free
+      health action shipped"; "What landed" bullet for `src/check.c` +
+      the `backend_preflight` factoring; `tests/check/test_check.c`
+      bullet; new **`## check action (token-free backend health check)`**
+      section (surface, check sequence, result contract, verdicts, exit
+      codes, guarantees).
+    - `README.md`: quick-start paragraph (verify the backend before any
+      run, zero tokens); the end-to-end example inserts step 6
+      `acta_runner check 1` (old steps 6/7 renumbered 7/8); the
+      dead-runner/sweep paragraph recommends `check` before a
+      `run --pending` batch and as the first triage step after a `failed`
+      backend call.
+    - `docs/status.md`: Done bullet for `acta_runner check`, explicitly
+      marked "implementation landed, full `make test` verification
+      pending".
+    - `docs/plans/runner-health-check.md`: status → "implemented
+      (edit-only session — no compilation/test run yet; verification
+      pending)"; new **Implementation notes** section recording the
+      resolutions: non-200-non-503 /health → `server unreachable`;
+      `check` is keyless; standalone mode is detected in `main.c` before
+      DB resolution; the config file is read only when `--timeout` is
+      absent; stub extensions (`models_status`, `max_context`,
+      `stub_server_chat_requests`).
+
+## Done (session 2 — verification + fixes)
+
+User ran the builds (session 1 stayed edit-only); three failures found
+and fixed, then everything green:
+
+23. **`acta_runner/src/check.c:215` — compile error** (first `make all`):
+    `too many arguments to function 'emit_runner_error'; expected 2, have
+    3` — the `"no base_url or model_identifier"` path passed the already
+    formatted `msg` plus a stray `"%s"`. Fixed: `emit_runner_error(
+    EXIT_INVALID, msg)` (2-arg inline in `runner_util.h:194`).
+24. **`acta_runner/src/run.c:734` — truncation warning**: the
+    `PREFLIGHT_MODEL_NOT_SERVED` FAIL wrote two unbounded `%s` (up to 511
+    bytes each, from `model_identifier` / `available_ids`) into
+    `errmsg[512]`. Fixed with precision specifiers
+    (`"execution model '%.200s' not served by server (available:
+    %.200s)"` — worst case 453 < 512), matching the existing `%.300s`
+    style; test-pinned substrings (`not served by server`) unchanged.
+25. **`acta_runner/tests/check/test_check.c` — every functional check
+    failed (23/38) on the first `make test`**: the stdout capture used
+    `mkstemp(NULL)`, which on the MSYS2 host resolved to the unwritable
+    system temp dir (`C:\WINDOWS`) — `cap_begin` failed, so
+    `run_check_capture` returned -1 without ever calling `cmd_check`
+    (no stderr from `cmd_check` in the log; the standalone zero-chat /
+    no-DB-row guarantees still passed). Fixed: the capture file is now
+    created with a **CWD-relative `mkstemp` template**
+    (`.test_check.XXXXXX`, unlinked on both success and failure paths);
+    no `freopen`.
+    (A pipe-based capture was tried first but abandoned: this mingw-w64
+    CRT's `_pipe` has a 3-arg UCRT-style signature.) After the fix:
+    `make all`, `make test` (every suite, `test_check` included) and
+    `make gui` all green; docs status lines updated (`docs/status.md`,
+    `docs/plans/runner-health-check.md`). Committed.
+
+## Deferred (plan open questions, NOT part of this task)
+
+- a `check` "would-run" `max_chars` dry run;
+- a GUI "Check backend" button.

@@ -5,8 +5,9 @@
 #                   (tests/argparse), the phase-2 pipeline (tests/run),
 #                   the --pending batch suite (tests/run/test_pending.c)
 #                   the stale-`running` sweep suite (tests/run/
-#                   test_sweep.c) and the soft-delete claim suite
-#                   (tests/run/test_deleted.c)
+#                   test_sweep.c), the soft-delete claim suite
+#                   (tests/run/test_deleted.c) and the token-free
+#                   `check` health suite (tests/check/test_check.c)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
@@ -112,6 +113,14 @@ CONF_SRCS  := tests/run/test_conf.c tests/stub_server.c \
 CONF_OBJS  := $(patsubst %.c, %.o, $(CONF_SRCS))
 CONF_TARGET := tests/run/test_conf$(EXEEXT)
 
+# ---- token-free backend health-check suite: `check` action
+#      (docs/plans/runner-health-check.md) — the zero
+#      /v1/chat/completions assertion + no-execution-rows checks
+CHK_SRCS  := tests/check/test_check.c tests/stub_server.c \
+             src/check.c src/backend.c src/argparse.c
+CHK_OBJS  := $(patsubst %.c, %.o, $(CHK_SRCS))
+CHK_TARGET := tests/check/test_check$(EXEEXT)
+
 # ---- dead-runner end-to-end suite: SIGKILL a real runner, sweep it ----
 # Spawns real acta_runner child processes (run, then sweep) against the
 # in-process stub server; scratch FILE db in tests/run/. ~10-15 s
@@ -177,6 +186,9 @@ $(KEY_TARGET): $(KEY_OBJS) $(ACTA_DB_LIB)
 $(CONF_TARGET): $(CONF_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(CONF_OBJS) $(TEST_LDLIBS)
 
+$(CHK_TARGET): $(CHK_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(CHK_OBJS) $(TEST_LDLIBS)
+
 $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDLIBS)
 
@@ -187,7 +199,7 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(CHK_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
@@ -195,6 +207,7 @@ test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $
 	$(SPAWN_PATH) $(DEL_TARGET)
 	$(SPAWN_PATH) $(KEY_TARGET)
 	$(SPAWN_PATH) $(CONF_TARGET)
+	$(SPAWN_PATH) $(CHK_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
 # acta_runner/ (the test spawns ./acta_runner[.exe] as child processes).
@@ -236,9 +249,13 @@ tests/run/test_api_key.o: tests/run/test_api_key.c tests/stub_server.h
 tests/run/test_conf.o: tests/run/test_conf.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
+tests/check/test_check.o: tests/check/test_check.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
         $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SWEEP_OBJS) \
         $(SWEEP_TARGET) $(DEL_OBJS) $(DEL_TARGET) $(DEAD_OBJS) \
         $(DEAD_TARGET) $(KEY_OBJS) $(KEY_TARGET) $(CONF_OBJS) \
-        $(CONF_TARGET) $(SMOKE_OBJS) $(SMOKE_TARGET)
+        $(CONF_TARGET) $(CHK_OBJS) $(CHK_TARGET) \
+        $(SMOKE_OBJS) $(SMOKE_TARGET)

@@ -689,99 +689,56 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
                  total_chars, ctx_chars, sys_chars, max_chars);
     }
 
+    /* The two token-free preflight calls (GET /health, then
+     * GET /v1/models) are factored into backend_preflight() — the
+     * shared request/response path with the standalone `check` action
+     * (docs/plans/runner-health-check.md). The classification maps to
+     * the exact same FAIL messages as before. As before, the api key
+     * is sent on these GETs too (docs/runner_contract.md, decision 4).
+     * */
     long max_ctx = 0;
     {
-        char url[1024];
-        build_url(url, sizeof url, model->base_url, "/health");
-        backend_response_t r;
-        int brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
-        if (brc != BACKEND_OK) {
-            free(r.body);
-            if (brc == BACKEND_ERR_CANCELED)
-                CANCEL();
-            if (brc == BACKEND_ERR_TIMEOUT)
-                FAIL(EXIT_TIMEOUT, "health check timed out after %d s",
-                     timeout_sec);
+        backend_preflight_t pf;
+        int prc = backend_preflight(model->base_url,
+                                    model->model_identifier,
+                                    api_key, timeout_sec, &pf);
+        if (prc == PREFLIGHT_CANCELED)
+            CANCEL();
+        switch (prc) {
+        case PREFLIGHT_OK:
+            max_ctx = pf.max_context;
+            break;
+        case PREFLIGHT_HEALTH_TIMEOUT:
+            FAIL(EXIT_TIMEOUT, "health check timed out after %d s",
+                 timeout_sec);
+        case PREFLIGHT_HEALTH_TRANSPORT:
             FAIL(EXIT_HTTP, "health check transport failure: %s",
-                 backend_strerror(brc));
-        }
-        int st = r.http_status;
-        free(r.body);
-        if (st == 503)
-            FAIL(EXIT_HTTP,
-                 "backend /health returned 503: model still loading");
-        if (st != 200)
-            FAIL(EXIT_HTTP, "backend /health returned %d", st);
-    }
-    {
-        char url[1024];
-        build_url(url, sizeof url, model->base_url, "/v1/models");
-        backend_response_t r;
-        int brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
-        if (brc != BACKEND_OK) {
-            free(r.body);
-            if (brc == BACKEND_ERR_CANCELED)
-                CANCEL();
-            if (brc == BACKEND_ERR_TIMEOUT)
-                FAIL(EXIT_TIMEOUT, "models check timed out after %d s",
-                     timeout_sec);
+                 backend_strerror(pf.brc));
+        case PREFLIGHT_HEALTH_NOT_200:
+            if (pf.http_status == 503)
+                FAIL(EXIT_HTTP,
+                     "backend /health returned 503: model still loading");
+            FAIL(EXIT_HTTP, "backend /health returned %d", pf.http_status);
+        case PREFLIGHT_MODELS_TIMEOUT:
+            FAIL(EXIT_TIMEOUT, "models check timed out after %d s",
+                 timeout_sec);
+        case PREFLIGHT_MODELS_TRANSPORT:
             FAIL(EXIT_HTTP, "models check transport failure: %s",
-                 backend_strerror(brc));
-        }
-        if (r.http_status != 200) {
-            int st = r.http_status;
-            free(r.body);
-            FAIL(EXIT_HTTP, "backend /v1/models returned %d", st);
-        }
-        cJSON *jm = cJSON_Parse(r.body);
-        free(r.body);
-        if (!jm)
+                 backend_strerror(pf.brc));
+        case PREFLIGHT_MODELS_NOT_200:
+            FAIL(EXIT_HTTP, "backend /v1/models returned %d", pf.http_status);
+        case PREFLIGHT_MODELS_UNPARSEABLE:
             FAIL(EXIT_HTTP, "unparseable /v1/models response body");
-        /* The server may serve several models; scan ALL entries for the
-         * execution's model_identifier (not just data[0]). */
-        cJSON *data = cJSON_GetObjectItem(jm, "data");
-        cJSON *match = NULL;
-        if (data && cJSON_IsArray(data)) {
-            int n = cJSON_GetArraySize(data);
-            for (int i = 0; i < n; i++) {
-                cJSON *it = cJSON_GetArrayItem(data, i);
-                cJSON *sid = it ? cJSON_GetObjectItem(it, "id") : NULL;
-                if (cJSON_IsString(sid) && sid->valuestring &&
-                    strcmp(sid->valuestring,
-                         model->model_identifier) == 0) {
-                    match = it;
-                    break;
-                }
-            }
-        }
-        if (!match) {
-            /* Build a list of the ids the server actually has, for the
-             * error message. */
-            char avail[512];
-            avail[0] = 0;
-            if (data && cJSON_IsArray(data)) {
-                int n = cJSON_GetArraySize(data);
-                for (int i = 0; i < n; i++) {
-                    cJSON *it = cJSON_GetArrayItem(data, i);
-                    cJSON *sid = it ? cJSON_GetObjectItem(it, "id") : NULL;
-                    if (!cJSON_IsString(sid) || !sid->valuestring)
-                        continue;
-                    size_t left = sizeof avail - strlen(avail) - 1;
-                    if (left > 0)
-                        snprintf(avail + strlen(avail), left, "%s%s",
-                                 avail[0] ? ", " : "",
-                                 sid->valuestring);
-                }
-            }
-            cJSON_Delete(jm);
+        case PREFLIGHT_MODEL_NOT_SERVED:
             FAIL(EXIT_HTTP,
-                 "execution model '%s' not served by server (available: %s)",
-                 model->model_identifier, avail[0] ? avail : "(none)");
+                 "execution model '%.200s' not served by server "
+                 "(available: %.200s)",
+                 model->model_identifier,
+                 pf.available_ids[0] ? pf.available_ids : "(none)");
+        default:
+            FAIL(EXIT_HTTP, "preflight failed");
+            break;
         }
-        cJSON *mc = cJSON_GetObjectItem(match, "max_context");
-        if (cJSON_IsNumber(mc))
-            max_ctx = (long)mc->valuedouble;
-        cJSON_Delete(jm);
     }
 
     /* ---- 3b. preflight catalog (best-effort audit): GET / ----

@@ -32,6 +32,14 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
  * dead-runner cleanup per decision 6) */
 int cmd_sweep(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
 
+/* handler for "check" (src/check.c): token-free backend health check
+ * (GET /health + GET /v1/models only — zero tokens, no chat call, no
+ * execution rows, no DB writes). `check <model-record-id>` (DB mode,
+ * the model row is read for base_url + model_identifier) or
+ * `check --base-url <url> --model-identifier <id>` (standalone mode:
+ * no DB lookup; `db` is NULL then and must not be touched) */
+int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
+
 /* Single-execution pipeline (src/run.c): claim (start), resolve
  * context/skill/model revisions, preflight (/health, /v1/models),
  * POST /v1/chat/completions, set_raw_response, optional post-hoc

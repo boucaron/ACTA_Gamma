@@ -7,7 +7,7 @@
  * Flow (mirrors acta_cli/main.c):
  *   1. parse_globals  → --db, --version, --help, --verbose
  *   2. early-exit     → version / help
- *   3. require action → "run" / "sweep"
+ *   3. require action → "run" / "check" / "sweep"
  *   4. resolve DB path
  *   5. open DB
  *   6. dispatch       → commands_dispatch(action, args, opts, db)
@@ -62,12 +62,25 @@ static void help_print(FILE *out)
         "Actions:\n"
         "  run <execution-id>    Run one pending execution\n"
         "  run --pending         Run pending executions (up to --max)\n"
+        "  check <model-record-id>  Verify the backend and model WITHOUT\n"
+        "                          any chat completion (zero tokens, no\n"
+        "                          execution rows, no DB writes)\n"
+        "  check --base-url <url> --model-identifier <id>\n"
+        "                          (standalone: no DB lookup)\n"
         "  sweep                 Fail stale `running` executions\n"
         "\n"
         "run flags:\n"
         "  --pending             Run pending executions instead of one id\n"
         "  --max <n>             Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec>       Backend timeout in seconds (default:\n"
+        "                        config file \"timeout\", else 600)\n"
+        "\n"
+        "check flags:\n"
+        "  --base-url <url>          Standalone mode: probe this server\n"
+        "  --model-identifier <id>   Standalone mode (with --base-url);\n"
+        "                            mutually exclusive with the positional\n"
+        "                            <model-record-id>\n"
+        "  --timeout <sec>           Backend timeout in seconds (default:\n"
         "                        config file \"timeout\", else 600)\n"
         "\n"
         "sweep flags:\n"
@@ -101,6 +114,9 @@ int commands_dispatch(const char *action, cmd_args_t *args,
     }
     if (strcmp(action, "run") == 0) {
         return cmd_run(args, gopts, db);
+    }
+    if (strcmp(action, "check") == 0) {
+        return cmd_check(args, gopts, db);
     }
     if (strcmp(action, "sweep") == 0) {
         return cmd_sweep(args, gopts, db);
@@ -147,6 +163,21 @@ int main(int argc, char **argv)
     if (cmd_args_validate(&ga) != EXIT_OK) {
         free(gopts.argv);
         return EXIT_INVALID;
+    }
+
+    /* ---- "check" standalone mode skips the DB entirely ----
+     * `check --base-url <url> --model-identifier <id>` probes a server
+     * before any model is registered, so there is no DB lookup: the
+     * action is dispatched with a NULL db handle, which cmd_check must
+     * not touch. (DB-mode `check <model-record-id>` needs the open
+     * handle for the model-row read.) */
+    if (strcmp(action, "check") == 0 &&
+        cmd_args_has_flag(&ga, "base-url") &&
+        cmd_args_has_flag(&ga, "model-identifier")) {
+        runner_gopts = &gopts;
+        int rc = commands_dispatch(action, &ga, &gopts, NULL);
+        free(gopts.argv);
+        return rc;
     }
 
     /* ---- resolve DB path ----

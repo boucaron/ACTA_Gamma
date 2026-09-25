@@ -127,6 +127,8 @@ static const flag_spec_t runner_flag_specs[] = {
     { "max",     1 },
     { "timeout", 1 },
     { "stale-seconds", 1 },
+    { "base-url", 1 },
+    { "model-identifier", 1 },
 };
 
 static int flag_has_value(const char *name) {

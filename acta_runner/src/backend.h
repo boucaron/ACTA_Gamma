@@ -75,4 +75,72 @@ int backend_request(const char *method, const char *url,
 /* Human-readable string for a BACKEND_* code. */
 const char *backend_strerror(int rc);
 
+/*
+ * Token-free backend preflight (shared by the `run` pipeline and the
+ * standalone `check` action).
+ *
+ * Performs the two cheap GETs — GET /health, then GET /v1/models (only
+ * after /health succeeds: a 503 server is "loading", not "unknown
+ * model") — and classifies the outcome, so both callers share one
+ * request/response path (docs/plans/runner-health-check.md). No POST,
+ * no chat/completions: this is the zero-token surface.
+ *
+ * Result codes:
+ *   PREFLIGHT_OK               — /health is 200 and model_id is present
+ *                                in the catalog; out->max_context holds
+ *                                the entry's max_context (0 when absent).
+ *   PREFLIGHT_CANCELED         — a request was aborted by the cooperative
+ *                                cancel flag (GUI only; the CLI never
+ *                                triggers it).
+ *   PREFLIGHT_HEALTH_TIMEOUT   — the /health call hit the timeout.
+ *   PREFLIGHT_HEALTH_TRANSPORT — /health transport failure
+ *                                (DNS/connect/TLS/...); out->brc is the
+ *                                raw BACKEND_* code.
+ *   PREFLIGHT_HEALTH_NOT_200   — /health returned a non-200 status;
+ *                                out->http_status holds it (503 = "model
+ *                                still loading").
+ *   PREFLIGHT_MODELS_TIMEOUT   — the /v1/models call hit the timeout.
+ *   PREFLIGHT_MODELS_TRANSPORT — /v1/models transport failure.
+ *   PREFLIGHT_MODELS_NOT_200   — /v1/models returned a non-200 status;
+ *                                out->http_status holds it.
+ *   PREFLIGHT_MODELS_UNPARSEABLE — the /v1/models body is not JSON.
+ *   PREFLIGHT_MODEL_NOT_SERVED — catalog is OK but model_id is not one
+ *                                of the served ids; out->available_ids
+ *                                holds the served ids (comma list).
+ *
+ * Caller contract: non-empty base_url and model_id, timeout_sec > 0,
+ * out non-NULL. `api_key` is forwarded to backend_request() (the run
+ * pipeline sends its key on every request, including these GETs —
+ * docs/runner_contract.md decision 4; the `check` action passes NULL,
+ * it is keyless by design).
+ */
+typedef enum {
+    PREFLIGHT_OK = 0,
+    PREFLIGHT_CANCELED,
+    PREFLIGHT_HEALTH_TIMEOUT,
+    PREFLIGHT_HEALTH_TRANSPORT,
+    PREFLIGHT_HEALTH_NOT_200,
+    PREFLIGHT_MODELS_TIMEOUT,
+    PREFLIGHT_MODELS_TRANSPORT,
+    PREFLIGHT_MODELS_NOT_200,
+    PREFLIGHT_MODELS_UNPARSEABLE,
+    PREFLIGHT_MODEL_NOT_SERVED
+} preflight_result_t;
+
+/* Outcome of backend_preflight(). */
+typedef struct {
+    int   brc;              /* raw BACKEND_* code of the failing call (0 if OK) */
+    int   http_status;      /* status of the failing call (0 if transport) */
+    long  max_context;      /* catalog max_context (0 when unknown) */
+    char  available_ids[512]; /* served ids, comma list (NOT_SERVED only) */
+} backend_preflight_t;
+
+/*
+ * Run the token-free preflight: GET /health, then GET /v1/models.
+ * Returns a preflight_result_t code; `out` is filled accordingly.
+ */
+int backend_preflight(const char *base_url, const char *model_id,
+                      const char *api_key,
+                      int timeout_sec, backend_preflight_t *out);
+
 #endif /* ACTA_RUNNER_BACKEND_H */

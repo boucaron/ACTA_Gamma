@@ -6,7 +6,7 @@ skill + model + context, calls the OpenAI-compatible backend, and records
 the outcome (raw response, result, error, phase logs) back into the
 database.
 
-## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped
+## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` token-free health action shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -33,6 +33,21 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   stub server serves `GET /` with a canned catalog
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
+- `src/check.c` — the token-free `check` action
+  (`docs/plans/runner-health-check.md`): `acta_runner check
+  <model-record-id>` (DB mode: the model row is read read-only for
+  `base_url` + `model_identifier`; no execution is created, claimed, or
+  logged) or `acta_runner check --base-url <url> --model-identifier <id>`
+  (standalone: no DB lookup at all). Two token-free GETs — `GET /health`
+  (200 ok; 503 `model still loading`; unreachable `server unreachable`)
+  then `GET /v1/models` (id present → ok with the catalog entry's
+  `max_context`; absent → `model not served`; endpoint error →
+  `catalog unreachable`). One JSON verdict line on stdout
+  (`{"ok":true,...}` / `{"ok":false,...,"verdict":"..."}`); exit
+  0/1/12/13 from the existing code space. The shared `/health` +
+  catalog request/response path is factored into
+  `backend_preflight()` in `src/backend.c` — the `run` pipeline's
+  preflight and `check` call the same function, so the two cannot drift.
 - `src/run.c` preflight size check (decision 8 below): the assembled
   prompt is exactly `system =
   skill.prompt_template` + `user = context.content`, so preflight compares
@@ -61,6 +76,16 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   `tests/run/test_run.c` scenarios 16 (over the limit: fails preflight,
   no backend call, exact message) and 17 (at the limit: proceeds and
   completes).
+  `tests/check/test_check.c` — the `check` action against the stub on a
+  scratch `:memory:` DB: DB-mode success (exit 0, `max_context`
+  reported), `/health` 503 (`model still loading`), model not in catalog
+  (`model not served`), catalog endpoint error (`catalog unreachable`),
+  connection refused (`server unreachable`), slow `/health` + small
+  `--timeout` (EXIT_TIMEOUT), unknown `<model-record-id>` (EXIT_NOT_FOUND),
+  standalone mode (no DB lookup, `db` handle NULL), argument conflicts
+  (EXIT_INVALID). In EVERY scenario the stub's
+  `/v1/chat/completions` request count stays 0 and no execution / 
+  execution_log rows exist — the zero-token / no-DB-writes guarantee.
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
   pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
   manual smoke test against a LIVE OpenAI-compatible server
@@ -247,6 +272,65 @@ Implementation notes (where the spec left room):
    all pending rows in `id ASC` order, optionally capped by `--max <n>`
    (0 = no limit); the batch continues past a failure and returns the
    worst exit code seen.
+
+## check action (token-free backend health check)
+
+The only way to find out whether the backend is usable used to be
+starting a real execution — which claims the row (`pending →
+running`), performs an actual `POST /v1/chat/completions` (tokens and
+model compute), and, on failure, leaves a `failed` row that needs
+`exec reset` or `sweep`. `check` answers "is the server up, is my model
+loaded, what context window is it serving?" **without paying for a
+completion and without touching the audit database**.
+
+```
+acta_runner check <model-record-id>                            # DB mode
+acta_runner check --base-url <url> --model-identifier <id>     # standalone
+```
+
+- **DB mode** (default): `<model-record-id>` is a `models` row id; the
+  runner reads `base_url` + `model_identifier` from the record. No
+  execution is created, claimed, or logged — the DB is only read for the
+  model row. Unknown id → `EXIT_NOT_FOUND`.
+- **Standalone mode**: `--base-url` / `--model-identifier` are mutually
+  exclusive with the positional id; no DB lookup at all (the DB is not
+  even resolved/opened in this mode) — useful to probe a server before
+  any model is registered.
+
+**Check sequence** (both calls token-free, via the shared
+`backend_preflight()` in `src/backend.c`):
+
+1. `GET /health` — `200` ok; `503` → verdict `model still loading`
+   (same meaning as the run preflight); connection refused / DNS /
+   timeout (or any other non-200) → verdict `server unreachable`.
+2. `GET /v1/models` — only after `/health` succeeds (a 503 server is
+   "loading", not "unknown model"): `model_identifier` present in the
+   catalog → verdict ok, the catalog entry's `max_context` is
+   reported; absent → verdict `model not served`; endpoint error /
+   unparseable body → verdict `catalog unreachable`.
+
+**Result contract** — one JSON line on stdout (scriptable):
+
+- success: `{"ok":true,"model":"<id>","max_context":<n>,"base_url":"<url>"}`
+- failure: `{"ok":false,"model":"<id>","base_url":"<url>","verdict":"model
+  still loading" | "server unreachable" | "model not served" | "catalog
+  unreachable"}`
+
+**Exit codes** (the runner's existing code space, no new numbers):
+`0` all checks passed; `1` unknown `<model-record-id>` (DB mode);
+`4` invalid arguments (flag conflicts, bad `--timeout`, malformed
+config file when it is the timeout source); `12` (`EXIT_HTTP`) `/health`
+non-200, model not in catalog, HTTP-level failure; `13`
+(`EXIT_TIMEOUT`) a check call hit `--timeout`. Timeout resolution is the
+existing one: `--timeout` flag → config file `"timeout"` → built-in
+default 600 s.
+
+**Guarantees (the point of the command):** no
+`POST /v1/chat/completions` — ever; zero tokens, zero inference. No
+`execution_log` rows, no execution state change, no DB writes of any
+kind. No streaming, no retry loop (consistent with the product
+decisions). It is the token-free pre-flight for a `run --pending`
+batch and the first triage step after a `failed` backend call.
 
 ## Explicitly out of scope (we do not implement these)
 

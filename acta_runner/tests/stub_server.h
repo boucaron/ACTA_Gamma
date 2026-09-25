@@ -28,6 +28,10 @@ typedef struct {
     const char *chat_content;  /* message content on a 200 response */
     int         catalog_status; /* GET / response (default 200; 404 = no
                                      catalog, i.e. non-llama backend) */
+    int         models_status;  /* /v1/models response (default 200; e.g.
+                                     500 simulates a catalog failure) */
+    long        max_context;    /* max_context of the served /v1/models
+                                     entry (0 = field omitted) */
     int         delay_ms;      /* sleep before replying (timeout tests) */
 } stub_config_t;
 
@@ -46,5 +50,11 @@ int stub_server_stop(void);
  * (docs/runner_contract.md, decision 4: env-set-wins / file
  * fallback). */
 const char *stub_server_last_auth(void);
+
+/* Number of POST /v1/chat/completions requests received since the last
+ * stub_server_start. Reset on stub_server_start. The "zero tokens"
+ * assertion hook for the `check` suite: every `check` scenario must
+ * leave this at 0 (docs/plans/runner-health-check.md). */
+int stub_server_chat_requests(void);
 
 #endif /* ACTA_RUNNER_STUB_SERVER_H */

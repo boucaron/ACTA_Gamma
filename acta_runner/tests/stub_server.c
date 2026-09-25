@@ -41,6 +41,7 @@ static int      g_listen = -1;
 static stub_config_t g_cfg;
 static int      g_port = 0;
 static char     g_last_auth[256]; /* Authorization value of last request */
+static int      g_chat_requests = 0; /* POST /v1/chat/completions count */
 
 static void msleep(int ms)
 {
@@ -156,6 +157,11 @@ const char *stub_server_last_auth(void)
     return g_last_auth[0] ? g_last_auth : NULL;
 }
 
+int stub_server_chat_requests(void)
+{
+    return g_chat_requests;
+}
+
 /* Read the request (header + body) and serve one response. */
 static void handle_connection(int c, const stub_config_t *cfg)
 {
@@ -220,12 +226,31 @@ static void handle_connection(int c, const stub_config_t *cfg)
     }
 
     if (strcmp(path, "/v1/models") == 0) {
+        if (cfg->models_status != 200) {
+            char body[512];
+            snprintf(body, sizeof body,
+                     "{\"error\":{\"code\":%d,"
+                     "\"message\":\"server error\","
+                     "\"type\":\"server_error\"}}",
+                     cfg->models_status);
+            send_response(c, cfg->models_status,
+                          cfg->models_status == 500 ? "Internal Server Error"
+                                                    : "Error",
+                          body);
+            return;
+        }
         char body[512];
         char id[128];
         json_escape(id, sizeof id, cfg->model_id ? cfg->model_id : "");
-        snprintf(body, sizeof body,
-                 "{\"object\":\"list\",\"data\":[{\"id\":\"%s\","
-                 "\"object\":\"model\"}]}", id);
+        if (cfg->max_context > 0)
+            snprintf(body, sizeof body,
+                     "{\"object\":\"list\",\"data\":[{\"id\":\"%s\","
+                     "\"object\":\"model\",\"max_context\":%ld}]}",
+                     id, cfg->max_context);
+        else
+            snprintf(body, sizeof body,
+                     "{\"object\":\"list\",\"data\":[{\"id\":\"%s\","
+                     "\"object\":\"model\"}]}", id);
         send_response(c, 200, "OK", body);
         return;
     }
@@ -258,6 +283,7 @@ static void handle_connection(int c, const stub_config_t *cfg)
     }
 
     if (strcmp(path, "/v1/chat/completions") == 0) {
+        g_chat_requests++;
         if (cfg->chat_status != 200) {
             char body[512];
             char emsg[256];
@@ -354,7 +380,10 @@ int stub_server_start(const stub_config_t *cfg)
     g_cfg = *cfg;
     if (g_cfg.catalog_status == 0)
         g_cfg.catalog_status = 200;
+    if (g_cfg.models_status == 0)
+        g_cfg.models_status = 200;
     g_last_auth[0] = '\0';
+    g_chat_requests = 0;
     g_running = 1;
     if (pthread_create(&g_thread, NULL, server_main, NULL) != 0) {
         g_running = 0;

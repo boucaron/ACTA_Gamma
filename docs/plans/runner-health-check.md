@@ -1,6 +1,8 @@
 # Plan: quick runner health check without consuming tokens
 
-Status: proposal (not started)
+Status: implemented and verified — `make all`, `make test` (incl. the new
+`acta_runner/tests/check/test_check` suite) and `make gui` green; see
+`docs/status.md`
 
 ## Context
 
@@ -133,6 +135,35 @@ The existing in-process stub server already covers everything needed:
    beyond "is the backend up"; defer to a follow-up if wanted.
 2. Should the GUI get a "Check backend" button that calls the same
    in-process pipeline? Nice-to-have; separate plan.
+
+## Implementation notes (where the plan left room)
+
+- A `/health` status that is neither 200 nor 503 (e.g. 404) is classified
+  as `server unreachable` (the health endpoint did not report ok); the
+  run pipeline keeps its per-status message (`backend /health returned
+  <n>`).
+- `check` is keyless by design: it probes the server surface before any
+  model is registered and never performs the chat call, so no
+  `Authorization` header is sent (the run pipeline's preflight GETs still
+  send the key — decision 4 is unchanged there; `backend_preflight` takes
+  an `api_key` parameter and `check` passes NULL).
+- Standalone mode is detected in `main.c` before DB resolution (both
+  `--base-url` and `--model-identifier` present) and dispatched with a
+  NULL `db` handle, so a machine without any database file can still
+  probe a server. The config file is read only when `--timeout` is
+  absent (the flag wins outright, so the file cannot change the result);
+  a readable-but-malformed file is a fail-closed hard error like
+  everywhere else.
+- The stub server gained `models_status` (default 200; non-200 simulates a
+  catalog failure) and `max_context` (0 = field omitted) so the
+  "catalog unreachable" and `max_context` reporting paths are testable,
+  plus `stub_server_chat_requests()` — the zero-token assertion hook.
+- The test's stdout capture redirects `STDOUT_FILENO` via dup/dup2 to an
+  `mkstemp` file created with a **CWD-relative template**
+  (`.test_check.XXXXXX`, unlinked afterwards) — the original
+  `mkstemp(NULL)` resolved to the unwritable system temp dir on the MSYS2
+  host and made every scenario fail silently (capture -1, `cmd_check`
+  never ran). No `freopen`.
 
 ## Rollout (single logical change)
 

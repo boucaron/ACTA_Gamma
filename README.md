@@ -128,6 +128,8 @@ Three steps before the example below:
 
    This serves every GGUF in `models/` at `http://127.0.0.1:8080` — it is the llama.cpp router, not a generic OpenAI endpoint (full contract: [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1). One model is fine: point `--models-dir` at a folder containing that one GGUF — GGUF model files are downloadable, e.g., from Hugging Face; if you don't have llama.cpp yet, [`docs/building.md`](docs/building.md) covers install/build. The `-c 2048` above is a **demo value**: it is the backend's *token* context window and is deliberately much smaller than the runner's `max_chars` *byte* guard — a context can pass preflight and still be rejected by the backend. Set `-c` to match your model's supported context length.
 
+   Before any run you can verify the backend and a model **without consuming tokens** — `acta_runner check <model-record-id>` does the two token-free preflight calls (`GET /health`, `GET /v1/models`) and reports `ok` / the served `max_context`, or a distinct verdict (`model still loading`, `server unreachable`, `model not served`, `catalog unreachable`), with no execution row and no DB write ([`docs/runner_contract.md`](docs/runner_contract.md), "check action").
+
 ## Environment variables and the per-machine config file
 
 * **`OPENAI_API_KEY`** — the API key for the backend's HTTP calls, used identically by `acta_runner` and `acta_gui`. Resolution: `$OPENAI_API_KEY` (if set — even to the empty string, which is enough for a keyless localhost server) → the config file's `"api_key"` key. There is no CLI flag, and the key is never stored in the database. If the key is present in neither source, the run does not start; an empty key sends no `Authorization` header. Note the precedence: a set environment variable (even empty) **shadows** the config file's `"api_key"` — a stray `export OPENAI_API_KEY=` in your shell profile silently disables a key stored in the config file. This shadowing is silent: the binaries do not warn when a set (even empty) `OPENAI_API_KEY` overrides the config file's `"api_key"`. If the key must not persist on disk, set it in your shell profile instead of putting it in `ACTA_Gamma.conf`. Full policy: [`docs/runner_contract.md`](docs/runner_contract.md), decision 4.
@@ -176,11 +178,15 @@ acta_cli exec create --json '{"context_id":1,"skill_revision_id":1,"model_revisi
 # it just means no Authorization header is sent.
 export OPENAI_API_KEY=""
 
-# 6. Run it (blocks until the execution reaches a terminal state; exit 0 on success,
+# 6. Optional: verify the backend and model before the run, without
+#    consuming tokens (no execution row, no DB write; exit 0 on ok)
+acta_runner check 1
+
+# 7. Run it (blocks until the execution reaches a terminal state; exit 0 on success,
 #    non-zero on failure; hard per-call HTTP timeout: --timeout, default 600 s)
 acta_runner run 1
 
-# 7. Inspect the result and the audit trail
+# 8. Inspect the result and the audit trail
 acta_cli exec get 1
 acta_cli log list 1
 ```
@@ -211,7 +217,7 @@ $ acta_cli log list 1
 
 `raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. If the response does not match the skill's `output_schema`, the execution is `failed` with a `validation_failed` log row — there is no "completed with a flag" mode. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
-A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last activity — the newest of its `execution_log` rows and `started_at` — is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 600` → `--stale-seconds 650` or more) so a live run is never swept. Note the limit: sweep judges staleness by last activity, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
+A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last activity — the newest of its `execution_log` rows and `started_at` — is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 600` → `--stale-seconds 650` or more) so a live run is never swept. Before a `run --pending` batch — and as the first triage step after a `failed` backend call — run `acta_runner check <model-id>`: it verifies the server and the served model with **zero tokens and no execution row**, so a dead backend is diagnosed before any row is claimed and left `failed` ([`docs/runner_contract.md`](docs/runner_contract.md), "check action"). Note the limit: sweep judges staleness by last activity, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
 
 For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 

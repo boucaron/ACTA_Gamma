@@ -16,6 +16,8 @@
 #include <curl/curl.h>
 #include <curl/curlver.h>
 
+#include <cjson/cJSON.h>
+
 /* The timeout CURLcode was renamed in curl 8.8:
  *   CURLE_OPERATION_TIMED (old)  ->  CURLE_OPERATION_TIMEDOUT (new)
  * (Enum values are not preprocessor macros, so select by version.) */
@@ -233,4 +235,119 @@ const char *backend_strerror(int rc)
     case BACKEND_ERR_CANCELED:  return "cancelled";
     default:                    return "unknown backend error";
     }
+}
+
+/* Build "<base_url><path>" with the base's trailing slash normalized
+ * (run.c keeps its own copy for the GET / and chat URLs). */
+static void build_url(char *out, size_t outsz, const char *base, const char *path)
+{
+    size_t n = base ? strlen(base) : 0;
+    while (n > 0 && base[n - 1] == '/')
+        n--;
+    snprintf(out, outsz, "%.*s%s", (int)n, base ? base : "", path);
+}
+
+int backend_preflight(const char *base_url, const char *model_id,
+                      const char *api_key,
+                      int timeout_sec, backend_preflight_t *out)
+{
+    if (out) {
+        out->brc = 0;
+        out->http_status = 0;
+        out->max_context = 0;
+        out->available_ids[0] = '\0';
+    }
+
+    char url[1024];
+    backend_response_t r;
+
+    /* ---- GET /health ---- */
+    build_url(url, sizeof url, base_url, "/health");
+    int brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
+    if (brc != BACKEND_OK) {
+        free(r.body);
+        if (out)
+            out->brc = brc;
+        if (brc == BACKEND_ERR_CANCELED)
+            return PREFLIGHT_CANCELED;
+        if (brc == BACKEND_ERR_TIMEOUT)
+            return PREFLIGHT_HEALTH_TIMEOUT;
+        return PREFLIGHT_HEALTH_TRANSPORT;
+    }
+    if (out)
+        out->http_status = r.http_status;
+    free(r.body);
+    if (r.http_status != 200)
+        return PREFLIGHT_HEALTH_NOT_200;
+
+    /* ---- GET /v1/models (only after /health succeeded) ---- */
+    build_url(url, sizeof url, base_url, "/v1/models");
+    brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
+    if (brc != BACKEND_OK) {
+        free(r.body);
+        if (out)
+            out->brc = brc;
+        if (brc == BACKEND_ERR_CANCELED)
+            return PREFLIGHT_CANCELED;
+        if (brc == BACKEND_ERR_TIMEOUT)
+            return PREFLIGHT_MODELS_TIMEOUT;
+        return PREFLIGHT_MODELS_TRANSPORT;
+    }
+    if (out)
+        out->http_status = r.http_status;
+    if (r.http_status != 200) {
+        free(r.body);
+        return PREFLIGHT_MODELS_NOT_200;
+    }
+    cJSON *jm = cJSON_Parse(r.body);
+    free(r.body);
+    if (!jm)
+        return PREFLIGHT_MODELS_UNPARSEABLE;
+
+    /* The server may serve several models; scan ALL entries for the
+     * model_id (not just data[0]). */
+    cJSON *data = cJSON_GetObjectItem(jm, "data");
+    cJSON *match = NULL;
+    if (data && cJSON_IsArray(data)) {
+        int n = cJSON_GetArraySize(data);
+        for (int i = 0; i < n; i++) {
+            cJSON *it = cJSON_GetArrayItem(data, i);
+            cJSON *sid = it ? cJSON_GetObjectItem(it, "id") : NULL;
+            if (cJSON_IsString(sid) && sid->valuestring &&
+                strcmp(sid->valuestring, model_id) == 0) {
+                match = it;
+                break;
+            }
+        }
+    }
+    if (!match) {
+        /* Build a list of the ids the server actually has, for the
+         * caller's error/verdict message. */
+        char avail[512];
+        avail[0] = 0;
+        if (data && cJSON_IsArray(data)) {
+            int n = cJSON_GetArraySize(data);
+            for (int i = 0; i < n; i++) {
+                cJSON *it = cJSON_GetArrayItem(data, i);
+                cJSON *sid = it ? cJSON_GetObjectItem(it, "id") : NULL;
+                if (!cJSON_IsString(sid) || !sid->valuestring)
+                    continue;
+                size_t left = sizeof avail - strlen(avail) - 1;
+                if (left > 0)
+                    snprintf(avail + strlen(avail), left, "%s%s",
+                             avail[0] ? ", " : "",
+                             sid->valuestring);
+            }
+        }
+        if (out)
+            snprintf(out->available_ids, sizeof out->available_ids,
+                     "%s", avail);
+        cJSON_Delete(jm);
+        return PREFLIGHT_MODEL_NOT_SERVED;
+    }
+    cJSON *mc = cJSON_GetObjectItem(match, "max_context");
+    if (cJSON_IsNumber(mc))
+        out->max_context = (long)mc->valuedouble;
+    cJSON_Delete(jm);
+    return PREFLIGHT_OK;
 }
