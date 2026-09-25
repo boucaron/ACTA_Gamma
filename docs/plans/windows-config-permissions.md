@@ -1,6 +1,12 @@
 # Plan: close the Windows config-file permission gap
 
-Status: proposal (not started)
+Status: dropped (not implemented). The enforcement attempt was abandoned:
+MinGW's import libs lack the standard self-relative-DACL conversion
+APIs, and the hand-rolled ACE walk kept failing (self-relative
+mis-detection → segfault). Windows config-file protection is declared
+the owner's responsibility in README / cli_spec / runner_contract;
+the pre-change behavior stands (POSIX `0600` hard error; Windows
+warn-and-read).
 
 ## Context
 
