@@ -32,7 +32,7 @@ Wire-format decisions settled here:
 | `{"id":N,"restored":true}` | restore success |
 | `{"deleted":true}` | `model_folder delete` / `skill_folder delete` success |
 | `{"id":N,"status":"<s>"}` | exec transition success (`s` ∈ running, cancelled, completed, failed); `set-raw` echoes the unchanged current status, which can also be `pending` |
-| `{"status":"ok"}` | `db exec` success |
+| `{"status":"ok"}` | `db init` success |
 | `{"version":"<ver>"}` | `db version` success |
 | `{"target":"<path>","bytes":<N>,"quick_check":"ok"}` | `db backup` success |
 | `[ {…}, … ]` / `[]` | list success (empty list → `[]`) |
@@ -48,10 +48,13 @@ modifiers). `--id_only` is a single-row modifier for `create` /
 `get`-style actions only; every `list` action rejects it with exit 4
 (it used to be silently ignored, printing full JSON rows).
 
-`db exec` is mutating-only: a statement whose first keyword is
-`SELECT` (after leading whitespace, stray `;`, and `--` / `/* */`
-comments) is rejected with exit 4 before execution, so the "no
-SELECT" help claim is enforced, not just documented.
+`db init` applies only the canonical static schema (the embedded copy of
+`acta_db/schema.sql`): a fresh file (no user tables) gets the full
+schema; an already schema'd file is an idempotent no-op; a partially
+applied or foreign file is a fail-closed hard error (exit 4) — the
+schema is never re-run on top of existing tables. It takes no SQL
+input of any kind (positional, `--sql`, `--file`, `--sql_stdin`, and
+the global `--stdin` are all rejected).
 
 `db backup` makes an atomic, consistent snapshot of the open database
 into `--to <target>` via the SQLite backup C API (`sqlite3_backup_*` —
@@ -112,7 +115,7 @@ rendering (~7 KB) of the same static table — positionals, flags (with `*`
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
-`success` is structured (the schema `version` field is 4): a JSON object
+`success` is structured (the schema `version` field is 5): a JSON object
 `{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
 (`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
 per-action table above; `,"note": "…"` optional, carrying the
@@ -167,7 +170,7 @@ treat an already-live row as a no-op success (exit 0, same
 
 Versioning side effect (model / skill): every mutation of a tracked
 field automatically snapshots a new immutable revision row via the DB
-triggers in `acta_gui/db/schema.sql` — so `model update` / `skill
+triggers in `acta_db/schema.sql` — so `model update` / `skill
 update` (and `model move` / `skill move`, `folder_id` being a tracked
 field) append a `model_revision` / `skill_revision` row with
 `revision = max(revision) + 1` whenever a tracked value actually
@@ -180,7 +183,7 @@ changed) snapshots nothing. Revision rows are read via the
 
 | Command | Positionals | Flags | Input | stdout on success |
 |---------|-------------|-------|-------|-------------------|
-| `db exec` | `sql` (or one of the flags) | `--sql`, `--file` (≤64 KiB), `--sql_stdin` (≤64 KiB) — mutually exclusive, first wins | positional / flag, never JSON | `{"status":"ok"}` (`--table` → `ok`) |
+| `db init` | — | `--table` | — | `{"status":"ok"}` (`--table` → `ok`) |
 | `db backup` | — | `--to <target>*` (must not exist), `--table` | — | `{"target":"<path>","bytes":<N>,"quick_check":"ok"}` (`--table` → `<target> <N> bytes`) |
 | `db version` | — | `--table` | — | `{"version":"<ver>"}` (`--table` → `SQLite <ver>`) |
 

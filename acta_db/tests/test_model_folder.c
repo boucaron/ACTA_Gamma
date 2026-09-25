@@ -55,7 +55,7 @@ static void setup(void)
     }
 
     /* The partial unique indexes from the production schema
-     * (acta_gui/db/schema.sql). Duplicate detection in
+     * (acta_db/schema.sql). Duplicate detection in
      * acta_db_model_folder_create/rename relies on these: the C layer
      * only maps SQLITE_CONSTRAINT_UNIQUE to ACTA_DB_ERR_DUPLICATE. */
     rc = acta_db_exec(g_db,

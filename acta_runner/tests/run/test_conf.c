@@ -26,7 +26,7 @@
  * (work item 1 / this file's section 7 covers only the resolution order).
  *
  * Same harness as test_api_key.c: scratch `:memory:` DB seeded from
- * `acta_gui/db/schema.sql` + in-process stub server.  `cmd_run` is
+ * `acta_db/schema.sql` + in-process stub server.  `cmd_run` is
  * called directly with a constructed argv (no process spawn).  The
  * platform app-data env var (APPDATA / XDG_DATA_HOME) is pointed at a
  * scratch dir so `acta_conf_default_path()` is fully controlled.
@@ -110,9 +110,9 @@ const global_opts_t *runner_gopts;
 static int load_schema(db_t *db)
 {
     static const char *paths[] = {
-        "../../acta_gui/db/schema.sql",
-        "../acta_gui/db/schema.sql",
-        "acta_gui/db/schema.sql",
+        "../../acta_db/schema.sql",
+        "../acta_db/schema.sql",
+        "acta_db/schema.sql",
     };
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths)[0]; i++) {
         FILE *f = fopen(paths[i], "rb");

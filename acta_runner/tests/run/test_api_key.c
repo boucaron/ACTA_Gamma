@@ -13,7 +13,7 @@
  *   4. unit checks of runner_api_key_status / runner_api_key_message.
  *
  * Same harness as test_pending.c: scratch `:memory:` DB seeded from
- * `acta_gui/db/schema.sql` + in-process stub server. `cmd_run` is
+ * `acta_db/schema.sql` + in-process stub server. `cmd_run` is
  * called directly with a constructed argv (no process spawn).
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
@@ -68,9 +68,9 @@ const global_opts_t *runner_gopts;
 static int load_schema(db_t *db)
 {
     static const char *paths[] = {
-        "../../acta_gui/db/schema.sql",
-        "../acta_gui/db/schema.sql",
-        "acta_gui/db/schema.sql",
+        "../../acta_db/schema.sql",
+        "../acta_db/schema.sql",
+        "acta_db/schema.sql",
     };
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths)[0]; i++) {
         FILE *f = fopen(paths[i], "rb");

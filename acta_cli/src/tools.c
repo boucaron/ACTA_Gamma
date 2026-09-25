@@ -10,7 +10,7 @@
  *   M3  skill_folder list/count filter by an optional positional
  *       <parent_id | all>, not a --parent_id flag
  *
- * Success shapes are structured (P1; the emitted `version` field is 4):
+ * Success shapes are structured (P1; the emitted `version` field is 5):
  * `success` is a JSON
  * object `{"kind":"json"|"json_object"|"json_array"|"bare_int"|
  * "plain_text"(,"keys":[...])(,"note":"...")}`; kind "json" carries
@@ -76,15 +76,11 @@ static const tool_pos_t p_id[]        = { { "id", 1, "positive-int" } };
 static const tool_pos_t p_model_id[]  = { { "model_id", 1, "positive-int" } };
 static const tool_pos_t p_skill_id[]  = { { "skill_id", 1, "positive-int" } };
 static const tool_pos_t p_exec_id[]   = { { "execution_id", 1, "positive-int" } };
-static const tool_pos_t p_sql[]       = { { "sql", 0, "string" } };
 static const tool_pos_t p_sf_parent[] =
     { { "parent_id", 0, "non-negative-int, or the sentinel 'all'" } };
 
 /* ── per-action flags (subset of entity_flag_specs) ── */
 
-static const tool_flag_t f_db_exec[] = {
-    { "sql", 1, 0 }, { "file", 1, 0 }, { "sql_stdin", 0, 0 },
-};
 static const tool_flag_t f_db_backup[] = {
     { "to", 1, 1 }, { "table", 0, 0 },
 };
@@ -279,7 +275,7 @@ static const tool_success_t suc_int            =
     { "bare_int", NULL, 0, NULL };
 static const tool_success_t suc_plain          =
     { "plain_text", NULL, 0, NULL };
-static const tool_success_t suc_db_exec        =
+static const tool_success_t suc_db_init        =
     { "json", ks_status, 1, "--table -> ok" };
 static const tool_success_t suc_db_version     =
     { "json", ks_version, 1, "--table -> SQLite <ver>" };
@@ -330,19 +326,21 @@ static const exit_code_t exit_codes[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  the table: 75 entries = 65 actions + 10 help actions              */
+/*  the table: 74 entries = 64 actions + 10 help actions              */
 /* ------------------------------------------------------------------ */
 
 static const tool_entry_t tool_table[] = {
     /* ── db ── */
-    { "db.exec", "db", "exec", NULL, 0,
-      "Execute mutating SQL (no SELECT). Exactly one source, mutually "
-      "exclusive, first wins in order: positional sql, --sql, --file, "
-      "--sql_stdin; --file and --sql_stdin are limited to 64 KiB. Never "
-      "JSON; the global --stdin is rejected (use --sql_stdin).",
-      p_sql, 1, f_db_exec, 3, "positional|flags",
+    { "db.init", "db", "init", NULL, 0,
+      "Apply the canonical schema (the static, embedded copy of "
+      "acta_db/schema.sql) to a fresh database file. Takes no SQL input "
+      "of any kind: positional, --sql, --file, --sql_stdin, and the "
+      "global --stdin are all rejected. Fresh file → schema applied; "
+      "already schema'd file → idempotent no-op; partially applied or "
+      "foreign file → fail closed (exit 4).",
+      NULL, 0, f_table, 1, "none",
       NULL, 0, NULL, 0,
-      &suc_db_exec },
+      &suc_db_init },
 
     { "db.version", "db", "version", NULL, 0,
       "Print the SQLite library version.",
@@ -1259,7 +1257,7 @@ static void compact_pos(FILE *f, const tool_pos_t *p, size_t n)
 
 int tools_print_compact(FILE *out)
 {
-    fputs("# acta_cli tools v3 (compact); full JSON: --tools\n", out);
+    fputs("# acta_cli tools v4 (compact); full JSON: --tools\n", out);
     fputs("usage: acta_cli [global flags] <entity> <action> [args]\n", out);
     fputs("globals: --db --fields --no_nulls --id_only --count --table "
           "--pretty --json --stdin --from_file --out --raw_out "
@@ -1324,7 +1322,7 @@ int tools_print(FILE *out, int pretty)
     fputs(pretty ? "{\n" : "{", out);
 
     jf_str(out, "name", "acta_cli", pretty, 1, &i, top_n);
-    jf_num(out, "version", 4, pretty, 1, &i, top_n);
+    jf_num(out, "version", 5, pretty, 1, &i, top_n);
     jf_str(out, "usage",
            "acta_cli [global flags] <entity> <action> [args]",
            pretty, 1, &i, top_n);

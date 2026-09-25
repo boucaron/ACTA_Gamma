@@ -28,7 +28,7 @@ int json_parse_execution_log(const char *blob, void *out);
 int json_parse_model_folder(const char *blob, void *out);
 int json_parse_skill_folder(const char *blob, void *out);
 
-/* ---- raw pass-through (for db exec results etc.) ---- */
+/* ---- raw pass-through ---- */
 /*
  * Validate that `blob` is well-formed JSON. Returns 0 or -1.
  */

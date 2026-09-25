@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "argparse.h"
 #include "cli_util.h"
+#include "schema_sql.h"
 #include <sqlite3.h>
 #include <string.h>
 #include <stdio.h>
@@ -25,35 +26,25 @@
  * `db <action> --help` therefore cannot drift.
  */
 
-static void usage_exec(FILE *f)
+static void usage_init(FILE *f)
 {
     fputs(
-"== exec =========================================================\n"
-"  Execute a single mutating statement (no SELECT / query support).\n"
-"  A SELECT statement is rejected with exit 4 (query statements are\n"
-"  not supported; use the entity list actions to read rows).\n"
-"  Supported: INSERT, UPDATE, DELETE, CREATE, DROP, ALTER,\n"
-"             TRUNCATE, REPLACE, and other write / DDL statements.\n"
+"== init =========================================================\n"
+"  Apply the canonical schema (the static, embedded copy of\n"
+"  acta_db/schema.sql) to a fresh database file.  Takes no SQL\n"
+"  input of any kind.\n"
 "\n"
-"  Provide SQL via one of (mutually exclusive, first wins):\n"
+"    acta_cli db init\n"
 "\n"
-"    acta_cli db exec \"INSERT INTO users (name) VALUES ('Ada');\"\n"
-"        <- positional argument\n"
-"\n"
-"    acta_cli db exec --sql \"DELETE FROM sessions WHERE expires < now;\"\n"
-"        <- --sql flag\n"
-"\n"
-"    acta_cli db exec --file /path/to/migration.sql\n"
-"        <- --file flag (max 64 KiB)\n"
-"\n"
-"    acta_cli db exec --sql_stdin\n"
-"    cat migration.sql | acta_cli db exec --sql_stdin\n"
-"        <- --sql_stdin flag (max 64 KiB)\n"
+"  Behaviour:\n"
+"    - Fresh file (no user tables): the canonical schema is applied\n"
+"      and {\"status\":\"ok\"} is emitted.\n"
+"    - Already schema'd file: idempotent no-op, {\"status\":\"ok\"}.\n"
+"    - Partially applied or foreign file: fail closed with a clear\n"
+"      error (exit 4) — the schema is never re-run on top of\n"
+"      existing tables.\n"
 "\n"
 "  Options:\n"
-"    --sql <text>       SQL text to execute\n"
-"    --file <path>      Read SQL from a file (max 64 KiB)\n"
-"    --sql_stdin        Read SQL from stdin (max 64 KiB)\n"
 "    --table            print 'ok' instead of JSON\n"
 "    --verbose [N]      debug level 0-3 (stderr)\n"
 "\n"
@@ -62,7 +53,6 @@ static void usage_exec(FILE *f)
 "  \"code\":<rc>,\"message\":\"...\"} (exit code mapped from rc)\n"
 "\n", f);
 }
-
 /* ── path identity for the self-backup guard ──────────────────────
  * Canonicalize `p` into `out` (caller-provided, outsz bytes): resolve
  * relative paths against the cwd, drop trailing slashes.  Used to
@@ -151,12 +141,12 @@ void db_usage(FILE *f)
 "Usage: acta_cli db <action> [options]\n"
 "\n"
 "Actions:\n"
-"  exec      Execute mutating SQL (INSERT, UPDATE, DELETE, DDL, etc.)\n"
+"  init      Apply the canonical schema to a fresh database file\n"
 "  version   Print SQLite library version\n"
 "  backup    Atomic snapshot of the DB into --to <target>\n"
 "  help <action>  Show help for a single action (no arg = full help)\n"
 "\n", f);
-    usage_exec(f);
+    usage_init(f);
     usage_version(f);
     usage_backup(f);
     fputs(
@@ -169,7 +159,7 @@ void db_usage(FILE *f)
 /* P0: print the help section for one db action. 0 = printed, -1 = unknown. */
 int db_help_for_action(const char *action, FILE *out)
 {
-    if (strcmp(action, "exec") == 0)      usage_exec(out);
+    if (strcmp(action, "init") == 0)      usage_init(out);
     else if (strcmp(action, "version") == 0) usage_version(out);
     else if (strcmp(action, "backup") == 0) usage_backup(out);
     else return -1;
@@ -178,51 +168,12 @@ int db_help_for_action(const char *action, FILE *out)
 
 
 
-/* ── helpers ───────────────────────────────────────────────────────── */
-
-/* KI-5: skip leading whitespace, stray ';', and SQL comments, then
- * report whether the first statement keyword is SELECT. */
-static int sql_first_statement_is_select(const char *sql)
-{
-    const char *p = sql;
-    for (;;) {
-        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ';')
-            p++;
-        if (p[0] == '-' && p[1] == '-') {   /* line comment */
-            while (*p && *p != '\n') p++;
-            continue;
-        }
-        if (p[0] == '/' && p[1] == '*') {   /* block comment */
-            p += 2;
-            while (*p && !(*p == '*' && p[1] == '/')) p++;
-            if (*p) p += 2;
-            continue;
-        }
-        break;
-    }
-    /* SELECT is six letters: S E L E C T — the terminator test is on
-     * p[6], the first byte after the keyword. */
-    return (p[0] == 'S' || p[0] == 's') &&
-           p[1] == 'E' && p[2] == 'L' && p[3] == 'E' && p[4] == 'C' &&
-           p[5] == 'T' &&
-           (p[6] == '\0' || p[6] == ' ' || p[6] == '\t' ||
-            p[6] == '\r' || p[6] == '\n');
-}
-
-static void exec_output(const global_opts_t *gopts)
-{
-    if (gopts->table)
-        fprintf(stdout, "ok\n");
-    else
-        fprintf(stdout, "{\"status\":\"ok\"}\n");
-}
-
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Dispatch                                                           */
 /* ══════════════════════════════════════════════════════════════════ */
 
 static const action_def_t db_actions[] = {
-    { "exec",    "execute mutating SQL (no SELECT)" },
+    { "init",    "apply the canonical schema to a fresh database file" },
     { "version", "print SQLite library version"     },
     { "backup",  "atomic snapshot of the DB into --to <target>" },
     { "help",   "show this help"                   },
@@ -246,154 +197,98 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
         return EXIT_OK;
     }
 
-    /* ── exec ─────────────────────────────────────────────────────── */
-    if (strcmp(action, "exec") == 0) {
-        /* Sources, mutually exclusive, first wins in the order the
-         * help lists them: positional, --sql, --file, --sql_stdin. */
-        const char *pos_sql = cmd_args_next_positional(ga);
-        const char *sql     = cmd_args_flag(ga, "sql",   1);
-        const char *fpath   = cmd_args_flag(ga, "file",  1);
-        /* KI-1: boolean flags must be read with cmd_args_has_flag;
-         * cmd_args_flag(...) is NULL by construction for them. */
+    /* ── init ─────────────────────────────────────────────────────── */
+    if (strcmp(action, "init") == 0) {
+        /* db init takes no SQL input: reject any SQL-carrying source
+         * explicitly instead of letting it fall through. */
+        const char *pos_sql   = cmd_args_next_positional(ga);
+        const char *sql       = cmd_args_flag(ga, "sql",   1);
+        const char *fpath     = cmd_args_flag(ga, "file",  1);
         const int   use_stdin = cmd_args_has_flag(ga, "sql_stdin");
 
-        VLOG(1, "db exec: pos=%s sql=%s file=%s stdin=%d",
-             pos_sql? pos_sql: "(null)",
-             sql    ? sql    : "(null)",
-             fpath  ? fpath  : "(null)",
+        VLOG(1, "db init: pos=%s sql=%s file=%s stdin=%d",
+             pos_sql ? pos_sql : "(null)",
+             sql     ? sql     : "(null)",
+             fpath   ? fpath   : "(null)",
              use_stdin);
 
-        VLOG(2, "  gopts: fields=%s no_nulls=%d table=%d id_only=%d verbose=%d",
-             gopts->fields ? gopts->fields : "(all)",
-             gopts->no_nulls, gopts->id_only, gopts->table, gopts->verbose);
-
-        /* The global --stdin flag is consumed by parse_globals into
-         * gopts->from_stdin before the handler sees it, so the entity
-         * flag is --sql_stdin. Reject --stdin explicitly instead of
-         * letting it silently fall through to "no SQL source". */
         if (gopts->from_stdin) {
-            VLOG(1, "  ERROR: global --stdin used; db exec expects --sql_stdin");
+            VLOG(1, "  ERROR: global --stdin used; db init takes no input");
             return finish_db_error(ACTA_DB_ERR_INVALID,
-                "global --stdin is a JSON-input flag; read SQL from stdin "
-                "with --sql_stdin (acta_cli db exec --sql_stdin)");
+                "global --stdin is a JSON-input flag; db init takes no "
+                "input (it applies the canonical embedded schema)");
         }
 
-        if (!pos_sql && !sql && !fpath && !use_stdin) {
-            VLOG(1, "  ERROR: no SQL source (need positional, --sql, --file, or --sql_stdin)");
+        if (pos_sql || sql || fpath || use_stdin) {
+            VLOG(1, "  ERROR: SQL input rejected");
             return finish_db_error(ACTA_DB_ERR_INVALID,
-                "no SQL source: provide SQL as a positional argument, "
-                "--sql, --file, or --sql_stdin");
+                "db init takes no arguments: it applies the canonical "
+                "embedded schema — there is no SQL to supply");
         }
 
+        /* The canonical table set (acta_db/schema.sql). */
+        static const char *const CANONICAL[] = {
+            "model_folders", "models", "model_revisions",
+            "skill_folders", "skills", "skill_revisions",
+            "contexts", "executions", "execution_logs",
+        };
+        const int n_canon =
+            (int)(sizeof CANONICAL / sizeof CANONICAL[0]);
 
-        /* resolve SQL text */
-        char   *sql_buf = NULL;
-        const char *sql_ptr = NULL;
+        int err = 0, n = 0;
+        char **tables = acta_db_user_tables(db, &n, &err);
+        if (err != ACTA_DB_OK || tables == NULL) {
+            char what[256];
+            snprintf(what, sizeof what, "cannot list user tables: %s",
+                     acta_db_last_error(db) ? acta_db_last_error(db)
+                                            : "(no detail)");
+            acta_db_user_tables_free(tables, n);
+            return finish_db_error(err, what);
+        }
 
-        if (pos_sql) {
-            sql_ptr = pos_sql;
-        } else if (sql) {
-            sql_ptr = sql;
-        } else if (fpath) {
-            VLOG(2, "  reading file: %s", fpath);
-            FILE *fp = fopen(fpath, "r");
-            if (!fp) {
-                VLOG(1, "  ERROR: cannot open file '%s'", fpath);
-                char what[1024];
-                snprintf(what, sizeof what,
-                         "cannot open file '%s': check the path and permissions",
-                         fpath);
-                return finish_db_error(ACTA_DB_ERR_INVALID, what);
-            }
-            long sz = 0;
-            fseek(fp, 0, SEEK_END);
-            sz = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-            if (sz < 0 || sz > 65536) {
-                fclose(fp);
-                char what[1024];
-                snprintf(what, sizeof what,
-                         "SQL file '%s' too large (%ld bytes, max 65536): "
-                         "split the file or use --sql_stdin for large inputs",
-                         fpath, sz);
-                return finish_db_error(ACTA_DB_ERR_INVALID, what);
-            }
-            sql_buf = malloc((size_t)sz + 1);
-            if (!sql_buf) {
-                fclose(fp);
-                return finish_db_error(ACTA_DB_ERR_ALLOC,
-                                       "memory allocation failed");
-            }
-            size_t rd = fread(sql_buf, 1, (size_t)sz, fp);
-            fclose(fp);
-            sql_buf[rd] = '\0';
-            sql_ptr = sql_buf;
-        } else if (use_stdin) {
-            VLOG(2, "  reading from stdin");
-            sql_buf = malloc(65537);
-            if (!sql_buf) {
-                return finish_db_error(ACTA_DB_ERR_ALLOC,
-                                       "memory allocation failed");
-            }
-            size_t total = 0;
-            size_t n;
-            while ((n = fread(sql_buf + total, 1,
-                              65536 - total, stdin)) > 0) {
-                total += n;
-                if (total >= 65536 - 1) {
-                    free(sql_buf);
-                    return finish_db_error(ACTA_DB_ERR_INVALID,
-                        "stdin input too large (max 65536 bytes): "
-                        "pipe a smaller file or split the query");
+        int have_canon = 0;
+        for (int i = 0; i < n; i++) {
+            for (int c = 0; c < n_canon; c++)
+                if (strcmp(tables[i], CANONICAL[c]) == 0) {
+                    have_canon++;
+                    break;
                 }
-            }
-            sql_buf[total] = '\0';
-            sql_ptr = sql_buf;
         }
 
-        if (sql_ptr == NULL || *sql_ptr == '\0') {
-            free(sql_buf);
-            VLOG(1, "  ERROR: empty SQL resolved from source");
-            return finish_db_error(ACTA_DB_ERR_INVALID,
-                "empty SQL: the source (positional, --sql, --file, or "
-                "--sql_stdin) resolved to 0 bytes");
+        int rc;
+        if (n == 0) {
+            VLOG(1, "  fresh file: applying canonical schema");
+            rc = acta_db_exec(db, ACTA_SCHEMA_SQL);
+        } else if (have_canon == n_canon) {
+            /* Already schema'd: short-circuit no-op (the shipped schema
+             * uses bare CREATE TABLE, so it must not be re-run). */
+            VLOG(1, "  already schema'd: no-op (%d user tables)", n);
+            rc = ACTA_DB_OK;
+        } else {
+            VLOG(1, "  partial/foreign file: %d of %d canonical tables",
+                 have_canon, n_canon);
+            char what[256];
+            snprintf(what, sizeof what,
+                     "database is not fresh and not fully schema'd "
+                     "(%d of %d canonical tables present): fail closed, "
+                     "no schema applied",
+                     have_canon, n_canon);
+            acta_db_user_tables_free(tables, n);
+            return finish_db_error(ACTA_DB_ERR_INVALID, what);
         }
-
-        VLOG(3, "  sql_ptr=%p sql_len=%zu",
-             (const void *)sql_ptr, strlen(sql_ptr));
-
-        /* KI-5: db exec is mutating-only (per the help text and
-         * cli_spec.md); reject SELECT before touching the DB instead
-         * of running a silent query. */
-        if (sql_first_statement_is_select(sql_ptr)) {
-            VLOG(1, "  ERROR: SELECT statement rejected");
-            return finish_db_error(ACTA_DB_ERR_INVALID,
-                "db exec does not support SELECT / query statements; "
-                "it executes mutating SQL only (INSERT, UPDATE, DELETE, "
-                "CREATE, DROP, ALTER, ...). Use the entity list actions "
-                "to query rows.");
-        }
-
-        int rc = acta_db_exec(db, sql_ptr);
-
-        VLOG(3, "  acta_db_exec → rc=%d last_error=%s",
-             rc, acta_db_last_error(db) ? acta_db_last_error(db) : "(null)");
-
-        free(sql_buf);
+        acta_db_user_tables_free(tables, n);
 
         if (rc != ACTA_DB_OK) {
             const char *msg = acta_db_last_error(db);
-            if (!msg) msg = acta_db_errmsg(db);   /* KI-7: surface sqlite3_errmsg */
-            VLOG(1, "  FAILED rc=%d (%s)", rc,
-                 acta_db_strerror(rc));
-            char what[1024];
-            snprintf(what, sizeof what, "SQL execution failed: %s",
-                     msg ? msg : "(no detail)");
-            return finish_db_error(rc, what);
+            VLOG(1, "  FAILED rc=%d (%s)", rc, msg ? msg : "(no detail)");
+            return finish_db_error(rc, msg ? msg : "schema application failed");
         }
 
         VLOG(1, "  ok");
-        exec_output(gopts);
+        if (gopts->table)
+            fprintf(stdout, "ok\n");
+        else
+            fprintf(stdout, "{\"status\":\"ok\"}\n");
         return EXIT_OK;
     }
 
@@ -418,7 +313,7 @@ int cmd_db(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
 
         /* The global --stdin is a JSON-input flag; db backup takes no
          * input.  Reject it explicitly instead of letting it fall
-         * through (same rule as db exec). */
+         * through (same rule as db init). */
         if (gopts->from_stdin) {
             VLOG(1, "  ERROR: global --stdin used; db backup takes no input");
             return finish_db_error(ACTA_DB_ERR_INVALID,

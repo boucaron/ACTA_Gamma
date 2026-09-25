@@ -16,247 +16,203 @@ static int do_db(stest_ctx_t *ctx, const char *action,
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  db exec
+ *  db init
  * ═══════════════════════════════════════════════════════════════════ */
 
-/* --- success paths ------------------------------------------------- */
+#define INIT_FRESH_DB "acta_test_init_fresh.db"
+#define INIT_PARTIAL_DB "acta_test_init_partial.db"
+#define INIT_FOREIGN_DB "acta_test_init_foreign.db"
 
-static void test_exec_positional_insert(stest_ctx_t *ctx)
+static void scratch_cleanup(const char *path)
 {
+    char p[256];
+    snprintf(p, sizeof p, "%s", path);
+    remove(p);
+    snprintf(p, sizeof p, "%s-wal", path);
+    remove(p);
+    snprintf(p, sizeof p, "%s-shm", path);
+    remove(p);
+}
+
+/* open a scratch connection on `path` (fresh file, schema not applied) */
+static db_t *open_scratch(stest_ctx_t *ctx, const char *path, int *err)
+{
+    scratch_cleanup(path);
+    db_t *db = acta_db_open(path, err, ACTA_DB_OPEN_CREATE);
+    TEST_NOT_NULL(ctx, db);
+    return db;
+}
+
+static void test_init_fresh(stest_ctx_t *ctx)
+{
+    int err = 0;
+    db_t *db = open_scratch(ctx, INIT_FRESH_DB, &err);
+    if (!db) return;
+
     global_opts_t g = gopts_default();
     cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "INSERT INTO contexts(type, content, content_hash) "
-               "VALUES('text','db-test-positional','h1')",
-               &g);
 
-    int rc = do_db(ctx, "exec", a, g);
+    stest_capture_begin(ctx);
+    int rc = cmd_db("init", a, &g, db);
+    stest_capture_end(ctx);
+
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
     targs_free(a, &g);
+
+    /* the schema must actually have been applied */
+    int n = 0, e2 = 0;
+    char **tabs = acta_db_user_tables(db, &n, &e2);
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+    TEST_EQ(ctx, n, 9);
+    acta_db_user_tables_free(tabs, n);
+
+    acta_db_close(db);
+    scratch_cleanup(INIT_FRESH_DB);
 }
 
-static void test_exec_positional_real(stest_ctx_t *ctx)
+static void test_init_fresh_table(stest_ctx_t *ctx)
 {
-    /* The documented positional form: db exec "INSERT ...".  (The
-     * existing test_exec_positional_insert actually drives the --sql
-     * flag; this one exercises the real positional path.  Includes a
-     * trailing ';' as in the help example. */
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_pos(a,
-              "INSERT INTO contexts(type, content, content_hash) "
-              "VALUES('text','db-test-positional-real','h6');",
-              &g);
+    int err = 0;
+    db_t *db = open_scratch(ctx, INIT_FRESH_DB, &err);
+    if (!db) return;
 
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
-    targs_free(a, &g);
-}
-
-static void test_exec_positional_after_bool_flag(stest_ctx_t *ctx)
-{
-    /* Regression (P1 #1): the old cmd_args_next_positional heuristic
-     * ate the token after a boolean flag as its value, so a positional
-     * SQL after --sql_stdin was lost (and the handler would read
-     * stdin). The positional must survive the bool flag and win as the
-     * first-listed source — and stdin must NOT be read. */
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag_bool(a, "sql_stdin", &g);
-    targs_pos(a,
-              "INSERT INTO contexts(type, content, content_hash) "
-              "VALUES('text','db-test-pos-after-bool','h7');",
-              &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
-    targs_free(a, &g);
-}
-
-static void test_exec_sql_flag(stest_ctx_t *ctx)
-{
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "INSERT INTO contexts(type, content, content_hash) "
-               "VALUES('text','db-test-sqlflag','h2')",
-               &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
-}
-
-static void test_exec_ddl_create_index(stest_ctx_t *ctx)
-{
-    /* DDL should also succeed */
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "CREATE INDEX IF NOT EXISTS idx_ctx_dbtest "
-               "ON contexts(type)",
-               &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-
-    /* clean up */
-    targs_flag(a, "sql", "DROP INDEX IF EXISTS idx_ctx_dbtest", &g);
-    rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
-}
-
-static void test_exec_trailing_semicolon(stest_ctx_t *ctx)
-{
-    /* The lib (sqlite3_exec) accepts a trailing ';' after a single
-     * statement (the help example uses one). Lock that behavior in. */
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "INSERT INTO contexts(type, content, content_hash) "
-               "VALUES('text','db-test-trailing-semicolon','h4');",
-               &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
-}
-
-static void test_exec_table_mode(stest_ctx_t *ctx)
-{
     global_opts_t g = gopts_table();
     cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "INSERT INTO contexts(type, content, content_hash) "
-               "VALUES('text','db-test-table','h3')",
-               &g);
 
-    int rc = do_db(ctx, "exec", a, g);
+    stest_capture_begin(ctx);
+    int rc = cmd_db("init", a, &g, db);
+    stest_capture_end(ctx);
+
     TEST_EQ(ctx, rc, EXIT_OK);
-    /* table mode prints bare "ok", not JSON */
     TEST(ctx, strstr(stest_stdout(ctx), "\"status\"") == NULL);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "ok");
     targs_free(a, &g);
+
+    acta_db_close(db);
+    scratch_cleanup(INIT_FRESH_DB);
 }
 
-/* --- error paths --------------------------------------------------- */
-
-static void test_exec_no_source(stest_ctx_t *ctx)
+static void test_init_noop(stest_ctx_t *ctx)
 {
-    /* no positional, no --sql, no --file, no --stdin */
+    /* REF_DB is already schema'd: re-running must be a no-op, exit 0 */
     global_opts_t g = gopts_default();
     cmd_args_t   *a = targs_new();
 
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    int rc = do_db(ctx, "init", a, g);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
     targs_free(a, &g);
 }
 
-static void test_exec_global_stdin_rejected(stest_ctx_t *ctx)
+static void test_init_partial(stest_ctx_t *ctx)
 {
-    /* The global --stdin is consumed by parse_globals into gopts->from_stdin
-     * before db exec sees it. The handler must reject it with a clear error
-     * (pointing at --sql_stdin), not silently fall through to "no SQL source"
-     * or start reading stdin. */
+    /* one canonical table, the rest missing: fail closed, exit 4 */
+    int err = 0;
+    db_t *db = open_scratch(ctx, INIT_PARTIAL_DB, &err);
+    if (!db) return;
+
+    int e2 = acta_db_exec(db,
+        "CREATE TABLE models (id INTEGER PRIMARY KEY AUTOINCREMENT)");
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+
     global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+
+    stest_capture_begin(ctx);
+    int rc = cmd_db("init", a, &g, db);
+    stest_capture_end(ctx);
+
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST(ctx, strstr(stest_stdout(ctx), "\"status\"") == NULL);
+    targs_free(a, &g);
+
+    acta_db_close(db);
+    scratch_cleanup(INIT_PARTIAL_DB);
+}
+static void test_init_foreign(stest_ctx_t *ctx)
+{
+    /* unrelated table only: fail closed, exit 4 */
+    int err = 0;
+    db_t *db = open_scratch(ctx, INIT_FOREIGN_DB, &err);
+    if (!db) return;
+
+    int e2 = acta_db_exec(db,
+        "CREATE TABLE foreign_tbl (id INTEGER PRIMARY KEY)");
+    TEST_EQ(ctx, e2, ACTA_DB_OK);
+
+    global_opts_t g = gopts_default();
+    cmd_args_t   *a = targs_new();
+
+    stest_capture_begin(ctx);
+    int rc = cmd_db("init", a, &g, db);
+    stest_capture_end(ctx);
+
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    targs_free(a, &g);
+
+    acta_db_close(db);
+    scratch_cleanup(INIT_FOREIGN_DB);
+}
+
+static void test_init_rejects_input(stest_ctx_t *ctx)
+{
+    /* db init takes no SQL input: positional / --sql / --file /
+     * --sql_stdin / global --stdin are all rejected with exit 4 */
+    global_opts_t g = gopts_default();
+
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "SELECT 1;", &g);
+    TEST_EQ(ctx, do_db(ctx, "init", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag(a, "sql", "SELECT 1;", &g);
+    TEST_EQ(ctx, do_db(ctx, "init", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag(a, "file", "x.sql", &g);
+    TEST_EQ(ctx, do_db(ctx, "init", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag_bool(a, "sql_stdin", &g);
+    TEST_EQ(ctx, do_db(ctx, "init", a, g), EXIT_INVALID);
+    targs_free(a, &g);
+
     g.from_stdin = 1;
-    cmd_args_t   *a = targs_new();
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    a = targs_new();
+    TEST_EQ(ctx, do_db(ctx, "init", a, g), EXIT_INVALID);
     targs_free(a, &g);
 }
 
-static void test_exec_empty_sql_flag(stest_ctx_t *ctx)
+static void test_exec_removed(stest_ctx_t *ctx)
 {
-    /* --sql "" must be rejected with a clear error, not passed to the lib */
+    /* db exec no longer exists: every form is an unknown action,
+     * exit 10 (same as any other rejected action). */
     global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql", "", &g);
 
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
+    cmd_args_t *a = targs_new();
+    targs_pos(a, "SELECT 1;", &g);
+    TEST_EQ(ctx, do_db(ctx, "exec", a, g), EXIT_CLI);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag(a, "sql", "SELECT 1;", &g);
+    TEST_EQ(ctx, do_db(ctx, "exec", a, g), EXIT_CLI);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag(a, "file", "x.sql", &g);
+    TEST_EQ(ctx, do_db(ctx, "exec", a, g), EXIT_CLI);
+    targs_free(a, &g);
+
+    a = targs_new();
+    targs_flag_bool(a, "sql_stdin", &g);
+    TEST_EQ(ctx, do_db(ctx, "exec", a, g), EXIT_CLI);
     targs_free(a, &g);
 }
-
-static void test_exec_empty_file(stest_ctx_t *ctx)
-{
-    /* 0-byte file must be rejected (was: acta_db_exec(db, "")) */
-    const char *path = "acta_test_empty.sql";
-    FILE *fp = fopen(path, "w");
-    if (fp)
-        fclose(fp);
-
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "file", path, &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
-    targs_free(a, &g);
-    remove(path);
-}
-
-static void test_exec_invalid_sql(stest_ctx_t *ctx)
-{
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql", "THIS IS NOT SQL", &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST(ctx, rc != EXIT_OK);
-    targs_free(a, &g);
-}
-
-static void test_exec_fk_violation(stest_ctx_t *ctx)
-{
-    /* INSERT into executions with a bogus context_id */
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "INSERT INTO executions(context_id, skill_revision_id, "
-               "model_revision_id, status) "
-               "VALUES(9999, 1, 1, 'pending')",
-               &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    /* should fail: FK violation (PRAGMA foreign_keys=OFF in the dump,
-     * but the test harness may enable it; if OFF, this still inserts –
-     * we just assert the call ran and returned either OK or an error) */
-    /* Keep assertion loose: must not crash */
-    (void)rc;
-    targs_free(a, &g);
-}
-
-static void test_exec_immutable_context(stest_ctx_t *ctx)
-{
-    /* contexts table has a BEFORE UPDATE trigger that RAISE(ABORT) */
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "sql",
-               "UPDATE contexts SET content='hack' WHERE id=1",
-               &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST(ctx, rc != EXIT_OK);
-    targs_free(a, &g);
-}
-
-static void test_exec_missing_file(stest_ctx_t *ctx)
-{
-    global_opts_t g = gopts_default();
-    cmd_args_t   *a = targs_new();
-    targs_flag(a, "file", "/nonexistent/path/to/migration.sql", &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_INVALID);
-    targs_free(a, &g);
-}
-
 /* ── version ──────────────────────────────────────────────────────── */
 
 static void test_version_json(stest_ctx_t *ctx)
@@ -291,7 +247,7 @@ static void test_help(stest_ctx_t *ctx)
     int rc = do_db(ctx, "help", a, g);
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "Usage:");
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "exec");
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "init");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "version");
     TEST_CONTAINS(ctx, stest_stdout(ctx), "backup");
     targs_free(a, &g);
@@ -311,62 +267,16 @@ static void test_unknown_action(stest_ctx_t *ctx)
 
 static void test_unknown_action_suggestion(stest_ctx_t *ctx)
 {
-    /* "exect" is one char off "exec" – closest_match should suggest it */
+    /* "initt" is one char off "init" – closest_match should suggest it */
     global_opts_t g = gopts_default();
     cmd_args_t   *a = targs_new();
 
-    int rc = do_db(ctx, "exect", a, g);
+    int rc = do_db(ctx, "initt", a, g);
     TEST_EQ(ctx, rc, EXIT_CLI);
     /* suggestion goes to stderr, not captured stdout; just check rc */
     targs_free(a, &g);
 }
 
-/* ── verbose smoke (must not crash, output goes to stderr) ───────── */
-
-static void test_exec_verbose(stest_ctx_t *ctx)
-{
-    global_opts_t g = gopts_default();
-    g.verbose = 3;
-    cmd_args_t *a = targs_new();
-    targs_flag(a, "sql",
-               "INSERT INTO contexts(type, content, content_hash) "
-               "VALUES('text','verbose-test','hv')",
-               &g);
-
-    int rc = do_db(ctx, "exec", a, g);
-    TEST_EQ(ctx, rc, EXIT_OK);
-    targs_free(a, &g);
-}
-
-/* ═══════════════════════════════════════════════════════════════════
- *  known issues (KI-n) — run via parse_globals +
- *  handler exactly like main.c does (stest_run_argv).
- * ═══════════════════════════════════════════════════════════════════ */
-
-/* KI-1 (fixed): db exec --sql_stdin used to always fail rc 4 —
- * db.c derived the boolean flag with cmd_args_flag(...) != NULL, which
- * is NULL by construction. Now use_stdin = cmd_args_has_flag(...);
- * this test is a regression pin: the INSERT below must succeed. */
-static void test_exec_sql_stdin_flag(stest_ctx_t *ctx)
-{
-    char *argv0[] = { "acta_cli", "db", "exec", "--sql_stdin" };
-    int rc = stest_run_argv(ctx, cmd_db, 4, argv0,
-        "INSERT INTO contexts(type, content, content_hash) "
-        "VALUES('text','ki1-sql-stdin','hki1');");
-    TEST_EQ(ctx, rc, EXIT_OK);
-    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
-}
-
-/* KI-5 (fixed, now a regression pin): help/--tools claim "no SELECT"
- * and db.c now enforces it — a statement whose first keyword is
- * SELECT is rejected before execution. The SELECT below must fail
- * with exit 4 (not run silently). */
-static void test_exec_select_behavior_pinned(stest_ctx_t *ctx)
-{
-    char *argv0[] = { "acta_cli", "db", "exec", "SELECT 1;" };
-    int rc = stest_run_argv(ctx, cmd_db, 4, argv0, "");
-    TEST_EQ(ctx, rc, EXIT_INVALID);
-}
 
 /* ═══════════════════════════════════════════════════════════════════
  *  db backup
@@ -534,24 +444,14 @@ int run_db_test_all(void)
     stest_ctx_t ctx;
     stest_init(&ctx, REF_DB);
 
-    /* exec – success */
-    test_exec_positional_insert(&ctx);
-    test_exec_positional_real(&ctx);
-    test_exec_positional_after_bool_flag(&ctx);
-    test_exec_sql_flag(&ctx);
-    test_exec_ddl_create_index(&ctx);
-    test_exec_trailing_semicolon(&ctx);
-    test_exec_table_mode(&ctx);
-
-    /* exec – errors */
-    test_exec_no_source(&ctx);
-    test_exec_global_stdin_rejected(&ctx);
-    test_exec_empty_sql_flag(&ctx);
-    test_exec_empty_file(&ctx);
-    test_exec_invalid_sql(&ctx);
-    test_exec_fk_violation(&ctx);
-    test_exec_immutable_context(&ctx);
-    test_exec_missing_file(&ctx);
+    /* init */
+    test_init_fresh(&ctx);
+    test_init_fresh_table(&ctx);
+    test_init_noop(&ctx);
+    test_init_partial(&ctx);
+    test_init_foreign(&ctx);
+    test_init_rejects_input(&ctx);
+    test_exec_removed(&ctx);
 
     /* version */
     test_version_json(&ctx);
@@ -573,12 +473,6 @@ int run_db_test_all(void)
     test_unknown_action(&ctx);
     test_unknown_action_suggestion(&ctx);
 
-    /* verbose */
-    test_exec_verbose(&ctx);
-
-    /* known issues (KI-n) */
-    test_exec_sql_stdin_flag(&ctx);
-    test_exec_select_behavior_pinned(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

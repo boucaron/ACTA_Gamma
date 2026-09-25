@@ -175,9 +175,12 @@ int acta_db_force_close(db_t *db);
  * prepared-statement APIs (acta_db_*_query, acta_db_*_create, ...), not
  * this function.
  *
- * Intended callers today: schema application at first GUI launch
- * (acta_gui/db/schema.sql) and the acta_cli `db exec` raw-SQL command,
- * both of which pass through operator-supplied SQL by design. */
+ * Sole caller: schema application at first GUI launch
+ * (the canonical schema, acta_db/schema.sql, embedded as the Qt
+ * resource :/db/schema.sql). The CLI no longer exposes a raw-SQL path
+ * (`db init` applies the same embedded schema via this same primitive,
+ * but the schema text is static developer-supplied data, not
+ * user input). */
 int acta_db_exec(db_t *db, const char *sql);
 
 /* Returns the last error message for this connection. */
@@ -197,6 +200,16 @@ const char *acta_db_errmsg(db_t *db);
  * lifetime of the db_t; NULL if db is NULL.  Used by the CLI `db backup`
  * action to reject a target equal to the DB path itself. */
 const char *acta_db_main_path(const db_t *db);
+
+/* Return a heap-allocated, NULL-terminated array of strdup'd user-table
+ * names (sqlite_master type='table', excluding sqlite_ internals);
+ * *out_count receives the count. NULL on failure with *err set to
+ * ACTA_DB_ERR_SQL / ACTA_DB_ERR_ALLOC. Free with acta_db_user_tables_free. */
+char **acta_db_user_tables(db_t *db, int *out_count, int *err);
+
+/* Free the array (and each name string) returned by acta_db_user_tables.
+ * NULL-safe. */
+void acta_db_user_tables_free(char **names, int count);
 
 /* Atomic, consistent snapshot of the open database into a brand-new
  * file `target`, via the SQLite backup C API

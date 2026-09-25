@@ -22,7 +22,7 @@
  *      what last_activity() sees; a fresh row is kept, not swept.
  *
  * Same harness style as test_run.c / test_pending.c: scratch `:memory:`
- * DB seeded from `acta_gui/db/schema.sql`. No stub server — sweep is
+ * DB seeded from `acta_db/schema.sql`. No stub server — sweep is
  * pure DB + time; timestamps are set directly by UPDATE so no sleeping
  * is needed. `cmd_sweep` is called directly with a constructed argv
  * (no process spawn).
@@ -64,9 +64,9 @@ const global_opts_t *runner_gopts;
 static int load_schema(db_t *db)
 {
     static const char *paths[] = {
-        "../../acta_gui/db/schema.sql",
-        "../acta_gui/db/schema.sql",
-        "acta_gui/db/schema.sql",
+        "../../acta_db/schema.sql",
+        "../acta_db/schema.sql",
+        "acta_db/schema.sql",
     };
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
         FILE *f = fopen(paths[i], "rb");

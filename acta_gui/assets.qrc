@@ -2,6 +2,9 @@
   <qresource prefix="/">
     <file>assets/logo.jpg</file>
     <file>assets/style.qss</file>
-    <file>db/schema.sql</file>
+    <!-- Canonical schema lives in acta_db/schema.sql; this is the single
+         source of truth, referenced by alias so the resource stays
+         :/db/schema.sql. -->
+    <file alias="db/schema.sql">../acta_db/schema.sql</file>
   </qresource>
 </RCC>

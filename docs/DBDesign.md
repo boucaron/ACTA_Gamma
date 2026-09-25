@@ -2,20 +2,20 @@
 
 This is a deliberately small first-pass schema. The goal is to model the core execution primitive without prematurely introducing datasets, workflows, providers, or other higher-level concepts.
 
-The canonical, executable copy of this schema is `acta_gui/db/schema.sql` (the same DDL is embedded in `acta_cli/acta_test_ref.sql` and seeded by the runner tests); the SQL blocks below mirror it.
+The canonical, executable copy of this schema is `acta_db/schema.sql` (the persistence layer owns its own schema; the same DDL is embedded in `acta_cli/acta_test_ref.sql` and seeded by the runner tests); the SQL blocks below mirror it.
 
 ## Scope and assumptions (PoC)
 
 This is a PoC in progress, not a product. Three deliberate non-goals are baked into `acta_db`:
 
-- **No schema versioning or migration framework.** The schema is a first pass applied once at creation (`acta_gui/db/schema.sql`). Existing DB files are opened as-is (`ACTA_DB_OPEN_EXISTING`); if the schema changes, there is no built-in migration path. Manual `ALTER TABLE` recipes (e.g. the soft-delete columns above) are the supported way to move a file forward.
+- **No schema versioning or migration framework.** The schema is a first pass applied once at creation (`acta_db/schema.sql`). Existing DB files are opened as-is (`ACTA_DB_OPEN_EXISTING`); if the schema changes, there is no built-in migration path. The supported evolution path is the versioned schema file: the next schema change lands as a new `acta_db/schema.sql` revision plus a note here, and data-carrying files are migrated by taking a `db backup --to` first and re-applying via `db init` on a fresh file. No user-supplied SQL is ever accepted (`db exec` was removed).
 - **No purge / hard delete, by design.** Rows are soft-deleted (`deleted_at`) and never physically removed. If a clean state is genuinely needed, create a new database file rather than purging the existing one.
 - **Not thread-safe by design.** One `db_t` is one SQLite connection, owned by a single thread. Concurrency is not shared through the library: the runner uses its own connection, the GUI uses its own connection (the in-app runner thread opens its own handle), and the CLI opens its own. WAL makes cross-process read/write work, but simultaneous writers on the same file are not supported in the current implementation; there is no `busy_timeout` or retry logic in `acta_db`. If two writers do contend, SQLite returns `SQLITE_BUSY` to one of them; `acta_db` surfaces that as a normal database error (the losing operation is aborted, nothing is partially written, and the other writer's committed data is intact) — there is no automatic retry, so the operator's action is to rerun the command.
-- **One raw-SQL escape hatch.** `acta_db_exec` (`acta_db/include/db.h`) is the only public, non-parameterized path into the connection; every other API is prepared and bound. Its `sql` argument must be static or developer-supplied (DDL, migrations, schema scripts) — never composed from user-supplied input. It is intentionally kept because DDL cannot be parameterized; current callers are the GUI's first-launch schema application and the CLI `db exec` command, both operator-supplied SQL.
+- **One raw-SQL escape hatch.** `acta_db_exec` (`acta_db/include/db.h`) is the only public, non-parameterized path into the connection; every other API is prepared and bound. Its `sql` argument must be static or developer-supplied (DDL, migrations, schema scripts) — never composed from user-supplied input. It is intentionally kept because DDL cannot be parameterized; the only caller is the GUI's first-launch schema application (and the CLI `db init` action, on a fresh file), both applying the static embedded canonical schema — no user-supplied SQL.
 
 ## Data durability and maintenance
 
-**Minimum durability expectation.** ACTA Gamma persists to one private SQLite file; that file is the data. There is no replication or sync: if the file is lost, the skills, revisions, contexts, executions, and their logs are lost. The single rule: **take a backup before destructive operations** (schema changes via `db exec`, manual file operations, migrating to a new file) — the working path is the `acta_cli db backup --to <target>` action (below); the manual procedure stays as the reference.
+**Minimum durability expectation.** ACTA Gamma persists to one private SQLite file; that file is the data. There is no replication or sync: if the file is lost, the skills, revisions, contexts, executions, and their logs are lost. The single rule: **take a backup before destructive operations** (schema changes via the versioned schema file / `db init`, manual file operations, migrating to a new file) — the working path is the `acta_cli db backup --to <target>` action (below); the manual procedure stays as the reference.
 
 **WAL file lifecycle.** The database runs in WAL journal mode, so alongside `acta.db` you will see `acta.db-wal` and `acta.db-shm`. These are transient: SQLite deletes both when the last connection to the database closes cleanly. If a process dies mid-write, the `-wal` file remains and is replayed on the next open — the data is not lost by that. Two consequences:
 
@@ -38,7 +38,7 @@ sqlite3 acta.db "VACUUM INTO 'acta_backup_YYYYMMDD.db';"
 
 **Backup frequency (minimum, guidance only).**
 
-* **Before any destructive operation** — schema changes via `db exec`, manual file operations, migrating to a new file.
+* **Before any destructive operation** — schema changes via the versioned schema file / `db init`, manual file operations, migrating to a new file.
 * **At the end of any session that produced executions** — executions and their logs are the high-value records (soft delete means they stay in the file forever and are never recoverable from the live file alone if the file is lost).
 * Keep backups **outside the DB directory**; name them `acta_backup_YYYYMMDD.db`; keep the last ~7 by deleting older ones manually (no retention enforcement). Prefer a **different physical volume** where possible: a backup on the same disk does not survive a disk failure. Restoring is not a special command: open the backup with `acta_cli --db acta_backup_YYYYMMDD.db …` or the GUI's *Choose database file* dialog, and verify a restored file with `PRAGMA integrity_check` (full) before relying on it.
 
@@ -124,7 +124,7 @@ The runner should treat the backend as an interchangeable implementation.
 
 Revision rows (`model_revisions`, `skill_revisions`) are written **only** by
 the schema triggers below — there is no application-level "snapshot" call,
-and even raw SQL against the parent tables (e.g. via `db exec`) fires the
+and even raw SQL against the parent tables fires the
 triggers, so the revision sequence cannot be skipped at the application
 layer. A revision row, once written, is immutable: the schema provides no
 `UPDATE`/`DELETE` path for it.
@@ -486,8 +486,9 @@ ALTER TABLE executions ADD COLUMN deleted_at TEXT;
 ```
 
 Existing rows have `deleted_at = NULL`, i.e. they are live. Apply via
-`acta_cli db exec` (or `--file`); idempotent check: `PRAGMA table_info`
-before applying.
+the versioned schema file on a fresh database file: `db init` (take a
+`db backup --to` of the data-carrying file first); idempotent check:
+`PRAGMA table_info` before applying.
 
 ## Executions
 

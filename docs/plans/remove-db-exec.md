@@ -1,6 +1,9 @@
 # Plan: remove the raw-SQL `db exec` action from `acta_cli`
 
-Status: proposal (not started)
+Status: done (implemented; see `docs/tasks_continuation.md` sessions 1-4 —
+including the session-4 fix of the unterminated `ACTA_SCHEMA_SQL` declaration
+in the generated `schema_sql.h`, which broke the first `make all` at
+`sqlite3.h:188`; build/test verification is with the user)
 
 ## Context
 

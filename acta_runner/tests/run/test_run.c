@@ -57,13 +57,13 @@ static void check(int cond, const char *what)
 
 /* ── DB setup ─────────────────────────────────────────────────────── */
 
-/* Load acta_gui/db/schema.sql from a couple of likely locations. */
+/* Load acta_db/schema.sql from a couple of likely locations. */
 static int load_schema(db_t *db)
 {
     static const char *paths[] = {
-        "../../acta_gui/db/schema.sql",
-        "../acta_gui/db/schema.sql",
-        "acta_gui/db/schema.sql",
+        "../../acta_db/schema.sql",
+        "../acta_db/schema.sql",
+        "acta_db/schema.sql",
     };
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
         FILE *f = fopen(paths[i], "rb");

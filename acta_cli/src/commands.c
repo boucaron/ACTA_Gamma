@@ -2,9 +2,10 @@
 #include "argparse.h"
 #include "cli.h"
 
+#include <sqlite3.h>
 #include <string.h>
 #include <stdio.h>
-#include <sqlite3.h>
+
 
 /* Single definition; set once in commands_dispatch, read by VLOG()
  * (cli.h) from every translation unit. */

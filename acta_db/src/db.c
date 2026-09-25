@@ -2,6 +2,8 @@
 #include "db.h"
 #include <sqlite3.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
 /* ------------------------------------------------------------------ */
@@ -263,6 +265,80 @@ const char *acta_db_errmsg(db_t *db) {
 const char *acta_db_main_path(const db_t *db) {
     if (!db) return NULL;
     return db->path;
+}
+
+/* Return the names of every user table in the main database
+ * (sqlite_master rows with type='table', excluding the internal
+ * sqlite_ bookkeeping tables). Returns a heap-allocated, NULL-terminated
+ * array of strdup'd name strings; *out_count (if non-NULL) receives the
+ * number of entries. On failure returns NULL and sets *err (if non-NULL)
+ * to ACTA_DB_ERR_SQL or ACTA_DB_ERR_ALLOC; on success sets ACTA_DB_OK.
+ * Free the result with acta_db_user_tables_free.
+ *
+ * Used by acta_cli `db init` for its PRAGMA table_info-style idempotency
+ * check: distinguish a fresh (no user tables) file, an already-
+ * schema'd file (exactly the canonical tables), and a partially-
+ * applied or foreign file. */
+char **acta_db_user_tables(db_t *db, int *out_count, int *err)
+{
+    if (out_count) *out_count = 0;
+    if (!db || !db->handle) {
+        if (err) *err = ACTA_DB_ERR_INVALID;
+        return NULL;
+    }
+
+    const char *sql =
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+        "ORDER BY name;";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(db->handle, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        db_set_error(db, "failed to prepare the user-table query");
+        if (err) *err = ACTA_DB_ERR_SQL;
+        return NULL;
+    }
+
+    int capacity = 16;
+    int count = 0;
+    char **names = NULL;
+    int failed = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *name = (const char *)sqlite3_column_text(stmt, 0);
+        if (!name) { failed = 1; break; }
+        if (count == capacity) {
+            capacity *= 2;
+            char **grow = realloc(names, (size_t)capacity * sizeof *names);
+            if (!grow) { failed = 1; break; }
+            names = grow;
+        }
+        names[count] = strdup(name);
+        if (!names[count]) { failed = 1; break; }
+        count++;
+    }
+    sqlite3_finalize(stmt);
+
+    if (failed) {
+        for (int i = 0; i < count; i++) free(names[i]);
+        free(names);
+        if (!db->last_error)
+            db_set_error(db, "memory allocation failed");
+        if (err) *err = ACTA_DB_ERR_ALLOC;
+        return NULL;
+    }
+
+    if (names) names[count] = NULL;   /* NULL terminator */
+    if (out_count) *out_count = count;
+    if (err) *err = ACTA_DB_OK;
+    return names;
+}
+
+void acta_db_user_tables_free(char **names, int count)
+{
+    (void)count;
+    if (!names) return;
+    for (int i = 0; names[i]; i++)
+        free(names[i]);
+    free(names);
 }
 
 int acta_db_backup(db_t *db, const char *target, long long *bytes_out,

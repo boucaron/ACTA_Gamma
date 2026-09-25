@@ -9,7 +9,7 @@ binary per suite.
   Configurable per scenario: health status (200/503), served model id,
   chat status (200/500), chat content, reply delay (timeout tests).
 - `tests/run/test_run.c` — pipeline (`run_execution`) against the stub
-  on a scratch `:memory:` DB seeded from `acta_gui/db/schema.sql`:
+  on a scratch `:memory:` DB seeded from `acta_db/schema.sql`:
   - success → `completed`, raw_response stored, full phase log
     (execution_started, context_loaded, prompt_resolved, llm_request,
     llm_response, execution_completed)

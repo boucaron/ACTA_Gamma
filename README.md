@@ -145,7 +145,7 @@ Three steps before the example below:
 
 Against the running `llama-server` router from the quick start (fresh `acta.db` — by default the platform app-data location, see [Environment variables](#environment-variables-and-the-per-machine-config-file); so every id is `1`).
 
-**Fresh databases need the schema first.** `acta_cli`/`acta_runner` never create the schema themselves: run `acta_cli db exec --file acta_gui/db/schema.sql` — the canonical schema file lives in the GUI tree (the GUI embeds it, and launching the GUI once applies it as well). The schema is applied once at creation; there is no schema versioning or migration path (see [`docs/DBDesign.md`](docs/DBDesign.md)) — a fresh DB file is the clean-state path. A fresh file without the schema fails with `no such table`.
+**Fresh databases need the schema first.** `acta_cli`/`acta_runner` never create the schema themselves: run `acta_cli db init` — it applies the canonical schema (`acta_db/schema.sql`, embedded statically in the CLI; the GUI embeds the same file, and launching the GUI once applies it as well). The schema is applied once at creation; there is no schema versioning or migration path (see [`docs/DBDesign.md`](docs/DBDesign.md)) — a fresh DB file is the clean-state path. A fresh file without the schema fails with `no such table`.
 
 ```sh
 # 1. Register the model
@@ -229,7 +229,7 @@ Once the backend is running (see [Quick start](#quick-start)), launch `acta_gui`
 
 ## CLI ergonomics
 
-All three binaries support `--version` and `--help`. The CLI offers file in/out (`--content_file`, `--out`, `--raw_out`), NDJSON `--stream`, output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), light-projection listers with `--full` for the high-volume blob fields, and the machine-readable `--tools` JSON schema (e.g. `acta_cli skill list --table --fields name,revision`). **Warning:** `db exec` executes mutating SQL with no parameter binding and no undo — it can delete or corrupt the audit database. Statements whose first keyword is `SELECT` are rejected with exit 4 before execution; it is a development/debugging tool, not part of the normal workflow — do not pass user-supplied strings to it. The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
+All three binaries support `--version` and `--help`. The CLI offers file in/out (`--content_file`, `--out`, `--raw_out`), NDJSON `--stream`, output shaping (`--fields`, `--no_nulls`, `--table`, `--count`, `--id_only`, `--pretty`), light-projection listers with `--full` for the high-volume blob fields, and the machine-readable `--tools` JSON schema (e.g. `acta_cli skill list --table --fields name,revision`). The CLI takes no user-supplied SQL: `db init` applies the canonical embedded schema to a fresh file (already schema'd file → no-op; partial/foreign file → fail closed, exit 4). The full wire format, per-action flag tables, and error contracts are in [`docs/cli_spec.md`](docs/cli_spec.md).
 
 Components and their reference docs:
 
