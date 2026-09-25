@@ -17,6 +17,13 @@
 #define EXIT_CLI            10
 #define EXIT_DB_OPEN        11
 
+/* ---- entry point ----
+ * The full CLI flow (parse_globals → resolve DB path → open → dispatch)
+ * lives in cli_main() so the test binaries (which link the app objects
+ * minus main.o) can drive it in-process; main() is a thin wrapper.
+ */
+int cli_main(int argc, char **argv);
+
 /* ---- global options (filled by parse_globals) ---- */
 typedef struct {
     /* input / source */

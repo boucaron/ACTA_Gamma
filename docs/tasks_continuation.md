@@ -223,6 +223,62 @@ the follow-up list call returns 9 rows).
 2. ~~**Grep audit** for leftover user-facing `db exec`~~ — **done in
    session 3** (see above); the `json.h:31` cosmetic cleanup was applied.
 
+## Done (session 7 — `db init` bootstrap unreachable from the CLI)
+
+While running the schema-migration plan's leftover operator checks
+(`db backup --to` + `db migrate` on the backed-up file), a gap in the
+finished `db init` work was found: **the "fresh file" path is
+unreachable from the CLI binary.**
+
+23. **The gap.** `main.c` opened the DB with `ACTA_DB_OPEN_EXISTING`
+   for every action, and `acta_db_open` in `EXISTING` mode requires
+   **at least one user table** (its anti-0-byte guard). So
+   `acta_cli db init --db fresh.db` exits 11 for both a **nonexistent**
+   file and a **valid-but-empty** (zero-table) file — verified
+   empirically with the prebuilt binary. The fresh-file behavior
+   (schema applied, `user_version = 1`) was only ever reachable
+   in-process: the GUI first launch and the `db_test.c` scenarios,
+   which open their scratch handles with `ACTA_DB_OPEN_CREATE`. That
+   contradicts the shipped contract: README ("Fresh databases need the
+   schema first: run `acta_cli db init`"), `usage_init` ("Fresh file
+   (no user tables): the canonical schema is applied"), and the
+   `remove-db-exec` plan's goal 1 ("Bootstrapping a fresh database for
+   CLI-only users"). The in-process `cmd_db` pins and the `acta_db`
+   open-mode pins were all green — the broken layer was the wiring
+   around them, which no test exercised (test binaries link
+   `APP_OBJS_NO_MAIN` and pre-open their own handles).
+24. **Fix, `acta_cli/src/main.c`.** Open-mode selection before
+   `acta_db_open`: `db init` opens with `ACTA_DB_OPEN_CREATE` (the
+   bootstrap path — may create/adopt a fresh file); every other action
+   keeps `ACTA_DB_OPEN_EXISTING` (missing file still exits 11).
+   Fail-closed on a corrupt non-SQLite file is preserved: `sqlite3_open`
+   succeeds, the user-table listing fails, and the `init` branch's
+   existing `err != ACTA_DB_OK || tables == NULL` path errors out. No
+   doc change was needed — README / `cli_spec.md` / `usage_init`
+   already state the contract the fix now actually meets.
+25. **Testable seam: `cli_main`.** To pin the wiring in-process, the
+   full CLI flow (parse → early-exit → resolve → open → dispatch →
+   close) moved from `main.c` into a new `acta_cli/src/cli_main.c`
+   (`cli_main` + `cli_error`, which moved with it — declared in
+   `cli.h`); `main.c` is now a thin `main()` → `cli_main()` wrapper.
+   `cli_main.o` is picked up by the `SRCS` wildcard and links into
+   every test binary (`APP_OBJS_NO_MAIN` excludes only `main.o`).
+26. **Tests, `acta_cli/tests/db/db_test.c`.** New
+   `test_cli_main_bootstrap` (registered in `run_db_test_all`), driving
+   `cli_main` in-process under `stest_capture` (dup2 on fd 1, same
+   pattern as the `test_check` capture fix):
+   - **(a)** `db init --db <nonexistent>` → rc 0, `{"status":"ok"}`;
+     the file now exists with **9 user tables** and
+     `PRAGMA user_version = 1` (the bootstrap that previously exited 11);
+   - **(b)** `db init --db <existing zero-table valid file>` → rc 0,
+     schema applied — the exact case `ACTA_DB_OPEN_EXISTING` rejects;
+   - **(c)** regression: `db version --db <nonexistent>` → rc
+     **11** with empty stdout (JSON error line on stderr) — every other
+     action still requires an existing database.
+
+Verified green by the user: `make all` + `make test` (every suite,
+`test_db` now includes the three `cli_main` scenarios).
+
 ## Notes / decisions made
 - `db init` uses short-circuit idempotency (does NOT re-run CREATE TABLE on an
   already schema'd file; only a fresh file runs the schema), because the

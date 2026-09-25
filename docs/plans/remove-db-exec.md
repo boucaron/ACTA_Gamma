@@ -1,14 +1,20 @@
 # Plan: remove the raw-SQL `db exec` action from `acta_cli`
 
 Status: done (implemented and verified — see `docs/tasks_continuation.md`
-sessions 1-6: session 4 fixed the unterminated `ACTA_SCHEMA_SQL`
+sessions 1-7: session 4 fixed the unterminated `ACTA_SCHEMA_SQL`
 declaration in the generated `schema_sql.h` (broke the first `make all` at
 `sqlite3.h:188`), session 5 fixed the `acta_db_user_tables` empty-result
 handling, the two stale `exec` pins in `tests/help/help_test.c`, and the
 74 → 75 tools-entry miscount; session 6 fixed the missing initial
 allocation in `acta_db_user_tables` that segfaulted `test_db` and
-`test_tools`; full `make all` / `make test` run verified green by the
-user)
+`test_tools`; session 7 closed the bootstrap gap — the "fresh file" path
+of `db init` was unreachable from the CLI binary because `main.c` opened
+every action with `ACTA_DB_OPEN_EXISTING` (which requires at least one
+user table), so a nonexistent or zero-table file exited 11; the open mode
+is now `ACTA_DB_OPEN_CREATE` for `db init` only, via the `cli_main` seam
+(full flow in `src/cli_main.c`, `main.c` a thin wrapper), pinned by
+`test_cli_main_bootstrap` in the `db` suite; full `make all` / `make test`
+run verified green by the user)
 
 ## Context
 

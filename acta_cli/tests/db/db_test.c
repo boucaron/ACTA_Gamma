@@ -214,6 +214,95 @@ static void test_exec_removed(stest_ctx_t *ctx)
     TEST_EQ(ctx, do_db(ctx, "exec", a, g), EXIT_CLI);
     targs_free(a, &g);
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  CLI bootstrap wiring (cli_main)
+ *
+ *  The cmd_db scenarios above pin the `init` logic in-process with a
+ *  pre-opened handle.  These pin the wiring around it: main.c (cli_main)
+ *  opens with ACTA_DB_OPEN_CREATE for `db init` only, so a fresh file
+ *  (nonexistent, or existing but zero-table) can be bootstrapped from
+ *  the CLI; every other action still requires an existing database
+ *  (ACTA_DB_OPEN_EXISTING → exit 11 on a missing file).
+ * ═══════════════════════════════════════════════════════════════════ */
+
+#define INIT_CLI_MAIN_DB      "acta_test_cli_main_init.db"
+#define INIT_CLI_MAIN_EMPTY_DB "acta_test_cli_main_empty.db"
+
+static void run_cli_main(stest_ctx_t *ctx, char *argv[], int argc,
+                         int *rc)
+{
+    stest_capture_begin(ctx);
+    *rc = cli_main(argc, argv);
+    stest_capture_end(ctx);
+}
+
+static void test_cli_main_bootstrap(stest_ctx_t *ctx)
+{
+    /* (a) db init on a NONEXISTENT file: cli_main creates it and
+     *     applies the canonical schema (user_version 1, 9 tables). */
+    scratch_cleanup(INIT_CLI_MAIN_DB);
+    char *argv_a[] = { "acta_cli", "db", "init", "--db",
+                       INIT_CLI_MAIN_DB };
+    int rc = -1;
+    run_cli_main(ctx, argv_a, 5, &rc);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+
+    int err = 0, n = 0, uv = -1;
+    db_t *db = acta_db_open(INIT_CLI_MAIN_DB, &err, ACTA_DB_OPEN_EXISTING);
+    TEST_NOT_NULL(ctx, db);
+    char **tabs = acta_db_user_tables(db, &n, &err);
+    TEST_EQ(ctx, err, ACTA_DB_OK);
+    TEST_EQ(ctx, n, 9);
+    acta_db_user_tables_free(tabs, n);
+    acta_db_schema_version(db, &uv);
+    TEST_EQ(ctx, uv, 1);
+    acta_db_close(db);
+    scratch_cleanup(INIT_CLI_MAIN_DB);
+
+    /* (b) db init on an EXISTING but EMPTY (zero user tables) valid
+     *     file — the case ACTA_DB_OPEN_EXISTING would reject (exit 11);
+     *     ACTA_DB_OPEN_CREATE accepts it and applies the schema. */
+    scratch_cleanup(INIT_CLI_MAIN_EMPTY_DB);
+    {
+        int e2 = 0;
+        db_t *db2 = acta_db_open(INIT_CLI_MAIN_EMPTY_DB, &e2,
+                                 ACTA_DB_OPEN_CREATE);
+        TEST_NOT_NULL(ctx, db2);
+        /* one statement so the file gets a real SQLite header on disk */
+        acta_db_exec(db2, "PRAGMA user_version=0;");
+        acta_db_close(db2);
+    }
+    char *argv_b[] = { "acta_cli", "db", "init", "--db",
+                       INIT_CLI_MAIN_EMPTY_DB };
+    run_cli_main(ctx, argv_b, 5, &rc);
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"status\":\"ok\"");
+    {
+        int e2 = 0, n2 = 0;
+        db_t *db2 = acta_db_open(INIT_CLI_MAIN_EMPTY_DB, &e2,
+                                 ACTA_DB_OPEN_EXISTING);
+        TEST_NOT_NULL(ctx, db2);
+        char **tabs2 = acta_db_user_tables(db2, &n2, &e2);
+        TEST_EQ(ctx, e2, ACTA_DB_OK);
+        TEST_EQ(ctx, n2, 9);
+        acta_db_user_tables_free(tabs2, n2);
+        acta_db_close(db2);
+    }
+    scratch_cleanup(INIT_CLI_MAIN_EMPTY_DB);
+
+    /* (c) regression: every other action still requires an existing
+     *     database — a missing file is exit 11 with an empty stdout
+     *     (the JSON error line goes to stderr). */
+    scratch_cleanup(INIT_CLI_MAIN_DB);
+    char *argv_c[] = { "acta_cli", "db", "version", "--db",
+                       INIT_CLI_MAIN_DB };
+    run_cli_main(ctx, argv_c, 5, &rc);
+    TEST_EQ(ctx, rc, EXIT_DB_OPEN);
+    TEST_EQ(ctx, (int)strlen(stest_stdout(ctx)), 0);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
  *  db migrate
  * ═══════════════════════════════════════════════════════════════════ */
@@ -659,6 +748,7 @@ int run_db_test_all(void)
     test_init_foreign(&ctx);
     test_init_rejects_input(&ctx);
     test_exec_removed(&ctx);
+    test_cli_main_bootstrap(&ctx);
 
     /* migrate */
     test_migrate_fresh(&ctx);
