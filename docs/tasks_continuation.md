@@ -295,7 +295,7 @@ Verified green by the user: `make all` + `make test` (every suite,
 
 # Task continuation 2: token-free runner health check (`acta_runner check`)
 
-Source plan: `docs/plans/runner-health-check.md` (plan 1 of the three open
+Source plan: the runner health-check plan (plan 1 of the three open
 plans; plan 2 — schema migration — is now done, see "Task continuation 3"
 below; plan 3 — Windows config permissions — is still a proposal, not
 started).
@@ -403,7 +403,7 @@ Status: **verified; committed.** Session 1 was edit-only; session 2 ran
     - `docs/status.md`: Done bullet for `acta_runner check`, explicitly
       marked "implementation landed, full `make test` verification
       pending".
-    - `docs/plans/runner-health-check.md`: status → "implemented
+    - the runner health-check plan: status → "implemented
       (edit-only session — no compilation/test run yet; verification
       pending)"; new **Implementation notes** section recording the
       resolutions: non-200-non-503 /health → `server unreachable`;
@@ -443,7 +443,7 @@ and fixed, then everything green:
     CRT's `_pipe` has a 3-arg UCRT-style signature.) After the fix:
     `make all`, `make test` (every suite, `test_check` included) and
     `make gui` all green; docs status lines updated (`docs/status.md`,
-    `docs/plans/runner-health-check.md`). Committed.
+    the runner health-check plan). Committed.
 
 ## Deferred (plan open questions, NOT part of this task)
 
@@ -454,7 +454,7 @@ and fixed, then everything green:
 
 # Task continuation 3: schema migrations (`acta_cli db migrate`)
 
-Source plan: `docs/plans/schema-migration.md` (plan 2; follow-up to the
+Source plan: the schema-migration plan (plan 2; follow-up to the
 `remove-db-exec` task — fills the "no operator path for evolving an
 existing database" gap left by the `db exec` removal).
 

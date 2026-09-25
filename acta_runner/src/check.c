@@ -1,7 +1,7 @@
 /*
  * acta_runner — "check" action (token-free backend health check)
  *
- * Per docs/plans/runner-health-check.md: verifies the backend and a
+ * Per docs/runner_contract.md (check action): verifies the backend and a
  * specific model WITHOUT any chat completion — zero tokens, zero
  * inference, zero execution rows, no DB writes of any kind. It is the
  * token-free pre-flight for a `run --pending` batch and the first

@@ -33,8 +33,7 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   stub server serves `GET /` with a canned catalog
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
-- `src/check.c` — the token-free `check` action
-  (`docs/plans/runner-health-check.md`): `acta_runner check
+- `src/check.c` — the token-free `check` action: `acta_runner check
   <model-record-id>` (DB mode: the model row is read read-only for
   `base_url` + `model_identifier`; no execution is created, claimed, or
   logged) or `acta_runner check --base-url <url> --model-identifier <id>`

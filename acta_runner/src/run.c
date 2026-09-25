@@ -692,7 +692,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
     /* The two token-free preflight calls (GET /health, then
      * GET /v1/models) are factored into backend_preflight() — the
      * shared request/response path with the standalone `check` action
-     * (docs/plans/runner-health-check.md). The classification maps to
+     * (docs/runner_contract.md, check action). The classification maps to
      * the exact same FAIL messages as before. As before, the api key
      * is sent on these GETs too (docs/runner_contract.md, decision 4).
      * */

@@ -1,6 +1,6 @@
 /*
  * test_check.c — token-free backend health-check tests for the `check`
- * action (docs/plans/runner-health-check.md).
+ * action (docs/runner_contract.md, check action).
  *
  * Covers:
  *   1. DB mode success              -> exit 0, ok:true, max_context

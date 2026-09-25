@@ -82,7 +82,7 @@ const char *backend_strerror(int rc);
  * Performs the two cheap GETs — GET /health, then GET /v1/models (only
  * after /health succeeds: a 503 server is "loading", not "unknown
  * model") — and classifies the outcome, so both callers share one
- * request/response path (docs/plans/runner-health-check.md). No POST,
+ * request/response path (docs/runner_contract.md, check action). No POST,
  * no chat/completions: this is the zero-token surface.
  *
  * Result codes:
