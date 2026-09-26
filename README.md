@@ -1,5 +1,7 @@
 # ACTA Gamma
 
+![ACTA Gamma logo](assets/logo.jpg)
+
 **LLMs as actions, not agents.**
 
 ACTA Gamma is a small runner for executing **one controlled LLM action at a time** and recording the outcome.
