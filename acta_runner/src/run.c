@@ -222,6 +222,9 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         return EXIT_INVALID;
     }
 
+    /* One action-summary line per action (VLOG level 1 contract);
+     * mirrors the --pending batch summary above. */
+    VLOG(1, "cmd_run: running execution %d", id);
     int rc = run_execution(db, id, timeout, max_chars, api_key);
     acta_conf_free(&conf);
     return rc;
