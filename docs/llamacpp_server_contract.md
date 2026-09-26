@@ -2,7 +2,7 @@
 
 Distilled from the llama.cpp server README (the full auto-generated
 server reference in the upstream llama.cpp repository; only the
-runner-relevant subset is kept here). Tested on **llama.cpp 0.4.x** (router mode); compatibility with later versions is not guaranteed — if the router surface changes, the preflight and catalog-fetch steps need re-validation.
+runner-relevant subset is kept here). Tested on **llama.cpp 0.5.0** (router mode); compatibility with any other version is not guaranteed — if the router surface changes, the preflight and catalog-fetch steps need re-validation.
 
 ## 1. Server startup (canonical: router mode)
 

@@ -145,7 +145,13 @@ Implementation notes (where the spec left room):
    `acta_runner run <id>` (commit 184d574); later refinement
    (M1 / UR #45, commit f6efe22) runs the same pipeline in-process,
    reusing the C `run.c`/`backend.c` directly instead of a Qt port —
-   the standalone runner and its CLI remain available. The worker must be
+   the standalone runner and its CLI remain available. **Cancel:** the
+   pipeline runs on a worker thread; **Cancel** sets a flag checked
+   between pipeline steps, and a response that arrives after cancel is
+   discarded — an HTTP call already in flight runs to completion (the
+   backend still generates the full response; the tokens are consumed
+   regardless), so cancel stops the **recording**, not the compute, and
+   transitions the row to `cancelled`. The worker must be
    `moveToThread()`-ed into its `QThread`; reparenting it to the
    `QThread` (which lives on the GUI thread) would keep the worker's
    affinity on the GUI thread and dispatch the blocking pipeline into
