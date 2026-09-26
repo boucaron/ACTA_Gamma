@@ -578,3 +578,136 @@ all green; docs status lines updated; committed.
   user_version` with a minor-bump convention is the chosen design; a
   `schema_version TEXT` table row would be the alternative;
 - a future `db schema-version` action printing the version ledger.
+
+---
+
+## Docs consistency audit (separate task — status snapshot, 2026-09-26)
+
+Read-only cross-check of `docs/*` against the code, the built binaries
+(`acta_cli --tools` / `--help`, live CLI runs on `docs/examples/acta.db`) and
+the git history. No doc edits made yet — this section records what was
+verified and what remains to fix.
+
+### Done (verified)
+
+1. **Structure** — four build units (`acta_db`, `acta_cli`, `acta_runner`,
+   `acta_gui`) + top-level Makefile; GUI compiles the runner's `run.c`,
+   `backend.c`, `argparse.c`, `deathmark.c` by path (matches
+   `building.md` coupling section and commit `5774a49`). Build/test
+   artifacts and `acta_runner/MYTEST/` leftovers are gitignored or
+   untracked working files — no action needed.
+2. **`docs/cli_spec.md` vs the binary** — flag/positional/exit-code tables
+   match the `--tools` output (76 entries, compact header `v5`) and live
+   CLI behaviour (exit 4 for `--id_only` on `list`, unknown JSON key →
+   exit 4, `--deleted` alias, `db` actions, `--raw_out`, `--stream`;
+   DB-open failure → `ACTA_DB_ERR_SQL`, `code:-11`, exit 11).
+3. **`docs/runner_contract.md` vs `acta_runner` source** — actions
+   `run`/`check`/`sweep`, flags `--pending`/`--max`/`--timeout`/
+   `--stale-seconds`, preflight/auto-preflight, exit codes 0/1/4/12/13,
+   decision 4 (api_key policy), decision 8 (max_chars) all match.
+4. **`docs/DBDesign.md` vs `acta_db/schema.sql` / `acta_cli/acta_test_ref.sql`**
+   — 9 tables, triggers, state machine, soft-delete lifecycle all match;
+   GUI `assets.qrc` correctly aliases `:/db/schema.sql` →
+   `../acta_db/schema.sql`.
+5. **Commit cross-check** — every commit hash cited in `docs/status.md`
+   and `docs/known_issues.md` exists (`ce14a22`, `d678a12`, `4451244`,
+   `c437b3e`, `1e376a7`, `c327a49`, `c64b74c`, `cebd993`, `c3d37b8`,
+   `494e988`, `fd1e1a4`, `1bb0466`, `4c3fe27`, `97fe915`, `0ce3826`,
+   `740a3c6`, `d820c6b`, `0ce3886`, `a830bf2`, `427671a`, `d142a8e`,
+   `2f8085e`, `184d574`, `f6efe22`, `51e375c`, `0b06b25`, `4400496`); each
+   message matches the current code/test state (all named test files exist:
+   `test_shadow.c`, `test_autopreflight.c`, `test_deathmark.c`,
+   `test_busy.c`, `acta_cli/tests/{conf,dbpath,tools,help,gparse}`).
+   Coherent histories confirmed: tools schema 69 → 75 → 76 entries / v6;
+   timeout 300 s → 600 s (`c1ad7f9`, `ACTA_CONF_DEFAULT_TIMEOUT 600` used by
+   runner and GUI); `db exec` → `db init`; `executions.prompt` removal;
+   QSettings org name `ACTA Gamma` (`acta_gui/src/main.cpp`, matches
+   `known_issues.md` #12); llama.cpp pin 0.4.x → 0.5.0 (`5bd9f77`).
+6. **Example DB facts** — revision ids in `multi-persona-review.md`
+   (skills 9/11/12/13/14 → revs 18–22, model 12 → rev 18), replay.md fresh-copy
+   id table (model 13 / rev 19, runs 59/60) and exec 58 binding
+   (context 31 / skill rev 22 / model rev 18, completed) all match
+   `docs/examples/acta.db`. Context wire key is `hash` (not `content_hash`),
+   matching `json.c` and cli_spec.
+7. **Verification hygiene** — a test row created in
+   `docs/examples/acta.db` during live CLI checks was restored via
+   `git checkout`; the file is back to its committed state.
+
+### Remaining (doc fixes NOT yet made)
+
+1. **`docs/cli_spec.md` — stale `--tools` version number** ❗
+   Says "the schema `version` field is **5**"; the binary emits
+   `"version": 6` (76 entries), and `docs/status.md` records the bump
+   5 → 6 when `db migrate` landed. Only the version-field sentence is
+   stale; the `## db` table itself matches.
+2. **`docs/status.md` — self-contradicting intro** ❗
+   Opening paragraph: "no schema versioning or migration framework".
+   The same file's **Done** section (and `DBDesign.md`) documents the
+   implemented `PRAGMA user_version` migrations and `acta_cli db migrate`.
+3. **Dead README cross-reference in two docs** ❗
+   `docs/building.md` (twice) and `docs/status.md` both point to
+   *"the README **Environment variables and the per-machine config
+   file** section"*. That section no longer exists — the README was
+   rewritten in `5217df6` ("Large simplification"); the content now lives
+   under `# Configuration` (`### OPENAI_API_KEY` / `### ACTA_DB` /
+   `### ACTA_Gamma.conf`).
+4. **`docs/status.md` — dangling README-paragraph references** (changelog
+   entries that read as live pointers): "README sweep paragraph (clean-exit
+   mark + the `--stale-seconds` choice rule)", "README quick-start bullet +
+   sweep paragraph + end-to-end step 6 comment", "README env bullet".
+   The current README has only one-line CLI-table rows for `sweep`/`check`
+   and no auto-preflight or death-marker paragraph.
+5. **`docs/examples/playground.md` — wrong count**: "The DB already
+   contains **57 finished executions**." Actual: 57 *live* executions, of
+   which only **50 are `completed`** (1 failed, 6 pending live, 1 deleted).
+6. **`docs/examples/replay.md` — wrong universality claim**: "**Every
+   completed execution in the bundled database is bound to model revision
+   18**." Actual: 23 completed bound to model revision 18, **27 bound to
+   model revision 16**. (Rest of the doc checks out.)
+7. **`docs/DBDesign.md` — stale soft-delete migration section** (minor):
+   "Migrating existing databases (soft-delete columns)" instructs manual
+   `ALTER TABLE … ADD COLUMN deleted_at` and refers to "the versioned
+   schema file" — but the 0.1 baseline already includes the `deleted_at`
+   columns and no standalone soft-delete migration file exists.
+8. **`docs/cli_spec.md` — undocumented flag** (minor): `--pretty` (real
+   global flag, in `--help` and the compact tools header, applied to
+   `--tools` output) is never mentioned.
+9. **README "Current status" feature list** (minor omission, not a
+   contradiction): does not mention `db migrate`, the `check` health
+   action, auto preflight, or the death marker (shipped in `431609f`,
+   `e1af4c5`, `69fd9cf`, `8d63320`).
+10. **`.gitignore` nit** (optional): `docs/examples/acta.db` is force-added
+    without a `!docs/examples/acta.db` negation rule (commit `1d06a09` says
+    it "overrides the `*.db` rule"); a negation line would make the intent
+    explicit.
+
+### Remaining — done (session 1)
+
+All 10 remaining items above were applied (facts re-verified against the
+built binary and `docs/examples/acta.db` before editing):
+
+1. `docs/cli_spec.md`: schema `version` field 5 → 6.
+2. `docs/status.md` intro: "no schema versioning or migration framework"
+   → "schema versioning is implemented via `PRAGMA user_version` with
+   `acta_cli db migrate` (see Done below)".
+3. Dead README cross-reference fixed in `docs/building.md` and
+   `docs/status.md` → README `# Configuration`.
+4. `docs/status.md` dangling README-paragraph references reworded as
+   changelog notes (env bullet, death-marker docs line, auto-preflight
+   docs line).
+5. `docs/examples/playground.md`: "57 finished executions" → 57 live
+   (50 `completed`, 1 `failed`, 6 `pending`, +1 deleted), "pick a
+   `completed` one".
+6. `docs/examples/replay.md`: universality claim → 23 completed bound to
+   model revision 18, 27 bound to model revision 16.
+7. `docs/DBDesign.md`: "Migrating existing databases (soft-delete
+   columns)" rewritten — migration goes through `db migrate` / the 0.1
+   baseline (which already carries `deleted_at` + the trigger); no manual
+   `ALTER TABLE` procedure; `db init` only seeds fresh files.
+8. `docs/cli_spec.md`: `--tools --pretty` documented in the schema-flags
+   paragraph (2-space indent; default is a single line).
+9. README "Current status" feature list gained: `db migrate`,
+   `acta_runner check`, auto preflight, death marker.
+10. `.gitignore`: `!docs/examples/acta.db` negation added under the
+    `*.db` rule (verified: the file remains tracked).
+

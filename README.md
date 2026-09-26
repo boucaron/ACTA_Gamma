@@ -533,6 +533,10 @@ The core pipeline is implemented:
 * replay
 * soft delete / restore
 * stale execution recovery
+* schema migrations (`db migrate`)
+* token-free backend health check (`acta_runner check`)
+* auto preflight before a run is claimed
+* death marker for clean process exits mid-run
 * database backup
 
 The project is still at an early productization stage.

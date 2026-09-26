@@ -125,13 +125,15 @@ wrong case — is rejected with exit 4 (`invalid JSON body`), not
 silently ignored.
 
 Schema flags: `--tools` emits the machine-readable JSON schema
-(`src/tools.c`); `--tools --compact` emits a plain-text one-line-per-command
+(`src/tools.c`); `--tools --pretty` renders the same schema with 2-space
+indentation (the default rendering is a single line); `--tools --compact`
+emits a plain-text one-line-per-command
 rendering (~7 KB) of the same static table — positionals, flags (with `*`
 = required), JSON keys, input mode, aliases — intended for LLM/agent
 in-context use. The full JSON output stays the source of truth; compact
 is derived from the same `tool_table`, so it cannot drift from it.
 
-`success` is structured (the schema `version` field is 5): a JSON object
+`success` is structured (the schema `version` field is 6): a JSON object
 `{"kind": "json" | "json_object" | "json_array" | "bare_int" | "plain_text"`
 (`,"keys": [ … ]` when `kind` is `"json"` — the exact wire keys from the
 per-action table above; `,"note": "…"` optional, carrying the

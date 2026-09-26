@@ -94,7 +94,8 @@ exact.
 
 ## Executions and the audit trail
 
-The DB already contains 57 finished executions. Pick one:
+The DB already contains 57 live executions — 50 `completed`, 1 `failed`, 6
+`pending` (plus 1 deleted). Pick a `completed` one:
 
 ```sh
 $ acta_cli exec list --fields id,skill_revision_id,model_revision_id,status

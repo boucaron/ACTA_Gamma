@@ -21,10 +21,11 @@ configuration, and LLM sampling are not pinned (see
 
 **Which model your router must serve.** The runner's preflight checks that
 the router's `GET /v1/models` lists the `model_identifier` of the model
-record the replay is bound to. Every completed execution in the bundled
-database is bound to model revision 18 — model record 12,
+record the replay is bound to. The 23 completed executions in the bundled
+database that are bound to model revision 18 — model record 12,
 `model_identifier` `JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`,
-`base_url` `http://localhost:8080` — the author's local GGUF. Unless you
+`base_url` `http://localhost:8080` — the author's local GGUF (the other 27
+completed executions are bound to model revision 16). Unless you
 happen to have that exact file, you will bring your own model and replay a
 **new** first execution run against it, instead of execution 58.
 

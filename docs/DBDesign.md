@@ -478,21 +478,20 @@ BEGIN
 END;
 ```
 
-### Migrating existing databases (soft-delete columns)
+### Migrating existing databases
 
-Pre-existing DB files created before the soft-delete lifecycle need the
-two columns and the trigger replacement (already in the schema above):
-
-```sql
-ALTER TABLE contexts   ADD COLUMN deleted_at TEXT;
-ALTER TABLE executions ADD COLUMN deleted_at TEXT;
--- plus the contexts_soft_delete_only trigger replacement, see above
-```
-
-Existing rows have `deleted_at = NULL`, i.e. they are live. Apply via
-the versioned schema file on a fresh database file: `db init` (take a
-`db backup --to` of the data-carrying file first); idempotent check:
-`PRAGMA table_info` before applying.
+Schema evolution goes through the versioned migration files:
+`acta_db/migrations/<version>.sql` (embedded as `include/migrations_sql.h`)
+applied by `acta_cli db migrate` — `PRAGMA user_version` is the recorded
+schema version, and each migration newer than the file's version is
+applied in its own transaction. The 0.1 baseline migration
+(`acta_db/migrations/0.1.sql`, a verbatim copy of `acta_db/schema.sql`)
+already carries the `deleted_at` columns and the
+`contexts_soft_delete_only` trigger, so no separate soft-delete migration
+exists: a pre-migration file is migrated from 0.1 wholesale, and its
+existing rows land with `deleted_at = NULL`, i.e. live. `db init` only
+seeds a fresh file — take a `db backup --to` of a data-carrying file
+before migrating it.
 
 ## Executions
 
