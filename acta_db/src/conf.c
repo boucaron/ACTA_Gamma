@@ -1,7 +1,8 @@
 /*
  * conf.c — per-machine config file parser.
  *
- * Source of truth: docs/plans/acta-config-file.md (work item 1).
+ * Source of truth: docs/runner_contract.md (decisions 4 and 8) and the
+ * README "Environment variables and the per-machine config file".
  *
  * Parsed with the same fail-closed style as the model `configuration` blob
  * check in acta_runner/src/run.c: not-an-object, unknown key, wrong type, or
@@ -303,8 +304,8 @@ int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
         return -1;
     }
 
-    /* Permission gate (work item 5 of
-     * docs/plans/acta-config-file.md): the file may hold a secret
+    /* Permission gate (docs/runner_contract.md, decision 4): the file may
+     * hold a secret
      * ("api_key"), so it must be 0600 (owner read/write only).  A file
      * whose mode gives read access to group or other is refused
      * fail-closed, BEFORE its contents are read.  stat failure (file
@@ -394,8 +395,8 @@ int acta_conf_api_key_shadow_warning(const char *env_key,
 }
 
 /*
- * Resolution helpers -- work item 4 of
- * docs/plans/acta-config-file.md.  The file supplies per-machine
+ * Resolution helpers (docs/runner_contract.md, decisions 4 and 8).  The file
+ * supplies per-machine
  * defaults; it is never a per-run override.  acta_conf_parse already
  * guarantees a present value is a positive integer, so 0 is exactly
  * "absent from the file".

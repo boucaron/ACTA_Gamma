@@ -6,7 +6,7 @@
  */
 #include "acta_dbpath.h"
 
-#include <conf.h>   /* acta_conf_read / acta_conf_default_path (work item 3) */
+#include <conf.h>   /* acta_conf_read / acta_conf_default_path */
 
 #include <stdio.h>
 #include <stdlib.h>

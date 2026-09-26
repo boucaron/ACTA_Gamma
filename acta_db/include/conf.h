@@ -10,10 +10,11 @@ extern "C" {
 /*
  * acta_conf_t — per-machine settings parsed from the config file.
  *
- * Source of truth: docs/plans/acta-config-file.md (work item 1).  This is
+ * Source of truth: docs/runner_contract.md (decisions 4 and 8) and the
+ * README "Environment variables and the per-machine config file".  This is
  * the "shared helper" read by all three binaries; acta_cli and acta_runner
  * call this C parser directly, and the GUI uses an equivalent Qt
- * (QJsonDocument) reader (work item 6) rather than this code.
+ * (QJsonDocument) reader rather than this code.
  *
  * The file holds AT MOST these four operator settings.  Backend URL, model
  * id, and configuration stay in the DB model record — this struct holds
@@ -25,7 +26,8 @@ extern "C" {
  *   failure (return -1) -> the struct is left fully zeroed; free nothing.
  *
  * "0" in max_chars / timeout means "absent from the file"; the caller
- * applies the built-in default (see the plan) in that case.
+ * applies the built-in default (the ACTA_CONF_DEFAULT_* constants below)
+ * in that case.
  */
 typedef struct {
     char *api_key;   /* heap copy of "api_key", or NULL when absent */
@@ -67,8 +69,7 @@ int acta_conf_parse(const char *blob, acta_conf_t *out, char **err_msg);
 void acta_conf_free(acta_conf_t *conf);
 
 /*
- * API key precedence policy — work item 2 of
- * docs/plans/acta-config-file.md.
+ * API key precedence policy (docs/runner_contract.md, decision 4).
  *
  * Precedence: $OPENAI_API_KEY (if set) -> the config file's "api_key".
  * The file is a fallback, not a second channel: an environment variable
@@ -83,7 +84,7 @@ void acta_conf_free(acta_conf_t *conf);
  * Mirror of runner_api_key_status() in acta_runner/include/runner_util.h
  * so acta_runner (cmd_run) and acta_gui (runnerWorker) apply one shared
  * policy and cannot drift; the GUI passes the key parsed by its own Qt
- * reader (work item 6) as file_key.
+ * reader as file_key.
  */
 enum { ACTA_KEY_OK = 0, ACTA_KEY_EMPTY_WARN = 1, ACTA_KEY_UNSET_ERR = 2 };
 
@@ -148,8 +149,8 @@ int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
 
 /*
  * Built-in defaults for the two per-machine settings that have no
- * flag/env source of their own (docs/plans/acta-config-file.md, work
- * item 4; docs/plans/max-chars-size-check.md):
+ * flag/env source of their own (docs/runner_contract.md, decisions 4 and
+ * 8):
  *   ACTA_CONF_DEFAULT_MAX_CHARS — maximum total chars of the prompt sent
  *                                 (skill.prompt_template + context.content);
  *   ACTA_CONF_DEFAULT_TIMEOUT   — default per-call HTTP timeout (seconds).
@@ -161,7 +162,7 @@ int acta_conf_read(const char *path, acta_conf_t *conf, int *missing,
 
 /*
  * Resolve the prompt size limit: config file -> built-in default.
- * Precedence (docs/plans/acta-config-file.md): "max_chars" (file) ->
+ * Precedence (docs/runner_contract.md, decision 8): "max_chars" (file) ->
  * ACTA_CONF_DEFAULT_MAX_CHARS. There is no env var or CLI flag for
  * max_chars, so the file is the top rung.
  *
@@ -175,7 +176,7 @@ long acta_conf_resolve_max_chars(const acta_conf_t *conf);
 /*
  * Resolve the default per-call HTTP timeout: --timeout flag -> config
  * file -> built-in default.
- * Precedence (docs/plans/acta-config-file.md): --timeout (per-run flag)
+ * Precedence (docs/runner_contract.md, decision 4): --timeout (per-run flag)
  * -> "timeout" (file) -> ACTA_CONF_DEFAULT_TIMEOUT. The file supplies
  * the default, never a per-run override.
  *

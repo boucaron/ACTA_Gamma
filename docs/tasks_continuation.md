@@ -112,7 +112,7 @@ actually landed. Two small leftovers fixed:
 16. **`schema_sql.h` re-verified byte-exact** against `acta_db/schema.sql`
     (240 quoted line-literals, decoded content identical).
 17. **Grep audit completed**: no user-facing `db exec` / `db.exec` left
-    except (a) intentional historical mentions in `docs/plans/*`,
+    except (a) intentional historical mentions in
     `docs/known_issues.md`, `docs/status.md`, `docs/DBDesign.md`
     ("(`db exec` was removed)"), and (b) the intentional test-pinning
     comment in `db_test.c` ("db exec no longer exists"). Untracked
@@ -295,11 +295,12 @@ Verified green by the user: `make all` + `make test` (every suite,
 
 # Task continuation 2: token-free runner health check (`acta_runner check`)
 
-Source plan: the runner health-check plan (plan 1 of the three then-open
-plans; plan 2 — schema migration — is done, see "Task continuation 3"
-below; plan 3 — Windows config permissions — was later dropped without
-implementation: Windows config-file protection is declared the owner's
-responsibility, and the pre-change warn-and-read behavior stands).
+Source plan: the runner health-check plan (all three of its then-open
+siblings are gone: the schema-migration plan is done, see "Task
+continuation 3" below; the Windows config permissions plan was dropped
+without implementation — Windows config-file protection is declared the
+owner's responsibility, and the pre-change warn-and-read behavior
+stands).
 
 Status: **verified; committed.** Session 1 was edit-only; session 2 ran
 `make all` / `make test` / `make gui` and fixed the failures found (see
@@ -455,9 +456,9 @@ and fixed, then everything green:
 
 # Task continuation 3: schema migrations (`acta_cli db migrate`)
 
-Source plan: the schema-migration plan (plan 2; follow-up to the
-`remove-db-exec` task — fills the "no operator path for evolving an
-existing database" gap left by the `db exec` removal).
+Source plan: the schema-migration plan (follow-up to the `remove-db-exec`
+task — fills the "no operator path for evolving an existing database"
+gap left by the `db exec` removal).
 
 Status: **verified; committed.** Session 1 was edit-only; session 2 ran
 the builds and fixed the failures found (see "Done (session 2)"), then

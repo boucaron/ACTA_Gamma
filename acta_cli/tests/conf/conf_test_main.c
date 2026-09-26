@@ -13,13 +13,12 @@
  *     BEFORE its contents are read (0600 contract);
  *   - acta_conf_default_path: per-platform string (same app-data dir
  *     as the default DB file);
- *   - acta_conf_resolve_max_chars / _timeout: file-over-builtin order
- *     (work item 4).
+ *   - acta_conf_resolve_max_chars / _timeout: file-over-builtin order.
  *
  * The end-to-end cmd_run behaviour (env-set-wins, file fallback,
  * bad-permissions refusal, missing-file + unset-env hard error) is
  * pinned by acta_runner/tests/run/test_conf.c; the DB-path order
- * with/without the file by acta_cli/tests/dbpath (work item 3).
+ * with/without the file by acta_cli/tests/dbpath.
  */
 #include "conf.h"
 
@@ -351,7 +350,7 @@ static void test_read(void)
     remove(path);
 }
 
-/* ── resolution helpers (work item 4) ─────────────────────────────── */
+/* ── resolution helpers ───────────────────────────────────────────── */
 
 static void test_resolve(void)
 {

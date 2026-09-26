@@ -10,7 +10,7 @@
 // A missing or unreadable file is NOT an error: the file is simply
 // unavailable as a fallback (missing = true, valid = true).
 //
-// Permission gate (work item 5, mirror of acta_conf_read in
+// Permission gate (mirror of acta_conf_read in
 // acta_db/src/conf.c): the file may hold a secret ("api_key"), so it must
 // be 0600 (owner read/write only).  Group- or other-readable -> fail-closed
 // BEFORE the contents are read.  stat failure (no file) falls through to
@@ -18,10 +18,10 @@
 // meaningless (always 0666), so the gate warns and reads the file anyway
 // (best-effort, not enforced).
 //
-// Shared by the two GUI read sites (work items 3 and 6):
-//   - MainWindow::defaultDbPath consumes "db" (work item 3);
+// Shared by the two GUI read sites:
+//   - MainWindow::defaultDbPath consumes "db";
 //   - RunnerWorker::runInThread consumes "api_key" / "max_chars" /
-//     "timeout" (work item 6), applying the shared key policy
+//     "timeout", applying the shared key policy
 //     acta_conf_api_key_status from acta_db/conf.h.
 
 #include <cstdio>

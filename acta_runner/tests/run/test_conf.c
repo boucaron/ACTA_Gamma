@@ -21,9 +21,9 @@
  *      (acta_conf_resolve_max_chars / acta_conf_resolve_timeout).
  *
  * The DB-path precedence with/without the file is pinned by the
- * acta_cli/tests/dbpath suite (work item 3); the acta_conf parser /
- * status-helper unit rules are pinned by the acta_cli/tests/conf suite
- * (work item 1 / this file's section 7 covers only the resolution order).
+ * acta_cli/tests/dbpath suite; the acta_conf parser / status-helper unit
+ * rules are pinned by the acta_cli/tests/conf suite (this file's section 7
+ * covers only the resolution order).
  *
  * Same harness as test_api_key.c: scratch `:memory:` DB seeded from
  * `acta_db/schema.sql` + in-process stub server.  `cmd_run` is
@@ -309,7 +309,7 @@ static int make_conf_locations(const char *tmpdir, char *base, size_t bs,
     return 1;
 }
 
-/* Write a config file with the contract mode 0600 (work item 5).
+/* Write a config file with the contract mode 0600.
  * The permission gate refuses group/other-readable files, so a
  * default-umask (0644) file would be refused in every test that needs
  * the file to be readable. */
@@ -586,7 +586,7 @@ int main(void)
     }
 
     /* 7. (unit) max_chars / timeout file-over-builtin resolution order
-     *    (work item 4 helpers; the file supplies the default, the
+     *    (acta_conf_resolve_* helpers; the file supplies the default, the
      *    --timeout flag is the per-run override). */
     {
         printf("== unit: acta_conf_resolve_max_chars / _timeout\n");

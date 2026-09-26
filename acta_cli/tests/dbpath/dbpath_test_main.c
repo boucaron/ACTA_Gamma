@@ -161,7 +161,7 @@ static void default_posix(void)
 #endif
 }
 
-/* ── config-file step (work item 3) ─────────────────────────────────── */
+/* ── config-file step ──────────────────────────────────────────────── */
 
 static int write_file(const char *path, const char *content)
 {
@@ -171,7 +171,7 @@ static int write_file(const char *path, const char *content)
     fputs(content, f);
     fclose(f);
 #ifndef _WIN32
-    /* The resolver's POSIX permission gate (work item 5) refuses
+    /* The resolver's POSIX permission gate refuses
      * group/other-readable files; a default-umask (0644) file would be
      * refused, so pin the contract mode 0600.  On Windows the mode bits
      * are meaningless (always 0666) and the gate is not run. */
