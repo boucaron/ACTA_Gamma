@@ -1,6 +1,5 @@
 /*
- * test_autopreflight.c — auto preflight before the atomic claim
- * (docs/plans/runner-ops-hardening.md, item 4).
+ * test_autopreflight.c — auto preflight before the atomic claim.
  *
  * Covers:
  *   1. `run --pending`, dead server (no stub)     -> exit 12, the `check`
@@ -21,7 +20,10 @@
  *      per-execution pipeline preflight each = 3 calls, not 4.
  *
  * Same harness as test_pending.c: scratch `:memory:` DB seeded from
- * `acta_db/schema.sql` + in-process stub server. `cmd_run` is called
+ * `acta_db/schema.sql` (fresh per scenario — preflight-failure scenarios
+ * leave their rows pending, so a shared DB would accumulate them and
+ * break the per-scenario row-count and request-count assertions) +
+ * in-process stub server. `cmd_run` is called
  * directly with a constructed argv (no process spawn); the stdout verdict
  * line is captured the same way as in tests/check/test_check.c.
  *
@@ -217,6 +219,23 @@ static int seed_pending(db_t *db, const char *model_id)
     return id;
 }
 
+/* A scratch in-memory DB with the schema loaded, one per scenario:
+ * the preflight-failure scenarios leave their rows pending (nothing is
+ * claimed), so a DB shared across scenarios would accumulate pending
+ * rows and break the per-scenario row-count and request-count checks. */
+static db_t *open_fresh_db(void)
+{
+    int err = ACTA_DB_OK;
+    db_t *db = acta_db_open(":memory:", &err, ACTA_DB_OPEN_CREATE);
+    if (!db)
+        return NULL;
+    if (load_schema(db) != ACTA_DB_OK) {
+        acta_db_close(db);
+        return NULL;
+    }
+    return db;
+}
+
 /* ── verification helpers ─────────────────────────────────────────── */
 
 static int execution_status(db_t *db, int id, char *out, size_t outsz)
@@ -310,23 +329,14 @@ int main(void)
      * (docs/runner_contract.md, decision 4). */
     env_set_or_unset("OPENAI_API_KEY", "stub-key");
 
-    int err = ACTA_DB_OK;
-    db_t *db = acta_db_open(":memory:", &err, ACTA_DB_OPEN_CREATE);
-    if (!db) {
-        fprintf(stderr, "cannot open in-memory db: %s\n",
-                acta_db_strerror(err));
-        return 1;
-    }
-    if (load_schema(db) != ACTA_DB_OK) {
-        fprintf(stderr, "cannot load schema: %s\n",
-                acta_db_last_error(db) ? acta_db_last_error(db) : "unknown");
-        acta_db_close(db);
-        return 1;
-    }
-
     /* 1. dead server (no stub), 2 pending rows -> exit 12, the `check`
      *    verdict line, no claim, no DB writes, rows stay pending */
     {
+        db_t *db = open_fresh_db();
+        if (!db) {
+            fprintf(stderr, "cannot open scratch db\n");
+            return 1;
+        }
         printf("== auto preflight: --pending, dead server\n");
         int ids[2];
         int ok = 1;
@@ -350,10 +360,16 @@ int main(void)
               "no execution_log rows (no DB writes)");
         check(stub_server_chat_requests() == 0,
               "zero /v1/chat/completions requests (token-free)");
+        acta_db_close(db);
     }
 
     /* 2. /health 503 -> exit 12, "model still loading", no DB writes */
     {
+        db_t *db = open_fresh_db();
+        if (!db) {
+            fprintf(stderr, "cannot open scratch db\n");
+            return 1;
+        }
         printf("== auto preflight: --pending, /health 503\n");
         int ids[2];
         int ok = 1;
@@ -385,10 +401,16 @@ int main(void)
                   "zero /v1/chat/completions requests (token-free)");
             stub_server_stop();
         }
+        acta_db_close(db);
     }
 
     /* 3. model not served -> exit 12, "model not served", no DB writes */
     {
+        db_t *db = open_fresh_db();
+        if (!db) {
+            fprintf(stderr, "cannot open scratch db\n");
+            return 1;
+        }
         printf("== auto preflight: --pending, model not served\n");
         int ids[2];
         int ok = 1;
@@ -420,10 +442,16 @@ int main(void)
                   "zero /v1/chat/completions requests (token-free)");
             stub_server_stop();
         }
+        acta_db_close(db);
     }
 
     /* 4. slow server + --timeout 1 -> exit 13, "server unreachable" */
     {
+        db_t *db = open_fresh_db();
+        if (!db) {
+            fprintf(stderr, "cannot open scratch db\n");
+            return 1;
+        }
         printf("== auto preflight: --pending, timeout\n");
         int ids[2];
         int ok = 1;
@@ -454,11 +482,17 @@ int main(void)
                   "no execution_log rows (no DB writes)");
             stub_server_stop();
         }
+        acta_db_close(db);
     }
 
     /* 5. `run <id>` with a dead server -> exit 12, verdict line, the row
      *    stays pending, no DB writes */
     {
+        db_t *db = open_fresh_db();
+        if (!db) {
+            fprintf(stderr, "cannot open scratch db\n");
+            return 1;
+        }
         printf("== auto preflight: run <id>, dead server\n");
         int id = seed_pending(db, "stub-model");
         check(id > 0, "seeded 1 pending");
@@ -477,6 +511,7 @@ int main(void)
         check(no_log_rows(db, id), "no execution_log rows (no DB writes)");
         check(stub_server_chat_requests() == 0,
               "zero /v1/chat/completions requests (token-free)");
+        acta_db_close(db);
     }
 
     /* 6. healthy server, 2 pending rows -> both complete; the
@@ -485,6 +520,11 @@ int main(void)
      *    preflight each = 3 calls (NOT 4 = per-row auto preflight,
      *    and NOT 2 = no auto preflight). */
     {
+        db_t *db = open_fresh_db();
+        if (!db) {
+            fprintf(stderr, "cannot open scratch db\n");
+            return 1;
+        }
         printf("== auto preflight: healthy, 2 pending rows\n");
         int ids[2];
         int ok = 1;
@@ -523,9 +563,8 @@ int main(void)
                   "one chat completion per execution");
             stub_server_stop();
         }
+        acta_db_close(db);
     }
-
-    acta_db_close(db);
 
     printf("\n%d checks, %d failure(s)\n", checks, failures);
     return failures ? 1 : 0;
