@@ -8,8 +8,9 @@ RESOURCES += ../assets.qrc
 INCLUDEPATH += $$PWD/../../acta_db/include
 # M1 / UR #45: in-process runner — the pipeline sources (run.c,
 # backend.c, plus argparse.c for the cmd_args_* helpers used by
-# cmd_run) are compiled straight into the app; the exit-code contract
-# comes from runner.h.
+# cmd_run, and deathmark.c for the death-marker claim/release
+# helpers run_execution uses) are compiled straight into the app;
+# the exit-code contract comes from runner.h.
 INCLUDEPATH += $$PWD/../../acta_runner/include
 
 SOURCES += \
@@ -31,7 +32,8 @@ SOURCES += \
     widgets/executionLogDialog.cpp \
     ../../acta_runner/src/run.c \
     ../../acta_runner/src/backend.c \
-    ../../acta_runner/src/argparse.c
+    ../../acta_runner/src/argparse.c \
+    ../../acta_runner/src/deathmark.c
 
 HEADERS += \
     confreader.h \

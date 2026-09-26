@@ -85,16 +85,21 @@ The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns rea
 
 ## GUI–runner source coupling (hard constraint)
 
-The GUI's qmake project (`acta_gui/acta_gui.pro`) compiles the runner's own
-source files `acta_runner/src/run.c` and `acta_runner/src/backend.c`
-directly, so the in-app **Run** button executes the same pipeline as
-`acta_runner` without building the `acta_runner` binary. There is a single
+The GUI's qmake project (`acta_gui/src/src.pro`, via the
+`acta_gui/acta_gui.pro` subdirs wrapper) compiles the runner's own
+source files `acta_runner/src/run.c`, `acta_runner/src/backend.c`,
+`acta_runner/src/argparse.c` (the `cmd_args_*` helpers used by `cmd_run`)
+and `acta_runner/src/deathmark.c` (the death-marker claim/release helpers
+used by `run_execution`) directly, so the in-app **Run** button executes
+the same pipeline as `acta_runner` without building the `acta_runner`
+binary. There is a single
 pipeline codebase, not a second copy: the atomic `pending → running` claim
 and the state-transition logic are shared, not duplicated — both paths use
 the single `acta_db_execution_start` in `acta_db`.
 
-**Constraint: `acta_runner/src/run.c` and `acta_runner/src/backend.c` may not
-be moved or renamed without updating `acta_gui/acta_gui.pro`.** The qmake
+**Constraint: the runner sources the qmake project compiles (`run.c`,
+`backend.c`, `argparse.c` and `deathmark.c` in `acta_runner/src/`) may not
+be moved or renamed without updating `acta_gui/src/src.pro`.** The qmake
 project references them by path; moving them (e.g. into a `pipeline/`
 directory) breaks the GUI build — the C targets still build fine, only the
 `qmake6`/`make` step in `acta_gui/` fails.
