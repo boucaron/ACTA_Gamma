@@ -25,6 +25,7 @@
 #include "argparse.h"
 #include "acta_db.h"
 #include "acta_dbpath.h"  /* DB path resolution shared with acta_cli */
+#include "deathmark.h"
 
 /*
  * Single-line JSON error → stderr, empty stdout. Enforces the error
@@ -224,6 +225,12 @@ int main(int argc, char **argv)
     if (const char *note = acta_db_last_error(db))
         fprintf(stderr, "[warn] db opened with degraded pragma state: %s\n",
                 note);
+
+    /* Death-marker exit path: on a clean exit (SIGINT/SIGTERM/atexit)
+     * while an execution is claimed in `running`, the row is marked
+     * failed instead of left orphaned
+     * (docs/plans/runner-ops-hardening.md, item 3). */
+    deathmark_install();
 
     /* ---- dispatch (handler receives the open db handle) ---- */
     runner_gopts = &gopts;

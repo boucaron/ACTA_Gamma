@@ -44,6 +44,7 @@
 #include "runner_util.h"
 #include "acta_db.h"
 #include "backend.h"
+#include "deathmark.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -202,6 +203,9 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         for (int i = 0; i < n; i++) {
             int rc = run_execution(db, rows[i]->id, timeout, max_chars,
                                    api_key);
+            /* The row has left `running` (every run_execution path
+             * transitions it), so the death marker has nothing to do. */
+            deathmark_release();
             if (rc != EXIT_OK && rc > worst)
                 worst = rc;
         }
@@ -226,6 +230,9 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
      * mirrors the --pending batch summary above. */
     VLOG(1, "cmd_run: running execution %d", id);
     int rc = run_execution(db, id, timeout, max_chars, api_key);
+    /* The row has left `running` (every run_execution path transitions
+     * it), so the death marker has nothing to do. */
+    deathmark_release();
     acta_conf_free(&conf);
     return rc;
 }
@@ -477,6 +484,10 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
         return emit_runner_error(EXIT_INVALID,
                                  "could not claim execution: start() failed");
     }
+    /* Death marker: if the process exits cleanly (SIGINT/SIGTERM/atexit)
+     * while this row is still `running`, it is marked failed instead of
+     * orphaned (docs/plans/runner-ops-hardening.md, item 3). */
+    deathmark_claim(db, exec_id);
     log_phase(db, exec_id, ACTA_LOG_LEVEL_INFO, "execution_started",
               "execution claimed (pending -> running)", NULL);
     if (backend_cancel_requested())

@@ -6,7 +6,8 @@
 #                   the --pending batch suite (tests/run/test_pending.c)
 #                   the stale-`running` sweep suite (tests/run/
 #                   test_sweep.c), the soft-delete claim suite
-#                   (tests/run/test_deleted.c) and the token-free
+#                   (tests/run/test_deleted.c), the death-marker suite
+#                   (tests/run/test_deathmark.c) and the token-free
 #                   `check` health suite (tests/check/test_check.c)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
@@ -62,6 +63,9 @@ endif
 CFLAGS += -DACTA_RUNNER_GIT_HASH=\"$(GIT_HASH)\"
 
 # ---- sources ----
+# (src/deathmark.c is picked up by the wildcard; it is added
+# explicitly to the test source lists below, since the tests link the
+# src files without the wildcard.)
 SRCS := $(wildcard src/*.c)
 OBJS := $(patsubst %.c, %.o, $(SRCS))
 TARGET := acta_runner$(EXEEXT)
@@ -70,13 +74,13 @@ TARGET := acta_runner$(EXEEXT)
 # Links the real src/run.c + src/backend.c (no main.o) with the test
 # harness and the stub server.
 TEST_SRCS  := tests/run/test_run.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c
+              src/run.c src/backend.c src/argparse.c src/deathmark.c
 TEST_OBJS  := $(patsubst %.c, %.o, $(TEST_SRCS))
 TEST_TARGET := tests/run/test_run$(EXEEXT)
 
 # ---- pending-batch test suite (R3): run --pending loop + --max clamping ----
 PEND_SRCS  := tests/run/test_pending.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c
+              src/run.c src/backend.c src/argparse.c src/deathmark.c
 PEND_OBJS  := $(patsubst %.c, %.o, $(PEND_SRCS))
 PEND_TARGET := tests/run/test_pending$(EXEEXT)
 
@@ -91,7 +95,7 @@ SWEEP_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
 #      against soft-deleted `pending` rows (single-claim guard +
 #      live-only batch claim), via the in-process stub server --------
 DEL_SRCS  := tests/run/test_deleted.c tests/stub_server.c \
-             src/run.c src/backend.c src/argparse.c
+             src/run.c src/backend.c src/argparse.c src/deathmark.c
 DEL_OBJS  := $(patsubst %.c, %.o, $(DEL_SRCS))
 DEL_TARGET := tests/run/test_deleted$(EXEEXT)
 # DEL_LDLIBS is defined with TEST_LDLIBS below (it must come after
@@ -100,7 +104,7 @@ DEL_TARGET := tests/run/test_deleted$(EXEEXT)
 # ---- API key presence policy test suite: unset -> error, empty ->
 #      warning (docs/runner_contract.md, decision 4)
 KEY_SRCS  := tests/run/test_api_key.c tests/stub_server.c \
-             src/run.c src/backend.c src/argparse.c
+             src/run.c src/backend.c src/argparse.c src/deathmark.c
 KEY_OBJS  := $(patsubst %.c, %.o, $(KEY_SRCS))
 KEY_TARGET := tests/run/test_api_key$(EXEEXT)
 
@@ -109,16 +113,24 @@ KEY_TARGET := tests/run/test_api_key$(EXEEXT)
 #      max_chars/timeout resolution (docs/runner_contract.md,
 #      decisions 5 and 8)
 CONF_SRCS  := tests/run/test_conf.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c
+              src/run.c src/backend.c src/argparse.c src/deathmark.c
 CONF_OBJS  := $(patsubst %.c, %.o, $(CONF_SRCS))
 CONF_TARGET := tests/run/test_conf$(EXEEXT)
 
 # ---- shadow-warning suite: a set $OPENAI_API_KEY shadowing the config
 #      file "api_key" warns once per run (runner-ops item 1)
 SHAD_SRCS  := tests/run/test_shadow.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c
+              src/run.c src/backend.c src/argparse.c src/deathmark.c
 SHAD_OBJS  := $(patsubst %.c, %.o, $(SHAD_SRCS))
 SHAD_TARGET := tests/run/test_shadow$(EXEEXT)
+
+# ---- death-marker suite: clean-exit mark of a claimed `running` row
+#      (docs/plans/runner-ops-hardening.md, item 3) — pure DB; no stub
+#      server, no backend sources
+DMRK_SRCS  := tests/run/test_deathmark.c src/deathmark.c
+DMRK_OBJS  := $(patsubst %.c, %.o, $(DMRK_SRCS))
+DMRK_TARGET := tests/run/test_deathmark$(EXEEXT)
+DMRK_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
 
 # ---- token-free backend health-check suite: `check` action
 #      (docs/plans/runner-health-check.md) — the zero
@@ -196,6 +208,9 @@ $(CONF_TARGET): $(CONF_OBJS) $(ACTA_DB_LIB)
 $(SHAD_TARGET): $(SHAD_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(SHAD_OBJS) $(TEST_LDLIBS)
 
+$(DMRK_TARGET): $(DMRK_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(DMRK_OBJS) $(DMRK_LDLIBS)
+
 $(CHK_TARGET): $(CHK_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(CHK_OBJS) $(TEST_LDLIBS)
 
@@ -209,7 +224,7 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(CHK_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
@@ -218,6 +233,7 @@ test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $
 	$(SPAWN_PATH) $(KEY_TARGET)
 	$(SPAWN_PATH) $(CONF_TARGET)
 	$(SPAWN_PATH) $(SHAD_TARGET)
+	$(SPAWN_PATH) $(DMRK_TARGET)
 	$(SPAWN_PATH) $(CHK_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
@@ -272,5 +288,6 @@ clean:
         $(SWEEP_TARGET) $(DEL_OBJS) $(DEL_TARGET) $(DEAD_OBJS) \
         $(DEAD_TARGET) $(KEY_OBJS) $(KEY_TARGET) $(CONF_OBJS) \
         $(CONF_TARGET) $(SHAD_OBJS) $(SHAD_TARGET) \
+        $(DMRK_OBJS) $(DMRK_TARGET) \
         $(CHK_OBJS) $(CHK_TARGET) \
         $(SMOKE_OBJS) $(SMOKE_TARGET)

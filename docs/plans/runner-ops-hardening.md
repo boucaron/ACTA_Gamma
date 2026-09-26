@@ -1,6 +1,6 @@
 # Plan: runner operational hardening (four small fixes + one low-priority probe)
 
-Status: item 1 done (commit `4400496`, see `docs/status.md`); item 2 done (see `docs/status.md`); items 3–5 not started. Source: the MYTEST persona reviews
+Status: items 1–3 done (see `docs/status.md`); items 4–5 not started. Source: the MYTEST persona reviews
 (`acta_runner/MYTEST/*_summarize.md`); items 1, 2, 3, 10 of the
 consolidated review were accepted. Items raised but rejected are listed
 under "Considered and rejected".

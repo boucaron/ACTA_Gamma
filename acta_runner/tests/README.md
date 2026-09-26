@@ -82,6 +82,16 @@ Exit code 0 = all checks pass, 1 = at least one failure.
   - `--stale-seconds 0` / missing / non-numeric → `EXIT_INVALID`
   - inline `--stale-seconds=<n>` form
 
+- `tests/run/test_deathmark.c` — death marker for orphaned `running`
+  rows (runner-ops item 3): in-process, pure DB (no stub server) —
+  claim a row to `running`, invoke the exit path
+  (`deathmark_exit_path`), assert the row is `failed` with the "runner
+  process exited during execution" diagnostic + one error-level
+  `execution_failed` log row; idempotent (a second invocation adds
+  nothing); no-op on `completed` rows, unknown ids, and a released
+  claim. The signal wiring itself is deliberately thin and not
+  tested in-process; `test_deadrunner.c` covers the real process loop.
+
 - `tests/run/test_deadrunner.c` — end-to-end dead-runner recovery
   (real processes, scratch FILE db in `tests/run/`, in-process stub
   server on port 8918; fork/execv/SIGKILL on POSIX,
