@@ -12,7 +12,7 @@ This is not an agent framework. It is a runner that makes one LLM call and recor
 
 The C components build with plain `make` on Windows (MinGW/MSYS2), Linux (gcc/clang), and macOS (Xcode clang); the Qt 6 GUI additionally needs `qmake6` on any of those platforms.
 
-**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode serving at least one GGUF model. Everything else is in this repo — if you just want a run on screen, skip to [Quick start](#quick-start) (step 2 there covers the optional `make gui` build).
+**You need:** a C compiler (gcc/clang), SQLite, curl, cJSON (plus Qt 6 only for the optional GUI), and a running llama.cpp `llama-server` in router mode (launched without `-m`, with `--models-dir` pointing at a folder of GGUF files — defined in [Quick start](#quick-start)) serving at least one GGUF model. Everything else is in this repo — if you just want a run on screen, skip to [Quick start](#quick-start) (step 2 there covers the optional `make gui` build).
 
 ## Current status
 
@@ -40,7 +40,7 @@ In agent frameworks, versioning, immutability, and audit trails are typically a 
 
 The runner drives the execution. The LLM does not orchestrate itself, maintain state, delegate work, or decide what happens next. ACTA Gamma is deliberately not an agent framework — at its core it is a runner over an OpenAI-compatible endpoint plus a SQLite audit log — the full point of view is in [`docs/PointOfView.md`](docs/PointOfView.md).
 
-Terms used throughout this README: a **skill** is a versioned prompt template with an optional output schema — it is not a tool, function, or agent capability; a **context** is a named, immutable snapshot of input data (a document, a code file, a log excerpt) — it is not the model's prompt window.
+Terms used throughout this README: a **skill** is a versioned prompt template with an optional output schema — it is not a tool, function, or agent capability; a **context** is a named, immutable snapshot of input data (a document, a code file, a log excerpt) — it is not the model's prompt window; a **revision** is an immutable snapshot of a skill's or model's fields, created automatically whenever the parent is created or edited — an execution is always bound to a specific revision, not to the mutable parent.
 
 ## Core ideas
 
@@ -85,17 +85,17 @@ In the diagram, **Observation** is the LLM's response recorded verbatim as the e
 
 The short version of the lifecycle:
 
-- **Revisions.** Skill folders and model folders are optional organizational groupings for list display; they do not affect execution. Creating, updating, or soft-deleting a skill or model parent auto-snapshots a new immutable revision row via a DB trigger — there is no separate "snapshot" command, and no `active`/`current` flag: the "current" revision is simply the latest one. Editing *creates, not modifies*: existing executions keep pointing at the revision they were bound to.
+- **Revisions.** Skill folders and model folders are optional organizational groupings for list display; they do not affect execution. Creating, updating, or soft-deleting a skill or model parent auto-snapshots a new immutable revision row via a DB trigger — a skill revision captures its `name`, `description`, `prompt_template`, and `output_schema`; a model revision captures its `name`, `description`, `backend`, `base_url`, `model_identifier`, and `configuration`. There is no separate "snapshot" command, and no `active`/`current` flag: the "current" revision is simply the latest one. Editing *creates, not modifies*: existing executions keep pointing at the revision they were bound to.
 - **Execution binding.** An execution binds to explicit `skill_revision_id` and `model_revision_id`, and its user message is exactly `context.content` — so a replay (a second `exec create` with the same three ids, optionally linked via `--parent_execution_id`) resends byte-identical request inputs.
 - **States.** `pending → running → completed`, with `failed` (manual reset via `exec reset`) and `cancelled` (allowed from `pending` or `running`).
-- **Concurrency.** The claim is atomic: `start()` is a single conditional `UPDATE … WHERE id=? AND status='pending'`, so two processes can never both own the same execution — the loser's claim matches zero rows and it exits with an error. The database runs in WAL mode; concurrent readers are fine, but simultaneous *writers* on the same file are **not supported in the current implementation** — single-writer is the expected usage pattern. A 5 s `busy_timeout` is set on every open (the `ACTA_DB_BUSY_TIMEOUT_MS` constant in `acta_db/src/db.c`), so a transient contention (a WAL checkpoint, a concurrent `db backup`) is absorbed by waiting up to 5 s instead of failing mid-pipeline. If a write still fails with `SQLITE_BUSY` after the timeout, `acta_db` reports the wrapped diagnostic — `SQLITE_BUSY: concurrent write detected; this database is single-writer by design — wait for the other process to finish and rerun` — and the operator's action is to rerun the command. Details: [`docs/DBDesign.md`](docs/DBDesign.md).
+- **Concurrency.** The claim is atomic: `start()` is a single conditional `UPDATE … WHERE id=? AND status='pending'`, so two processes can never both own the same execution. Single-writer by design: the database runs in WAL mode, concurrent readers are fine, but simultaneous *writers* on the same file are **not supported** — a 5 s `busy_timeout` absorbs transient contention, and if a write still fails with `SQLITE_BUSY`, the operator's action is simply to rerun the command. The exact diagnostic, the constant, and the WAL details are in [`docs/DBDesign.md`](docs/DBDesign.md).
 - **Soft delete.** Rows are never hard-deleted: `delete` sets a `deleted_at` timestamp, `restore` clears it, listers are live-only by default (`--include_deleted` / `--deleted` to opt back in), and a new DB file is the clean-state path.
 
 The full treatment — triggers, the state machine, soft-delete rules, and the durability/backup guidance — is in [`docs/DBDesign.md`](docs/DBDesign.md); worked examples are in [`docs/examples/create-and-revise.md`](docs/examples/create-and-revise.md) (revision snapshots) and [`docs/examples/playground.md`](docs/examples/playground.md) (soft-delete tour, no backend needed).
 
 ## How a run is assembled
 
-The runner builds the chat call from the bound revisions: `system` = the skill's `prompt_template`, `user` = `context.content` — there is no per-execution prompt field, and an empty context content fails the execution at preflight, before any backend call. Preflight enforces a deterministic `max_chars` guard on the two strings before any backend call (default 100,000, configurable): the count is the **UTF-8 byte length** of `prompt_template` + `context.content` (equivalently `strlen` in C, which counts bytes), not Unicode codepoints and not tokens — multibyte text (CJK, emoji) consumes more bytes per character, and the backend's own context window (the router's `-c`, in tokens) is a separate, final constraint. Full pipeline — claim, resolve, preflight, call, validate, record — and the backend contract are in [`docs/runner_contract.md`](docs/runner_contract.md); the llama.cpp router surface is in [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md).
+The runner builds the chat call from the bound revisions: `system` = the skill's `prompt_template`, `user` = `context.content` — there is no per-execution prompt field, and an empty context content fails the execution at preflight, before any backend call. Preflight enforces a deterministic `max_chars` guard on the two strings before any backend call (default 100,000, configurable): the count is the **UTF-8 byte length** of `prompt_template` + `context.content` (equivalently `strlen` in C, which counts bytes), not Unicode codepoints and not tokens — multibyte text (CJK, emoji) consumes more bytes per character, and the backend's own context window (the router's `-c`, in tokens) is a separate, final constraint. Treat the guard as a coarse pre-check, not a guarantee: a prompt can pass it and still be rejected by the backend for exceeding `-c` — size `-c` to your model and expect that overflow to surface as a backend error, not a preflight failure. Full pipeline — claim, resolve, preflight, call, validate, record — and the backend contract are in [`docs/runner_contract.md`](docs/runner_contract.md); the llama.cpp router surface is in [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md).
 
 ## Implementation
 
@@ -106,7 +106,7 @@ The implementation is C/C++ on top of SQLite:
 | `acta_db/` | C11 | SQLite persistence library (`libacta_db`) — skills, skill folders, skill revisions, models, model folders, model revisions, contexts, executions, execution logs ([schema design: `docs/DBDesign.md`](docs/DBDesign.md)) |
 | `acta_cli/` | C11 | Command-line client (`acta_cli`) over `acta_db` (uses cJSON for output) |
 | `acta_runner/` | C11 | Standalone LLM execution runner (`acta_runner`) — drives pending executions against the model's OpenAI-compatible backend, with `execution_log` phase rows (uses curl + cJSON) |
-| `acta_gui/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app **Run** button runs the runner's pipeline in-process — single pipeline codebase, not a second copy; the source coupling is a hard build constraint, see [`docs/building.md`](docs/building.md), "GUI–runner source coupling"). While a run is in flight the button toggles into **Cancel**, which cooperatively cancels the in-flight pipeline — the pipeline runs on a worker thread, Cancel sets a flag checked between pipeline steps, and a response that arrives after cancel is discarded — and transitions the row to `cancelled` |
+| `acta_gui/` | C++ / Qt 6 (Core, Widgets) | Desktop GUI: manage skills, models, contexts, review executions, and run them (the in-app **Run** button runs the runner's pipeline in-process — single pipeline codebase, not a second copy; the source coupling is a hard build constraint, see [`docs/building.md`](docs/building.md), "GUI–runner source coupling"). While a run is in flight the button toggles into **Cancel**, which cooperatively cancels the in-flight pipeline — the pipeline runs on a worker thread, Cancel sets a flag checked between pipeline steps, and a response that arrives after cancel is discarded — and transitions the row to `cancelled`. Note: the flag is checked only between steps, so an HTTP call already in flight runs to completion — the backend still generates the full response (the tokens are consumed regardless); cancel stops the **recording**, not the compute |
 
 The backend is a llama.cpp `llama-server` running in **router mode** (launched without a model, e.g. with `--models-dir` pointing at local GGUF files) — it is the **only** supported backend. llama.cpp **0.4.x** (router mode) is the tested baseline and a hard requirement: the OpenAI-compatible surface is pinned to that version's behavior, the runner does no version negotiation, and the router API is not guaranteed stable across major versions; dropping a new GGUF into `--models-dir` while the server runs is not covered by the contract. The pipeline talks to it through the OpenAI-compatible HTTP surface (`GET /health`, `GET /v1/models`, `POST /v1/chat/completions`), but that surface is the interface, not a portability promise; ACTA Gamma is not a generic OpenAI client. The backend is assumed to be a **local, unauthenticated, plain-HTTP** endpoint — do not point `base_url` at a remote host; the API key (if any) travels in cleartext.
 
@@ -143,6 +143,25 @@ Three steps before the example below:
   | `"max_chars"` | positive integer | max total prompt size in **UTF-8 bytes** (`skill.prompt_template` + `context.content`); default 100,000 |
   | `"timeout"` | positive integer, seconds | default per-call HTTP timeout; default 600 s (the `--timeout` flag still wins per run) |
 
+## Commands at a glance
+
+The full per-action flag tables and wire format are in [`docs/cli_spec.md`](docs/cli_spec.md); this is just orientation:
+
+| Command | What it does |
+|---|---|
+| `acta_cli db init` | apply the canonical schema to a fresh DB file (once, before anything else) |
+| `acta_cli db migrate` | apply pending versioned schema migrations in place |
+| `acta_cli db backup --to <path>` | atomic snapshot of the open database |
+| `acta_cli model create` | register a model (backend, `base_url`, `model_identifier`) |
+| `acta_cli skill create` | create a versioned prompt template + optional `output_schema` |
+| `acta_cli context create` | create the immutable input snapshot |
+| `acta_cli exec create` | bind context + skill revision + model revision into a `pending` execution |
+| `acta_runner check <model-id>` | token-free backend + model health check (no execution row, no DB write) |
+| `acta_runner run <id>` / `run --pending` | claim, preflight, one LLM call, record result + `execution_log` |
+| `acta_cli exec reset <id>` | `failed → pending` so the execution can be rerun |
+| `acta_runner sweep --stale-seconds N` | fail stale `running` rows left behind by a dead process |
+| `acta_cli exec get <id>` / `log list <id>` | read the recorded result, raw response, and phase log |
+
 ## Minimal end-to-end example
 
 Against the running `llama-server` router from the quick start (fresh `acta.db` — by default the platform app-data location, see [Environment variables](#environment-variables-and-the-per-machine-config-file); so every id is `1`).
@@ -157,10 +176,8 @@ Against the running `llama-server` router from the quick start (fresh `acta.db` 
 #  extension (e.g. qwen3-8b for models/qwen3-8b.gguf) — verify with GET /v1/models)
 acta_cli model create --json '{"name":"llama-local","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"qwen3-8b"}'
 
-# 2. Create a versioned skill (prompt template + optional output schema)
-# output_schema is a JSON-schema-style object (type/required/properties/items are checked;
-# extra fields in the response are allowed). Only those keywords are enforced —
-# other JSON Schema keywords (enum, pattern, minimum, …) are not. Omit it for free-text outputs.
+# 2. Create a versioned skill (prompt template + optional output_schema —
+#    see the note below: only a subset of JSON Schema keywords is enforced)
 acta_cli skill create --json '{"name":"sentiment","prompt_template":"Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}","output_schema":{"type":"object","required":["label","confidence"],"properties":{"label":{"type":"string"},"confidence":{"type":"number"}}}}'
 
 # 3. Create an immutable context (the input snapshot)
@@ -194,6 +211,8 @@ acta_cli exec get 1
 acta_cli log list 1
 ```
 
+> **`output_schema` note:** the validator enforces only `type`, `required`, `properties`, and `items` — other JSON Schema keywords (`enum`, `pattern`, `minimum`, …) are **not** enforced, and extra fields in the response are allowed. Omit `output_schema` for free-text outputs.
+
 What the output looks like (abbreviated — real timestamps, and a full `raw_response`, in practice):
 
 ```sh
@@ -220,7 +239,9 @@ $ acta_cli log list 1
 
 `raw_response` is the model's text verbatim; `result` is the recorded, schema-checked output; the log is the phase timeline — one row per event, with `prompt_resolved` carrying the exact prompt that was sent. If the response does not match the skill's `output_schema`, the execution is `failed` with a `validation_failed` log row — there is no "completed with a flag" mode. `parent_execution_id` links a replay to the execution it replays (optional on `exec create`).
 
-A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_runner run 1` (fails) → `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last activity — the newest of its `execution_log` rows and `started_at` — is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. A *clean* exit (Ctrl+C / SIGTERM) while an execution is claimed in `running` marks that execution `failed` with the diagnostic `runner process exited during execution` + a matching `execution_failed` log row (death marker); a *hard* kill (SIGKILL, power loss) still orphans the row in `running`, and `sweep` is the recovery path in that case. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 600` → `--stale-seconds 650` or more) so a live run is never swept. `run` performs this preflight itself before the claim: `acta_runner run <id>` and `run --pending` call the same two token-free GETs before anything is claimed, and a dead backend or an unserved model exits with the `check` verdict code (12/13) and the same JSON verdict line — no row is claimed, no DB write ([`docs/runner_contract.md`](docs/runner_contract.md), "check action"). `acta_runner check <model-id>` remains the manual triage tool: probe a server before any model is registered (standalone mode), or after a `failed` backend call — it verifies the server and the served model with **zero tokens and no execution row**. Note the limit: sweep judges staleness by last activity, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6).
+### Recovery and stale execution handling
+
+A failed backend call (server down, connection error, or the `--timeout` exceeded) leaves the execution in `failed` with the error recorded in `error`; recovery is the manual reset cycle: `acta_cli exec reset 1` (`failed → pending`) → `acta_runner run 1` again (or the GUI Retry button, which does both). If a runner process dies mid-flight, `acta_runner sweep --stale-seconds N` fails executions left in `running` whose last activity — the newest of its `execution_log` rows and `started_at` — is older than N — run it manually when you suspect a crash or a hung run; it is not a daemon and nothing runs it for you. A *clean* exit (Ctrl+C / SIGTERM) while an execution is claimed in `running` marks that execution `failed` with the diagnostic `runner process exited during execution` + a matching `execution_failed` log row (death marker); a *hard* kill (SIGKILL, power loss) still orphans the row in `running`, and `sweep` is the recovery path in that case. Pick N larger than the longest legitimate run you may have in flight (e.g. `--timeout 600` → `--stale-seconds 650` or more) so a live run is never swept. Note the limit: sweep judges staleness by last activity, not by process liveness — a runner that is alive but stuck in a hanging HTTP call can look stale; if you run very long calls, use a larger N or check the runner process before sweeping (details in [`docs/runner_contract.md`](docs/runner_contract.md), decision 6). The automatic pre-claim preflight and the manual `check` triage are described in the [Quick start](#quick-start).
 
 For worked examples against an *existing* database — exploring the DB, revising skills, replaying runs, and running five versioned skills over the same context — see [`docs/examples/`](docs/examples/README.md).
 
