@@ -139,6 +139,11 @@ void RunnerWorker::runInThread()
         resetCancel();
         return;
     }
+    // A set (even empty) env var shadows a non-empty config file
+    // "api_key": surface the same warning acta_runner prints to stderr
+    // (docs/runner_contract.md, decision 4) in the run result message.
+    const char *shadowMsg = nullptr;
+    acta_conf_api_key_shadow_warning(envKey, fileKey, &shadowMsg);
     const char *apiKey = (envKey != NULL) ? envKey : fileKey;
 
     const int timeoutSec = (conf.timeout > 0)
@@ -155,6 +160,10 @@ void RunnerWorker::runInThread()
     if (exitCode == 0) {
         if (keyStatus == ACTA_KEY_EMPTY_WARN)
             message = QString::fromUtf8(keyMsg);
+        if (shadowMsg)
+            message = message.isEmpty()
+                ? QString::fromUtf8(shadowMsg)
+                : message + " " + QString::fromUtf8(shadowMsg);
     } else {
         message = lastErrorLogMessage(db, m_executionId);
     }

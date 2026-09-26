@@ -173,7 +173,15 @@ Implementation notes (where the spec left room):
    `configuration` carrying an `api_key` key is rejected as an unknown
    key and fails the execution with `EXIT_INVALID`). Precedence:
    `$OPENAI_API_KEY` (if set — even to the empty string) wins over the
-   file; the file is a fallback, not a second channel. Having **both**
+   file; the file is a fallback, not a second channel. The shadowing is
+   not silent: when `$OPENAI_API_KEY` is set (even to the empty string)
+   and the file key is non-empty, both binaries print a one-line
+   warning — `warning: OPENAI_API_KEY is set (empty or not) and shadows
+   the config file "api_key"; the effective key is the environment
+   value` — to stderr in `acta_runner` (once per `run` invocation) and
+   in the run result message in `acta_gui`; no warning when the env var
+   is unset or the file key is absent/empty (nothing is being shadowed).
+   Having **both**
    sources is a deliberate owner decision, not an accident: the env var
    is the primary channel for scripted and programmatic use (and stays the
    only source for a machine without a config file); the file key is the

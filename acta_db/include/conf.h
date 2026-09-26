@@ -91,6 +91,23 @@ int acta_conf_api_key_status(const char *env_key, const char *file_key,
                              const char **msg);
 
 /*
+ * Shadow warning policy — companion to acta_conf_api_key_status()
+ * (docs/runner_contract.md, decision 4).
+ *
+ * A set $OPENAI_API_KEY (even to the empty string) shadows the config
+ * file's non-empty "api_key": the environment value is the effective
+ * key and the file key is not used at all.  When that shadowing is in
+ * effect, returns 1 and sets *msg to the canonical one-line warning;
+ * otherwise (env var unset, or the file key absent/empty — nothing is
+ * being shadowed) returns 0 and sets *msg to NULL.
+ *
+ * Used by acta_runner (cmd_run, stderr) and acta_gui (runnerWorker,
+ * run-result message) so both surfaces print the same warning.
+ */
+int acta_conf_api_key_shadow_warning(const char *env_key, const char *file_key,
+                                     const char **msg);
+
+/*
  * Default location of the config file: the same app-data directory as
  * the default DB file ("ACTA_Gamma.conf" next to "acta.db"):
  *   Windows : %APPDATA%\ACTA_Gamma\ACTA_Gamma.conf

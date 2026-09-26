@@ -127,6 +127,11 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     }
     if (key_status == ACTA_KEY_EMPTY_WARN)
         fprintf(stderr, "%s\n", key_msg);
+    /* A set (even empty) env var shadows a non-empty file key: one
+     * stderr line per run, so a stray `export OPENAI_API_KEY=` does
+     * not silently disable the config file key (decision 4). */
+    if (acta_conf_api_key_shadow_warning(env_key, file_key, &key_msg) > 0)
+        fprintf(stderr, "%s\n", key_msg);
 
     api_key = (env_key != NULL) ? env_key : file_key;
     /* When the env var is unset, api_key borrows conf.api_key, so conf

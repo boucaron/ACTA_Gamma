@@ -375,6 +375,24 @@ int acta_conf_api_key_status(const char *env_key, const char *file_key,
     return ACTA_KEY_OK;
 }
 
+int acta_conf_api_key_shadow_warning(const char *env_key,
+                                     const char *file_key, const char **msg)
+{
+    if (msg)
+        *msg = NULL;
+    /* The env var shadows only when it is set (even to "") and a
+     * non-empty file key is being overridden. */
+    if (env_key == NULL)
+        return 0;
+    if (file_key == NULL || file_key[0] == '\0')
+        return 0;
+    if (msg)
+        *msg = "warning: OPENAI_API_KEY is set (empty or not) and shadows "
+               "the config file \"api_key\"; the effective key is the "
+               "environment value";
+    return 1;
+}
+
 /*
  * Resolution helpers -- work item 4 of
  * docs/plans/acta-config-file.md.  The file supplies per-machine
