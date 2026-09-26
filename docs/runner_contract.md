@@ -6,7 +6,7 @@ skill + model + context, calls the OpenAI-compatible backend, and records
 the outcome (raw response, result, error, phase logs) back into the
 database.
 
-## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` token-free health action shipped
+## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` token-free health action shipped, run auto preflight shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -23,7 +23,7 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   with one `execution_log` row per phase and JSON metadata
   (http status, latency, token usage, …). Every post-claim failure
   funnels through `fail_execution()` so a row never stays stuck in
-  `running`.
+  `running`. In addition, `cmd_run` (`run <id>` and `run --pending`) runs the auto preflight **before the claim**: the same two token-free GETs `check` uses (via `backend_preflight()`), once per `acta_runner` invocation — for the execution the claim is about (in a `--pending` batch, the first pending row); dead/unreachable backend or model not served → exit with the `check` verdict code (12/13), the same JSON verdict line, nothing claimed, no DB writes (docs/plans/runner-ops-hardening.md, item 4).
 - R8 (commit 2f8085e): preflight catalog logging — after the
   `/v1/models` id match, the runner fetches the llama.cpp model catalog
   (`GET /`) and logs a `preflight_passed` event with the matched entry's
@@ -68,6 +68,11 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   under `make test`, on a scratch `:memory:` DB. Batch/claim/cleanup suites alongside:
   `tests/run/test_pending.c` (R3: `run --pending` loop, `--max`
   clamping, worst exit code across mixed outcomes),
+  `tests/run/test_autopreflight.c` (pre-claim auto preflight: dead
+  server / `/health` 503 / model not served / timeout → exit 12/13 with
+  the `check` verdict line, rows stay `pending`, no DB writes; healthy
+  → the run proceeds, with the /health + /v1/models counts pinning
+  "once per invocation"),
   `tests/run/test_deleted.c` (soft-delete claim: `run <id>` on a
   deleted row → not-found before claim; `run --pending` is live-only),
   `tests/run/test_sweep.c` (in-process sweep logic). The size-check
@@ -244,6 +249,15 @@ Implementation notes (where the spec left room):
 
 ## Phase 2 pipeline (spec for `run_execution`)
 
+**Pre-claim auto preflight (cmd_run level, before step 1)** — `run <id>`
+and `run --pending` call the same two token-free GETs `check` uses (via
+`backend_preflight()`), once per `acta_runner` invocation — for the
+execution the claim is about (in a `--pending` batch, the first pending
+row). Dead/unreachable backend or model not served → exit with the
+`check` verdict code (12/13) and the same JSON verdict line, nothing
+claimed, no DB writes (docs/plans/runner-ops-hardening.md, item 4). The
+per-execution step-3 preflight below still runs, after the claim.
+
 1. **Claim** — fetch execution; must be `pending`; `start()` →
    `running`; log `execution_started`.
 2. **Resolve** — fetch context (`content`), skill revision
@@ -337,8 +351,10 @@ default 600 s.
 `POST /v1/chat/completions` — ever; zero tokens, zero inference. No
 `execution_log` rows, no execution state change, no DB writes of any
 kind. No streaming, no retry loop (consistent with the product
-decisions). It is the token-free pre-flight for a `run --pending`
-batch and the first triage step after a `failed` backend call.
+decisions). The `run` action now runs this pre-flight automatically
+before the claim (docs/plans/runner-ops-hardening.md, item 4); `check`
+remains the manual triage tool: a standalone probe before any model is
+registered, and the first triage step after a `failed` backend call.
 
 ## Explicitly out of scope (we do not implement these)
 

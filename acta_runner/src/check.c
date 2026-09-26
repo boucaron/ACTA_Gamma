@@ -22,7 +22,9 @@
  *                          endpoint error / unparseable body ->
  *                          "catalog unreachable".
  *
- * Result contract (one JSON line on stdout, scriptable):
+ * Result contract (one JSON line on stdout, scriptable — emitted via
+ * emit_check_verdict in runner_util.h, shared with the run pre-claim
+ * auto preflight, docs/plans/runner-ops-hardening.md item 4):
  *   success: {"ok":true,"model":"<id>","max_context":<n>,"base_url":"<url>"}
  *   failure: {"ok":false,"model":"<id>","base_url":"<url>",
  *             "verdict":"model still loading" | "server unreachable"
@@ -78,27 +80,6 @@ static void check_usage(FILE *out)
         "Exit: 0 ok | 1 model not found | 4 invalid | 12 http |\n"
         "13 timeout\n",
         out);
-}
-
-/* One-line JSON verdict on stdout (the scriptable result contract). */
-static void emit_verdict(int ok, const char *model, const char *base_url,
-                         long max_context, const char *verdict)
-{
-    if (ok) {
-        printf("{\"ok\":true,\"model\":");
-        json_str(stdout, model ? model : "");
-        printf(",\"max_context\":%ld,\"base_url\":", max_context);
-        json_str(stdout, base_url ? base_url : "");
-        printf("}\n");
-    } else {
-        printf("{\"ok\":false,\"model\":");
-        json_str(stdout, model ? model : "");
-        printf(",\"base_url\":");
-        json_str(stdout, base_url ? base_url : "");
-        printf(",\"verdict\":");
-        json_str(stdout, verdict ? verdict : "");
-        printf("}\n");
-    }
 }
 
 int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
@@ -233,56 +214,17 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     backend_preflight_t pf;
     int prc = backend_preflight(base, mid, NULL, timeout_sec, &pf);
 
-    const char *verdict = NULL;
+    /* The prc -> (verdict, exit code) mapping is the shared
+     * preflight_verdict() in backend.c — the same classification the run
+     * pre-claim auto preflight uses (docs/plans/runner-ops-hardening.md,
+     * item 4), so the two surfaces cannot drift. */
     int exit_code = EXIT_OK;
-    switch (prc) {
-    case PREFLIGHT_OK:
-        break;
-    case PREFLIGHT_CANCELED:
-        /* Defensive dead path for the CLI: the cooperative cancel flag
-         * is only ever set by the GUI. */
-        verdict = "server unreachable";
-        exit_code = EXIT_HTTP;
-        break;
-    case PREFLIGHT_HEALTH_TIMEOUT:
-        verdict = "server unreachable";
-        exit_code = EXIT_TIMEOUT;
-        break;
-    case PREFLIGHT_HEALTH_TRANSPORT:
-        verdict = "server unreachable";
-        exit_code = EXIT_HTTP;
-        break;
-    case PREFLIGHT_HEALTH_NOT_200:
-        verdict = (pf.http_status == 503)
-            ? "model still loading" : "server unreachable";
-        exit_code = EXIT_HTTP;
-        break;
-    case PREFLIGHT_MODELS_TIMEOUT:
-        verdict = "catalog unreachable";
-        exit_code = EXIT_TIMEOUT;
-        break;
-    case PREFLIGHT_MODELS_TRANSPORT:
-        verdict = "catalog unreachable";
-        exit_code = EXIT_HTTP;
-        break;
-    case PREFLIGHT_MODELS_NOT_200:
-    case PREFLIGHT_MODELS_UNPARSEABLE:
-        verdict = "catalog unreachable";
-        exit_code = EXIT_HTTP;
-        break;
-    case PREFLIGHT_MODEL_NOT_SERVED:
-        verdict = "model not served";
-        exit_code = EXIT_HTTP;
-        break;
-    default:
-        verdict = "server unreachable";
-        exit_code = EXIT_HTTP;
-        break;
-    }
+    const char *verdict = preflight_verdict(prc, &pf, &exit_code);
 
     VLOG(1, "cmd_check: %s (base_url=%s, model=%s)",
          prc == PREFLIGHT_OK ? "ok" : verdict, base, mid);
-    emit_verdict(prc == PREFLIGHT_OK, mid, base, pf.max_context, verdict);
+    emit_check_verdict(prc == PREFLIGHT_OK, mid, base, pf.max_context,
+                       verdict);
 
     free(base);
     free(mid);

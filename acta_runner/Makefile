@@ -3,9 +3,10 @@
 #   make          → builds ./acta_runner
 #   make test     → builds + runs the test suites: argparse
 #                   (tests/argparse), the phase-2 pipeline (tests/run),
-#                   the --pending batch suite (tests/run/test_pending.c)
-#                   the stale-`running` sweep suite (tests/run/
-#                   test_sweep.c), the soft-delete claim suite
+#                   the --pending batch suite (tests/run/test_pending.c),
+#                   the pre-claim auto-preflight suite (tests/run/
+#                   test_autopreflight.c), the stale-`running` sweep suite
+#                   (tests/run/test_sweep.c), the soft-delete claim suite
 #                   (tests/run/test_deleted.c), the death-marker suite
 #                   (tests/run/test_deathmark.c) and the token-free
 #                   `check` health suite (tests/check/test_check.c)
@@ -83,6 +84,16 @@ PEND_SRCS  := tests/run/test_pending.c tests/stub_server.c \
               src/run.c src/backend.c src/argparse.c src/deathmark.c
 PEND_OBJS  := $(patsubst %.c, %.o, $(PEND_SRCS))
 PEND_TARGET := tests/run/test_pending$(EXEEXT)
+
+# ---- auto-preflight suite: the pre-claim `check`-verdict preflight
+#      (docs/plans/runner-ops-hardening.md, item 4): dead/unserved backend
+#      -> exit 12/13 + the check verdict line, nothing claimed, no DB
+#      writes; healthy -> the run proceeds; the stub's /health and
+#      /v1/models counts pin "once per acta_runner invocation"
+AUTO_SRCS  := tests/run/test_autopreflight.c tests/stub_server.c \
+              src/run.c src/backend.c src/argparse.c src/deathmark.c
+AUTO_OBJS  := $(patsubst %.c, %.o, $(AUTO_SRCS))
+AUTO_TARGET := tests/run/test_autopreflight$(EXEEXT)
 
 # ---- stale-running sweep test suite (R4): sweep --stale-seconds ----
 # Pure DB + time; no HTTP, no stub server, no backend sources.
@@ -193,6 +204,9 @@ $(AP_TARGET): $(AP_OBJS)
 $(PEND_TARGET): $(PEND_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(PEND_OBJS) $(TEST_LDLIBS)
 
+$(AUTO_TARGET): $(AUTO_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(AUTO_OBJS) $(TEST_LDLIBS)
+
 $(SWEEP_TARGET): $(SWEEP_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(SWEEP_OBJS) $(SWEEP_LDLIBS)
 
@@ -224,10 +238,11 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
+	$(SPAWN_PATH) $(AUTO_TARGET)
 	$(SPAWN_PATH) $(SWEEP_TARGET)
 	$(SPAWN_PATH) $(DEL_TARGET)
 	$(SPAWN_PATH) $(KEY_TARGET)
@@ -261,6 +276,9 @@ tests/run/test_run.o: tests/run/test_run.c tests/stub_server.h
 tests/run/test_pending.o: tests/run/test_pending.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
+tests/run/test_autopreflight.o: tests/run/test_autopreflight.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
 tests/run/test_sweep.o: tests/run/test_sweep.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -284,7 +302,8 @@ tests/check/test_check.o: tests/check/test_check.c tests/stub_server.h
 
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
-        $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SWEEP_OBJS) \
+        $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(AUTO_OBJS) \
+        $(AUTO_TARGET) $(SWEEP_OBJS) \
         $(SWEEP_TARGET) $(DEL_OBJS) $(DEL_TARGET) $(DEAD_OBJS) \
         $(DEAD_TARGET) $(KEY_OBJS) $(KEY_TARGET) $(CONF_OBJS) \
         $(CONF_TARGET) $(SHAD_OBJS) $(SHAD_TARGET) \

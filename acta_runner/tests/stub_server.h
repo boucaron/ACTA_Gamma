@@ -57,4 +57,17 @@ const char *stub_server_last_auth(void);
  * leave this at 0 (docs/runner_contract.md, check action). */
 int stub_server_chat_requests(void);
 
+/* Number of GET /health requests received since the last
+ * stub_server_start (reset on stub_server_start). Used by the
+ * auto-preflight suite to pin "once per acta_runner invocation"
+ * (docs/plans/runner-ops-hardening.md, item 4): an N-row --pending
+ * batch makes 1 + N /health calls (one pre-claim auto preflight plus
+ * one per-execution pipeline preflight), not 2 * N. */
+int stub_server_health_requests(void);
+
+/* Number of GET /v1/models requests received since the last
+ * stub_server_start (reset on stub_server_start); same "once per
+ * invocation" assertion as stub_server_health_requests(). */
+int stub_server_models_requests(void);
+
 #endif /* ACTA_RUNNER_STUB_SERVER_H */

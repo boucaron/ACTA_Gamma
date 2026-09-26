@@ -38,6 +38,15 @@
  * Concurrency: start() is the atomic claim; after the claim succeeds every
  * error path funnels through fail_execution() so the row never stays stuck
  * in "running".
+ *
+ * cmd_run additionally runs an auto preflight BEFORE the claim
+ * (docs/plans/runner-ops-hardening.md, item 4): the same two token-free
+ * GETs `check` uses (backend_preflight), once per acta_runner invocation
+ * — for the execution the claim is about (the first pending row in a
+ * --pending batch). Dead/unreachable backend or model not served -> exit
+ * with the `check` verdict code (12/13) and the same JSON verdict line,
+ * nothing claimed, no DB writes. The pipeline's own step-3 preflight
+ * stays (it runs per execution, after the claim).
  */
 
 #include "runner.h"
@@ -66,6 +75,12 @@ static void run_usage(FILE *out)
         "                   file \"timeout\", else 600)\n",
         out);
 }
+
+/* Auto preflight before the atomic claim; full definition below, in
+ * the pipeline-helpers section (docs/plans/runner-ops-hardening.md,
+ * item 4). */
+static int run_preflight_before_claim(db_t *db, const execution_t *e,
+                                     const char *api_key, int timeout_sec);
 
 int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
 {
@@ -198,6 +213,19 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             return EXIT_OK;
         }
 
+        /* Auto preflight before the claim (docs/plans/
+         * runner-ops-hardening.md, item 4): the shared token-free GETs
+         * `check` runs, once per invocation — for the first pending row,
+         * the one the batch claims first — so a dead backend or an
+         * unserved model exits with the check verdict before any row is
+         * claimed or written. */
+        int pfc = run_preflight_before_claim(db, rows[0], api_key, timeout);
+        if (pfc != EXIT_OK) {
+            acta_db_execution_list_free(rows, n);
+            acta_conf_free(&conf);
+            return pfc;
+        }
+
         VLOG(1, "cmd_run: running %d pending execution(s)", n);
         int worst = EXIT_OK;
         for (int i = 0; i < n; i++) {
@@ -224,6 +252,35 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         run_usage(stderr);
         acta_conf_free(&conf);
         return EXIT_INVALID;
+    }
+
+    /* Auto preflight before the claim (docs/plans/
+     * runner-ops-hardening.md, item 4): the row-state validation runs
+     * exactly as run_execution would (unknown/deleted -> 1, not pending
+     * -> 4), then the shared token-free GETs `check` uses — so a dead
+     * backend or an unserved model exits with the check verdict before
+     * the claim and before any DB write. */
+    {
+        int err = ACTA_DB_OK;
+        execution_t *e = acta_db_execution_get(db, id, &err);
+        int pfc;
+        if (err != ACTA_DB_OK) {
+            pfc = finish_op_error(db, err, "execution_get");
+        } else if (!e || e->deleted_at) {
+            pfc = emit_not_found("execution");
+        } else if (e->status &&
+                   strcmp(e->status, ACTA_EXEC_STATUS_PENDING) != 0) {
+            emit_error("execution is not pending; only pending executions "
+                       "can be run");
+            pfc = EXIT_INVALID;
+        } else {
+            pfc = run_preflight_before_claim(db, e, api_key, timeout);
+        }
+        acta_db_execution_free(e);
+        if (pfc != EXIT_OK) {
+            acta_conf_free(&conf);
+            return pfc;
+        }
     }
 
     /* One action-summary line per action (VLOG level 1 contract);
@@ -328,6 +385,65 @@ static int cancel_execution(db_t *db, int exec_id)
         snprintf(errmsg, sizeof errmsg, "execution cancelled by user"); \
         goto done;                                                      \
     } while (0)
+
+/* ── auto preflight before the claim (runner-ops item 4) ──────────── */
+
+/*
+ * The shared preflight the `run` action runs BEFORE the atomic claim
+ * (docs/plans/runner-ops-hardening.md, item 4): the same two token-free
+ * GETs `check` uses (via backend_preflight), called once per acta_runner
+ * invocation — for the execution the claim is about (in a --pending
+ * batch, the first pending row, the one claimed first). A dead/unreachable
+ * backend, or a model not served, exits with the `check` verdict code
+ * (12/13) and emits the same JSON verdict line `check` emits — nothing
+ * is claimed and no DB writes happen. A healthy backend returns EXIT_OK
+ * silently; the pipeline's own step-3 preflight still runs per
+ * execution, after the claim.
+ *
+ * `e` must be a live, pending execution row (the caller validates). The
+ * model-revision fetch failures mirror run_execution's step-2 messages
+ * but exit without any DB write, since nothing is claimed yet.
+ * Returns EXIT_OK or the `check` verdict exit code (12/13); the SQL/4
+ * exits mirror run_execution's pre-claim failure exits.
+ */
+static int run_preflight_before_claim(db_t *db, const execution_t *e,
+                                     const char *api_key, int timeout_sec)
+{
+    int err = ACTA_DB_OK;
+    model_revision_t *model =
+        acta_db_model_revision_get(db, e->model_revision_id, &err);
+    if (err != ACTA_DB_OK || !model) {
+        char msg[192];
+        snprintf(msg, sizeof msg, "model revision fetch failed (id %d): %s",
+                 e->model_revision_id,
+                 acta_db_last_error(db) ? acta_db_last_error(db) : "not found");
+        return emit_runner_error(err != ACTA_DB_OK ? EXIT_SQL : EXIT_INVALID,
+                                msg);
+    }
+    if (!model->base_url || !model->base_url[0] ||
+        !model->model_identifier || !model->model_identifier[0]) {
+        acta_db_model_revision_free(model);
+        return emit_runner_error(EXIT_INVALID,
+                                "model revision missing base_url or "
+                                "model_identifier");
+    }
+    backend_preflight_t pf;
+    int prc = backend_preflight(model->base_url, model->model_identifier,
+                                api_key, timeout_sec, &pf);
+    if (prc == PREFLIGHT_OK) {
+        VLOG(1, "cmd_run: preflight before claim ok (model=%s)",
+             model->model_identifier);
+        acta_db_model_revision_free(model);
+        return EXIT_OK;
+    }
+    int exit_code;
+    const char *verdict = preflight_verdict(prc, &pf, &exit_code);
+    VLOG(1, "cmd_run: preflight before claim failed: %s (base_url=%s, model=%s)",
+         verdict, model->base_url, model->model_identifier);
+    emit_check_verdict(0, model->model_identifier, model->base_url, 0, verdict);
+    acta_db_model_revision_free(model);
+    return exit_code;
+}
 
 /* ── post-hoc output_schema validation (subset) ────────────────────── */
 

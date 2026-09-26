@@ -30,11 +30,32 @@ binary per suite.
   - `--max M < N` → exactly the first M (by `id ASC`) run, the rest stay
     `pending`; a follow-up unbounded batch consumes the remainder
   - `--max 0` → no limit, all run
-  - mixed outcomes (model-mismatch failure then success) → batch
+  - mixed outcomes (success then model-mismatch failure) → batch
     continues, later rows are still processed, exit = worst exit code
     seen (12 = HTTP/preflight; 13 timeout, 4 claim/validation in other
-    mixes)
+    mixes). The mismatched row is seeded SECOND: the pre-claim auto
+    preflight (runner-ops item 4) covers the first pending row only,
+    so a mismatched first row aborts the whole batch before any claim
+    (covered by test_autopreflight.c); here the mismatch is caught by
+    the pipeline's own step-3 preflight, after the claim
   - no pending rows → clean exit 0
+
+- `tests/run/test_autopreflight.c` — the auto preflight before the
+  atomic claim (runner-ops item 4), same stub + scratch-`:memory:`
+  harness, with the stdout verdict line captured:
+  - `run --pending`, dead server → exit 12 + the `check` JSON verdict
+    line ("server unreachable"), rows stay `pending`, no
+    `execution_log` rows, zero chat requests (no claim, no DB writes)
+  - `run --pending`, /health 503 → exit 12, "model still loading"
+  - `run --pending`, model not served → exit 12, "model not served"
+  - `run --pending`, slow server + `--timeout 1` → exit 13, "server
+    unreachable"
+  - `run <id>`, dead server → exit 12, "server unreachable", row stays
+    `pending`, no DB writes
+  - healthy server, 2 pending rows → both `completed`; the stub's
+    /health and /v1/models counts (3 each: 1 pre-claim auto preflight +
+    1 per-execution pipeline preflight) pin "once per acta_runner
+    invocation"
 
 - `tests/run/test_shadow.c` — the `OPENAI_API_KEY` shadow warning
   (runner-ops item 1): same stub + scratch-`:memory:` harness as
@@ -97,8 +118,10 @@ Exit code 0 = all checks pass, 1 = at least one failure.
   server on port 8918; fork/execv/SIGKILL on POSIX,
   CreateProcess/TerminateProcess on Windows). The `:memory:` suites
   above prove the sweep logic; this one proves the real loop:
-  - a real `acta_runner run <id>` child claims the execution and blocks
-    on the delayed /health preflight call → observed in `running`
+  - a real `acta_runner run <id>` child runs its pre-claim auto
+    preflight (blocked on the delayed /health + /v1/models calls), then
+    claims the execution and blocks on the pipeline's delayed /health
+    preflight → observed in `running`
   - the child is SIGKILL'd mid-run → row stays stuck in `running`
   - after aging past `--stale-seconds 5` (no timestamp backdating), a
     second real `acta_runner sweep` child exits 0 and transitions the

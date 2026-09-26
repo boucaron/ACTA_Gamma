@@ -16,7 +16,12 @@
  *      claim/validation). The single stub server serves one
  *      configuration per scenario, so the failing row uses a model
  *      identifier mismatch (preflight `/v1/models` check) — same
- *      EXIT_HTTP class as the health-503 case.
+ *      EXIT_HTTP class as the health-503 case. The mismatched row is
+ *      seeded SECOND: the pre-claim auto preflight (runner-ops item 4)
+ *      covers the FIRST pending row only, so a mismatched first row
+ *      would abort the whole batch before any claim (covered by
+ *      test_autopreflight.c); here the mismatch is caught by the
+ *      pipeline's own step-3 preflight, after the claim.
  *   5. no pending rows → clean exit 0.
  *
  * Same harness as test_run.c: scratch `:memory:` DB seeded from
@@ -393,12 +398,16 @@ int main(void)
     }
 
     /* 4. mixed outcomes: failing row does not stop the batch; later
-     *    rows are still processed; exit = worst exit code seen (12). */
+     *    rows are still processed; exit = worst exit code seen (12).
+     *    The healthy row is seeded FIRST (lower id): the pre-claim auto
+     *    preflight (runner-ops item 4) runs for the first pending row
+     *    only, so the mismatched row is claimed and then fails in the
+     *    pipeline's own step-3 preflight. */
     {
-        printf("== batch: mixed outcomes (mismatch then success)\n");
-        int id_bad = seed_pending(db, "wrong-model");  /* lower id first */
-        int id_good = seed_pending(db, "stub-model");
-        check(id_bad > 0 && id_good > 0, "seeded 2 pending");
+        printf("== batch: mixed outcomes (success then mismatch)\n");
+        int id_good = seed_pending(db, "stub-model");  /* lower id first */
+        int id_bad = seed_pending(db, "wrong-model");
+        check(id_good > 0 && id_bad > 0, "seeded 2 pending");
 
         if (stub_server_start(&cfg) != 0) {
             check(0, "stub server start");

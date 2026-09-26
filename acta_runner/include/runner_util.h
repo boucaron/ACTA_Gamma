@@ -240,4 +240,36 @@ static inline const char *runner_api_key_message(int status)
     }
 }
 
+/* ── check verdict line (one JSON line on stdout) ─────────────────── */
+/* Emit the scriptable `check` verdict line on stdout
+ * (docs/runner_contract.md, check action):
+ *   success: {"ok":true,"model":"<id>","max_context":<n>,"base_url":"<url>"}
+ *   failure: {"ok":false,"model":"<id>","base_url":"<url>",
+ *             "verdict":"<reason>"}
+ * Shared by the `check` action and the run pre-claim auto preflight
+ * (docs/plans/runner-ops-hardening.md, item 4), so the verdict wording
+ * cannot drift between the two surfaces. On success `verdict` is
+ * unused; on failure `max_context` is unused. */
+static inline void emit_check_verdict(int ok, const char *model,
+                                      const char *base_url,
+                                      long max_context,
+                                      const char *verdict)
+{
+    if (ok) {
+        printf("{\"ok\":true,\"model\":");
+        json_str(stdout, model ? model : "");
+        printf(",\"max_context\":%ld,\"base_url\":", max_context);
+        json_str(stdout, base_url ? base_url : "");
+        printf("}\n");
+    } else {
+        printf("{\"ok\":false,\"model\":");
+        json_str(stdout, model ? model : "");
+        printf(",\"base_url\":");
+        json_str(stdout, base_url ? base_url : "");
+        printf(",\"verdict\":");
+        json_str(stdout, verdict ? verdict : "");
+        printf("}\n");
+    }
+}
+
 #endif /* ACTA_RUNNER_UTIL_H */

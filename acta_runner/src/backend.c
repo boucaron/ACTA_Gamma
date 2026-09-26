@@ -7,6 +7,7 @@
  */
 
 #include "backend.h"
+#include "runner.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -350,4 +351,61 @@ int backend_preflight(const char *base_url, const char *model_id,
         out->max_context = (long)mc->valuedouble;
     cJSON_Delete(jm);
     return PREFLIGHT_OK;
+}
+
+/* The `check` verdict mapping, shared by the `check` action and the run
+ * pre-claim auto preflight (docs/plans/runner-ops-hardening.md, item 4):
+ * one classification, one set of exit codes. PREFLIGHT_OK -> NULL verdict
+ * and exit 0; every failure -> a verdict string + 12 (HTTP) or 13
+ * (timeout), exactly the `check` contract.
+ */
+const char *preflight_verdict(int prc, const backend_preflight_t *pf,
+                             int *exit_code)
+{
+    const char *verdict;
+    int code;
+    switch (prc) {
+    case PREFLIGHT_OK:
+        verdict = NULL;
+        code = EXIT_OK;
+        break;
+    case PREFLIGHT_CANCELED:
+        /* Defensive dead path for the CLI: the cooperative cancel flag
+         * is only ever set by the GUI. */
+        /* deliberate fallthrough to "server unreachable" */
+    case PREFLIGHT_HEALTH_TRANSPORT:
+        verdict = "server unreachable";
+        code = EXIT_HTTP;
+        break;
+    case PREFLIGHT_HEALTH_TIMEOUT:
+        verdict = "server unreachable";
+        code = EXIT_TIMEOUT;
+        break;
+    case PREFLIGHT_HEALTH_NOT_200:
+        verdict = (pf && pf->http_status == 503)
+            ? "model still loading" : "server unreachable";
+        code = EXIT_HTTP;
+        break;
+    case PREFLIGHT_MODELS_TIMEOUT:
+        verdict = "catalog unreachable";
+        code = EXIT_TIMEOUT;
+        break;
+    case PREFLIGHT_MODELS_TRANSPORT:
+    case PREFLIGHT_MODELS_NOT_200:
+    case PREFLIGHT_MODELS_UNPARSEABLE:
+        verdict = "catalog unreachable";
+        code = EXIT_HTTP;
+        break;
+    case PREFLIGHT_MODEL_NOT_SERVED:
+        verdict = "model not served";
+        code = EXIT_HTTP;
+        break;
+    default:
+        verdict = "server unreachable";
+        code = EXIT_HTTP;
+        break;
+    }
+    if (exit_code)
+        *exit_code = code;
+    return verdict;
 }

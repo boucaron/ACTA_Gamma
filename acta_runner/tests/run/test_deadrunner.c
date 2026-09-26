@@ -5,9 +5,10 @@
  * against a seeded `:memory:` DB. This suite covers the real failure
  * loop with real processes:
  *
- *   1. a real `acta_runner run <id>` child claims a pending execution
- *      against the in-process stub server (delay_ms long enough that it
- *      blocks on the /health preflight call, sitting in `running`);
+ *   1. a real `acta_runner run <id>` child runs its pre-claim auto
+ *      preflight (blocked on the stub's delayed /health and /v1/models
+ *      calls), then claims the pending execution and blocks again on
+ *      the pipeline's /health preflight, sitting in `running`;
  *   2. the child is SIGKILL'd (POSIX) / TerminateProcess'd (Windows)
  *      mid-run — the realistic "dead runner process";
  *   3. the row is stuck in `running` (nothing auto-recovered it);
@@ -383,8 +384,10 @@ int main(void)
         return 1;
     }
 
-    /* Hanging stub: every response is delayed long enough that the
-     * child blocks on the /health preflight call while in `running`. */
+    /* Hanging stub: every response is delayed. The child first blocks on
+     * the pre-claim auto preflight (/health, then /v1/models), then
+     * claims the row and blocks on the pipeline's /health preflight
+     * while in `running`. */
     stub_config_t cfg;
     memset(&cfg, 0, sizeof cfg);
     cfg.port = STUB_PORT;

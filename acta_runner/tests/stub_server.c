@@ -42,6 +42,8 @@ static stub_config_t g_cfg;
 static int      g_port = 0;
 static char     g_last_auth[256]; /* Authorization value of last request */
 static int      g_chat_requests = 0; /* POST /v1/chat/completions count */
+static int      g_health_requests = 0; /* GET /health count */
+static int      g_models_requests = 0; /* GET /v1/models count */
 
 static void msleep(int ms)
 {
@@ -162,6 +164,16 @@ int stub_server_chat_requests(void)
     return g_chat_requests;
 }
 
+int stub_server_health_requests(void)
+{
+    return g_health_requests;
+}
+
+int stub_server_models_requests(void)
+{
+    return g_models_requests;
+}
+
 /* Read the request (header + body) and serve one response. */
 static void handle_connection(int c, const stub_config_t *cfg)
 {
@@ -215,6 +227,7 @@ static void handle_connection(int c, const stub_config_t *cfg)
         msleep(cfg->delay_ms);
 
     if (strcmp(path, "/health") == 0 || strcmp(path, "/v1/health") == 0) {
+        g_health_requests++;
         if (cfg->health_status == 503)
             send_response(c, 503, "Service Unavailable",
                           "{\"error\":{\"code\":503,"
@@ -226,6 +239,7 @@ static void handle_connection(int c, const stub_config_t *cfg)
     }
 
     if (strcmp(path, "/v1/models") == 0) {
+        g_models_requests++;
         if (cfg->models_status != 200) {
             char body[512];
             snprintf(body, sizeof body,
@@ -384,6 +398,8 @@ int stub_server_start(const stub_config_t *cfg)
         g_cfg.models_status = 200;
     g_last_auth[0] = '\0';
     g_chat_requests = 0;
+    g_health_requests = 0;
+    g_models_requests = 0;
     g_running = 1;
     if (pthread_create(&g_thread, NULL, server_main, NULL) != 0) {
         g_running = 0;
