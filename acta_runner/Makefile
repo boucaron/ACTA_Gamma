@@ -113,6 +113,13 @@ CONF_SRCS  := tests/run/test_conf.c tests/stub_server.c \
 CONF_OBJS  := $(patsubst %.c, %.o, $(CONF_SRCS))
 CONF_TARGET := tests/run/test_conf$(EXEEXT)
 
+# ---- shadow-warning suite: a set $OPENAI_API_KEY shadowing the config
+#      file "api_key" warns once per run (runner-ops item 1)
+SHAD_SRCS  := tests/run/test_shadow.c tests/stub_server.c \
+              src/run.c src/backend.c src/argparse.c
+SHAD_OBJS  := $(patsubst %.c, %.o, $(SHAD_SRCS))
+SHAD_TARGET := tests/run/test_shadow$(EXEEXT)
+
 # ---- token-free backend health-check suite: `check` action
 #      (docs/plans/runner-health-check.md) — the zero
 #      /v1/chat/completions assertion + no-execution-rows checks
@@ -186,6 +193,9 @@ $(KEY_TARGET): $(KEY_OBJS) $(ACTA_DB_LIB)
 $(CONF_TARGET): $(CONF_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(CONF_OBJS) $(TEST_LDLIBS)
 
+$(SHAD_TARGET): $(SHAD_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(SHAD_OBJS) $(TEST_LDLIBS)
+
 $(CHK_TARGET): $(CHK_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(CHK_OBJS) $(TEST_LDLIBS)
 
@@ -199,7 +209,7 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(CHK_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(CHK_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
@@ -207,6 +217,7 @@ test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $
 	$(SPAWN_PATH) $(DEL_TARGET)
 	$(SPAWN_PATH) $(KEY_TARGET)
 	$(SPAWN_PATH) $(CONF_TARGET)
+	$(SPAWN_PATH) $(SHAD_TARGET)
 	$(SPAWN_PATH) $(CHK_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
@@ -249,6 +260,9 @@ tests/run/test_api_key.o: tests/run/test_api_key.c tests/stub_server.h
 tests/run/test_conf.o: tests/run/test_conf.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
+tests/run/test_shadow.o: tests/run/test_shadow.c tests/stub_server.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
 tests/check/test_check.o: tests/check/test_check.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
@@ -257,5 +271,6 @@ clean:
         $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(SWEEP_OBJS) \
         $(SWEEP_TARGET) $(DEL_OBJS) $(DEL_TARGET) $(DEAD_OBJS) \
         $(DEAD_TARGET) $(KEY_OBJS) $(KEY_TARGET) $(CONF_OBJS) \
-        $(CONF_TARGET) $(CHK_OBJS) $(CHK_TARGET) \
+        $(CONF_TARGET) $(SHAD_OBJS) $(SHAD_TARGET) \
+        $(CHK_OBJS) $(CHK_TARGET) \
         $(SMOKE_OBJS) $(SMOKE_TARGET)

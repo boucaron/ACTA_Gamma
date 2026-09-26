@@ -29,6 +29,7 @@ int run_execution_list_tests(void);
 int run_execution_deleted_tests(void);
 
 int run_light_queries_tests(void);
+int run_busy_tests(void);
 
 int main(void) {
     int failures = 0;
@@ -71,6 +72,9 @@ int main(void) {
 
     // Light-projection listers
     failures += run_light_queries_tests();
+
+    // busy_timeout + wrapped SQLITE_BUSY
+    failures += run_busy_tests();
 
     // Execution logs
     failures += run_execution_log_tests();

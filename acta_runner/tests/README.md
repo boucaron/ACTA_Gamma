@@ -36,6 +36,21 @@ binary per suite.
     mixes)
   - no pending rows → clean exit 0
 
+- `tests/run/test_shadow.c` — the `OPENAI_API_KEY` shadow warning
+  (runner-ops item 1): same stub + scratch-`:memory:` harness as
+  `test_conf.c`, with per-run stderr capture (`dup(2)` + `freopen` onto
+  a scratch file around the `cmd_run` call):
+  - env EMPTY + non-empty file `"api_key"` (POSIX; `_putenv` cannot set
+    an empty string on Windows) → completes with NO `Authorization`
+    header and stderr carries the one-line shadow warning
+  - env non-empty + non-empty file key → completes with the ENV key in
+    the Bearer header and stderr carries the shadow warning
+  - env UNSET + file key → completes with the FILE key, NO shadow
+    warning
+  - env non-empty + file key absent → completes with the ENV key, NO
+    shadow warning
+  - (unit) the `acta_conf_api_key_shadow_warning` truth table
+
 Build & run from `acta_runner/`:
 
     make test        # builds tests/run/test_run + test_pending +

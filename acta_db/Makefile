@@ -64,7 +64,7 @@ TEST_MODULES := db execution execution_log integration \
                 model model_folder model_revision \
                 skill skill_folder skill_revision \
                 context_deleted execution_deleted \
-                light_queries
+                light_queries busy
 
 .PHONY: all clean test test-build test-%
 
@@ -87,7 +87,10 @@ test: $(LIB_STATIC) $(TEST_BIN_DIR)/run
 
 $(TEST_BIN_DIR)/run: $(TEST_SRCS) $(LIB_STATIC)
 	@mkdir -p $(TEST_BIN_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -o $@ $(TEST_SRCS) -L. -lacta_db $(LDLIBS)
+	# -lpthread: the busy-timeout suite (tests/test_busy.c) runs the
+	# contending writer on a pthread (no-op on glibc, winpthread on
+	# mingw).
+	$(CC) $(CFLAGS) -I$(INC_DIR) -o $@ $(TEST_SRCS) -L. -lacta_db $(LDLIBS) -lpthread
 
 # ─── Run a single module's tests ──────────────────────────────────────────────
 # Usage:

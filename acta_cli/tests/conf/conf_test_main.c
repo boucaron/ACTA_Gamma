@@ -193,6 +193,37 @@ static void test_api_key_status(void)
     T(acta_conf_api_key_status(NULL, NULL, NULL) == ACTA_KEY_UNSET_ERR);
 }
 
+/* ── acta_conf_api_key_shadow_warning ────────────────────────────── */
+
+static void test_api_key_shadow(void)
+{
+    const char *msg = "canary";
+
+    /* Shadow in effect: env set (non-empty) + non-empty file key. */
+    T(acta_conf_api_key_shadow_warning("env-key", "file-key", &msg) == 1);
+    T(msg != NULL && strstr(msg, "shadows") != NULL);
+    T(strstr(msg, "effective key is the environment value") != NULL);
+
+    /* Env set to EMPTY also shadows (the footgun case). */
+    T(acta_conf_api_key_shadow_warning("", "file-key", &msg) == 1);
+    T(msg != NULL && strstr(msg, "shadows") != NULL);
+
+    /* Env unset -> nothing is being shadowed. */
+    T(acta_conf_api_key_shadow_warning(NULL, "file-key", &msg) == 0);
+    T(msg == NULL);
+
+    /* Env set, file key absent (NULL) -> no shadow. */
+    T(acta_conf_api_key_shadow_warning("env-key", NULL, &msg) == 0);
+    T(msg == NULL);
+
+    /* Env set, file key present but empty -> nothing to shadow. */
+    T(acta_conf_api_key_shadow_warning("env-key", "", &msg) == 0);
+    T(msg == NULL);
+
+    /* NULL msg pointer is tolerated. */
+    T(acta_conf_api_key_shadow_warning("env-key", "file-key", NULL) == 1);
+}
+
 /* ── acta_conf_default_path ───────────────────────────────────────── */
 
 static void test_default_path(void)
@@ -349,6 +380,7 @@ int main(void)
 {
     test_parse();
     test_api_key_status();
+    test_api_key_shadow();
     test_default_path();
     test_read();
     test_resolve();
