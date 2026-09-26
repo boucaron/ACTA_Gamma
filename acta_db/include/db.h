@@ -114,7 +114,19 @@ typedef struct db_t db_t;
  * reported in this note. This is NOT an error — the return code is
  * ACTA_DB_OK and the connection is fully usable; callers may log the
  * note. Any later acta_db_exec* call clears it, like any other error
- * string. */
+ * string.
+ *
+ * Every open connection also sets a busy timeout
+ * (sqlite3_busy_timeout) of 5000 ms — the ACTA_DB_BUSY_TIMEOUT_MS
+ * constant in db.c: a write that collides with a transient
+ * cross-process event (a WAL checkpoint, a concurrent `db backup`)
+ * waits up to that budget before failing, instead of returning a raw
+ * SQLITE_BUSY immediately (docs/DBDesign.md, the concurrency note).
+ * If a write still fails with SQLITE_BUSY after the timeout,
+ * acta_db_last_error() holds the wrapped diagnostic:
+ * "SQLITE_BUSY: concurrent write detected; this database is
+ * single-writer by design — wait for the other process to finish and
+ * rerun". */
 db_t *acta_db_open(const char *path, int *err, int creationMode);
 
 /* Close the database and free the handle.
@@ -183,7 +195,11 @@ int acta_db_force_close(db_t *db);
  * canonical schema on a fresh file), and the CLI `db migrate` (the
  * repo-static migration DDL, acta_db/migrations/<version>.sql).
  * In every case the text is static developer-supplied data, not
- * user input; there is no raw-SQL path. */
+ * user input; there is no raw-SQL path.
+ *
+ * A SQLITE_BUSY that survives the open-time busy timeout is reported
+ * in acta_db_last_error() as the wrapped single-writer diagnostic
+ * (see acta_db_open above); the return code is still ACTA_DB_ERR_SQL. */
 int acta_db_exec(db_t *db, const char *sql);
 
 /* Returns the last error message for this connection. */

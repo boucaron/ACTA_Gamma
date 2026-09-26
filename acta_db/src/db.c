@@ -25,12 +25,22 @@ const char *acta_db_strerror(int code)
     }
 }
 
+/* Transient-contention budget for the single-writer design: on
+ * SQLITE_BUSY, sqlite3 waits up to this many milliseconds before
+ * returning an error (set on every open; docs/DBDesign.md, the
+ * concurrency note).  A named constant, not a magic number. */
+#define ACTA_DB_BUSY_TIMEOUT_MS 5000
+
 /* ------------------------------------------------------------------ */
 /*  Internal: run a one-shot SQL statement, capturing the error string.
  *
  *  Returns SQLITE_OK or a SQLite error code.
  *  On failure, *last_error is set to a sqlite3_malloc'd string that
  *  the caller owns (free with sqlite3_free).
+ *
+ *  A SQLITE_BUSY that survives the open-time busy timeout (above) is
+ *  reported with a wrapped single-writer diagnostic instead of the raw
+ *  "database is locked" text (docs/DBDesign.md, the concurrency note).
  * ------------------------------------------------------------------ */
 static int db_exec_capture(db_t *db, const char *sql) {
     /* Free any previous error string before running a new statement. */
@@ -39,6 +49,17 @@ static int db_exec_capture(db_t *db, const char *sql) {
 
     int rc = sqlite3_exec(db->handle, sql, NULL, NULL,
                           (char **)&db->last_error);
+    if (rc == SQLITE_BUSY) {
+        char *wrapped =
+            sqlite3_mprintf("SQLITE_BUSY: concurrent write detected; this "
+                            "database is single-writer by design — wait "
+                            "for the other process to finish and rerun");
+        if (wrapped) {
+            sqlite3_free(db->last_error);
+            db->last_error = wrapped;
+        }
+        /* On mprintf OOM, keep the raw sqlite3_exec error string as-is. */
+    }
     return rc;
 }
 
@@ -101,6 +122,18 @@ db_t *acta_db_open(const char *path, int *err, int creationMode)
         if (err) *err = ACTA_DB_ERR_SQL;
         return NULL;
     }
+
+    /*
+     * Transient-contention budget (docs/DBDesign.md, the concurrency
+     * note): a mid-pipeline write that collides with a WAL checkpoint
+     * or a concurrent `db backup` now waits up to ACTA_DB_BUSY_TIMEOUT_MS
+     * before failing, instead of returning a raw SQLITE_BUSY and losing
+     * a completed LLM result.  Single-writer is still the expected
+     * pattern — the wait only absorbs short cross-process contention;
+     * if it is exhausted, db_exec_capture() reports the wrapped
+     * single-writer diagnostic.
+     */
+    sqlite3_busy_timeout(handle, ACTA_DB_BUSY_TIMEOUT_MS);
 
     /*
      * PRAGMAs are best-effort: check-and-report, never fail the open.
