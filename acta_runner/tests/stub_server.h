@@ -59,8 +59,8 @@ int stub_server_chat_requests(void);
 
 /* Number of GET /health requests received since the last
  * stub_server_start (reset on stub_server_start). Used by the
- * auto-preflight suite to pin "once per acta_runner invocation"
- * (docs/plans/runner-ops-hardening.md, item 4): an N-row --pending
+ * auto-preflight suite to pin "once per acta_runner invocation":
+ * an N-row --pending
  * batch makes 1 + N /health calls (one pre-claim auto preflight plus
  * one per-execution pipeline preflight), not 2 * N. */
 int stub_server_health_requests(void);

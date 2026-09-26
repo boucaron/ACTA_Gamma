@@ -246,8 +246,8 @@ static inline const char *runner_api_key_message(int status)
  *   success: {"ok":true,"model":"<id>","max_context":<n>,"base_url":"<url>"}
  *   failure: {"ok":false,"model":"<id>","base_url":"<url>",
  *             "verdict":"<reason>"}
- * Shared by the `check` action and the run pre-claim auto preflight
- * (docs/plans/runner-ops-hardening.md, item 4), so the verdict wording
+ * Shared by the `check` action and the run pre-claim auto preflight,
+ * so the verdict wording
  * cannot drift between the two surfaces. On success `verdict` is
  * unused; on failure `max_context` is unused. */
 static inline void emit_check_verdict(int ok, const char *model,

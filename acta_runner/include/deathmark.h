@@ -4,8 +4,7 @@
 #include "acta_db.h"
 
 /*
- * Death marker for orphaned `running` rows
- * (docs/plans/runner-ops-hardening.md, item 3).
+ * Death marker for orphaned `running` rows.
  *
  * On a clean process exit (SIGINT / SIGTERM / atexit) while an
  * execution is claimed in `running`, the marker transitions the row to

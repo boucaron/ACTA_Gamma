@@ -39,8 +39,8 @@
  * error path funnels through fail_execution() so the row never stays stuck
  * in "running".
  *
- * cmd_run additionally runs an auto preflight BEFORE the claim
- * (docs/plans/runner-ops-hardening.md, item 4): the same two token-free
+ * cmd_run additionally runs an auto preflight BEFORE the claim:
+ * the same two token-free
  * GETs `check` uses (backend_preflight), once per acta_runner invocation
  * — for the execution the claim is about (the first pending row in a
  * --pending batch). Dead/unreachable backend or model not served -> exit
@@ -77,8 +77,7 @@ static void run_usage(FILE *out)
 }
 
 /* Auto preflight before the atomic claim; full definition below, in
- * the pipeline-helpers section (docs/plans/runner-ops-hardening.md,
- * item 4). */
+ * the pipeline-helpers section. */
 static int run_preflight_before_claim(db_t *db, const execution_t *e,
                                      const char *api_key, int timeout_sec);
 
@@ -213,8 +212,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             return EXIT_OK;
         }
 
-        /* Auto preflight before the claim (docs/plans/
-         * runner-ops-hardening.md, item 4): the shared token-free GETs
+        /* Auto preflight before the claim: the shared token-free GETs
          * `check` runs, once per invocation — for the first pending row,
          * the one the batch claims first — so a dead backend or an
          * unserved model exits with the check verdict before any row is
@@ -254,8 +252,7 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         return EXIT_INVALID;
     }
 
-    /* Auto preflight before the claim (docs/plans/
-     * runner-ops-hardening.md, item 4): the row-state validation runs
+    /* Auto preflight before the claim: the row-state validation runs
      * exactly as run_execution would (unknown/deleted -> 1, not pending
      * -> 4), then the shared token-free GETs `check` uses — so a dead
      * backend or an unserved model exits with the check verdict before
@@ -389,8 +386,8 @@ static int cancel_execution(db_t *db, int exec_id)
 /* ── auto preflight before the claim (runner-ops item 4) ──────────── */
 
 /*
- * The shared preflight the `run` action runs BEFORE the atomic claim
- * (docs/plans/runner-ops-hardening.md, item 4): the same two token-free
+ * The shared preflight the `run` action runs BEFORE the atomic claim:
+ * the same two token-free
  * GETs `check` uses (via backend_preflight), called once per acta_runner
  * invocation — for the execution the claim is about (in a --pending
  * batch, the first pending row, the one claimed first). A dead/unreachable
@@ -602,7 +599,7 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
     }
     /* Death marker: if the process exits cleanly (SIGINT/SIGTERM/atexit)
      * while this row is still `running`, it is marked failed instead of
-     * orphaned (docs/plans/runner-ops-hardening.md, item 3). */
+     * orphaned. */
     deathmark_claim(db, exec_id);
     log_phase(db, exec_id, ACTA_LOG_LEVEL_INFO, "execution_started",
               "execution claimed (pending -> running)", NULL);

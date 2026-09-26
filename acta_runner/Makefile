@@ -86,7 +86,7 @@ PEND_OBJS  := $(patsubst %.c, %.o, $(PEND_SRCS))
 PEND_TARGET := tests/run/test_pending$(EXEEXT)
 
 # ---- auto-preflight suite: the pre-claim `check`-verdict preflight
-#      (docs/plans/runner-ops-hardening.md, item 4): dead/unserved backend
+#      (auto preflight before the claim): dead/unserved backend
 #      -> exit 12/13 + the check verdict line, nothing claimed, no DB
 #      writes; healthy -> the run proceeds; the stub's /health and
 #      /v1/models counts pin "once per acta_runner invocation"
@@ -136,7 +136,7 @@ SHAD_OBJS  := $(patsubst %.c, %.o, $(SHAD_SRCS))
 SHAD_TARGET := tests/run/test_shadow$(EXEEXT)
 
 # ---- death-marker suite: clean-exit mark of a claimed `running` row
-#      (docs/plans/runner-ops-hardening.md, item 3) — pure DB; no stub
+#      (death marker on clean exit) — pure DB; no stub
 #      server, no backend sources
 DMRK_SRCS  := tests/run/test_deathmark.c src/deathmark.c
 DMRK_OBJS  := $(patsubst %.c, %.o, $(DMRK_SRCS))
@@ -144,7 +144,7 @@ DMRK_TARGET := tests/run/test_deathmark$(EXEEXT)
 DMRK_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
 
 # ---- token-free backend health-check suite: `check` action
-#      (docs/plans/runner-health-check.md) — the zero
+#      (token-free backend check) — the zero
 #      /v1/chat/completions assertion + no-execution-rows checks
 CHK_SRCS  := tests/check/test_check.c tests/stub_server.c \
              src/check.c src/backend.c src/argparse.c

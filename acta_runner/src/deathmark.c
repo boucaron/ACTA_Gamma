@@ -1,6 +1,5 @@
 /*
- * deathmark.c — death marker for orphaned `running` rows
- * (docs/plans/runner-ops-hardening.md, item 3).
+ * deathmark.c — death marker for orphaned `running` rows.
  *
  * On a clean process exit (SIGINT / SIGTERM / atexit) while an
  * execution is claimed in `running`, the marker fails the row with the

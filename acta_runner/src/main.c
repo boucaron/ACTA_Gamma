@@ -233,8 +233,7 @@ int main(int argc, char **argv)
 
     /* Death-marker exit path: on a clean exit (SIGINT/SIGTERM/atexit)
      * while an execution is claimed in `running`, the row is marked
-     * failed instead of left orphaned
-     * (docs/plans/runner-ops-hardening.md, item 3). */
+     * failed instead of left orphaned. */
     deathmark_install();
 
     /* ---- dispatch (handler receives the open db handle) ---- */

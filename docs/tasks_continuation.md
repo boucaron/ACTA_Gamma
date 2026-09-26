@@ -295,10 +295,11 @@ Verified green by the user: `make all` + `make test` (every suite,
 
 # Task continuation 2: token-free runner health check (`acta_runner check`)
 
-Source plan: the runner health-check plan (plan 1 of the three open
-plans; plan 2 — schema migration — is now done, see "Task continuation 3"
-below; plan 3 — Windows config permissions — is still a proposal, not
-started).
+Source plan: the runner health-check plan (plan 1 of the three then-open
+plans; plan 2 — schema migration — is done, see "Task continuation 3"
+below; plan 3 — Windows config permissions — was later dropped without
+implementation: Windows config-file protection is declared the owner's
+responsibility, and the pre-change warn-and-read behavior stands).
 
 Status: **verified; committed.** Session 1 was edit-only; session 2 ran
 `make all` / `make test` / `make gui` and fixed the failures found (see

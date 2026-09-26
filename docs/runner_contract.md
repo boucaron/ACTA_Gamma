@@ -23,7 +23,7 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   with one `execution_log` row per phase and JSON metadata
   (http status, latency, token usage, …). Every post-claim failure
   funnels through `fail_execution()` so a row never stays stuck in
-  `running`. In addition, `cmd_run` (`run <id>` and `run --pending`) runs the auto preflight **before the claim**: the same two token-free GETs `check` uses (via `backend_preflight()`), once per `acta_runner` invocation — for the execution the claim is about (in a `--pending` batch, the first pending row); dead/unreachable backend or model not served → exit with the `check` verdict code (12/13), the same JSON verdict line, nothing claimed, no DB writes (docs/plans/runner-ops-hardening.md, item 4).
+  `running`. In addition, `cmd_run` (`run <id>` and `run --pending`) runs the auto preflight **before the claim**: the same two token-free GETs `check` uses (via `backend_preflight()`), once per `acta_runner` invocation — for the execution the claim is about (in a `--pending` batch, the first pending row); dead/unreachable backend or model not served → exit with the `check` verdict code (12/13), the same JSON verdict line, nothing claimed, no DB writes.
 - R8 (commit 2f8085e): preflight catalog logging — after the
   `/v1/models` id match, the runner fetches the llama.cpp model catalog
   (`GET /`) and logs a `preflight_passed` event with the matched entry's
@@ -255,7 +255,7 @@ and `run --pending` call the same two token-free GETs `check` uses (via
 execution the claim is about (in a `--pending` batch, the first pending
 row). Dead/unreachable backend or model not served → exit with the
 `check` verdict code (12/13) and the same JSON verdict line, nothing
-claimed, no DB writes (docs/plans/runner-ops-hardening.md, item 4). The
+claimed, no DB writes. The
 per-execution step-3 preflight below still runs, after the claim.
 
 1. **Claim** — fetch execution; must be `pending`; `start()` →
@@ -352,7 +352,7 @@ default 600 s.
 `execution_log` rows, no execution state change, no DB writes of any
 kind. No streaming, no retry loop (consistent with the product
 decisions). The `run` action now runs this pre-flight automatically
-before the claim (docs/plans/runner-ops-hardening.md, item 4); `check`
+before the claim; `check`
 remains the manual triage tool: a standalone probe before any model is
 registered, and the first triage step after a `failed` backend call.
 

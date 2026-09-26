@@ -148,8 +148,8 @@ int backend_preflight(const char *base_url, const char *model_id,
  * (docs/runner_contract.md, check action): the human-readable `verdict`
  * string (NULL when prc == PREFLIGHT_OK) and, through *exit_code, the
  * matching process exit code (0 ok, EXIT_HTTP = 12, EXIT_TIMEOUT = 13).
- * Shared by the `check` action and the run pre-claim auto preflight
- * (docs/plans/runner-ops-hardening.md, item 4), so the verdict wording
+ * Shared by the `check` action and the run pre-claim auto preflight,
+ * so the verdict wording
  * and exit codes cannot drift between the two surfaces.
  */
 const char *preflight_verdict(int prc, const backend_preflight_t *pf,

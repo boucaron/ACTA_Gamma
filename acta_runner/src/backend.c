@@ -354,7 +354,7 @@ int backend_preflight(const char *base_url, const char *model_id,
 }
 
 /* The `check` verdict mapping, shared by the `check` action and the run
- * pre-claim auto preflight (docs/plans/runner-ops-hardening.md, item 4):
+ * pre-claim auto preflight:
  * one classification, one set of exit codes. PREFLIGHT_OK -> NULL verdict
  * and exit 0; every failure -> a verdict string + 12 (HTTP) or 13
  * (timeout), exactly the `check` contract.

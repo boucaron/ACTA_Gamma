@@ -1,6 +1,5 @@
 /*
- * test_shadow.c — OPENAI_API_KEY shadow-warning suite
- * (docs/plans/runner-ops-hardening.md, item 1):
+ * test_shadow.c — OPENAI_API_KEY shadow-warning suite:
  *   1. (POSIX) env set to EMPTY + non-empty file "api_key" -> the run
  *      completes WITHOUT an Authorization header and stderr carries the
  *      shadow warning (plus the existing empty-key warning).

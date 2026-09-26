@@ -24,7 +24,7 @@
  *
  * Result contract (one JSON line on stdout, scriptable — emitted via
  * emit_check_verdict in runner_util.h, shared with the run pre-claim
- * auto preflight, docs/plans/runner-ops-hardening.md item 4):
+ * auto preflight):
  *   success: {"ok":true,"model":"<id>","max_context":<n>,"base_url":"<url>"}
  *   failure: {"ok":false,"model":"<id>","base_url":"<url>",
  *             "verdict":"model still loading" | "server unreachable"
@@ -216,8 +216,7 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
 
     /* The prc -> (verdict, exit code) mapping is the shared
      * preflight_verdict() in backend.c — the same classification the run
-     * pre-claim auto preflight uses (docs/plans/runner-ops-hardening.md,
-     * item 4), so the two surfaces cannot drift. */
+     * pre-claim auto preflight uses, so the two surfaces cannot drift. */
     int exit_code = EXIT_OK;
     const char *verdict = preflight_verdict(prc, &pf, &exit_code);
 

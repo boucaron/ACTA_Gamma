@@ -1,6 +1,5 @@
 /*
- * test_deathmark.c — death marker for orphaned `running` rows
- * (docs/plans/runner-ops-hardening.md, item 3).
+ * test_deathmark.c — death marker for orphaned `running` rows.
  *
  * In-process, pure DB (no stub server, no backend sources): the plain
  * marker (deathmark_mark / deathmark_exit_path) is exercised directly

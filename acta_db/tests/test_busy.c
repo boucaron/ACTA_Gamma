@@ -1,6 +1,6 @@
 /* test_busy.c — busy_timeout + wrapped SQLITE_BUSY
  *
- * Pins item 2 of docs/plans/runner-ops-hardening.md: every
+ * Pins the busy_timeout contract: every
  * acta_db_open sets sqlite3_busy_timeout(ACTA_DB_BUSY_TIMEOUT_MS =
  * 5000), so a transient write contention (a WAL checkpoint, a
  * concurrent `db backup`) is absorbed by waiting rather than failing
