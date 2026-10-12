@@ -1533,6 +1533,10 @@ rejected the duplicates; unique names per case made it green. Not a GUI defect.
 
 1. `acta_runner/MYTEST/` is still untracked (normalized `acta.db`, the five
    `*_summarize` review outputs, `run_tests.sh`) — commit / git-ignore / delete.
+   **Decided (session 8): git-ignore it** — `.gitignore` gained `acta_runner/MYTEST/`
+   (the `acta.db` inside was already covered by `*.db`; the review outputs and
+   `run_tests.sh` are local scratch, and the pre-vocabulary DB copy lives at
+   `/c/msys64/tmp/actsnap/pre-vocabulary/acta_runner_MYTEST_acta.db`).
 2. The `acta_test_ref.db` fixture policy of §12.3 blocker 2.
 3. Still unfixed, pre-existing, out of scope: `emit_runner_error()` prints
    `{error":"…` while `docs/runner_contract.md` documents `{"error":…`; the
@@ -1553,9 +1557,11 @@ rejected the duplicates; unique names per case made it green. Not a GUI defect.
 > `acta_cli` **17/17**. WSL: `make all` rc 0 no warnings, 13 suites **712/0**,
 > `acta_cli` **17/17**. Nothing is left unverified except what §13.7 lists.
 >
-> Do next: only the two open owner calls — (1) the fate of untracked
-> `acta_runner/MYTEST/`; (2) the `acta_test_ref.db` fixture policy — plus, if
-> asked, the three out-of-scope items in §13.7 item 3. Do not reopen the settled
-> decisions (plan §9).
+> Do next: the one remaining owner call — the `acta_test_ref.db` fixture policy
+> (§12.3 blocker 2; the recommended fix is a `acta_cli/Makefile` rule
+> `acta_test_ref.db: acta_test_ref.sql` → `sqlite3 $@ < $<`, with `test` depending
+> on it — that exact command is what made a fresh worktree pass 17/17) — plus, if
+> asked, the three out-of-scope items in §13.7 item 3. `acta_runner/MYTEST/` is now
+> git-ignored (§13.7 item 1). Do not reopen the settled decisions (plan §9).
 
 

@@ -16,6 +16,11 @@ data/
 outputs/
 executions/
 
+# Local scratch: the acta_runner/MYTEST ad-hoc review workspace (its own acta.db,
+# the five *_summarize review outputs, run_tests.sh) - not part of the repo.
+# The pre-vocabulary copy of its acta.db is backed up under /c/msys64/tmp/actsnap/.
+acta_runner/MYTEST/
+
 # Build artifacts
 *.o
 *.exe
