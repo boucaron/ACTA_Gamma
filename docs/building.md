@@ -67,9 +67,12 @@ MSYS2_ARG_CONV_EXCL='*' wsl.exe -d <distro> -e bash -lc \
     /mnt/c/<path>/ACTA_Gamma/ ~/ACTA_Gamma/ && cd ~/ACTA_Gamma && make all'
 ```
 
-- `--include="acta_test_ref.db"` **before** `--exclude="*.db"`: the `acta_cli`
-  test harness needs that fixture (`make test` in `acta_cli/` must run with
-  cwd `acta_cli/`), while the scratch/generated `*.db` files stay out.
+- `--include="acta_test_ref.db"` **before** `--exclude="*.db"`: copies the
+  `acta_cli` test fixture along with the sources. It is a convenience, not a
+  requirement — `acta_cli/Makefile` regenerates the `.db` from the tracked
+  `acta_test_ref.sql` whenever it is missing or stale (see **Tests**) — but
+  dropping the include means the first `make test` rebuilds it. `make test` in
+  `acta_cli/` must run with cwd `acta_cli/` either way.
 - The `*.o *.a *.so *.exe build/ out/` excludes matter: a Windows tree full of
   PE objects would otherwise be relinked into ELF binaries (and fail).
 
@@ -130,6 +133,16 @@ cd acta_db       && make test   # C unit tests
 cd ../acta_cli   && make test   # per-entity CLI tests
 cd ../acta_runner && make test   # pipeline tests against a local stub backend
 ```
+
+`acta_cli` seeds every suite from the fixture `acta_cli/acta_test_ref.db`, which
+is **git-ignored**: the tracked `acta_test_ref.sql` (a plain `BEGIN TRANSACTION
+… COMMIT` dump) is its source of truth, and the `acta_cli` Makefile regenerates
+the `.db` from it whenever it is missing or older than the `.sql` — a fresh
+clone therefore needs nothing but `make test`. Edit the `.sql`, never the `.db`.
+The rule needs the `sqlite3` command-line tool (`make SQLITE3=/path/to/sqlite3
+test` to point at another one); without it the build stops with a named error
+instead of letting all 17 suites fail on a missing file. The CLI suites must run
+with `cwd = acta_cli/` — each one copies the fixture into `acta_cli/tmp/`.
 
 The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and `make smoke` (manual check of `tests/llama_smoke` against a LIVE llama.cpp `llama-server`; `llama_smoke` takes the key as a CLI argument, or `-` for no auth). For real use — `acta_runner run` or the GUI — the API key must come from `$OPENAI_API_KEY` or, when that variable is unset, the `"api_key"` key of the config file (`ACTA_Gamma.conf` in the app-data directory; no key anywhere → hard error, empty key → warning; see the README `# Configuration` section).
 

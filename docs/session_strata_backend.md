@@ -159,7 +159,7 @@ Scratch DBs used: `/tmp/acta_strata.db` (Windows side), `~/ACTA_Gamma/acta_wsl.d
 | This agent shell has no `/mingw64` mount → `acta_cli.exe`/`acta_runner.exe` exit **127** | `export PATH=/c/msys64/mingw64/bin:$PATH` (provides `libcjson-1.dll`) |
 | `jq` segfaults under MSYS2 | parse JSON with `python3` |
 | `wsl.exe` output is UTF-16 / CR-terminated; MSYS mangles `/mnt/...` args | pipe through `tr -d '\r'`, prefix `//mnt/c/...`, set `MSYS2_ARG_CONV_EXCL='*'` |
-| `acta_cli` test harness | must run with **cwd = `acta_cli/`** and needs the fixture `acta_cli/acta_test_ref.db` (rsync `--exclude="*.db"` must not drop it) |
+| `acta_cli` test harness | must run with **cwd = `acta_cli/`** and needs the fixture `acta_cli/acta_test_ref.db` (rsync `--exclude="*.db"` must not drop it — or let `acta_cli/Makefile` regenerate it from the tracked `acta_test_ref.sql`) |
 | `acta_runner` Makefile test rule prefixes `PATH='/mingw64/bin:…'` | on this shell that path is missing → run the built test binaries directly |
 | Stale objects | after changing `CFLAGS`, run `make clean` (or per-dir `make -C acta_db clean`), otherwise old non-PIC `.o` files are relinked |
 | rsync from `/mnt/c` also copies Windows `.o/.a/.so` unless excluded | exclude `build/ *.o *.a *.so *.exe out acta_db_out test/ tmp/ MYTEST/` |

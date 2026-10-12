@@ -1,7 +1,9 @@
 # acta_cli — POC Makefile
 #
 #   make          → builds ./acta_cli
-#   make test     → builds + runs all test binaries
+#   make test     → builds + runs all test binaries (regenerating the
+#                   acta_test_ref.db fixture from acta_test_ref.sql when it is
+#                   missing or stale — see the FIXTURE rule below)
 #   make clean    → removes objects + binaries
 #
 # Layout:
@@ -20,6 +22,9 @@
 #   tests/execution_log/  execution_log CLI tests
 #   tests/exec/           execution CLI tests
 #   tests/tools/          --tools (T4) schema contract tests
+#   acta_test_ref.sql     test-fixture source of truth (tracked); the
+#                         acta_test_ref.db the suites seed from is generated
+#                         from it and stays git-ignored
 #   tests/gparse/         global-parse seam (S2) raw-argv tests
 #   tests/json/           json layer (J1) unit tests
 #   ../acta_db/libacta_db.a
@@ -112,6 +117,31 @@ all: $(TARGET)
 # directory (part files + <suite>_test_main.c); no Makefile edit needed.
 TEST_BINS   := $(foreach s,$(TEST_SUITES),test_$(s)$(EXEEXT))
 
+# ---- test fixture: acta_test_ref.db ------------------------------------
+# Every suite seeds its scratch DB from the fixture acta_test_ref.db
+# (stest_init() copies it to tmp/), so the suites cannot run without it.
+# The .db is git-ignored; the tracked acta_test_ref.sql is its source of
+# truth (a plain `BEGIN TRANSACTION ... COMMIT` dump), so a fresh clone has no
+# fixture and `make test` used to die in stest_init() with errno=2.  This
+# rule regenerates it on demand: the .sql is the only file that ever needs
+# editing, and the .db is rebuilt whenever it is missing or older.
+# Regenerate from scratch (rm first): re-running the dump into a partially
+# built .db would fail on the existing tables.
+# sqlite3 is required by THIS rule only; without it the build stops with a
+# named error instead of letting all 17 suites fail on a missing file.
+# Override the tool if it lives elsewhere: make SQLITE3=/path/to/sqlite3
+SQLITE3      ?= sqlite3
+FIXTURE      := acta_test_ref.db
+FIXTURE_SQL  := acta_test_ref.sql
+
+$(FIXTURE): $(FIXTURE_SQL)
+	@command -v $(SQLITE3) >/dev/null 2>&1 || { \
+		echo "ERROR: '$(SQLITE3)' not found - needed to regenerate $(FIXTURE) from $(FIXTURE_SQL) (override with: make SQLITE3=/path/to/sqlite3 test)"; \
+		exit 1; }
+	rm -f $@
+	$(SQLITE3) $@ < $<
+
+
 # shared test-framework object (lives in tests/helpers/, used by all suites)
 HELPERS_OBJ := tests/helpers/test_helpers.o
 
@@ -143,7 +173,7 @@ $(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h
 $(TARGET): $(OBJS) $(DIALECT_OBJ) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(DIALECT_OBJ) $(LDLIBS)
 
-test: $(TEST_BINS)
+test: $(TEST_BINS) $(FIXTURE)
 	@fail=0; \
 	for t in $(TEST_BINS); do \
 		echo "== $$t =="; \
