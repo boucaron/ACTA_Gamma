@@ -84,29 +84,32 @@ static int last_activity(db_t *db, const execution_t *e,
                          char *out, size_t outsz)
 {
     int err = ACTA_DB_OK;
-    const char *last_log = NULL;
+    char last_log[32];
+    int have_log = 0;
     int total = acta_db_execution_log_count(db, e->id, NULL, &err);
     if (err == ACTA_DB_OK && total > 0) {
         int limit = total < ACTA_DB_MAX_PAGE ? total : ACTA_DB_MAX_PAGE;
         int n = 0;
         execution_log_t **rows = acta_db_execution_log_list_by_execution(
             db, e->id, NULL, total - limit, limit, &n, &err);
-        if (err == ACTA_DB_OK && rows) {
-            /* lister order is (created_at, id) ASC → the newest is last */
-            if (n > 0)
-                last_log = rows[n - 1]->created_at;
-            acta_db_execution_log_list_free(rows, n);
-        } else if (rows) {
-            acta_db_execution_log_list_free(rows, n);
+        if (err == ACTA_DB_OK && rows && n > 0 &&
+            rows[n - 1]->created_at && rows[n - 1]->created_at[0]) {
+            /* lister order is (created_at, id) ASC → the newest is last.
+             * Copy it out before the list is released: the row strings are
+             * owned by the list, so keeping the pointer past the free() is a
+             * use-after-free (fatal under glibc, silently lucky on MinGW). */
+            snprintf(last_log, sizeof last_log, "%s", rows[n - 1]->created_at);
+            have_log = 1;
         }
+        if (rows) acta_db_execution_log_list_free(rows, n);
     }
     const char *started = (e->started_at && e->started_at[0])
         ? e->started_at : NULL;
     const char *last;
-    if (last_log && started)
+    if (have_log && started)
         last = (strcmp(last_log, started) >= 0) ? last_log : started;
     else
-        last = last_log ? last_log : started;
+        last = have_log ? last_log : started;
     if (!last && e->created_at && e->created_at[0])
         last = e->created_at;
     if (!last || !last[0])

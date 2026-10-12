@@ -1,5 +1,11 @@
 CC      ?= cc
-CFLAGS  ?= -Wall -Wextra -std=c11 -O2 -g
+# -D_POSIX_C_SOURCE: strdup() and friends are POSIX, not ISO C — without the
+# feature-test macro glibc hides them under -std=c11 and the call becomes an
+# implicit declaration returning int (a truncated pointer on x86-64).
+CFLAGS  ?= -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -O2 -g
+# libacta_db.so is a shared object: on x86-64 Linux the objects must be
+# position-independent. Harmless on MinGW/macOS.
+CFLAGS  += -fPIC
 LDLIBS ?= -lsqlite3
 
 # ---- cJSON (override CJSON_DIR / CJSON_LIB to point at a custom build) ----

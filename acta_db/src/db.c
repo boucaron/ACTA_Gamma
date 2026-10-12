@@ -290,9 +290,13 @@ int acta_db_close(db_t *db)
         return ACTA_DB_ERR_SQL;
     }
 
-    /* Clean or hard-error: handle is gone, free our struct. */
+    /* Clean or hard-error: handle is gone, free our struct.
+     * last_error is sqlite3-allocated (sqlite3_malloc/mprintf/exec errmsg);
+     * db->path is a db_strdup() copy, i.e. malloc'd — it must be released
+     * with free(), not sqlite3_free() (mismatched allocators are UB and
+     * abort under glibc). */
     sqlite3_free(db->last_error);
-    sqlite3_free(db->path);
+    free(db->path);
     free(db);
     return (rc == SQLITE_OK) ? ACTA_DB_OK : ACTA_DB_ERR_SQL;
 }
@@ -302,7 +306,7 @@ int acta_db_force_close(db_t *db)   /* never fails to release */
     if (!db) return ACTA_DB_ERR_INVALID;
     sqlite3_close_v2(db->handle);    /* auto-finalises open stmts */
     sqlite3_free(db->last_error);
-    sqlite3_free(db->path);
+    free(db->path);                  /* db_strdup() copy: malloc, not sqlite3_malloc */
     free(db);
     return ACTA_DB_OK;
 }
