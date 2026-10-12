@@ -167,3 +167,24 @@ be added to `SOURCES` when `run.c` started using it.
 `acta_cli/Makefile` compiles `../acta_runner/src/dialect.c` into its own
 `src/dialect.o` (`-I../acta_runner/src` for the header), so the backend
 vocabulary has exactly one definition in the repository.
+
+The same coupling applies to **headers**. `acta_runner/include/runner_util.h`
+includes `"dialect.h"`, and `dialect.h` lives in `acta_runner/src/`; a quoted
+include resolves relative to the *including* file, so every consumer of
+`runner_util.h` needs `acta_runner/src/` on its include path. The runner's own
+Makefile already passes `-Isrc` and `acta_cli` passes `-I../acta_runner/src`,
+so `src.pro` must mirror them with
+`INCLUDEPATH += $$PWD/../../acta_runner/src` — without it the GUI build stops
+in `runnerWorker.cpp` with `fatal error: dialect.h: No such file or directory`
+(found when the GUI was first compiled, 2026-10-12; the C targets build fine
+either way).
+
+The generated `acta_gui/Makefile` and `acta_gui/src/Makefile{,.Debug,.Release}`
+are git-ignored build artifacts. **After any `src.pro` change, delete them and
+let qmake regenerate them**: a stale generated Makefile compiles the old
+`SOURCES` list and silently omits a newly added source (the tree once carried
+Makefiles with zero mentions of `dialect` next to a `src.pro` that listed it).
+qmake also creates `src/build/{obj,moc,rcc,ui}` when it generates the
+Makefiles, so deleting `src/build/` while keeping the Makefiles makes `uic`
+fail with `Could not create output file` — delete the Makefiles too (or
+recreate the directories).

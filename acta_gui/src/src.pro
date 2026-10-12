@@ -14,6 +14,14 @@ INCLUDEPATH += $$PWD/../../acta_db/include
 # compiled straight into the app; the exit-code contract comes from
 # runner.h.
 INCLUDEPATH += $$PWD/../../acta_runner/include
+# runner_util.h (in acta_runner/include/) includes "dialect.h", which lives in
+# acta_runner/src/. A quoted include resolves relative to the INCLUDING file, so
+# any consumer of runner_util.h needs src/ on the include path - exactly why
+# acta_cli/Makefile passes -I../acta_runner/src. Without this line the GUI build
+# stops in runnerWorker.cpp:
+#   fatal error: dialect.h: No such file or directory
+# (the runner's own Makefile already has -Isrc, so only the GUI was blind to it).
+INCLUDEPATH += $$PWD/../../acta_runner/src
 
 SOURCES += \
     main.cpp \

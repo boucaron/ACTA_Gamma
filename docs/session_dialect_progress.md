@@ -1363,6 +1363,8 @@ git-ignored). Results:
    mentions of `dialect`) first; Qt 6 **is** installed in MSYS2
    (`/c/msys64/mingw64/bin/qmake6.exe`, `Qt6Core.dll`). Commit it as its own
    commit once it compiles.
+   *(committed as `bb05950`; **built and verified in session 8 — see §13**,
+   which also fixes a real defect the commit contained.)*
 2. `acta_runner/MYTEST/` is still untracked (normalized `acta.db`, the five
    `*_summarize` review outputs, `run_tests.sh`) — owner call.
 3. The fixture policy of §12.3 blocker 2.
@@ -1400,4 +1402,160 @@ git-ignored). Results:
 > `~/acta_suites.sh` in batches; ASAN only after `make clean` in `acta_db` **and**
 > `acta_runner` with `ASAN_OPTIONS=detect_leaks=0`, then rebuild plain). Prefer
 > the §12.2 detached-worktree method to verify any new commit on its own.
+
+---
+
+## 13. SESSION 8 (2026-10-12, later) — the GUI is BUILT: one real defect found and fixed
+
+### 13.1 The GUI was compiled for the first time, and it failed
+
+`bb05950` (the GUI trio) had never been compiled. Run in a detached worktree at
+HEAD (`git worktree add --detach /c/msys64/tmp/wt_gui HEAD`): `mingw32-make all`
+rc 0, no warnings (baseline), then
+
+```bash
+export PATH=/c/msys64/mingw64/bin:$PATH TMP='C:/msys64/tmp' TEMP='C:/msys64/tmp'
+cd acta_gui
+rm -f Makefile src/Makefile src/Makefile.Debug src/Makefile.Release; rm -rf src/build
+qmake6 "CONFIG+=debug" acta_gui.pro -o Makefile
+mingw32-make
+```
+
+**Fails** (rc 2) on the third object:
+
+```
+In file included from runnerWorker.cpp:17:
+../../acta_runner/include/runner_util.h:7:10: fatal error: dialect.h: No such file or directory
+```
+
+**Cause.** `runner_util.h` (in `acta_runner/include/`) does `#include "dialect.h"`,
+and `dialect.h` lives in `acta_runner/src/`. A quoted include resolves relative
+to the **including** file, not to the translation unit, so `runnerWorker.cpp`
+cannot see it. `acta_runner/Makefile` passes `-Isrc` and `acta_cli/Makefile`
+passes `-I../acta_runner/src`; `src.pro` had neither, so the GUI was the only
+consumer blind to it. `run.c` and `backend.c` compiled fine because their own
+directory holds `dialect.h` — which is why §10.2's "no `INCLUDEPATH` change is
+needed" was wrong: true for the C files, false for the C++ consumer.
+
+**Fix** (`acta_gui/src/src.pro`, one line + comment, no other change):
+
+```pro
+INCLUDEPATH += $$PWD/../../acta_runner/src
+```
+
+After it: full clean rebuild **rc 0, zero compiler warnings**; 20 C++ objects +
+5 C objects (including `build/obj/dialect.o`) link into
+`acta_gui/src/debug/acta_gui.exe` (23.7 MB debug). `docs/building.md` "GUI–runner
+source coupling" now records the header rule and the stale-Makefile rule (§13.6).
+
+### 13.2 What the build confirmed (the four items `bb05950` said it must)
+
+| item | result |
+|---|---|
+| qmake regenerates the Makefiles | yes — regenerated `src/Makefile.Debug` / `src/Makefile.Release` mention `dialect` 11× each (the stale 19:49 ones: 0). `acta_gui/Makefile` is the subdirs wrapper and names no source (expected). |
+| `dialect.c` compiles and links | yes — compiled with `$(CC)` (gcc) under qmake's CFLAGS; `nm build/obj/run.o` shows `U dialect_from_string`, `U dialect_get`, `U dialect_expected_names`, all defined by `dialect.o`. |
+| the GUI passes no `-D_POSIX_C_SOURCE` and no `-fPIC`, and MinGW needs neither | confirmed — qmake `win32-g++` CFLAGS are `-fno-keep-inline-dllexport -march=nocona -msahf -mtune=generic -Wa,-mbig-obj -g -Wall -Wextra -Wextra $(DEFINES)`; the build is clean without them. `.c` files build with gcc, `.cpp` with g++ `-std=gnu++1z`. |
+| `validateFields()` compiles (`QString` vs `QLatin1String`) and still accepts the canonical values | compiles clean under `-Wall -Wextra`; behaviour verified functionally — §13.4. |
+| the Run path still links `run_execution()` | yes — `runnerWorker.cpp:157` calls `run_execution(db, id, timeoutSec, maxChars, apiKey)`, the unchanged 5-argument wrapper over `run_execution_dialect(…, DIALECT_UNKNOWN)`; the GUI never passes an override, so it keeps the `model_revision.backend` (llamacpp-default) source. |
+
+Both qmake configurations build rc 0 with zero warnings: `qmake6 "CONFIG+=debug"
+acta_gui.pro -o Makefile && mingw32-make` (debug only) and plain
+`qmake6 acta_gui.pro -o Makefile && mingw32-make` (debug **and** release —
+`src/release/acta_gui.exe`, 873 KB).
+
+### 13.3 Runtime smoke (offscreen)
+
+`QT_QPA_PLATFORM=offscreen` with `APPDATA` pointed at a scratch directory
+(`C:/msys64/tmp/guirun/appdata`, so the live `%APPDATA%\ACTA_Gamma` DB is not
+touched): the binary starts, `QApplication` + `MainWindow` construct, the event
+loop is still alive after 12 s (killed by the harness), no missing-DLL error and
+no abort. `src/debug/acta_gui.log` holds only Qt offscreen records (QRhi, the
+offscreen plugin creating a default mouse). `qoffscreen.dll` is present in
+`/c/msys64/mingw64/share/qt6/plugins/platforms/`. The app stops at its DB
+bootstrap modal (no interaction is possible offscreen), so no DB file is created.
+
+### 13.4 `validateFields()` validated through the real save path (scratch probe)
+
+The GUI has no test harness, so a throwaway probe (kept at
+`/c/msys64/tmp/guiprobe/probe.cpp`, **not** in the repo) was compiled against the
+GUI's own objects — every `acta_gui/src/build/obj/*.o` except `main.o` (the probe
+supplies `main()`), plus `libacta_db.a`, `-lsqlite3 -lcjson -lcurl -lws2_32` and
+the Qt libs — and drives the real save path headlessly:
+
+* `ModelDialog::newModel(db, 0)` (public) puts the dialog in `Mode::New` with a
+  live `db_t *` (a scratch DB built from `acta_db/schema.sql`);
+* the `.ui` widgets are reached **by object name** — `findChild<QLineEdit
+  *>("nameLineEdit")`, `findChild<QTextEdit*>("modelTextEdit")`,
+  `findChild<QTextEdit*>("backendTextEdit")` — no access hacks;
+* `QMetaObject::invokeMethod(&dlg, "onSaveClicked")` — a **private slot** is
+  invokable by name through the metaobject system, so `validateFields()` →
+  `createEntity()` runs exactly as a Save click would;
+* a 40 ms timer closes any `QApplication::activeModalWidget()`, so the modal
+  `QMessageBox` (warning or "Model saved.") returns instead of blocking, and its
+  title + text are printed.
+
+| backend typed | dialog said | saved? | row written |
+|---|---|---|---|
+| `llamacpp` | "Model saved." | yes | `backend = "llamacpp"` |
+| `openai` | "Model saved." | yes | `backend = "openai"` |
+| `  llamacpp  ` | "Model saved." | yes | `"llamacpp"` (trimmed) |
+| `openai ` | "Model saved." | yes | `"openai"` (trimmed) |
+| `llama` | `Backend must be "llamacpp" or "openai" (got "llama").` | no | none |
+| `LLAMACPP` | same shape, `got "LLAMACPP"` | no | none |
+| `vllm` | same shape, `got "vllm"` | no | none |
+| *(empty)* | "Name, backend and model identifier are required." | no | none |
+
+8 cases, 0 mismatches, probe rc 0. The first run showed 3 false mismatches — a
+**probe bug**: every case used the same model name and
+`uq_models_root ON models(name) WHERE folder_id IS NULL` (`acta_db/schema.sql:53`)
+rejected the duplicates; unique names per case made it green. Not a GUI defect.
+
+### 13.5 Re-verification after the fix
+
+| | Windows (MinGW) | WSL `insightcae` |
+|---|---|---|
+| `make all` | rc 0, no warnings (clean worktree at HEAD) | rc 0, no warnings (after the §5 rsync) |
+| GUI | clean rebuild rc 0, **zero warnings**, debug + release | not built (no Qt 6 in `insightcae`; the delta is a `.pro` line only) |
+| 13 `acta_runner` suites | **681 checks / 0 fail** (argparse 56, run 148, pending 29, autopreflight 68, sweep 43, deleted 12, api_key 16, conf 36, shadow 35, deathmark 20, check 77, dialect 83, openai_dialect 58) | **712 / 0** (api_key 19, conf 50, shadow 49) |
+| 17 `acta_cli` suites | **17/17 PASS**, rc 0 | **17/17 PASS**, rc 0 |
+
+### 13.6 New gotchas (add to the §4 table)
+
+| Gotcha | Workaround |
+|---|---|
+| Stale qmake Makefiles | `acta_gui/Makefile` and `acta_gui/src/Makefile{,.Debug,.Release}` are git-ignored artifacts that keep the **old** `SOURCES` list. After any `src.pro` change: `rm -f` them (and `src/build/`) and re-run qmake, or a newly added source is silently not compiled. |
+| `rm -rf src/build` alone breaks the next build | qmake creates `src/build/{obj,moc,rcc,ui}` only when it generates the Makefiles; with the Makefiles kept, `uic` fails with `Could not create output file` (`Error 1` on the first `.ui`). Delete the Makefiles too, or recreate the directories. |
+| `runner_util.h` needs `acta_runner/src/` on the include path | any consumer of it (GUI `src.pro`, `acta_cli/Makefile`) must add it — `dialect.h` is an internal header in `src/`, not in `include/`. |
+| Driving the GUI headlessly | `QT_QPA_PLATFORM=offscreen`; point `APPDATA` (Windows) at a scratch dir so the live app-data DB is not opened; private slots are callable via `QMetaObject::invokeMethod`, `.ui` widgets via `findChild(objectName)`; a timer that closes `QApplication::activeModalWidget()` unblocks the `QMessageBox`es. |
+| Scratch GUI/DB fixtures | model names are unique per folder (`uq_models_root` / `uq_models_child`): a probe that reuses one name gets `createEntity` failures that look like validation rejections. |
+
+### 13.7 REMAINING (owner calls, unchanged from §12.4)
+
+1. `acta_runner/MYTEST/` is still untracked (normalized `acta.db`, the five
+   `*_summarize` review outputs, `run_tests.sh`) — commit / git-ignore / delete.
+2. The `acta_test_ref.db` fixture policy of §12.3 blocker 2.
+3. Still unfixed, pre-existing, out of scope: `emit_runner_error()` prints
+   `{error":"…` while `docs/runner_contract.md` documents `{"error":…`; the
+   `acta_cli` test-harness leak (§9.1); `make -C acta_db libacta_db.a` not
+   regenerating `include/{schema,migrations}_sql.h` after `clean`.
+
+### 13.8 Resume prompt for the next session
+
+> Read `docs/session_dialect_progress.md` (**§13 first**, then §12; §3/§4/§8/§10/§11
+> are superseded), `docs/plans/backend_dialects.md` (§2 matrix, §3.2, §9 decisions)
+> and `docs/session_strata_backend.md` §4 in ACTA Gamma
+> (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
+>
+> State: **the whole dialect program is committed and every target builds** — the
+> 9-commit series `8e06493…` plus the GUI commit, whose `dialect.h` include-path
+> defect was found by compiling the GUI and fixed (§13.1). Windows: `make all` rc 0
+> no warnings, GUI debug + release rc 0 no warnings, 13 runner suites **681/0**,
+> `acta_cli` **17/17**. WSL: `make all` rc 0 no warnings, 13 suites **712/0**,
+> `acta_cli` **17/17**. Nothing is left unverified except what §13.7 lists.
+>
+> Do next: only the two open owner calls — (1) the fate of untracked
+> `acta_runner/MYTEST/`; (2) the `acta_test_ref.db` fixture policy — plus, if
+> asked, the three out-of-scope items in §13.7 item 3. Do not reopen the settled
+> decisions (plan §9).
+
 
