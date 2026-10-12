@@ -1,6 +1,10 @@
 # Session notes — Strata backend + WSL (Linux) build
 
-Handoff document. Date: 2026-10-12. Branch state: **all changes uncommitted** (working tree).
+Handoff document. Date: 2026-10-12. Branch state at writing time: **all changes
+uncommitted** (working tree) — **superseded later the same day**: everything is
+now committed, 12 commits `8e06493…88519b0` on `main`, **not pushed** to
+`origin`. Current state of the task list below: **§3.1**. Live re-verification
+against Strata on both platforms: **§2.5**.
 
 Goal of the work: let `acta_runner` use **Strata** (a local OpenAI-compatible
 llama.cpp/ggml-derived server already installed on this Windows machine) as a
@@ -35,12 +39,12 @@ through **WSL2 NAT** (no mirrored networking).
 
 ## 2. What is DONE
 
-### 2.1 New scripts (untracked, `scripts/`)
+### 2.1 New scripts (`scripts/` — untracked at writing time, committed since: §3.1 G)
 
 | File | Purpose | Status |
 |---|---|---|
 | `scripts/probe_strata.sh` | Probes the exact surface `acta_runner` uses: `GET /health`, `GET /v1/models` (+ model-id presence), `POST /v1/chat/completions`, `POST` with `response_format json_object`, and a cross-side WSL reachability check. Runs from **either** MSYS2 bash or inside WSL (auto-detects WSL, derives the host IP, falls back to `curl.exe`, retries the first GET). Exit 0/1/2. | works, exit 0 from both sides |
-| `scripts/wsl_strata_demo.sh` | WSL-side end-to-end demo: `db init` → model → 2 skills (plain + `output_schema`) → context → 2 executions → `check` → `run 1` → `run 2` → `exec get` → `log list` | works; run 1 completes, run 2 fails (issue A below) |
+| `scripts/wsl_strata_demo.sh` | WSL-side end-to-end demo: `db init` → model → 2 skills (plain + `output_schema`) → context → 2 executions → `check` → `run 1` → `run 2` → `exec get` → `log list` | at writing time: run 1 completes, run 2 fails (issue A below). **After the dialect work both complete** — re-verified §2.5 |
 
 Probe output (from inside WSL, NAT):
 
@@ -119,9 +123,61 @@ Remaining ASAN finding: a 16-byte leak **inside libsqlite3** on `db init` (not A
 
 Scratch DBs used: `/tmp/acta_strata.db` (Windows side), `~/ACTA_Gamma/acta_wsl.db` (WSL side).
 
+**Re-verified live after the dialect work landed (session 8, same day)** — the two
+failures in the table above are gone:
+
+| Path | Result |
+|---|---|
+| Windows, `http://127.0.0.1:8080`, model `backend:"openai"` | `check 1` → `{"ok":true,…,"max_context":204800}`; plain run **completed**; `output_schema` run **completed** → `{"label":"positive","confidence":0.95}` |
+| WSL (`scripts/wsl_strata_demo.sh`), `http://172.28.160.1:8080` | both executions **completed**, same audit keys |
+| Audit trail | `preflight_passed {"max_context":204800,"max_context_source":"entry.meta.n_ctx","dialect":"openai","catalog":null}`, `llm_request {"dialect":"openai","dialect_source":"model_revision","model_backend":"openai"}` |
+| Override | `run <id> --dialect llamacpp` → `[warn] … overrides model revision 1 backend 'openai'` + `dialect_override` log + Strata 400 `response_format.json_schema needs a schema object` → `execution_failed` (the envelope really is dialect-owned) |
+| Negative paths | `run --pending --dialect …` → rc 4; `check --base-url … --dialect openai` → ok; `acta_cli model create --backend llama` → rc 4 |
+| Scripts | `scripts/probe_strata.sh --dialect openai` verdict rc 0 (incl. step 4b `json_schema` → 200 and the WSL reachability check) |
+
+Scratch DBs this time: `C:/msys64/tmp/strata_run/acta.db` (Windows),
+`~/ACTA_Gamma/acta_wsl.db` (WSL). Strata is keyless (`/health "api_key": false`),
+so the runs used `OPENAI_API_KEY=""` — the documented empty-key localhost case
+(warning printed, no `Authorization` header sent).
+
 ---
 
 ## 3. What REMAINS
+
+### 3.1 Status of this list (session 8, 2026-10-12 latest) — read this first
+
+| # | Item | State |
+|---|---|---|
+| **A** | Strata `response_format` envelope | **Done** — dialect-owned builder; `openai` sends `{"type":"json_schema","json_schema":{"name":"acta_output","strict":true,"schema":…}}`. Verified live: accepted (200), and the llama.cpp shape is refused with Strata's verbatim 400 |
+| **B** | `max_context` = 0 on Strata | **Done** — chain `entry.max_context` → `entry.meta.n_ctx` → `/health`, with `max_context_source` recorded in `preflight_passed`; live value 204 800 from `entry.meta.n_ctx` |
+| **B′** | catalog audit | **Decided + done** — `fetch_catalog = 0` in `openai` mode: no `GET /`, `"catalog":null`. No `/props` probe (settled non-goal) |
+| **C** | `output_schema` silently dropped when passed as a JSON object | **Documented only, behaviour unchanged** (owner's call) — `docs/cli_spec.md` issue C + the README warning: it must be a JSON **string**; invalid JSON fails the execution |
+| **D** | WSL build docs | **Done** — `docs/building.md` WSL2 section (apt deps, rsync recipe, host-IP rule, cold-path retry, missing `curl`/`ip`/`pkg-config`) + `scripts/wsl_strata_demo.sh` |
+| **E** | Strata backend contract doc | **Done, renamed** — `docs/openai_dialect_contract.md` + README "OpenAI-compatible backends" + `docs/llamacpp_server_contract.md` cross-links. Deliberate: documented as a *strict OpenAI-compatible HTTP dialect*, not a vendor, so no `docs/strata_server_contract.md` exists |
+| **F** | `check <id>` = model record id | **Done** — README, `docs/cli_spec.md`, `docs/runner_contract.md` |
+| **G** | Commit everything | **Done** — 12 commits `8e06493…88519b0` (incl. `scripts/`); **not pushed** to `origin/main` |
+| **H** | GUI on WSL | **OPEN** — no Qt 6 in `insightcae`. The GUI is built and verified on Windows only (debug + release, zero warnings; see `docs/session_dialect_progress.md` §13) |
+| **I** | Full `make test` in one shot | **Done** — `acta_cli` 17/17 in one shot on both platforms; the 13 runner suites run as 13 binaries (681 Windows / 712 WSL); `acta_db` `make test` → ALL TESTS PASSED, rc 0 |
+| **J** | `backend:"strata"` or `openai`? | **Decided** — `openai` only; closed vocabulary `llamacpp`/`openai`, `llama` is not an alias, validated by `acta_cli` at declaration and re-validated by the runner at run time |
+
+**Still open on the Strata side (session 8):**
+
+1. **H** — GUI on WSL (needs Qt 6 installed in the distro).
+2. **Live Strata runs are manual**, not part of `make test`: `scripts/probe_strata.sh`
+   and `scripts/wsl_strata_demo.sh` are ad-hoc; the automated coverage
+   (`make test-e2e`, `tests/run/test_openai_dialect.c`) uses the stub server, so
+   nothing in the test suite ever touches a real OpenAI-compatible server.
+3. **`emit_runner_error()` prints `{error":"…`** (missing opening quote) while
+   `docs/runner_contract.md` documents `{"error":…` — seen live in a real Strata
+   failure line this session. One-character fix in
+   `acta_runner/include/runner_util.h` (`emit_runner_error`), worth pinning with a
+   test. Out of scope until the owner asks.
+4. **No catalog audit in `openai` mode** — `"catalog":null` is permanent unless a
+   `/props`-like endpoint is adopted (settled non-goal, plan §9 decision 4).
+5. **12 commits are local** — `git push` to `origin/main` not done.
+
+The original task table (with the pre-fix wording and the file/line pointers that
+led to the dialect plan) is kept below as history.
 
 > **Progress update (same day, later session):** issues **A** and **B** are now
 > implemented — Phases 1–3 of the dialect plan are done and green on Windows and
@@ -135,6 +191,8 @@ Scratch DBs used: `/tmp/acta_strata.db` (Windows side), `~/ACTA_Gamma/acta_wsl.d
 > touching A/B. Decision already taken there (§3.2): the dialect comes from
 > `model_revision.backend`; `--dialect` is only a `check`-standalone option and
 > a logged `run <id>` override.
+
+### 3.2 The original task list (history — statuses are in §3.1)
 
 | # | Task | Where | Notes / decision needed |
 |---|---|---|---|
@@ -169,6 +227,11 @@ Scratch DBs used: `/tmp/acta_strata.db` (Windows side), `~/ACTA_Gamma/acta_wsl.d
 ---
 
 ## 5. Resume prompt for the next session
+
+> **Superseded.** The live resume prompt is
+> [`docs/session_dialect_progress.md`](session_dialect_progress.md) §13.8; the
+> current state of this document's task list is §3.1 above. The prompt below is
+> kept as the session-1 handoff it was.
 
 > Read **both** `docs/session_strata_backend.md` and
 > `docs/plans/backend_dialects.md` in this repo (ACTA Gamma,
