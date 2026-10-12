@@ -11,7 +11,13 @@ int mtest_seed_folder(stest_ctx_t *ctx, const char *name, int parent_id);
 
 /* Insert a row into models (bypassing the trigger by using raw SQL
  * for the models row, then inserting the initial revision manually).
- * Returns the new model id, or -1 on error. */
+ * Returns the new model id, or -1 on error.
+ *
+ * `backend` is written straight into the column — the DB layer does not
+ * validate it, so a bad value here is invisible until acta_runner reads
+ * the row.  Keep it inside the closed vocabulary (llamacpp | openai,
+ * docs/plans/backend_dialects.md §9 #1/#2) so a seed never re-introduces
+ * a value the CLI itself would reject. */
 int mtest_seed_model(stest_ctx_t *ctx,
                      int folder_id, const char *name,
                      const char *backend, const char *model_identifier,

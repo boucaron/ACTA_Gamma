@@ -37,7 +37,7 @@ static void test_get_all_fields(stest_ctx_t *ctx)
     TEST_CONTAINS(ctx, out, "\"model_id\":2");
     TEST_CONTAINS(ctx, out, "\"revision\":1");
     TEST_CONTAINS(ctx, out, "\"name\":\"llama-70b\"");
-    TEST_CONTAINS(ctx, out, "\"backend\":\"vllm\"");
+    TEST_CONTAINS(ctx, out, "\"backend\":\"llamacpp\"");
     TEST_CONTAINS(ctx, out, "\"model_identifier\":\"meta/llama-70b\"");
     targs_free(a, &g);
 }
@@ -66,7 +66,7 @@ static void test_get_table(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_OK);
     const char *out = stest_stdout(ctx);
     TEST_CONTAINS(ctx, out, "llama-70b");
-    TEST_CONTAINS(ctx, out, "vllm");
+    TEST_CONTAINS(ctx, out, "llamacpp");
     targs_free(a, &g);
 }
 

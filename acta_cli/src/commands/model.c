@@ -2,9 +2,37 @@
 #include "commands.h"
 #include "argparse.h"
 #include "cli_util.h"
+#include "dialect.h"   /* the closed backend vocabulary — the same module
+                         * acta_runner uses (acta_runner/src/dialect.h);
+                         * acta_cli compiles that source, see
+                         * acta_cli/Makefile */
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+/*
+ * `models.backend` is a CLOSED vocabulary: llamacpp | openai
+ * (docs/plans/backend_dialects.md §9 decision 2). It is not a free-text
+ * label any more: acta_runner picks the HTTP dialect of a run from it
+ * (response_format envelope, top_k, the catalog audit), so a typo would
+ * only surface as a failed execution. The CLI therefore rejects it at the
+ * declaration site, with the vocabulary in the message.
+ *
+ * The vocabulary itself is single-sourced from the runner's dialect module
+ * (dialect_from_string / dialect_expected_names) — acta_cli compiles
+ * ../acta_runner/src/dialect.c rather than keeping a second list, so the
+ * side that stores the value and the side that acts on it cannot drift.
+ * The runner re-validates at run time, which also covers rows written
+ * straight into the DB or by an older build.
+ */
+static int backend_rejected(const char *backend, char *buf, size_t bufsz)
+{
+    if (backend && dialect_from_string(backend) != DIALECT_UNKNOWN)
+        return 0;
+    snprintf(buf, bufsz, "invalid backend '%s' (expected %s)",
+             backend ? backend : "", dialect_expected_names());
+    return 1;
+}
 
 /* ══════════════════════════════════════════════════════════════════ */
 /*  Usage / help                                                       */
@@ -35,11 +63,11 @@ void model_usage(FILE *f)
 "  Provide data via one of:\n"
 "\n"
 "    acta_cli model create \\\n"
-"      --name \"My Model\" \\\n"
-"      --backend openai \\\n"
-"      --model_identifier gpt-4o \\\n"
+"      --name \"Local llama\" \\\n"
+"      --backend llamacpp \\\n"
+"      --model_identifier llama-3-8b \\\n"
 "      --description \"Primary LLM\" \\\n"
-"      --base_url https://api.openai.com/v1 \\\n"
+"      --base_url http://127.0.0.1:8080 \\\n"
 "      --folder_id 3\n"
 "        <- flag-based\n"
 "\n"
@@ -48,8 +76,15 @@ void model_usage(FILE *f)
 "\n"
 "  Required fields:\n"
 "    --name <str>                 Display name\n"
-"    --backend <str>              Backend identifier\n"
+"    --backend <llamacpp|openai>  Backend dialect (closed vocabulary)\n"
 "    --model_identifier <str>     Upstream model id\n"
+"\n"
+"  `backend` is the HTTP dialect acta_runner speaks with the server:\n"
+"    llamacpp = a local llama.cpp llama-server (GET / catalog, its\n"
+"               response_format envelope, top_k),\n"
+"    openai   = a strict OpenAI-compatible server (Strata, vLLM, …):\n"
+"               no catalog call, the OpenAI json_schema envelope.\n"
+"  Anything else is rejected (exit 4). docs/runner_contract.md.\n"
 "\n"
 "  Optional fields:\n"
 "    --folder_id <int>            Owning folder (0 = root)\n"
@@ -90,7 +125,7 @@ void model_usage(FILE *f)
 "    --name <str>                 Display name\n"
 "    --folder_id <int>            Owning folder\n"
 "    --description <str>          Human-readable detail\n"
-"    --backend <str>              Backend identifier\n"
+"    --backend <llamacpp|openai>  Backend dialect (closed vocabulary)\n"
 "    --base_url <str>             API base URL\n"
 "    --model_identifier <str>     Upstream model id\n"
 "    --configuration <json>       Arbitrary JSON config\n"
@@ -165,11 +200,11 @@ static void usage_create(FILE *f)
 "  Provide data via one of:\n"
 "\n"
 "    acta_cli model create \\\n"
-"      --name \"My Model\" \\\n"
-"      --backend openai \\\n"
-"      --model_identifier gpt-4o \\\n"
+"      --name \"Local llama\" \\\n"
+"      --backend llamacpp \\\n"
+"      --model_identifier llama-3-8b \\\n"
 "      --description \"Primary LLM\" \\\n"
-"      --base_url https://api.openai.com/v1 \\\n"
+"      --base_url http://127.0.0.1:8080 \\\n"
 "      --folder_id 3\n"
 "        <- flag-based\n"
 "\n"
@@ -178,8 +213,15 @@ static void usage_create(FILE *f)
 "\n"
 "  Required fields:\n"
 "    --name <str>                 Display name\n"
-"    --backend <str>              Backend identifier\n"
+"    --backend <llamacpp|openai>  Backend dialect (closed vocabulary)\n"
 "    --model_identifier <str>     Upstream model id\n"
+"\n"
+"  `backend` is the HTTP dialect acta_runner speaks with the server:\n"
+"    llamacpp = a local llama.cpp llama-server (GET / catalog, its\n"
+"               response_format envelope, top_k),\n"
+"    openai   = a strict OpenAI-compatible server (Strata, vLLM, …):\n"
+"               no catalog call, the OpenAI json_schema envelope.\n"
+"  Anything else is rejected (exit 4). docs/runner_contract.md.\n"
 "\n"
 "  Optional fields:\n"
 "    --folder_id <int>            Owning folder (0 = root)\n"
@@ -228,7 +270,7 @@ static void usage_update(FILE *f)
 "    --name <str>                 Display name\n"
 "    --folder_id <int>            Owning folder\n"
 "    --description <str>          Human-readable detail\n"
-"    --backend <str>              Backend identifier\n"
+"    --backend <llamacpp|openai>  Backend dialect (closed vocabulary)\n"
 "    --base_url <str>             API base URL\n"
 "    --model_identifier <str>     Upstream model id\n"
 "    --configuration <json>       Arbitrary JSON config\n", f);
@@ -563,6 +605,16 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             ret = EXIT_INVALID;
             goto cleanup_create;
         }
+        {
+            char emsg[256];
+            if (backend_rejected(m.backend, emsg, sizeof emsg)) {
+                VLOG(1, "  ERROR: %s", emsg);
+                emit_error(emsg);
+                usage_create(stderr);
+                ret = EXIT_INVALID;
+                goto cleanup_create;
+            }
+        }
         if (!m.model_identifier) {
             VLOG(1, "  ERROR: missing required field 'model_identifier'");
             emit_error("missing required field: model_identifier");
@@ -702,6 +754,19 @@ int cmd_model(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             emit_error("at least one field required for update");
             usage_update(stderr);
             return EXIT_INVALID;
+        }
+
+        /* Closed backend vocabulary (see backend_rejected above): checked
+         * before the row is fetched, so a bad value never reaches the DB
+         * or turns into a failed execution later. */
+        {
+            char emsg[256];
+            if (f_backend && backend_rejected(f_backend, emsg, sizeof emsg)) {
+                VLOG(1, "  ERROR: %s", emsg);
+                emit_error(emsg);
+                usage_update(stderr);
+                return EXIT_INVALID;
+            }
         }
 
         {

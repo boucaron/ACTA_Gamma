@@ -107,7 +107,7 @@ static void test_move_nonexistent(stest_ctx_t *ctx)
 static void test_move_unique_violation(stest_ctx_t *ctx)
 {
     /* seed: create a model named "llama-20b" in folder 1 */
-    mtest_seed_model(ctx, 1, "llama-20b", "vllm", "meta/llama-20b",
+    mtest_seed_model(ctx, 1, "llama-20b", "llamacpp", "meta/llama-20b",
                      NULL, NULL, NULL);
 
     /* now try to move id=3 (root "llama-20b") into folder 1 → conflict */

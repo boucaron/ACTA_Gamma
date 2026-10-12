@@ -437,7 +437,10 @@ static const tool_entry_t tool_table[] = {
 
     /* ── model ── */
     { "model.create", "model", "create", NULL, 0,
-      "Create a model from flags or a JSON body.",
+      "Create a model from flags or a JSON body. `backend` is a closed "
+      "vocabulary (llamacpp | openai): it selects the HTTP dialect "
+      "acta_runner speaks with the server, any other value is rejected "
+      "with exit 4.",
       NULL, 0, f_model_create, 7, "flags|json",
       jk_model_req, 3, jk_model_opt, 4,
       &suc_id },
@@ -451,7 +454,8 @@ static const tool_entry_t tool_table[] = {
 
     { "model.update", "model", "update", NULL, 0,
       "Update one or more model fields; at least one of the listed flags "
-      "is required. Flags only (no JSON input).",
+      "is required. Flags only (no JSON input). `backend`, when given, "
+      "must be llamacpp or openai (exit 4 otherwise).",
       p_id, 1, f_model_update, 7, "flags",
       NULL, 0, NULL, 0,
       &suc_id },

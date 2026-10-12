@@ -70,9 +70,9 @@ static void test_update_all_fields(stest_ctx_t *ctx)
     targs_pos(a, "1", &g);
     targs_flag(a, "name", "UpdatedAll", &g);
     targs_flag(a, "description", "full update", &g);
-    targs_flag(a, "backend", "together", &g);
-    targs_flag(a, "base_url", "http://together.ai/v1", &g);
-    targs_flag(a, "model_identifier", "together-org/model", &g);
+    targs_flag(a, "backend", "openai", &g);
+    targs_flag(a, "base_url", "https://api.example.org/v1", &g);
+    targs_flag(a, "model_identifier", "example-org/model", &g);
     targs_flag(a, "configuration", "{\"max_tokens\":512}", &g);
 
     int rc = do_update(ctx, a, g);
@@ -164,6 +164,48 @@ static void test_update_invalid_folder(stest_ctx_t *ctx)
     targs_free(a, &g);
 }
 
+/* ── closed backend vocabulary (docs/plans/backend_dialects.md §9 #2) ──
+ * Checked after "at least one field" and BEFORE the row is fetched, so a
+ * rejected update leaves both `models` and `model_revisions` untouched. */
+
+static void test_update_backend_rejected(stest_ctx_t *ctx)
+{
+    int before = count_revisions(ctx, 1);
+    char *argv0[] = { "acta_cli", "model", "update", "1",
+                      "--backend", "vllm" };
+    int rc = stest_run_argv(ctx, cmd_model, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'vllm' (expected llamacpp or openai)");
+    TEST(ctx, stest_stdout(ctx)[0] == '\0');
+    TEST_EQ(ctx, count_revisions(ctx, 1), before);
+}
+
+static void test_update_backend_llama_not_alias(stest_ctx_t *ctx)
+{
+    int before = count_revisions(ctx, 1);
+    char *argv0[] = { "acta_cli", "model", "update", "1",
+                      "--backend", "llama" };
+    int rc = stest_run_argv(ctx, cmd_model, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'llama' (expected llamacpp or openai)");
+    TEST_EQ(ctx, count_revisions(ctx, 1), before);
+}
+
+static void test_update_backend_openai_ok(stest_ctx_t *ctx)
+{
+    /* `openai` is the second legal value, and changing it is a model
+     * revision: model 3 is seeded 'llamacpp' in the ref fixture and is
+     * otherwise untouched by this suite, so exactly one new revision. */
+    int before = count_revisions(ctx, 3);
+    char *argv0[] = { "acta_cli", "model", "update", "3",
+                      "--backend", "openai" };
+    int rc = stest_run_argv(ctx, cmd_model, 6, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_EQ(ctx, count_revisions(ctx, 3), before + 1);
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_model_test_update(void)
@@ -180,6 +222,9 @@ int run_model_test_update(void)
     test_update_folder_id(&ctx);
     test_update_unique_violation(&ctx);
     test_update_invalid_folder(&ctx);
+    test_update_backend_rejected(&ctx);
+    test_update_backend_llama_not_alias(&ctx);
+    test_update_backend_openai_ok(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

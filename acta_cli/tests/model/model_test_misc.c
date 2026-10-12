@@ -95,7 +95,7 @@ static void test_model_folder_hierarchy(stest_ctx_t *ctx)
     int child = mtest_seed_folder(ctx, "deepChild", 1);
     TEST(ctx, child > 0);
 
-    int mid = mtest_seed_model(ctx, child, "DeepModel", "vllm",
+    int mid = mtest_seed_model(ctx, child, "DeepModel", "llamacpp",
                                "org/deep", NULL, NULL, NULL);
     TEST(ctx, mid > 0);
 
@@ -121,7 +121,7 @@ static void test_fk_restriction_folder_delete(stest_ctx_t *ctx)
     int res = sqlite3_exec(ctx->db->handle, sql, NULL, NULL, &errmsg);
     if (res != SQLITE_OK) {
         TEST_CONTAINS(ctx, errmsg ? errmsg : "foreign key", "FOREIGN KEY");
-        free(errmsg);
+        sqlite3_free(errmsg);   /* sqlite3_exec allocates with sqlite3_malloc */
     } else {
         /* FKs are OFF in this test env (PRAGMA foreign_keys=OFF in ref SQL);
            the DELETE succeeded — acceptable for a unit test. */
@@ -180,7 +180,7 @@ static void test_create_then_immediately_get(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "RoundTrip", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/rt", &g);
 
     int rc = do_create(ctx, a, g);

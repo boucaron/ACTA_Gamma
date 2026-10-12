@@ -20,7 +20,7 @@ static void test_create_basic(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "CreateBasic", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/model-x", &g);
 
     int rc = do_create(ctx, a, g);
@@ -51,7 +51,7 @@ static void test_create_id_only(stest_ctx_t *ctx)
     global_opts_t g = gopts_id_only();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "IdOnlyModel", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/idonly", &g);
 
     int rc = do_create(ctx, a, g);
@@ -67,7 +67,7 @@ static void test_create_missing_name(stest_ctx_t *ctx)
 {
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/x", &g);
     /* no --name */
 
@@ -94,7 +94,7 @@ static void test_create_missing_identifier(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "NoIdentifier", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     /* no --model_identifier */
 
     int rc = do_create(ctx, a, g);
@@ -107,7 +107,7 @@ static void test_create_empty_name(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/x", &g);
 
     int rc = do_create(ctx, a, g);
@@ -121,7 +121,7 @@ static void test_create_root_unique_violation(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "test-model", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "dupe", &g);
 
     int rc = do_create(ctx, a, g);
@@ -136,7 +136,7 @@ static void test_create_folder_unique_violation(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "llama-70b", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "meta/llama-70b", &g);
     targs_flag(a, "folder_id", "1", &g);
 
@@ -152,7 +152,7 @@ static void test_create_same_name_different_folder_ok(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "llama-70b", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "meta/llama-70b", &g);
     targs_flag(a, "folder_id", "2", &g);
 
@@ -167,7 +167,7 @@ static void test_create_negative_folder_clamped(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "NegFolderModel", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/neg", &g);
     targs_flag(a, "folder_id", "-3", &g);
 
@@ -183,7 +183,7 @@ static void test_create_invalid_folder(stest_ctx_t *ctx)
     global_opts_t g = gopts_default();
     cmd_args_t *a = targs_new();
     targs_flag(a, "name", "BadFolder", &g);
-    targs_flag(a, "backend", "vllm", &g);
+    targs_flag(a, "backend", "llamacpp", &g);
     targs_flag(a, "model_identifier", "org/badfk", &g);
     targs_flag(a, "folder_id", "999", &g);
 
@@ -213,7 +213,7 @@ static void test_create_src_json_space(stest_ctx_t *ctx)
      * (P2: it used to be ignored and stdin read instead). */
     char *argv0[] = { "acta_cli", "model", "create",
                       "--json",
-                      "{\"name\":\"SrcJsonSpace\",\"backend\":\"vllm\","
+                      "{\"name\":\"SrcJsonSpace\",\"backend\":\"llamacpp\","
                       "\"model_identifier\":\"org/src-space\"}" };
     int rc = stest_run_argv(ctx, cmd_model, 5, argv0, "");
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -225,7 +225,7 @@ static void test_create_src_json_equals(stest_ctx_t *ctx)
     /* --json=<blob> (equals form) */
     char *argv0[] = { "acta_cli", "model", "create",
                       "--json={\"name\":\"SrcJsonEquals\","
-                      "\"backend\":\"vllm\","
+                      "\"backend\":\"llamacpp\","
                       "\"model_identifier\":\"org/src-equals\"}" };
     int rc = stest_run_argv(ctx, cmd_model, 4, argv0, "");
     TEST_EQ(ctx, rc, EXIT_OK);
@@ -235,7 +235,7 @@ static void test_create_src_json_equals(stest_ctx_t *ctx)
 static void test_create_src_from_file_present(stest_ctx_t *ctx)
 {
     const char *path = stest_write_input(ctx,
-        "{\"name\":\"SrcFromFile\",\"backend\":\"vllm\","
+        "{\"name\":\"SrcFromFile\",\"backend\":\"llamacpp\","
         "\"model_identifier\":\"org/src-file\"}");
     TEST_NOT_NULL(ctx, path);
     char *argv0[] = { "acta_cli", "model", "create",
@@ -257,7 +257,7 @@ static void test_create_src_stdin(stest_ctx_t *ctx)
 {
     char *argv0[] = { "acta_cli", "model", "create", "--stdin" };
     int rc = stest_run_argv(ctx, cmd_model, 4, argv0,
-        "{\"name\":\"SrcStdin\",\"backend\":\"vllm\","
+        "{\"name\":\"SrcStdin\",\"backend\":\"llamacpp\","
         "\"model_identifier\":\"org/src-stdin\"}");
     TEST_EQ(ctx, rc, EXIT_OK);
     TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
@@ -289,6 +289,92 @@ static void test_create_src_conflict_stdin_file(stest_ctx_t *ctx)
     TEST_EQ(ctx, rc, EXIT_INVALID);
 }
 
+/* ── closed backend vocabulary (docs/plans/backend_dialects.md §9 #2) ──
+ * `backend` selects the HTTP dialect acta_runner will speak, so it is no
+ * longer free text: only llamacpp and openai are accepted, the check runs
+ * before anything is written, and the refusal names the vocabulary. */
+
+static void test_create_backend_rejected(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "model", "create",
+                      "--name", "BadBackend",
+                      "--backend", "vllm",
+                      "--model_identifier", "org/bad" };
+    int rc = stest_run_argv(ctx, cmd_model, 9, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    /* the refusal is a stderr JSON line that states the vocabulary */
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'vllm' (expected llamacpp or openai)");
+    /* nothing was created: stdout stays clean */
+    TEST(ctx, stest_stdout(ctx)[0] == '\0');
+}
+
+static void test_create_backend_llama_not_alias(stest_ctx_t *ctx)
+{
+    /* §9 #1: `llama` is NOT an alias of `llamacpp` — dialect_from_string
+     * matches the canonical names exactly, so this must fail loudly. */
+    char *argv0[] = { "acta_cli", "model", "create",
+                      "--name", "AliasModel",
+                      "--backend", "llama",
+                      "--model_identifier", "org/alias" };
+    int rc = stest_run_argv(ctx, cmd_model, 9, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'llama' (expected llamacpp or openai)");
+}
+
+static void test_create_backend_case_sensitive(stest_ctx_t *ctx)
+{
+    /* "OpenAI" is not "openai": no guessing, no case folding. */
+    char *argv0[] = { "acta_cli", "model", "create",
+                      "--name", "CaseModel",
+                      "--backend", "OpenAI",
+                      "--model_identifier", "org/case" };
+    int rc = stest_run_argv(ctx, cmd_model, 9, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'OpenAI' (expected llamacpp or openai)");
+}
+
+static void test_create_backend_openai_ok(stest_ctx_t *ctx)
+{
+    /* The other half of the vocabulary: `openai` is accepted (it is the
+     * Strata / OpenAI-compatible dialect). */
+    char *argv0[] = { "acta_cli", "model", "create",
+                      "--name", "OpenAiDialect",
+                      "--backend", "openai",
+                      "--model_identifier", "org/openai-ok" };
+    int rc = stest_run_argv(ctx, cmd_model, 9, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_OK);
+    TEST_CONTAINS(ctx, stest_stdout(ctx), "\"id\":");
+}
+
+static void test_create_backend_json_rejected(stest_ctx_t *ctx)
+{
+    /* The same gate applies to the JSON input paths, not just flags. */
+    char *argv0[] = { "acta_cli", "model", "create",
+                      "--json",
+                      "{\"name\":\"JsonBadBackend\",\"backend\":\"together\","
+                      "\"model_identifier\":\"org/json-bad\"}" };
+    int rc = stest_run_argv(ctx, cmd_model, 5, argv0, "");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'together' (expected llamacpp or openai)");
+    TEST(ctx, stest_stdout(ctx)[0] == '\0');
+}
+
+static void test_create_backend_stdin_rejected(stest_ctx_t *ctx)
+{
+    char *argv0[] = { "acta_cli", "model", "create", "--stdin" };
+    int rc = stest_run_argv(ctx, cmd_model, 4, argv0,
+        "{\"name\":\"StdinBadBackend\",\"backend\":\"ollama\","
+        "\"model_identifier\":\"org/stdin-bad\"}");
+    TEST_EQ(ctx, rc, EXIT_INVALID);
+    TEST_CONTAINS(ctx, stest_stderr(ctx),
+                  "invalid backend 'ollama' (expected llamacpp or openai)");
+    TEST(ctx, stest_stdout(ctx)[0] == '\0');
+}
+
 /* ── runner ───────────────────────────────────────────────────────── */
 
 int run_model_test_create(void)
@@ -317,6 +403,12 @@ int run_model_test_create(void)
     test_create_src_conflict_json_stdin(&ctx);
     test_create_src_conflict_json_file(&ctx);
     test_create_src_conflict_stdin_file(&ctx);
+    test_create_backend_rejected(&ctx);
+    test_create_backend_llama_not_alias(&ctx);
+    test_create_backend_case_sensitive(&ctx);
+    test_create_backend_openai_ok(&ctx);
+    test_create_backend_json_rejected(&ctx);
+    test_create_backend_stdin_rejected(&ctx);
 
     int f = ctx.failures;
     stest_teardown(&ctx);

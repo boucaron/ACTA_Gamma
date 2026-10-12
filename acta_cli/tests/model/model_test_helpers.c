@@ -15,7 +15,7 @@ int mtest_seed_folder(stest_ctx_t *ctx, const char *name, int parent_id)
 
     char *errmsg = NULL;
     if (sqlite3_exec(ctx->db->handle, sql, NULL, NULL, &errmsg) != SQLITE_OK) {
-        free(errmsg);
+        sqlite3_free(errmsg);   /* sqlite3_exec allocates with sqlite3_malloc */
         return -1;
     }
     return (int)sqlite3_last_insert_rowid(ctx->db->handle);
@@ -52,7 +52,7 @@ int mtest_seed_model(stest_ctx_t *ctx,
 
     char *errmsg = NULL;
     if (sqlite3_exec(ctx->db->handle, sql, NULL, NULL, &errmsg) != SQLITE_OK) {
-        free(errmsg);
+        sqlite3_free(errmsg);   /* sqlite3_exec allocates with sqlite3_malloc */
         return -1;
     }
     return (int)sqlite3_last_insert_rowid(ctx->db->handle);

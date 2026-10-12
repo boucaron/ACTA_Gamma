@@ -205,7 +205,8 @@ int cli_main(int argc, char **argv) {
 
     /* Informational pragma note after a successful open (e.g. WAL not
      * supported by the backend). Not an error. */
-    if (const char *note = acta_db_last_error(db))
+    const char *note = acta_db_last_error(db);
+    if (note)
         fprintf(stderr, "[warn] db opened with degraded pragma state: %s\n",
                 note);
 

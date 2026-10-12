@@ -32,13 +32,13 @@ CREATE TABLE models (
     FOREIGN KEY(folder_id) REFERENCES model_folders(id) ON DELETE RESTRICT
 );
 INSERT INTO models VALUES(1,NULL,'test-model',NULL,'llamacpp',NULL,'llama-3-8b-v2',NULL,'2026-08-19 08:57:02',NULL,NULL);
-INSERT INTO models VALUES(2,NULL,'llama-70b',NULL,'vllm','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 13:54:54',NULL,NULL);
-INSERT INTO models VALUES(3,NULL,'llama-20b',NULL,'vllm','http://localhost:8000/v1','meta/llama-20b',NULL,'2026-08-25 13:55:10',NULL,NULL);
-INSERT INTO models VALUES(4,1,'llama-70b',NULL,'vllm','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 14:01:27',NULL,NULL);
-INSERT INTO models VALUES(5,NULL,'test',NULL,'test',NULL,'unique-test-xyz',NULL,'2026-08-25 14:10:00',NULL,NULL);
-INSERT INTO models VALUES(6,NULL,'t1',NULL,'t1',NULL,'t1',NULL,'2026-08-25 14:12:05',NULL,NULL);
-INSERT INTO models VALUES(7,NULL,'jtest',NULL,'jtest',NULL,'jtest-1',NULL,'2026-08-25 14:14:24',NULL,NULL);
-INSERT INTO models VALUES(8,NULL,'jtest2',NULL,'jtest',NULL,'jtest-2',NULL,'2026-08-25 14:15:28',NULL,NULL);
+INSERT INTO models VALUES(2,NULL,'llama-70b',NULL,'llamacpp','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 13:54:54',NULL,NULL);
+INSERT INTO models VALUES(3,NULL,'llama-20b',NULL,'llamacpp','http://localhost:8000/v1','meta/llama-20b',NULL,'2026-08-25 13:55:10',NULL,NULL);
+INSERT INTO models VALUES(4,1,'llama-70b',NULL,'llamacpp','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 14:01:27',NULL,NULL);
+INSERT INTO models VALUES(5,NULL,'test',NULL,'llamacpp',NULL,'unique-test-xyz',NULL,'2026-08-25 14:10:00',NULL,NULL);
+INSERT INTO models VALUES(6,NULL,'t1',NULL,'llamacpp',NULL,'t1',NULL,'2026-08-25 14:12:05',NULL,NULL);
+INSERT INTO models VALUES(7,NULL,'jtest',NULL,'openai',NULL,'jtest-1',NULL,'2026-08-25 14:14:24',NULL,NULL);
+INSERT INTO models VALUES(8,NULL,'jtest2',NULL,'openai',NULL,'jtest-2',NULL,'2026-08-25 14:15:28',NULL,NULL);
 CREATE TABLE model_revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     model_id INTEGER NOT NULL,
@@ -59,13 +59,13 @@ CREATE TABLE model_revisions (
 INSERT INTO model_revisions VALUES(1,1,1,NULL,'test-model',NULL,'llamacpp',NULL,'llama-3-8b',NULL,'2026-08-19 08:57:02','2026-08-19 08:57:02',NULL);
 INSERT INTO model_revisions VALUES(2,1,2,NULL,'test-model',NULL,'llamacpp',NULL,'llama-3-8b-v2',NULL,'2026-08-19 08:57:02','2026-08-19 08:57:02',NULL);
 INSERT INTO model_revisions VALUES(3,1,3,NULL,'test-model',NULL,'llamacpp',NULL,'llama-3-8b-v2',NULL,'2026-08-19 08:57:02','2026-08-19 08:57:02','2026-08-19 08:57:02');
-INSERT INTO model_revisions VALUES(4,2,1,NULL,'llama-70b',NULL,'vllm','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 13:54:54','2026-08-25 13:54:54',NULL);
-INSERT INTO model_revisions VALUES(5,3,1,NULL,'llama-20b',NULL,'vllm','http://localhost:8000/v1','meta/llama-20b',NULL,'2026-08-25 13:55:10','2026-08-25 13:55:10',NULL);
-INSERT INTO model_revisions VALUES(6,4,1,1,'llama-70b',NULL,'vllm','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 14:01:27','2026-08-25 14:01:27',NULL);
-INSERT INTO model_revisions VALUES(7,5,1,NULL,'test',NULL,'test',NULL,'unique-test-xyz',NULL,'2026-08-25 14:10:00','2026-08-25 14:10:00',NULL);
-INSERT INTO model_revisions VALUES(8,6,1,NULL,'t1',NULL,'t1',NULL,'t1',NULL,'2026-08-25 14:12:05','2026-08-25 14:12:05',NULL);
-INSERT INTO model_revisions VALUES(9,7,1,NULL,'jtest',NULL,'jtest',NULL,'jtest-1',NULL,'2026-08-25 14:14:24','2026-08-25 14:14:24',NULL);
-INSERT INTO model_revisions VALUES(10,8,1,NULL,'jtest2',NULL,'jtest',NULL,'jtest-2',NULL,'2026-08-25 14:15:28','2026-08-25 14:15:28',NULL);
+INSERT INTO model_revisions VALUES(4,2,1,NULL,'llama-70b',NULL,'llamacpp','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 13:54:54','2026-08-25 13:54:54',NULL);
+INSERT INTO model_revisions VALUES(5,3,1,NULL,'llama-20b',NULL,'llamacpp','http://localhost:8000/v1','meta/llama-20b',NULL,'2026-08-25 13:55:10','2026-08-25 13:55:10',NULL);
+INSERT INTO model_revisions VALUES(6,4,1,1,'llama-70b',NULL,'llamacpp','http://localhost:8000/v1','meta/llama-70b',NULL,'2026-08-25 14:01:27','2026-08-25 14:01:27',NULL);
+INSERT INTO model_revisions VALUES(7,5,1,NULL,'test',NULL,'llamacpp',NULL,'unique-test-xyz',NULL,'2026-08-25 14:10:00','2026-08-25 14:10:00',NULL);
+INSERT INTO model_revisions VALUES(8,6,1,NULL,'t1',NULL,'llamacpp',NULL,'t1',NULL,'2026-08-25 14:12:05','2026-08-25 14:12:05',NULL);
+INSERT INTO model_revisions VALUES(9,7,1,NULL,'jtest',NULL,'openai',NULL,'jtest-1',NULL,'2026-08-25 14:14:24','2026-08-25 14:14:24',NULL);
+INSERT INTO model_revisions VALUES(10,8,1,NULL,'jtest2',NULL,'openai',NULL,'jtest-2',NULL,'2026-08-25 14:15:28','2026-08-25 14:15:28',NULL);
 CREATE TABLE skill_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

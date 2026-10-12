@@ -34,13 +34,31 @@ CFLAGS  += -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -g \
            -Iinclude -I../acta_db/include \
            -Itests/helpers
 
+# Closed backend vocabulary (docs/plans/backend_dialects.md §9 decision 2):
+# src/commands/model.c validates --backend with the runner's dialect module
+# (dialect_from_string / dialect_expected_names) so the vocabulary has ONE
+# definition.  Unlike acta_dbpath.{c,h} — which is duplicated verbatim in
+# both src trees — dialect.{h,c} lives in acta_runner/src and is compiled
+# here by path, the same way acta_gui/src/src.pro compiles run.c, backend.c,
+# argparse.c and deathmark.c.  -I../acta_runner/src is needed for dialect.h
+# only; -Iinclude comes first and acta_runner/src holds just backend.h and
+# dialect.h, so nothing here can shadow an acta_cli header.
+CFLAGS    += -I../acta_runner/src
+
 # ---- test-suite directories (auto-derived) -------------------------
 # TEST_DIRS = every tests/<suite>/ directory except tests/helpers/.
+# `$(wildcard tests/*/)` still matches plain files (tests/ holds the
+# acta_test_ref.db fixture too) but appends a slash to directories only,
+# so the `$(filter %/,…)` keeps the suites and drops the fixture.  Without
+# it the fixture became a "suite": a bogus -Itests/acta_test_ref.db on
+# every compile (cc1.exe: warning: not a directory) and a
+# `test_acta_test_ref.db` target that cannot link (undefined reference to
+# `WinMain`), which broke `make test`.
 # New test suites are picked up automatically: create tests/<suite>/
 # with part files (each exposing one run_<suite>_test_<part>() function)
 # plus a <suite>_test_main.c that declares and calls them — no Makefile
 # edits needed beyond that directory.
-TEST_DIRS   := $(filter-out tests/helpers/, $(sort $(wildcard tests/*/)))
+TEST_DIRS   := $(filter-out tests/helpers/, $(filter %/, $(sort $(wildcard tests/*/))))
 TEST_SUITES := $(notdir $(patsubst %/,%,$(TEST_DIRS)))
 
 # one -I per test-suite directory
@@ -74,7 +92,11 @@ CFLAGS    += -DACTA_DB_GIT_HASH=\"$(GIT_HASH)\"
 SRCS    := $(wildcard src/*.c)
 SRCS   += $(wildcard src/commands/*.c)
 OBJS    := $(patsubst %.c, %.o, $(SRCS))
-APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS))
+# The out-of-tree object built from ../acta_runner/src/dialect.c (see the
+# rule below).  It is NOT part of $(OBJS) — SRCS only globs acta_cli's own
+# sources — so it is added explicitly wherever a link happens.
+DIALECT_OBJ := src/dialect.o
+APP_OBJS_NO_MAIN := $(filter-out src/main.o, $(OBJS)) $(DIALECT_OBJ)
 TARGET  := acta_cli$(EXEEXT)
 
 # ---- default goal ----
@@ -118,8 +140,8 @@ $(ACTA_DB_LIB): $(wildcard ../acta_db/src/*.c) $(wildcard ../acta_db/include/*.h
 	../acta_db/include/schema_sql.h ../acta_db/include/migrations_sql.h
 	$(MAKE) -C ../acta_db libacta_db.a
 
-$(TARGET): $(OBJS) $(ACTA_DB_LIB)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDLIBS)
+$(TARGET): $(OBJS) $(DIALECT_OBJ) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(DIALECT_OBJ) $(LDLIBS)
 
 test: $(TEST_BINS)
 	@fail=0; \
@@ -133,12 +155,21 @@ test: $(TEST_BINS)
 # Header dependencies: a changed header must force every object to
 # recompile.  Without these, a struct-layout change (e.g. global_opts_t
 # in cli.h) silently leaves stale .o files with mismatched offsets.
-HDRS := $(wildcard include/*.h) $(wildcard ../acta_db/include/*.h)
+HDRS := $(wildcard include/*.h) $(wildcard ../acta_db/include/*.h) \
+        ../acta_runner/src/dialect.h
 
 %.o: %.c $(HDRS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Explicit rule (an explicit rule always wins over the %.o pattern rule):
+# compile the runner's dialect module into an acta_cli-local object.  The
+# prerequisites matter — the pattern rule's $(HDRS) already lists dialect.h,
+# but a prerequisite list is what makes `src/dialect.o` rebuild when the
+# runner's dialect changes.
+$(DIALECT_OBJ): ../acta_runner/src/dialect.c ../acta_runner/src/dialect.h
+	$(CC) $(CFLAGS) -c ../acta_runner/src/dialect.c -o $@
+
 clean:
-	rm -f $(OBJS) $(HELPERS_OBJ) \
+	rm -f $(OBJS) $(DIALECT_OBJ) $(HELPERS_OBJ) \
 	      $(foreach d,$(TEST_DIRS),$(wildcard $(d)/*.o)) \
 	      $(TARGET) $(TEST_BINS)
