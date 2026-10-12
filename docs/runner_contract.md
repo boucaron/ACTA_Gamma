@@ -6,7 +6,7 @@ skill + model + context, calls the OpenAI-compatible backend, and records
 the outcome (raw response, result, error, phase logs) back into the
 database.
 
-## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` token-free health action shipped, run auto preflight shipped
+## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` token-free health action shipped, run auto preflight shipped, backend dialects shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -168,9 +168,11 @@ Implementation notes (where the spec left room):
    `user = context.content`. There is no per-execution prompt field:
    the skill is the only instruction source, and the context is the
    user message content. If a skill has an
-   `output_schema`, use `response_format: {"type":"json_schema",
-   "schema": ...}` when the backend supports it, otherwise validate the
-   raw response post-hoc. The resolved prompt is NOT stored in the
+   `output_schema`, send `response_format` in the **dialect's** envelope
+   (decision 9: `llamacpp` `{"type":"json_schema","schema":…}`,
+   `openai` `{"type":"json_schema","json_schema":{"name":"acta_output",
+   "strict":true,"schema":…}}`) when the backend supports it, otherwise
+   validate the raw response post-hoc. The resolved prompt is NOT stored in the
    `executions` row (the table has no prompt column);
    it is recorded in the `prompt_resolved` event of `execution_logs`
    (`metadata`: `system`, `user`, `system_bytes`, `user_bytes`), which
@@ -233,9 +235,10 @@ Implementation notes (where the spec left room):
    llm_request, llm_response, validation_*,
    execution_completed/failed, execution_cancelled) so the UI timeline
    shows meaningful phases. `preflight_passed` records the server-instance configuration
-   (R8): the matched model id, `max_context`, and the catalog entry's
-   launch `args` + `meta`. Best-effort: a missing catalog logs
-   `"catalog":null` and never fails the execution.
+   (R8): the matched model id, `max_context` with its `max_context_source`,
+   the `dialect` used (decision 9), and the catalog entry's launch `args` +
+   `meta`. Best-effort: a missing catalog — or a dialect with no catalog
+   endpoint at all — logs `"catalog":null` and never fails the execution.
 8. **Prompt size limit (`max_chars`).** The assembled prompt is exactly
    `system = skill.prompt_template` + `user = context.content`, so a
    plain char count is a deterministic, model-agnostic guard: preflight
@@ -252,6 +255,59 @@ Implementation notes (where the spec left room):
    guarantee — the backend's served `max_context` remains the final
    arbiter for under-limit prompts and keeps being recorded in
    `preflight_passed`; it is not used by the check itself.
+9. **Backend dialect (`llamacpp` / `openai`).** `models.backend` is a
+   **closed vocabulary**, not a free-text label: `llamacpp` or `openai`.
+   `acta_runner/src/dialect.{h,c}` is the single source of the vocabulary and
+   of the two shapes that genuinely differ (`dialect_from_string()`,
+   `dialect_expected_names()` → `"llamacpp or openai"`); `acta_cli` compiles
+   that same module. A dialect is a set of HTTP request/parse shapes, not a
+   vendor: `openai` means "strict OpenAI-compatible HTTP dialect" (Strata,
+   vLLM, …), not "the hosted OpenAI API". There is no third dialect, no plugin
+   registry and **no runtime auto-detection** — a request body chosen by
+   probing the server is exactly the input nondeterminism the revision design
+   exists to forbid.
+   - **Source:** the dialect belongs to the **model revision**
+     (`model_revisions.backend`, copied from `models.backend` at every
+     revision). `run <id>`, `run --pending` (per row), `check
+     <model-record-id>` and the GUI **Run** button all take it from the row:
+     the same execution row + the same model revision must always produce the
+     same request body.
+   - **Override:** `run <id> --dialect <llamacpp|openai>` is the CLI escape
+     hatch — accepted only with a single explicit execution id, never mutating
+     the DB or the revision, and never silent: `llm_request` metadata gains
+     `"dialect_source":"cli-override"` plus `"model_backend":"<row value>"`,
+     and a `warn`-level `dialect_override` log event is written when the
+     override disagrees with the row. `run --pending --dialect …` is rejected
+     with `EXIT_INVALID` (4) **before the claim** — a batch mixes model
+     revisions, one flag cannot describe them. `check` standalone mode (no
+     model row) accepts `--dialect` (default `llamacpp`); `check
+     <model-record-id> --dialect …` is rejected, the row decides in DB mode.
+   - **Unknown value:** fails **before any HTTP call** with `EXIT_INVALID` and
+     `model revision N has unsupported backend '<value>' (expected llamacpp or
+     openai)`. `acta_cli model create/update` validates the same vocabulary at
+     the declaration site (`invalid backend '<value>' (expected llamacpp or
+     openai)`); the runner re-validates at run time as defense for rows written
+     by another tool. Matching is exact and case-sensitive: `llama` is **not**
+     an alias of `llamacpp`, `OpenAI` is not `openai`.
+   - **What actually differs** (matrix: `docs/plans/backend_dialects.md` §2):
+     the `response_format` envelope (decision 3), `top_k` (sent by `llamacpp`,
+     omitted by `openai` — `model.configuration.top_k` is still *validated* in
+     both dialects, a bad value still fails the execution), the `GET /` catalog
+     audit (made only by `llamacpp`; `openai` makes no request and records
+     `"catalog":null`), and the preferred context-ceiling source
+     (`entry.max_context` first for `llamacpp`, `entry.meta.n_ctx` first for
+     `openai`, `/health max_context` as last resort for both). Everything else
+     — one call, no retries, no streaming, `raw_response =
+     choices[0].message.content`, exit codes, log phases — is shared and stays
+     shared.
+   - **Audit:** `llm_request` metadata always carries `dialect`,
+     `dialect_source` (`model_revision` | `cli-override`) and `model_backend`
+     (the row value), so an audit can tell which envelope produced a stored
+     `raw_response`; `preflight_passed` carries `dialect` and
+     `max_context_source` (`entry.max_context` | `entry.meta.n_ctx` |
+     `health.max_context` | `none`).
+   - Contracts: [`llamacpp_server_contract.md`](llamacpp_server_contract.md)
+     and [`openai_dialect_contract.md`](openai_dialect_contract.md).
 
 ## Phase 2 pipeline (spec for `run_execution`)
 
@@ -268,8 +324,10 @@ per-execution step-3 preflight below still runs, after the claim.
    `running`; log `execution_started`.
 2. **Resolve** — fetch context (`content`), skill revision
    (`prompt_template`, `output_schema`), model revision (`base_url`,
-   `model_identifier`, `configuration`); log `context_loaded`,
-   `prompt_resolved`.
+   `model_identifier`, `configuration`, `backend`); log `context_loaded`,
+   `prompt_resolved`. The model revision's `backend` resolves to the dialect
+   (decision 9); a value outside the vocabulary fails here, before any backend
+   call.
 3. **Preflight** (cheap, makes failures readable) — prompt size check
    first: `total_chars = strlen(prompt_template) +
    strlen(context.content)` vs. the resolved `max_chars` limit; over the
@@ -277,17 +335,23 @@ per-execution step-3 preflight below still runs, after the claim.
    X + skill prompt Y) exceeds max_chars Z")` before any backend call
    (decision 8). `GET /health`: `503` → fail "model still loading".
    `GET /v1/models`: mismatched `model_identifier` → fail "server is
-   running a different model".
-   Then best-effort `GET /` (llama.cpp model catalog): the matched
+   running a different model". The ceiling is read through the dialect and the
+   field it came from is recorded as `max_context_source`.
+   Then best-effort `GET /` (llama.cpp model catalog) — **only on the
+   `llamacpp` dialect** (`dialect_t.fetch_catalog`): the matched
    entry's `status.args` + `meta` (`n_ctx`, `n_params`, `size`, `ftype`)
    and `max_context` are recorded in a `preflight_passed` log event.
    A missing/unparseable catalog never fails the execution — it records
-   `"catalog":null`.
+   `"catalog":null`, which is also what the `openai` dialect records without
+   making the call at all.
 4. **Call** — `POST /v1/chat/completions` with `messages = [system:
    prompt_template, user: context.content]`, `model =
-   model_identifier`, params from `configuration`, and
-   `response_format = json_schema(output_schema)` when a skill has one;
-   log `llm_request` (url, model id, params). Empty context content →
+   model_identifier`, params from `configuration` (`top_k` only on the
+   `llamacpp` dialect), and `response_format = the dialect's json_schema
+   envelope` when a skill has an `output_schema` and
+   `supports_response_format` is not `false`; log `llm_request` (url, model
+   id, `response_format`, `dialect`, `dialect_source`, `model_backend`).
+   Empty context content →
    `fail(EXIT_INVALID, "empty context content")` before the call.
 5. **Record** — `set_raw_response(choices[0].message.content)`; log
    `llm_response` (HTTP status, latency, `usage` tokens, `timings`).
@@ -314,16 +378,24 @@ completion and without touching the audit database**.
 ```
 acta_runner check <model-record-id>                            # DB mode
 acta_runner check --base-url <url> --model-identifier <id>     # standalone
+                      [--dialect llamacpp|openai]
 ```
 
-- **DB mode** (default): `<model-record-id>` is a `models` row id; the
-  runner reads `base_url` + `model_identifier` from the record. No
+- **DB mode** (default): `<model-record-id>` is a **`models` row id, not an
+  execution id** (`check 4` says `model 4 not found` even when execution 4
+  exists); the
+  runner reads `base_url` + `model_identifier` + `backend` from the record. No
   execution is created, claimed, or logged — the DB is only read for the
   model row. Unknown id → `EXIT_NOT_FOUND`.
 - **Standalone mode**: `--base-url` / `--model-identifier` are mutually
   exclusive with the positional id; no DB lookup at all (the DB is not
   even resolved/opened in this mode) — useful to probe a server before
-  any model is registered.
+  any model is registered. With no model row the dialect has nowhere else to
+  come from, so `--dialect` is accepted here (default `llamacpp`, i.e. today's
+  standalone behavior is unchanged); it also changes the ceiling order
+  (`meta.n_ctx` beats the entry `max_context` on `openai`). `--dialect` without
+  `--base-url`+`--model-identifier`, or combined with a positional id, is
+  rejected with `EXIT_INVALID` (4).
 
 **Check sequence** (both calls token-free, via the shared
 `backend_preflight()` in `src/backend.c`):
@@ -334,8 +406,10 @@ acta_runner check --base-url <url> --model-identifier <id>     # standalone
 2. `GET /v1/models` — only after `/health` succeeds (a 503 server is
    "loading", not "unknown model"): `model_identifier` present in the
    catalog → verdict ok, the catalog entry's `max_context` is
-   reported; absent → verdict `model not served`; endpoint error /
-   unparseable body → verdict `catalog unreachable`.
+   reported through the dialect (entry `max_context` / entry `meta.n_ctx` /
+   `/health max_context`); absent → verdict `model not served`;
+   endpoint error / unparseable body → verdict `catalog unreachable`.
+   `check` makes no `GET /` catalog call in either dialect.
 
 **Result contract** — one JSON line on stdout (scriptable):
 

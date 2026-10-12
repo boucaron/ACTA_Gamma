@@ -108,12 +108,29 @@ The `models` table represents the configuration needed to invoke an LLM.
 For the initial llama.cpp setup:
 
 ```text
-backend          = openai-compatible
+backend          = llamacpp
 base_url         = http://127.0.0.1:8080
 model_identifier = qwen3-...
 ```
 
-`configuration` can contain backend-specific JSON without forcing those details into the core schema.
+**`backend` is a closed vocabulary: `llamacpp` or `openai`.** It is the HTTP
+**dialect** the runner speaks to that endpoint — preflight/catalog shape,
+where the context ceiling is published, the `response_format` envelope, whether
+`top_k` is sent — not a vendor name and not free text
+(`openai` = "strict OpenAI-compatible server", e.g. Strata or vLLM). The
+vocabulary is enforced in the application layer (`acta_cli` at create/update,
+`acta_runner` again at run time), **not** by a schema `CHECK`: the schema is
+frozen at `0.1`, so the column stays `TEXT NOT NULL` and a legacy value can
+exist in a row — it simply fails the run before any HTTP call. Single source of
+the vocabulary and of the two request shapes: `acta_runner/src/dialect.{h,c}`.
+Decision record: [`runner_contract.md`](runner_contract.md) decision 9; matrix:
+[`plans/backend_dialects.md`](plans/backend_dialects.md) §2.
+
+`configuration` is the **capability** layer, identical in both dialects: it
+carries backend-specific JSON without forcing those details into the core
+schema, and the runner accepts a strict known-key set
+(`temperature`, `max_tokens`, `top_k`, `supports_response_format`) — an unknown
+key fails the execution with `EXIT_INVALID`.
 
 For example:
 
@@ -124,7 +141,9 @@ For example:
 }
 ```
 
-The runner should treat the backend as an interchangeable implementation.
+The runner treats the backend as an interchangeable implementation **behind one
+of the two dialects**; there is no plugin mechanism and no runtime
+dialect detection.
 
 Revision rows (`model_revisions`, `skill_revisions`) are written **only** by
 the schema triggers below — there is no application-level "snapshot" call,

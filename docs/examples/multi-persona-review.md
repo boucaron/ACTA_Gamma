@@ -18,7 +18,7 @@ database first (no backend needed), start with
 
 ## What this example demonstrates
 
-| Claim (see [README](../README.md)) | How this example shows it |
+| Claim (see [README](../../README.md)) | How this example shows it |
 |---|---|
 | Comparability across skills/prompts | Five executions share the same context and model revision; only the skill revision differs |
 | Explicit revision binding (no "active" flag) | Each `exec create` names a concrete `skill_revision_id` and `model_revision_id` |
@@ -35,7 +35,7 @@ database first (no backend needed), start with
   `JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`. (A fresh `acta.db` has none of
   these; the ids below are therefore specific to *this* database.)
 - A running `llama-server` router (e.g. `http://127.0.0.1:8080`) serving that
-  model — see the README [Quick start](../README.md#quick-start) for how to
+  model — see the README [Quick start](../../README.md#quick-start) for how to
   obtain a GGUF and launch the router.
 - The router's API key — the value you passed with `--api-key` when you
   launched `llama-server` — exported as `OPENAI_API_KEY`.
@@ -47,7 +47,7 @@ the one thing in this example you cannot copy. The joke is simple: register
 your own model in the database, and adapt **one line** of the script.
 
 ```sh
-$ acta_cli model create --json '{"name":"my-model","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"my-model.gguf"}'
+$ acta_cli model create --json '{"name":"my-model","backend":"llamacpp","base_url":"http://127.0.0.1:8080","model_identifier":"my-model.gguf"}'
 ```
 
 Then find its id with `acta_cli model list --fields id,name` and point

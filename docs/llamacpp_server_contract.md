@@ -1,5 +1,14 @@
 # llama.cpp server — runner-relevant contract
 
+The contract of the runner's **`llamacpp` dialect** (`models.backend =
+"llamacpp"`, runner decision 9 in [`runner_contract.md`](runner_contract.md)):
+what `acta_runner` actually calls on a llama.cpp `llama-server`. The sibling
+contract for the other dialect is
+[`openai_dialect_contract.md`](openai_dialect_contract.md); the difference
+between the two is the `response_format` envelope (§4), `top_k`, the catalog
+call (§3a) and the preferred context-ceiling source (§3) — everything else is
+shared.
+
 Distilled from the llama.cpp server README (the full auto-generated
 server reference in the upstream llama.cpp repository; only the
 runner-relevant subset is kept here). Tested on **llama.cpp 0.5.0** (router mode); compatibility with any other version is not guaranteed — if the router surface changes, the preflight and catalog-fetch steps need re-validation.
@@ -60,6 +69,11 @@ check, not an exact single-id match): a mismatched server config fails
 cleanly instead of producing garbage (the execution fails with the ids
 the server actually serves).
 
+The context ceiling is read from the matched entry, `llamacpp`-first:
+entry `max_context` → entry `meta.n_ctx` → `/health` `max_context`, and the
+field actually used is recorded as `max_context_source` in
+`preflight_passed`.
+
 ## 3a. Model catalog — `GET /` (llama.cpp-specific, best-effort)
 
 The llama.cpp server also serves its model catalog at `GET /` (the
@@ -75,7 +89,9 @@ The llama.cpp server also serves its model catalog at `GET /` (the
 The runner fetches it during preflight and records the matched entry in
 the `preflight_passed` log event. This is **best-effort audit data**:
 a fetch failure never fails the execution (`"catalog":null` is recorded
-instead).
+instead). The call itself is a `llamacpp`-dialect property
+(`dialect_t.fetch_catalog`): on the `openai` dialect no `GET /` is made at
+all and `"catalog":null` is recorded without a request.
 
 ## 4. The call: `POST /v1/chat/completions`
 
@@ -87,11 +103,17 @@ instead).
   - `model`        – must match the loaded model id/alias
   - `messages`     – `[{role: system|user|assistant, content: ...}]`
   - `max_tokens`, `temperature`, `top_k`, `stream` (use `false`)
+    (`top_k` is sent by the `llamacpp` dialect only; the `openai` dialect
+    omits it)
   - `response_format`:
     - `{"type": "json_object"}` — plain JSON output
     - `{"type": "json_schema", "schema": {...}}` — **schema-constrained
       generation: this is where a skill's `output_schema` plugs in
-      directly**
+      directly, and it is the `llamacpp` envelope.** The `openai` dialect
+      nests the schema instead
+      (`{"type":"json_schema","json_schema":{"name":"acta_output",
+      "strict":true,"schema":{…}}}`); each dialect rejects the other's
+      shape — see [`openai_dialect_contract.md`](openai_dialect_contract.md) §6.
 - Response (non-streaming):
   - `choices[0].message.content` — the text (this is the `raw_response`)
   - `usage` — `prompt_tokens`, `completion_tokens`, `total_tokens`

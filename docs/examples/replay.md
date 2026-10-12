@@ -44,7 +44,7 @@ same context and skill revision as execution 58:
 
 ```sh
 # model_identifier must match the GGUF file name in your --models-dir
-$ acta_cli model create --json '{"name":"my-model","backend":"openai","base_url":"http://127.0.0.1:8080","model_identifier":"my-model.gguf"}'
+$ acta_cli model create --json '{"name":"my-model","backend":"llamacpp","base_url":"http://127.0.0.1:8080","model_identifier":"my-model.gguf"}'
 {"id":13}
 
 $ acta_cli model_revision get-latest 13 --id_only

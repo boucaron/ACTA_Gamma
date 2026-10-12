@@ -234,6 +234,22 @@ changed) snapshots nothing. Revision rows are read via the
 | `model list` | — | `--folder_id`, `--offset`, `--limit`, `--include_deleted` / `--deleted`, `--count`, `--table`, `--stream`, `--fields`, `--no_nulls` | — | `[ … ]` / `[]`; `--count` → bare int; `--stream` → NDJSON |
 | `model count` | — | `--folder_id`, `--include_deleted` / `--deleted` | — | bare int |
 
+> **`--backend` is a closed vocabulary: `llamacpp` or `openai`.** It is the
+> backend **dialect** the runner will speak (runner decision 9,
+> [`runner_contract.md`](runner_contract.md); contracts
+> [`llamacpp_server_contract.md`](llamacpp_server_contract.md) /
+> [`openai_dialect_contract.md`](openai_dialect_contract.md)), not a free-text
+> label. `acta_cli` rejects anything else — flags (`--backend vllm`), `--json`
+> (`"backend":"vllm"`) or `--stdin` — with exit `4` (`EXIT_INVALID`), the
+> message `invalid backend 'vllm' (expected llamacpp or openai)` on stderr and
+> empty stdout, **before** any row is written. Matching is exact and
+> case-sensitive: `llama` is not an alias of `llamacpp`, `OpenAI` is not
+> `openai`. The vocabulary lives in one place
+> (`acta_runner/src/dialect.c`, compiled by `acta_cli` too); the runner
+> re-validates it at run time for rows written by another tool. Changing
+> `backend` is a `model update`, which creates a **new model revision** — old
+> executions stay tied to the dialect they actually used.
+
 ## model_folder
 
 | Command | Positionals | Flags | Input | stdout on success |
@@ -273,6 +289,22 @@ changed) snapshots nothing. Revision rows are read via the
 > already all folders, so `--all` alone is a no-op (identical rows /
 > count); it is kept as the explicit form and wins over `--folder_id`
 > when both are given.
+
+> **`--output_schema` (and the JSON key) must be a JSON *string*.** The
+> column stores the schema as text, so the value has to arrive as a string
+> containing JSON:
+>
+> ```sh
+> acta_cli skill create --json '{"name":"s","prompt_template":"…",
+>   "output_schema":"{\"type\":\"object\"}"}'
+> ```
+>
+> Passing a JSON **object** instead (`"output_schema":{"type":"object"}`) is
+> not an error — the field mapper reads string fields only, so the object is
+> silently dropped and the column stores `null` (the skill then runs with no
+> schema and no validation). If `--output_schema` is not valid JSON the
+> **execution** fails later, at request-build time, with `EXIT_INVALID` and
+> `skill output_schema is not valid JSON`.
 
 ## skill_folder
 

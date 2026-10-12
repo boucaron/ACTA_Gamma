@@ -64,7 +64,16 @@ This makes ACTA Gamma useful for tasks such as:
 
 A registered LLM endpoint and model identifier.
 
-ACTA Gamma currently uses a local **llama.cpp `llama-server` router** serving GGUF models.
+ACTA Gamma speaks two **backend dialects**, declared by the model's `backend`
+value:
+
+* `llamacpp` — a local llama.cpp **`llama-server`** router serving GGUF models
+  (the default path, described below)
+* `openai` — any strict OpenAI-compatible HTTP server (Strata, vLLM, …)
+
+The dialect decides the HTTP shapes the runner uses (catalog call, context
+ceiling field, `response_format` envelope). It is a closed vocabulary: only
+`llamacpp` and `openai` are accepted.
 
 ### Skill
 
@@ -152,7 +161,10 @@ See [`docs/building.md`](docs/building.md) for platform-specific dependencies an
 
 ## 2. Start llama.cpp
 
-ACTA Gamma currently uses `llama-server` in router mode.
+ACTA Gamma's default path is `llama-server` in router mode — register such a
+model with `"backend": "llamacpp"`. A strict OpenAI-compatible server
+(`"backend": "openai"`) works the same way, see
+[OpenAI-compatible backends](#openai-compatible-backends) below.
 
 For example:
 
@@ -180,7 +192,6 @@ huggingface-cli download \
 The `-c` value is the backend's token context window; adjust it for your model.
 
 See [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) for the backend contract.
-
 ---
 
 # Minimal example
@@ -197,7 +208,7 @@ Register a model:
 acta_cli model create --json \
 '{
   "name": "llama-local",
-  "backend": "openai",
+  "backend": "llamacpp",
   "base_url": "http://127.0.0.1:8080",
   "model_identifier": "qwen3-8b"
 }'
@@ -206,19 +217,15 @@ acta_cli model create --json \
 Create a skill:
 
 ```bash
-acta_cli skill create --json \
-'{
-  "name": "sentiment",
-  "prompt_template": "Classify the sentiment of the input. Reply with JSON: {\"label\": \"positive\"|\"negative\", \"confidence\": number}",
-  "output_schema": {
-    "type": "object",
-    "required": ["label", "confidence"],
-    "properties": {
-      "label": {"type": "string"},
-      "confidence": {"type": "number"}
-    }
-  }
-}'
+acta_cli skill create \
+  --name sentiment \
+  --prompt_template 'Classify the sentiment of the input. Reply with JSON only.' \
+  --output_schema '{"type":"object","required":["label","confidence"],"properties":{"label":{"type":"string"},"confidence":{"type":"number"}}}'
+```
+
+`output_schema` is stored as text, so it must arrive as a **string containing
+JSON** — passing a JSON object inside `--json` stores `null` (the schema is
+silently dropped). See [`docs/cli_spec.md`](docs/cli_spec.md).
 ```
 
 Create an immutable context:
@@ -251,7 +258,7 @@ export OPENAI_API_KEY=""
 Optionally check the backend without making an LLM call:
 
 ```bash
-acta_runner check 1
+acta_runner check 1        # 1 = the MODEL record id, not an execution id
 ```
 
 Run the execution:
@@ -268,6 +275,43 @@ acta_cli log list 1
 ```
 
 The complete CLI contract and all available options are documented in [`docs/cli_spec.md`](docs/cli_spec.md).
+
+---
+
+# OpenAI-compatible backends
+
+A model registered `"backend": "openai"` is served by any strict
+OpenAI-compatible HTTP server — Strata, vLLM, … The name describes the **HTTP
+dialect**, not a vendor.
+
+```bash
+acta_cli model create --json \
+'{
+  "name": "strata-local",
+  "backend": "openai",
+  "base_url": "http://127.0.0.1:8080",
+  "model_identifier": "qwen3.8-flash-next-iq3_xxs"
+}'
+```
+
+Everything after that is identical — same `exec create`, same `acta_runner run
+1`. What differs is what the runner puts on the wire:
+
+| Concern | `llamacpp` | `openai` |
+|---|---|---|
+| context ceiling | entry `max_context` | entry `meta.n_ctx` |
+| model catalog audit | `GET /` | not requested (`"catalog": null`) |
+| `top_k` | sent | omitted |
+| `response_format` | `{"type":"json_schema","schema":{…}}` | `{"type":"json_schema","json_schema":{"name":"acta_output","strict":true,"schema":{…}}}` |
+
+The dialect comes from the **model revision**, so the same execution row and
+revision always produce the same request. `acta_runner check --base-url …
+--model-identifier … [--dialect llamacpp|openai]` probes a server before
+anything is registered; `acta_runner run <id> --dialect …` is a logged
+override — it never edits the model row, and the execution log records that an
+override happened.
+
+See [`docs/openai_dialect_contract.md`](docs/openai_dialect_contract.md).
 
 ---
 
@@ -346,7 +390,7 @@ The main commands are:
 | `acta_cli skill create`               | Create a versioned skill           |
 | `acta_cli context create`             | Create an immutable context        |
 | `acta_cli exec create`                | Create an execution                |
-| `acta_runner check <id>`              | Check backend/model availability   |
+| `acta_runner check <model-record-id>` | Check backend/model availability   |
 | `acta_runner run <id>`                | Execute one run                    |
 | `acta_runner run --pending`           | Run pending executions             |
 | `acta_cli exec reset <id>`            | Reset a failed execution           |
@@ -441,6 +485,10 @@ The main components are:
 
 See [`docs/DBDesign.md`](docs/DBDesign.md) and [`docs/runner_contract.md`](docs/runner_contract.md) for the detailed component contracts.
 
+Over that HTTP API the runner speaks two dialects: `llamacpp` (the
+`llama-server` above) and `openai` (any strict OpenAI-compatible server) —
+see [OpenAI-compatible backends](#openai-compatible-backends).
+
 ---
 
 # Configuration
@@ -491,7 +539,8 @@ In particular:
 * it does **not** automatically retry failed executions
 * it does **not** stream model responses
 * it does **not** manage the llama.cpp server
-* the current backend is a local llama.cpp `llama-server`
+* the two supported backend dialects are a local llama.cpp `llama-server`
+  (`llamacpp`) and any strict OpenAI-compatible server (`openai`)
 * the SQLite design is intended for a private local database, not a multi-user server
 
 The context is passed to the model as input; applications handling untrusted data are responsible for deciding how that data should be treated.
@@ -511,6 +560,7 @@ The README intentionally stays high-level. The detailed contracts live here:
 | [`docs/runner_contract.md`](docs/runner_contract.md)                   | Execution pipeline and runner behavior             |
 | [`docs/DBDesign.md`](docs/DBDesign.md)                                 | SQLite schema, revisions, lifecycle and migrations |
 | [`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) | llama.cpp backend contract                         |
+| [`docs/openai_dialect_contract.md`](docs/openai_dialect_contract.md)   | OpenAI-compatible (`openai` dialect) contract        |
 | [`docs/PointOfView.md`](docs/PointOfView.md)                           | Design philosophy and non-goals                    |
 | [`docs/status.md`](docs/status.md)                                     | Current project status and product decisions       |
 | [`docs/known_issues.md`](docs/known_issues.md)                         | Known issues                                       |
