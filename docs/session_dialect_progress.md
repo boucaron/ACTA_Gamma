@@ -1287,3 +1287,117 @@ portability/memory fixes share files with the dialect phases (`backend.c`,
 Line-ending hygiene before committing: `git add --renormalize .` (the index
 holds CRLF while the blobs are LF, `core.autocrlf=true` — §6 gotcha 1).
 
+---
+
+## 12. SESSION 7 (2026-10-12) — the batch is COMMITTED (7 commits); only the GUI trio is left
+
+### 12.1 What is in git now
+
+The owner chose **option B** of §11.5, and B collapsed to **7 commits** (not 10):
+whole-file staging means a file must land in the **earliest** phase that touches
+it, and `backend.{c,h}`, `run.c`, `check.c`, `Makefile`, `stub_server.{h,c}`,
+`test_run.c`, `test_check.c`, `test_autopreflight.c` each carry edits from
+several phases. Hunk-splitting them would leave intermediate commits that either
+do not compile or fail their own suites (`run.c`'s `cmd_run` `--dialect` handling
+without `argparse.c`'s known-flag table → `EXIT_CLI` instead of `EXIT_INVALID` in
+`test_autopreflight` scenario 8; a `Makefile` listing the openai suite without
+that suite in the tree → `make test` breaks). Hence Phases 1–4 + 6 are one
+commit, with the phase boundaries written out inside its message.
+
+| commit | content | files |
+|---|---|---|
+| `8e06493` | `docs(plans)`: add `docs/plans/backend_dialects.md` (status line updated to "implemented and verified, nothing committed") | 1 (+304) |
+| `4f26f1a` | `docs`: add the two session notes (`session_dialect_progress.md`, `session_strata_backend.md`) — resolves the plan's two dangling links | 2 (+1530) |
+| `9786d3c` | `fix`: the three portability/memory findings that share no file with the dialect phases — `acta_db/Makefile` (`-D_POSIX_C_SOURCE=200809L`, `-fPIC`), `acta_db/src/db.c` (`sqlite3_free`→`free` on the `db_strdup` copy), `acta_runner/src/sweep.c` (`last_activity()` use-after-free) | 3 |
+| `52dd03c` | `runner`: **Phases 1–4 + 6** — `max_context` fallback + `max_context_source`; `src/dialect.{h,c}` + `tests/dialect/`; the revision-sourced dialect in `run.c`/`backend.c`/`check.c` + metadata; `--dialect`; `stub_server` dialect/envelope rejection + `test_openai_dialect.c`; also carries the `check.c` UAF, the `main.c` declaration-in-condition, `MSG_NOSIGNAL`, `<strings.h>` | 27 (+3581/‑875) |
+| `cb2be70` | `cli`: **Phase 5** — `--backend` validation via `backend_rejected()`, the four usage blocks, `tools.c` descriptions, option-A Makefile wiring (`-I../acta_runner/src`, `src/dialect.o`, `$(TARGET)` prerequisite), the `TEST_DIRS` fix, the model tests + `acta_test_ref.sql` normalization, the `cli_main.c` hoist | 12 (+305/‑61) |
+| `7810e7c` | `docs`: **Phase 7** — `runner_contract.md` decision 9, new `openai_dialect_contract.md`, `llamacpp_server_contract.md`, `cli_spec.md`, `DBDesign.md`, `building.md` WSL2 section, README, `status.md`, the two example tutorials + the 2 broken links, the normalized `docs/examples/acta.db`, new `scripts/` | 13 (+792/‑54) |
+| `083dd71` | `tests`: the `acta_cli` harness creates `./tmp` (see §12.3) | 1 |
+
+All blobs landed `i/lf` (no CRLF pollution) even though `core.autocrlf=true`;
+no `git add --renormalize` was needed for these files (the already-tracked
+`docs/status.md` is still `i/crlf` — untouched by this batch).
+
+### 12.2 Per-commit snapshot verification (the method worth keeping)
+
+`git worktree add --detach /c/msys64/tmp/wt_x HEAD` → build and test **that
+commit alone** → `git worktree remove --force` (force: the build artifacts are
+git-ignored). Results:
+
+| commit | snapshot check |
+|---|---|
+| `9786d3c` | `make all` rc 0, no warnings; suites as they exist there: `test_sweep 43/0`, `test_run 102/0`, `test_check 38/0` |
+| `52dd03c` | `make all` rc 0, no warnings; **all 13 suites 681/0** |
+| `cb2be70` | fixture regenerated from the committed `.sql` → `acta_cli make test` 17/17 PASS, rc 0 |
+| `7810e7c` | `make all` rc 0 · 13 suites **681/0** · `acta_cli` **17/17** · HEAD-wide markdown-link audit: **no dangling links** |
+
+### 12.3 New findings from the commits
+
+* **Fresh-clone blocker 1 — FIXED (`083dd71`)**: nothing created `acta_cli/tmp/`
+  (git-ignored), so `stest_init()`'s fixture copy failed with `errno=2` and
+  `make -C acta_cli test` exited non-zero in a fresh worktree. The message looked
+  like a missing fixture because `copy_file()` prints the **source** while the
+  failure was on the **destination**. `stest_init()` now calls
+  `TEST_MKDIR("tmp")` (`mkdir(p)` on Windows, `mkdir(p,0755)` elsewhere, EEXIST
+  ignored) and the FATAL line names both suspects. Verified on both platforms
+  with `acta_cli/tmp` deleted: 17/17 PASS, rc 0.
+* **Fresh-clone blocker 2 — STILL OPEN**: `acta_test_ref.db` is git-ignored while
+  `acta_test_ref.sql` is tracked, so a clone must regenerate the fixture:
+  `python3 -c "import sqlite3; sqlite3.connect('acta_cli/acta_test_ref.db')
+  .executescript(open('acta_cli/acta_test_ref.sql').read())"`. Owner call: keep
+  ignoring it, un-ignore it, or generate it in the Makefile.
+* **Gotcha**: relinking in a fresh worktree once produced `collect2.exe: error:
+  ld returned 5 exit status` with no source error; the immediate retry linked
+  cleanly. Transient (AV/file-lock class), not a code problem — re-run before
+  hunting.
+* Binaries built from an uncommitted tree embed `ACTA_RUNNER_GIT_HASH="d7f7395a-dirty"`
+  / `ACTA_DB_GIT_HASH`; the `-dirty` suffix is a free reminder that nothing was
+  committed, and it is gone now.
+
+### 12.4 REMAINING
+
+1. **The GUI trio is the only uncommitted code**: `acta_gui/src/src.pro`,
+   `acta_gui/src/widgets/modelDialog.cpp`, `acta_gui/ui/modelDialog.ui` —
+   deliberately left out until the Qt build is done (deferred by the owner).
+   Regenerate the stale `acta_gui/src/Makefile{,.Debug,.Release}` (19:49, zero
+   mentions of `dialect`) first; Qt 6 **is** installed in MSYS2
+   (`/c/msys64/mingw64/bin/qmake6.exe`, `Qt6Core.dll`). Commit it as its own
+   commit once it compiles.
+2. `acta_runner/MYTEST/` is still untracked (normalized `acta.db`, the five
+   `*_summarize` review outputs, `run_tests.sh`) — owner call.
+3. The fixture policy of §12.3 blocker 2.
+4. Still unfixed, pre-existing, out of scope: `emit_runner_error()` prints
+   `{error":"…` while `docs/runner_contract.md` documents `{"error":…`; the
+   `acta_cli` test-harness leak (§9.1); `make -C acta_db libacta_db.a` not
+   regenerating `include/{schema,migrations}_sql.h` after `clean`.
+
+### 12.5 Resume prompt for the next session
+
+> Read `docs/session_dialect_progress.md` (**§12 first**, then §11; §3/§4/§8/§10
+> are superseded), `docs/plans/backend_dialects.md` (§2 matrix, §3.2, §9
+> decisions) and `docs/session_strata_backend.md` §4 in ACTA Gamma
+> (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
+>
+> State: **the whole dialect program is committed** — 7 commits from `8e06493` to
+> `083dd71` (plan doc, session notes, portability fixes, Phases 1–4+6 as one
+> `runner:` commit, Phase 5 `cli:` commit, Phase 7 `docs:` commit, harness
+> `tmp/` fix). Each commit was verified in a detached `git worktree`: HEAD builds
+> `make all` rc 0 with no warnings, 13 `acta_runner` suites **681/0** on Windows
+> (712/0 on WSL) and `acta_cli` **17/17 PASS** on both, and the committed tree has
+> no dangling markdown links. All DBs in the tree are on the canonical
+> vocabulary.
+>
+> Do next: (1) the **GUI** — regenerate the stale qmake Makefiles, build
+> (`qmake6 "CONFIG+=debug" acta_gui.pro` then `make`), fix whatever `dialect.c` +
+> `modelDialog` expose, then commit the three `acta_gui` files (the only
+> uncommitted code); (2) decide the fate of untracked `acta_runner/MYTEST/`; (3)
+> decide the `acta_test_ref.db` fixture policy (§12.3 blocker 2).
+>
+> Verify on both platforms (Windows: `mingw32-make`, `TMP='C:/msys64/tmp'
+> TEMP='C:/msys64/tmp'`, `PATH=/c/msys64/mingw64/bin:$PATH`, targets **without**
+> `.exe`, runner suites from `acta_runner/` via `/c/msys64/tmp/winsuites.sh`,
+> acta_cli suites from `acta_cli/`; WSL: the §5 rsync, `make all`, then
+> `~/acta_suites.sh` in batches; ASAN only after `make clean` in `acta_db` **and**
+> `acta_runner` with `ASAN_OPTIONS=detect_leaks=0`, then rebuild plain). Prefer
+> the §12.2 detached-worktree method to verify any new commit on its own.
+

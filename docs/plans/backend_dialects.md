@@ -1,14 +1,16 @@
 # Plan — backend dialects: `llamacpp` mode and `openai` mode
 
-Status: **implemented and verified (2026-10-12), nothing committed yet** —
-§9 holds the four answers (round 2); plan phases 0–6 and 8 are done and green
-on Windows/MinGW and WSL/Ubuntu (`acta_runner` 13 suites: 681 checks / 0
-failures on Windows, 712 / 0 on WSL; `acta_cli` 17/17 PASS on both; ASAN clean
-apart from the known libcurl global-init leak; acceptance criteria 1–8 verified,
-including live end-to-end against Strata with an `output_schema` skill). Phase 7
-(GUI) is written — `src.pro` + `modelDialog` — but **not compiled**, the GUI
+Status: **implemented, verified and COMMITTED (2026-10-12)** —
+§9 holds the four answers (round 2); plan phases 0–6 and 8 are in git
+(`9786d3c` portability fixes, `52dd03c` Phases 1–4 + 6, `cb2be70` Phase 5,
+`7810e7c` Phase 7 docs, `083dd71` harness fix) and green on Windows/MinGW and
+WSL/Ubuntu (`acta_runner` 13 suites: 681 checks / 0 failures on Windows, 712 / 0
+on WSL; `acta_cli` 17/17 PASS on both; ASAN clean apart from the known libcurl
+global-init leak; acceptance criteria 1–8 verified, including live end-to-end
+against Strata with an `output_schema` skill). Phase 7 (GUI) is written —
+`src.pro` + `modelDialog` — but **not compiled and still uncommitted**, the GUI
 build being deferred by the owner. Progress and gotchas:
-[`docs/session_dialect_progress.md`](../session_dialect_progress.md) (§10–§11).
+[`docs/session_dialect_progress.md`](../session_dialect_progress.md) (§10–§12).
 Depends on:
 [`docs/session_strata_backend.md`](../session_strata_backend.md) (issues A and B
 are exactly what this plan resolves).
@@ -302,3 +304,10 @@ Two implementation details settled in the same round:
 5. `openai` envelope + `openai` dialect tests (stub server rejects the wrong shape).
 6. `acta_cli` validation (+ migration if option A) + `--tools` schema.
 7. Docs + README + GUI rebuild.
+
+**Landed differently (2026-10-12):** whole-file staging forces a file into the
+earliest phase that touches it, and `backend.{c,h}`, `run.c`, `check.c`,
+`Makefile`, `stub_server.{h,c}`, `test_run.c`, `test_check.c`,
+`test_autopreflight.c` each carry several phases — so items 1–5 became ONE
+`runner:` commit and the series is 7 commits, recorded with per-commit
+worktree verification in `docs/session_dialect_progress.md` §12.1–§12.2.
