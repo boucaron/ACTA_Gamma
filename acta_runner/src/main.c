@@ -75,6 +75,14 @@ static void help_print(FILE *out)
         "  --max <n>             Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec>       Backend timeout in seconds (default:\n"
         "                        config file \"timeout\", else 600)\n"
+        "  --dialect <llamacpp|openai>\n"
+        "                        Override this run's dialect: never written\n"
+        "                        to the DB, always recorded (llm_request\n"
+        "                        metadata dialect /\n"
+        "                        dialect_source=\"cli-override\" /\n"
+        "                        model_backend) and logged as a warn when\n"
+        "                        it disagrees with the model row. Rejected\n"
+        "                        with --pending.\n"
         "  Auto preflight: before the claim, run verifies the backend with\n"
         "  the same two token-free GETs as `check` (once per invocation;\n"
         "  for a --pending batch, the first pending row). A dead backend or\n"
@@ -88,6 +96,11 @@ static void help_print(FILE *out)
         "                            <model-record-id>\n"
         "  --timeout <sec>           Backend timeout in seconds (default:\n"
         "                        config file \"timeout\", else 600)\n"
+        "  --dialect <llamacpp|openai>\n"
+        "                        Standalone mode only: which dialect the\n"
+        "                        probed server speaks (default llamacpp);\n"
+        "                        NOT accepted with a <model-record-id>,\n"
+        "                        where the model row decides\n"
         "\n"
         "sweep flags:\n"
         "  --stale-seconds <n>   Seconds of inactivity before a `running`\n"
@@ -227,7 +240,8 @@ int main(int argc, char **argv)
 
     /* Informational pragma note after a successful open (e.g. WAL not
      * supported by the backend). Not an error. */
-    if (const char *note = acta_db_last_error(db))
+    const char *note = acta_db_last_error(db);
+    if (note)
         fprintf(stderr, "[warn] db opened with degraded pragma state: %s\n",
                 note);
 

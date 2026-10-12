@@ -13,6 +13,12 @@
  *                                    response whose choices[0].message.
  *                                    content is cfg->chat_content
  *
+ * When cfg->dialect is set, the stub also plays the role of a dialect-
+ * specific server and rejects a request whose response_format envelope is
+ * the other dialect's shape (see stub_server.c envelope_ok()). With
+ * cfg->dialect == NULL no request body is inspected at all, which is what
+ * every pre-existing scenario relies on.
+ *
  * Single-threaded (one connection at a time) — the runner makes its
  * requests sequentially, so that is sufficient for tests.
  */
@@ -32,6 +38,18 @@ typedef struct {
                                      500 simulates a catalog failure) */
     long        max_context;    /* max_context of the served /v1/models
                                      entry (0 = field omitted) */
+    long        models_meta_n_ctx; /* meta.n_ctx of the served /v1/models
+                                     entry (0 = field omitted); the shape
+                                     OpenAI-dialect servers (Strata) use
+                                     instead of a top-level max_context */
+    long        health_max_context; /* max_context in the GET /health body
+                                     (0 = field omitted); the last-resort
+                                     ceiling source */
+    const char *dialect;     /* "llamacpp" | "openai": the envelope this
+                                  stub accepts on POST /v1/chat/completions.
+                                  NULL (the default) = inspect no request
+                                  body, i.e. every pre-existing scenario
+                                  unchanged. */
     int         delay_ms;      /* sleep before replying (timeout tests) */
 } stub_config_t;
 
@@ -69,5 +87,19 @@ int stub_server_health_requests(void);
  * stub_server_start (reset on stub_server_start); same "once per
  * invocation" assertion as stub_server_health_requests(). */
 int stub_server_models_requests(void);
+
+/* Number of GET / requests received since the last stub_server_start
+ * (reset on stub_server_start) — the llama.cpp catalog audit. It pins
+ * decision 4 of docs/plans/backend_dialects.md §9: the openai dialect
+ * must make ZERO catalog calls (fetch_catalog = 0, "catalog": null),
+ * while the llamacpp dialect makes exactly one per pipeline run. */
+int stub_server_catalog_requests(void);
+
+/* Body of the most recent POST served since stub_server_start (a
+ * tail-preserving window of the last 16 KiB), or NULL when no POST has
+ * been served. Lets a test assert the request the runner really built:
+ * which response_format envelope, and whether a parameter such as top_k
+ * was sent at all. */
+const char *stub_server_last_chat_body(void);
 
 #endif /* ACTA_RUNNER_STUB_SERVER_H */

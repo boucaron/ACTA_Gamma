@@ -129,6 +129,12 @@ static const flag_spec_t runner_flag_specs[] = {
     { "stale-seconds", 1 },
     { "base-url", 1 },
     { "model-identifier", 1 },
+    /* The dialect escape hatch (docs/plans/backend_dialects.md §3.2):
+     * value-taking, so `run 1 --dialect openai` never eats the id.
+     * Which surfaces accept it (and what the value must be) is validated
+     * in cmd_run / cmd_check, not here — this table only drives
+     * unknown-flag rejection and value/positional skipping. */
+    { "dialect", 1 },
 };
 
 static int flag_has_value(const char *name) {

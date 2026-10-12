@@ -145,7 +145,7 @@ static int seed_running(db_t *db)
     model_t m;
     memset(&m, 0, sizeof m);
     m.name = model_name;
-    m.backend = "llama";
+    m.backend = "llamacpp";   /* canonical dialect label (src/dialect.h) */
     m.base_url = "http://127.0.0.1:1";   /* unused: no HTTP in sweep */
     m.model_identifier = "stub-model";
     int model_id_ = 0;

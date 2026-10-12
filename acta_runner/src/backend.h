@@ -27,6 +27,8 @@
 #ifndef ACTA_RUNNER_BACKEND_H
 #define ACTA_RUNNER_BACKEND_H
 
+#include "dialect.h"   /* dialect_t: the preflight is dialect-aware */
+
 /* Result codes. */
 #define BACKEND_OK            0
 #define BACKEND_ERR_TRANSPORT (-1)
@@ -85,10 +87,25 @@ const char *backend_strerror(int rc);
  * request/response path (docs/runner_contract.md, check action). No POST,
  * no chat/completions: this is the zero-token surface.
  *
+ * `dialect` decides how the context ceiling is read out of the two
+ * documents (dialect_t.max_context_of). The two GETs themselves are the
+ * same in both dialects; the catalog GET / is NOT part of the preflight
+ * (it belongs to the run pipeline, gated on dialect_t.fetch_catalog).
+ * Every caller must resolve the dialect first: an unsupported
+ * model_revision.backend must fail with EXIT_INVALID before this is
+ * called, never silently defaulted. A NULL descriptor is tolerated as
+ * the historical llama.cpp behavior (defensive, never produced by the
+ * CLI paths).
+ *
  * Result codes:
  *   PREFLIGHT_OK               — /health is 200 and model_id is present
  *                                in the catalog; out->max_context holds
- *                                the entry's max_context (0 when absent).
+ *                                the context ceiling and
+ *                                out->max_context_source says which
+ *                                server field it came from
+ *                                ("entry.max_context" |
+ *                                "entry.meta.n_ctx" |
+ *                                "health.max_context" | "none").
  *   PREFLIGHT_CANCELED         — a request was aborted by the cooperative
  *                                cancel flag (GUI only; the CLI never
  *                                triggers it).
@@ -131,7 +148,8 @@ typedef enum {
 typedef struct {
     int   brc;              /* raw BACKEND_* code of the failing call (0 if OK) */
     int   http_status;      /* status of the failing call (0 if transport) */
-    long  max_context;      /* catalog max_context (0 when unknown) */
+    long  max_context;      /* context ceiling (0 when the server reports none) */
+    char  max_context_source[24]; /* which field it came from (PREFLIGHT_OK only) */
     char  available_ids[512]; /* served ids, comma list (NOT_SERVED only) */
 } backend_preflight_t;
 
@@ -140,6 +158,7 @@ typedef struct {
  * Returns a preflight_result_t code; `out` is filled accordingly.
  */
 int backend_preflight(const char *base_url, const char *model_id,
+                      const dialect_t *dialect,
                       const char *api_key,
                       int timeout_sec, backend_preflight_t *out);
 

@@ -13,7 +13,10 @@
  *                   GET /health (503 -> "model still loading"),
  *                   GET /v1/models (server model id must match),
  *                   GET / (llama.cpp model catalog; best-effort audit
- *                   source, logged as preflight_passed).
+ *                   source, logged as preflight_passed) — only for the
+ *                   llamacpp dialect: the openai dialect has no such
+ *                   endpoint, so the call is skipped and the audit
+ *                   records "catalog": null (dialect_t.fetch_catalog).
  *   4. Call      — POST /v1/chat/completions with
  *                     system = skill.prompt_template,
  *                     user   = context.content (always; empty ->
@@ -21,10 +24,14 @@
  *                     model  = model_identifier,
  *                     params from the model configuration JSON
  *                     (temperature, max_tokens, top_k,
- *                      supports_response_format),
+ *                      supports_response_format; top_k is sent only by
+ *                      the llamacpp dialect),
  *                     response_format = json_schema(output_schema) when the
- *                     skill has an output_schema and the backend supports it;
- *                   log llm_request.
+ *                     skill has an output_schema and the backend supports it
+ *                     (the envelope shape is the dialect's);
+ *                   log llm_request (with dialect / dialect_source /
+ *                   model_backend, so an audit says which envelope produced
+ *                   the stored raw_response).
  *   5. Record    — set_raw_response(choices[0].message.content);
  *                   log llm_response (HTTP status, latency, usage).
  *   6. Validate  — when an output_schema exists but response_format was not
@@ -72,7 +79,16 @@ static void run_usage(FILE *out)
         "  --pending       Run pending executions instead of one id\n"
         "  --max <n>       Max executions to run with --pending (0 = no limit)\n"
         "  --timeout <sec> Backend timeout in seconds (default: config\n"
-        "                   file \"timeout\", else 600)\n",
+        "                   file \"timeout\", else 600)\n"
+        "  --dialect <llamacpp|openai>\n"
+        "                  Override the model revision's backend dialect for\n"
+        "                  this one run: never written to the DB, always\n"
+        "                  recorded in the llm_request metadata\n"
+        "                  (dialect / dialect_source=\"cli-override\" /\n"
+        "                  model_backend) and logged as a `warn` when it\n"
+        "                  disagrees with the row. Rejected with --pending\n"
+        "                  (one flag cannot describe a batch of model\n"
+        "                  revisions).\n",
         out);
 }
 
@@ -105,6 +121,45 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         if (!parse_nonneg_int(v, &timeout) || timeout == 0) {
             VLOG(1, "cmd_run: ERROR --timeout must be a positive integer, got '%s'", v);
             emit_error("--timeout must be a positive integer");
+            run_usage(stderr);
+            return EXIT_INVALID;
+        }
+    }
+
+    /* --dialect: the CLI escape hatch (docs/plans/backend_dialects.md
+     * §3.2). The dialect of a run normally comes from the model
+     * revision it is tied to — that is what makes the same row + the
+     * same revision replay the same request — so the flag is only an
+     * override for a single explicit id:
+     *   - rejected with --pending (a batch mixes model revisions),
+     *   - rejected on a value outside the closed vocabulary,
+     * both checked here, before the config read, before the claim and
+     * before any DB write or HTTP call. */
+    dialect_id_t dialect_override = DIALECT_UNKNOWN; /* UNKNOWN = no override */
+    if (cmd_args_has_flag(ga, "dialect")) {
+        const char *dval = cmd_args_flag(ga, "dialect", 1);
+        if (!dval || !dval[0]) {
+            VLOG(1, "cmd_run: ERROR --dialect requires a value (%s)",
+                 dialect_expected_names());
+            emit_error("--dialect requires a value");
+            run_usage(stderr);
+            return EXIT_INVALID;
+        }
+        dialect_override = dialect_from_string(dval);
+        if (dialect_override == DIALECT_UNKNOWN) {
+            snprintf(msg, sizeof msg,
+                     "invalid --dialect '%s' (expected %s)",
+                     dval, dialect_expected_names());
+            VLOG(1, "cmd_run: ERROR %s", msg);
+            emit_error(msg);
+            run_usage(stderr);
+            return EXIT_INVALID;
+        }
+        if (pending) {
+            VLOG(1, "cmd_run: ERROR --dialect conflicts with --pending");
+            emit_error("--dialect cannot be combined with --pending: a "
+                       "--pending batch mixes model revisions, each with "
+                       "its own backend dialect (use run <id> --dialect)");
             run_usage(stderr);
             return EXIT_INVALID;
         }
@@ -281,9 +336,14 @@ int cmd_run(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     }
 
     /* One action-summary line per action (VLOG level 1 contract);
-     * mirrors the --pending batch summary above. */
+     * mirrors the --pending batch summary above. The dialect override
+     * (if any) is already validated and reaches the pipeline as-is:
+     * run_execution_dialect logs the warn + the llm_request metadata.
+     * In the --pending branch above the override is always
+     * DIALECT_UNKNOWN, so every row uses its own model revision. */
     VLOG(1, "cmd_run: running execution %d", id);
-    int rc = run_execution(db, id, timeout, max_chars, api_key);
+    int rc = run_execution_dialect(db, id, timeout, max_chars, api_key,
+                                   dialect_override);
     /* The row has left `running` (every run_execution path transitions
      * it), so the death marker has nothing to do. */
     deathmark_release();
@@ -424,12 +484,31 @@ static int run_preflight_before_claim(db_t *db, const execution_t *e,
                                 "model revision missing base_url or "
                                 "model_identifier");
     }
+
+    /* The dialect is resolved exactly as run_execution resolves it, so
+     * an unsupported backend aborts the invocation before the claim and
+     * before any HTTP call — the same EXIT_INVALID, the same message. */
+    dialect_id_t did = dialect_from_string(model->backend);
+    const dialect_t *dialect = dialect_get(did);
+    if (!dialect) {
+        char msg[192];
+        snprintf(msg, sizeof msg,
+                 "model revision %d has unsupported backend '%s' "
+                 "(expected %s)", e->model_revision_id,
+                 model->backend ? model->backend : "",
+                 dialect_expected_names());
+        VLOG(1, "cmd_run: %s", msg);
+        acta_db_model_revision_free(model);
+        return emit_runner_error(EXIT_INVALID, msg);
+    }
+
     backend_preflight_t pf;
     int prc = backend_preflight(model->base_url, model->model_identifier,
-                                api_key, timeout_sec, &pf);
+                                dialect, api_key, timeout_sec, &pf);
     if (prc == PREFLIGHT_OK) {
-        VLOG(1, "cmd_run: preflight before claim ok (model=%s)",
-             model->model_identifier);
+        VLOG(1, "cmd_run: preflight before claim ok (model=%s, dialect=%s, max_context=%ld from %s)",
+             model->model_identifier, dialect->name, pf.max_context,
+             pf.max_context_source[0] ? pf.max_context_source : "none");
         acta_db_model_revision_free(model);
         return EXIT_OK;
     }
@@ -536,6 +615,16 @@ static int schema_check(const cJSON *schema, const cJSON *value,
 
 int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
                   const char *api_key)
+{
+    /* No dialect override: model_revision.backend decides (the GUI and
+     * every test path land here). */
+    return run_execution_dialect(db, exec_id, timeout_sec, max_chars,
+                                 api_key, DIALECT_UNKNOWN);
+}
+
+int run_execution_dialect(db_t *db, int exec_id, int timeout_sec, long max_chars,
+                          const char *api_key,
+                          dialect_id_t dialect_override)
 {
     /* max_chars: the resolved prompt size limit (config file -> built-in
      * default), resolved by the caller via acta_conf_resolve_max_chars
@@ -657,6 +746,47 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
         acta_db_model_revision_free(model);
         acta_db_execution_free(e);
         return ex;
+    }
+
+    /* ---- resolve the backend dialect ----
+     * The dialect is a property of the model revision
+     * (docs/plans/backend_dialects.md §3.2): it decides the request body
+     * (response_format envelope, top_k) and the catalog audit, so it
+     * must come from the row that the execution is tied to — not from
+     * argv — for the same row + revision to replay the same request.
+     *
+     * `dialect_override` is the CLI escape hatch (DIALECT_UNKNOWN = no
+     * override). An unknown backend value fails HERE, before any HTTP
+     * call, with EXIT_INVALID: no guessing, no auto-detection, no silent
+     * default — the same fail-loudly rule as the strict `configuration`
+     * unknown-key check below. */
+    const char *row_backend = model->backend ? model->backend : "";
+    dialect_id_t row_did = dialect_from_string(model->backend);
+    dialect_id_t use_did = (dialect_override != DIALECT_UNKNOWN)
+                         ? dialect_override : row_did;
+    const dialect_t *dialect = dialect_get(use_did);
+    const char *dialect_source = (dialect_override != DIALECT_UNKNOWN)
+                               ? "cli-override" : "model_revision";
+    if (!dialect) {
+        FAIL(EXIT_INVALID,
+             "model revision %d has unsupported backend '%s' (expected %s)",
+             e->model_revision_id, row_backend, dialect_expected_names());
+    }
+    if (dialect_override != DIALECT_UNKNOWN && dialect_override != row_did) {
+        /* Deliberately loud: the audit trail must show that the request
+         * shape came from the command line, overriding the row. */
+        cJSON *om = cJSON_CreateObject();
+        cJSON_AddStringToObject(om, "dialect", dialect->name);
+        cJSON_AddStringToObject(om, "model_backend", row_backend);
+        cJSON_AddStringToObject(om, "reason", "cli-override");
+        char *ometa = json_print(om);
+        log_phase(db, exec_id, ACTA_LOG_LEVEL_WARN, "dialect_override",
+                  "--dialect overrides the model revision backend",
+                  ometa);
+        free(ometa);
+        fprintf(stderr, "[warn] --dialect %s overrides model revision %d "
+                        "backend '%s'\n", dialect->name,
+                e->model_revision_id, row_backend);
     }
 
     /* The user message is always the context content; the executions
@@ -829,16 +959,23 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
      * is sent on these GETs too (docs/runner_contract.md, decision 4).
      * */
     long max_ctx = 0;
+    /* Copied out of the preflight struct: `pf` is block-scoped below and
+     * the value is consumed later, in the preflight_passed metadata. */
+    char max_ctx_src[24] = "none";
     {
         backend_preflight_t pf;
         int prc = backend_preflight(model->base_url,
                                     model->model_identifier,
+                                    dialect,
                                     api_key, timeout_sec, &pf);
         if (prc == PREFLIGHT_CANCELED)
             CANCEL();
         switch (prc) {
         case PREFLIGHT_OK:
             max_ctx = pf.max_context;
+            snprintf(max_ctx_src, sizeof max_ctx_src, "%s",
+                     pf.max_context_source[0] ? pf.max_context_source
+                                               : "none");
             break;
         case PREFLIGHT_HEALTH_TIMEOUT:
             FAIL(EXIT_TIMEOUT, "health check timed out after %d s",
@@ -879,20 +1016,29 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
      * and meta (n_ctx, n_params, size, ftype, ...) in the execution
      * timeline makes the server-instance configuration part of the
      * audit trail: the same model id can be served under different
-     * server flags. Best-effort by contract: non-llama OpenAI-compatible
-     * backends have no catalog — a failure here NEVER fails the
-     * execution, it only records "catalog": null. (R8) */
+     * server flags.
+     *
+     * The call is a llamacpp-dialect property (dialect_t.fetch_catalog):
+     * strict OpenAI-compatible servers have no such endpoint, so on the
+     * openai dialect it is not made at all — no pointless 404 per
+     * execution — and the metadata records "catalog": null, exactly the
+     * shape a llama.cpp server without a catalog already produced (R8,
+     * docs/plans/backend_dialects.md §9 decision 4).
+     * Best-effort by contract: a failure here NEVER fails the execution. */
     {
-        char url[1024];
-        build_url(url, sizeof url, model->base_url, "/");
-        backend_response_t r;
-        int brc = backend_request("GET", url, NULL, api_key, timeout_sec,
-                                  &r);
-        cJSON *cat = (brc == BACKEND_OK && r.http_status == 200)
-            ? cJSON_Parse(r.body) : NULL;
-        free(r.body);
-        if (brc == BACKEND_ERR_CANCELED)
-            CANCEL();
+        cJSON *cat = NULL;
+        if (dialect->fetch_catalog) {
+            char url[1024];
+            build_url(url, sizeof url, model->base_url, "/");
+            backend_response_t r;
+            int brc = backend_request("GET", url, NULL, api_key, timeout_sec,
+                                      &r);
+            cat = (brc == BACKEND_OK && r.http_status == 200)
+                ? cJSON_Parse(r.body) : NULL;
+            free(r.body);
+            if (brc == BACKEND_ERR_CANCELED)
+                CANCEL();
+        }
 
         cJSON *entry = NULL;
         if (cat) {
@@ -916,6 +1062,11 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
         cJSON_AddStringToObject(pm, "model_id", model->model_identifier);
         if (max_ctx > 0)
             cJSON_AddNumberToObject(pm, "max_context", (double)max_ctx);
+        /* Which server field the ceiling came from (entry max_context,
+         * entry meta.n_ctx, /health max_context, or none) — the audit
+         * trail states where the recorded ceiling came from. */
+        cJSON_AddStringToObject(pm, "max_context_source", max_ctx_src);
+        cJSON_AddStringToObject(pm, "dialect", dialect->name);
         if (entry) {
             cJSON *ccat = cJSON_CreateObject();
             cJSON *status = cJSON_GetObjectItem(entry, "status");
@@ -962,14 +1113,22 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
         cJSON_AddNumberToObject(req, "temperature", temperature);
     if (max_tokens > 0)
         cJSON_AddNumberToObject(req, "max_tokens", max_tokens);
-    if (top_k > 0)
+    /* top_k is a llama.cpp request parameter; it is not part of the
+     * OpenAI chat-completions body, so the openai dialect omits it
+     * (docs/plans/backend_dialects.md §9 decision 3). model.configuration
+     * still validates top_k in both dialects — a bad value fails the
+     * execution either way, it is simply not sent here. */
+    if (top_k > 0 && dialect->sends_top_k)
         cJSON_AddNumberToObject(req, "top_k", top_k);
     if (use_response_format) {
-        cJSON *rf = cJSON_CreateObject();
-        cJSON_AddStringToObject(rf, "type", "json_schema");
-        cJSON_AddItemToObject(rf, "schema",
-                              cJSON_Duplicate(schema_j, 1));
-        cJSON_AddItemToObject(req, "response_format", rf);
+        /* The envelope is the dialect difference: llama.cpp wants
+         * {"type":"json_schema","schema":…}, OpenAI-dialect servers want
+         * {"type":"json_schema","json_schema":{name,strict,schema}}.
+         * Sending the wrong one is what made a skill with output_schema
+         * fail with HTTP 400 against Strata (session doc, issue A). */
+        cJSON *rf = dialect->build_response_format(schema_j);
+        if (rf)
+            cJSON_AddItemToObject(req, "response_format", rf);
     }
     char *reqbody = json_print(req);
 
@@ -979,6 +1138,13 @@ int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
     cJSON_AddStringToObject(m2, "url", url);
     cJSON_AddStringToObject(m2, "model", model->model_identifier);
     cJSON_AddBoolToObject(m2, "response_format", use_response_format);
+    /* Which dialect produced this request body, and where it came from:
+     * "model_revision" (the normal path) or "cli-override" (run <id>
+     * --dialect). model_backend is the row value, so an audit can tell
+     * whether the request shape matched the registration. */
+    cJSON_AddStringToObject(m2, "dialect", dialect->name);
+    cJSON_AddStringToObject(m2, "dialect_source", dialect_source);
+    cJSON_AddStringToObject(m2, "model_backend", row_backend);
     char *meta2 = json_print(m2);
     {
         char rmsg[1100];

@@ -9,7 +9,12 @@
  *
  *   Pass 2 (cmd_args_*): per-action iteration. Known action flags:
  *           --pending (bool), --max <n>, --timeout <n>,
- *           --stale-seconds <n>; value flags eat the next token unless it
+ *           --stale-seconds <n>, --base-url <n>, --model-identifier <n>,
+ *           --dialect <n> (docs/plans/backend_dialects.md §3.2: the
+ *           parser only knows the name is value-taking and that it is
+ *           not unknown — which surfaces accept it, and which values are
+ *           legal, is decided by cmd_run / cmd_check);
+ *           value flags eat the next token unless it
  *           is inline (--name=value) or itself a flag; boolean flags
  *           never eat the next token; cmd_args_validate rejects
  *           unknown long options.
@@ -287,6 +292,54 @@ int main(void)
         cmd_args_t it = p2(av, 3);
         check(cmd_args_validate(&it) == EXIT_OK,
               "known flags -> EXIT_OK");
+    }
+
+    /* --dialect is a known, value-taking action flag (its VALUE is not
+     * validated here — cmd_run / cmd_check do that against the closed
+     * dialect vocabulary). */
+    {
+        char *av[] = { "--dialect", "openai" };
+        cmd_args_t it = p2(av, 2);
+        check(cmd_args_validate(&it) == EXIT_OK,
+              "--dialect is a known flag (no longer rejected)");
+        const char *v = cmd_args_flag(&it, "dialect", 1);
+        check(v && strcmp(v, "openai") == 0, "--dialect <name> value");
+        check(cmd_args_next_positional(&it) == NULL,
+              "--dialect value is not a positional");
+    }
+
+    {
+        char *av[] = { "--dialect=openai" };
+        cmd_args_t it = p2(av, 1);
+        check(cmd_args_validate(&it) == EXIT_OK,
+              "--dialect=<name> inline validates");
+        const char *v = cmd_args_flag(&it, "dialect", 1);
+        check(v && strcmp(v, "openai") == 0, "--dialect=<name> inline value");
+        check(cmd_args_next_positional(&it) == NULL,
+              "inline --dialect leaves no positional");
+    }
+
+    {
+        char *av[] = { "42", "--dialect", "llamacpp" };
+        cmd_args_t it = p2(av, 3);
+        const char *pos = cmd_args_next_positional(&it);
+        check(pos && strcmp(pos, "42") == 0,
+              "run <id> --dialect X: the id is the positional");
+    }
+
+    {
+        char *av[] = { "--dialect", "llamacpp", "42" };
+        cmd_args_t it = p2(av, 3);
+        const char *pos = cmd_args_next_positional(&it);
+        check(pos && strcmp(pos, "42") == 0,
+              "run --dialect X <id>: the value flag does not eat the id");
+    }
+
+    {
+        char *av[] = { "--dialect", "--pending" };
+        cmd_args_t it = p2(av, 2);
+        check(cmd_args_next_positional(&it) == NULL,
+              "--dialect does not eat the following flag");
     }
 
     {

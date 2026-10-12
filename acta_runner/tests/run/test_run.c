@@ -23,6 +23,23 @@
  *   run_execution max_chars test hook) -> failed + EXIT_INVALID preflight,
  *       no backend call reaches the stub, exact message
  *   17. at the limit (total_chars == max_chars) -> completed
+ *   18. ceiling reported only as entry meta.n_ctx (openai-dialect shape)
+ *       -> completed, preflight_passed records the value + its source
+ *   19. model revision with an unsupported backend ("vllm") -> failed +
+ *       EXIT_INVALID BEFORE any HTTP call (zero stub requests), exact
+ *       "unsupported backend" message (docs/plans/backend_dialects.md
+ *       §3.2 precedence rule)
+ *   20. run_execution_dialect override != row backend -> completed,
+ *       llm_request records dialect/dialect_source=cli-override/
+ *       model_backend + a dialect_override warn event
+ *   21. override == row backend -> no warn event, source still
+ *       cli-override
+ *   22. a row registered "openai", no flag -> dialect from
+ *       model_revision, no warn, ceiling read from meta.n_ctx
+ *   +  the llamacpp dialect is recorded in the log metadata
+ *      (llm_request: dialect / dialect_source / model_backend,
+ *       preflight_passed: dialect) so an audit can tell which envelope
+ *      produced a stored raw_response
  *
  * Run from tests/run/ (or anywhere): `make test` in acta_runner/.
  * Exit code: 0 = all pass, 1 = at least one failure.
@@ -91,11 +108,15 @@ static int load_schema(db_t *db)
     return -1;
 }
 
-/* Create context + skill (+ revision) + model (+ revision); returns 0 on
- * success, -1 on failure. */
-static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
-                int *model_rev_id, const char *output_schema,
-                const char *model_config, const char *ctx_content)
+/* Create context + skill (+ revision) + model (+ revision) with an
+ * explicit model backend (the dialect source, docs/plans/backend_dialects.md
+ * §3.2); returns 0 on success, -1 on failure. `backend` is stored verbatim,
+ * so a test can seed a value the dialect module does not know ("vllm") and
+ * prove the run rejects it. */
+static int seed_backend(db_t *db, int *ctx_id, int *skill_rev_id,
+                        int *model_rev_id, const char *output_schema,
+                        const char *model_config, const char *ctx_content,
+                        const char *backend)
 {
     int err = ACTA_DB_OK;
 
@@ -136,7 +157,7 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
     model_t m;
     memset(&m, 0, sizeof m);
     m.name = model_name;
-    m.backend = "llama";
+    m.backend = (char *)backend; /* dialect label (src/dialect.h) */
     m.base_url = STUB_BASE_URL;
     m.model_identifier = "stub-model";
     m.configuration = (char *)model_config;
@@ -150,6 +171,15 @@ static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
     *model_rev_id = mr->id;
     acta_db_model_revision_free(mr);
     return 0;
+}
+
+/* The llamacpp default every other scenario uses. */
+static int seed(db_t *db, int *ctx_id, int *skill_rev_id,
+                int *model_rev_id, const char *output_schema,
+                const char *model_config, const char *ctx_content)
+{
+    return seed_backend(db, ctx_id, skill_rev_id, model_rev_id,
+                        output_schema, model_config, ctx_content, "llamacpp");
 }
 
 static int make_execution(db_t *db, int ctx_id, int skill_rev_id,
@@ -315,6 +345,24 @@ int main(void)
                            EVT_FULL_SUCCESS, sizeof(EVT_FULL_SUCCESS) /
                            sizeof(EVT_FULL_SUCCESS[0]));
         if (sid > 0) {
+            /* The dialect is part of the audit trail: llm_request records
+             * WHICH envelope built the request body and WHERE the dialect
+             * came from (model_revision is the normal path, a --dialect
+             * override records "cli-override"); model_backend is the row
+             * value, so a reader can tell whether the request shape matched
+             * the registration (docs/plans/backend_dialects.md §6.5). */
+            check(log_metadata_contains(db, sid, "llm_request",
+                                       "\"dialect\":\"llamacpp\""),
+                  "llm_request metadata records the dialect");
+            check(log_metadata_contains(db, sid, "llm_request",
+                                       "\"dialect_source\":\"model_revision\""),
+                  "llm_request metadata records the dialect source");
+            check(log_metadata_contains(db, sid, "llm_request",
+                                       "\"model_backend\":\"llamacpp\""),
+                  "llm_request metadata records the model row backend");
+            check(log_metadata_contains(db, sid, "preflight_passed",
+                                       "\"dialect\":\"llamacpp\""),
+                  "preflight_passed metadata records the dialect");
             check(log_metadata_contains(db, sid, "prompt_resolved",
                                        "\"system\":\"SYS-TEMPLATE\""),
                   "prompt_resolved metadata carries resolved system");
@@ -328,6 +376,10 @@ int main(void)
             check(log_metadata_contains(db, sid, "preflight_passed",
                                        "\"args\":[\"llama-server\""),
                   "preflight_passed metadata carries launch args");
+            check(log_metadata_contains(db, sid, "preflight_passed",
+                                       "\"max_context_source\":\"none\""),
+                  "preflight_passed names the ceiling source "
+                  "(none here: the stub serves no ceiling field)");
         }
     }
 
@@ -644,6 +696,228 @@ int main(void)
                  ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
                  EVT_FULL_SUCCESS,
                  sizeof(EVT_FULL_SUCCESS) / sizeof(EVT_FULL_SUCCESS[0]));
+    }
+
+    /* 18. ceiling reported only as entry meta.n_ctx (the Strata /
+     *     OpenAI-dialect shape): the run completes and preflight_passed
+     *     records the REAL ceiling plus where it came from (issue B —
+     *     before the fallback this recorded no max_context at all). */
+    {
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.chat_status = 200;
+        cfg.chat_content = "stub-response";
+        cfg.max_context = 0;          /* no entry max_context */
+        cfg.models_meta_n_ctx = 204800;
+        int sid = scenario("ceiling from meta.n_ctx", db, &cfg, NULL, NULL,
+                           "CTX-CONTENT", 30,
+                           ACTA_CONF_DEFAULT_MAX_CHARS, EXIT_OK,
+                           ACTA_EXEC_STATUS_COMPLETED, "stub-response", NULL,
+                           EVT_FULL_SUCCESS,
+                           sizeof(EVT_FULL_SUCCESS) /
+                           sizeof(EVT_FULL_SUCCESS[0]));
+        if (sid > 0) {
+            check(log_metadata_contains(db, sid, "preflight_passed",
+                                       "\"max_context\":204800"),
+                  "preflight_passed records the meta.n_ctx ceiling");
+            check(log_metadata_contains(db, sid, "preflight_passed",
+                                       "\"max_context_source\":"
+                                       "\"entry.meta.n_ctx\""),
+                  "preflight_passed names the ceiling source");
+        }
+    }
+
+    /* 19. unsupported backend: a model revision whose `backend` is not one
+     *     of the two dialect names must fail with EXIT_INVALID BEFORE any
+     *     HTTP call — no guessing, no auto-detection, no silent default
+     *     (docs/plans/backend_dialects.md §3.2 precedence + §6.4). The stub
+     *     server is up so "zero requests" is a real assertion, and the row
+     *     is recorded as failed with the exact vocabulary in the message. */
+    {
+        printf("== unsupported backend 'vllm'\n");
+        int ctx = 0, skr = 0, mkr = 0;
+        if (seed_backend(db, &ctx, &skr, &mkr, NULL, NULL, "CTX-CONTENT",
+                        "vllm") != 0) {
+            check(0, "seed");
+        } else {
+            int id = make_execution(db, ctx, skr, mkr);
+            stub_config_t cfg;
+            memset(&cfg, 0, sizeof cfg);
+            cfg.port = STUB_PORT;
+            cfg.health_status = 200;
+            cfg.model_id = "stub-model";
+            cfg.chat_status = 200;
+            cfg.chat_content = "stub-response";
+            if (id > 0 && stub_server_start(&cfg) == 0) {
+                int rc = run_execution(db, id, 30,
+                                       ACTA_CONF_DEFAULT_MAX_CHARS, NULL);
+                check(rc == EXIT_INVALID, "exit code (EXIT_INVALID)");
+                check(stub_server_health_requests() == 0,
+                      "no GET /health (fails before any HTTP call)");
+                check(stub_server_models_requests() == 0,
+                      "no GET /v1/models");
+                check(stub_server_chat_requests() == 0,
+                      "no POST /v1/chat/completions (zero stub requests)");
+                int err = ACTA_DB_OK;
+                execution_t *e = acta_db_execution_get(db, id, &err);
+                check(e != NULL, "execution row present");
+                if (e) {
+                    check(e->status &&
+                              strcmp(e->status,
+                                     ACTA_EXEC_STATUS_FAILED) == 0,
+                          "execution status (failed)");
+                    char want[256];
+                    snprintf(want, sizeof want,
+                             "model revision %d has unsupported backend "
+                             "'vllm' (expected llamacpp or openai)", mkr);
+                    check(e->error && strcmp(e->error, want) == 0,
+                          "exact unsupported-backend message");
+                    acta_db_execution_free(e);
+                }
+                check(!log_has_event(db, id, "preflight_passed"),
+                      "no preflight_passed");
+                check(!log_has_event(db, id, "llm_request"),
+                      "no llm_request");
+                check(log_has_event(db, id, "execution_failed"),
+                      "execution_failed");
+            }
+            stub_server_stop();
+        }
+    }
+
+    /* 20. --dialect override that DISAGREES with the model row
+     *     (run_execution_dialect is what cmd_run calls for
+     *     `run <id> --dialect X`): the run completes, the audit trail says
+     *     the request shape came from the CLI, model_backend keeps the row
+     *     value, and the disagreement is logged as a warn event
+     *     (docs/plans/backend_dialects.md §3.2 + §6.7). */
+    {
+        printf("== dialect override (openai over a llamacpp row)\n");
+        int ctx = 0, skr = 0, mkr = 0;
+        if (seed(db, &ctx, &skr, &mkr, NULL, NULL, "CTX-CONTENT") != 0) {
+            check(0, "seed");
+        } else {
+            int id = make_execution(db, ctx, skr, mkr);
+            stub_config_t cfg;
+            memset(&cfg, 0, sizeof cfg);
+            cfg.port = STUB_PORT;
+            cfg.health_status = 200;
+            cfg.model_id = "stub-model";
+            cfg.chat_status = 200;
+            cfg.chat_content = "stub-response";
+            if (id > 0 && stub_server_start(&cfg) == 0) {
+                int rc = run_execution_dialect(db, id, 30,
+                                               ACTA_CONF_DEFAULT_MAX_CHARS,
+                                               NULL, DIALECT_OPENAI);
+                check(rc == EXIT_OK, "exit code (the override is accepted)");
+                int err = ACTA_DB_OK;
+                execution_t *e = acta_db_execution_get(db, id, &err);
+                check(e && e->status &&
+                          strcmp(e->status,
+                                 ACTA_EXEC_STATUS_COMPLETED) == 0,
+                      "execution status (completed)");
+                if (e)
+                    acta_db_execution_free(e);
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"dialect\":\"openai\""),
+                      "llm_request records the overridden dialect");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"dialect_source\":\"cli-override\""),
+                      "llm_request records the override as the source");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"model_backend\":\"llamacpp\""),
+                      "llm_request keeps the row backend");
+                check(log_has_event(db, id, "dialect_override"),
+                      "dialect_override warn event (override != row)");
+                check(log_metadata_contains(db, id, "dialect_override",
+                                           "\"model_backend\":\"llamacpp\""),
+                      "the warn event names the overridden row value");
+                check(log_metadata_contains(db, id, "preflight_passed",
+                                           "\"dialect\":\"openai\""),
+                      "preflight_passed records the dialect in use");
+            }
+            stub_server_stop();
+        }
+    }
+
+    /* 21. override that AGREES with the row: still recorded as an
+     *     override (the request shape came from argv), but deliberately
+     *     NOT warned about — the warn exists to expose a disagreement. */
+    {
+        printf("== dialect override matching the row\n");
+        int ctx = 0, skr = 0, mkr = 0;
+        if (seed(db, &ctx, &skr, &mkr, NULL, NULL, "CTX-CONTENT") != 0) {
+            check(0, "seed");
+        } else {
+            int id = make_execution(db, ctx, skr, mkr);
+            stub_config_t cfg;
+            memset(&cfg, 0, sizeof cfg);
+            cfg.port = STUB_PORT;
+            cfg.health_status = 200;
+            cfg.model_id = "stub-model";
+            cfg.chat_status = 200;
+            cfg.chat_content = "stub-response";
+            if (id > 0 && stub_server_start(&cfg) == 0) {
+                int rc = run_execution_dialect(db, id, 30,
+                                               ACTA_CONF_DEFAULT_MAX_CHARS,
+                                               NULL, DIALECT_LLAMACPP);
+                check(rc == EXIT_OK, "exit code");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"dialect\":\"llamacpp\""),
+                      "llm_request records the dialect");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"dialect_source\":\"cli-override\""),
+                      "llm_request still says the source was the CLI");
+                check(!log_has_event(db, id, "dialect_override"),
+                      "no dialect_override warn (override == row)");
+            }
+            stub_server_stop();
+        }
+    }
+
+    /* 22. a row registered `openai` needs no flag: the normal path is
+     *     model_revision, with no warn event and no override recorded. */
+    {
+        printf("== openai row, no override\n");
+        int ctx = 0, skr = 0, mkr = 0;
+        if (seed_backend(db, &ctx, &skr, &mkr, NULL, NULL, "CTX-CONTENT",
+                        "openai") != 0) {
+            check(0, "seed");
+        } else {
+            int id = make_execution(db, ctx, skr, mkr);
+            stub_config_t cfg;
+            memset(&cfg, 0, sizeof cfg);
+            cfg.port = STUB_PORT;
+            cfg.health_status = 200;
+            cfg.model_id = "stub-model";
+            cfg.chat_status = 200;
+            cfg.chat_content = "stub-response";
+            cfg.max_context = 0;
+            cfg.models_meta_n_ctx = 204800; /* the Strata shape */
+            if (id > 0 && stub_server_start(&cfg) == 0) {
+                int rc = run_execution(db, id, 30,
+                                       ACTA_CONF_DEFAULT_MAX_CHARS, NULL);
+                check(rc == EXIT_OK, "exit code");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"dialect\":\"openai\""),
+                      "llm_request records the row dialect");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"dialect_source\":\"model_revision\""),
+                      "dialect_source is model_revision");
+                check(log_metadata_contains(db, id, "llm_request",
+                                           "\"model_backend\":\"openai\""),
+                      "model_backend matches the row");
+                check(!log_has_event(db, id, "dialect_override"),
+                      "no dialect_override event");
+                check(log_metadata_contains(db, id, "preflight_passed",
+                                           "\"max_context\":204800"),
+                      "the openai ceiling order reads meta.n_ctx");
+            }
+            stub_server_stop();
+        }
     }
 
     acta_db_close(db);

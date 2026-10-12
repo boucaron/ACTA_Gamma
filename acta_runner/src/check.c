@@ -9,6 +9,12 @@
  *
  *   acta_runner check <model-record-id>                  # DB mode
  *   acta_runner check --base-url <url> --model-identifier <id>   # standalone
+ *                               [--dialect llamacpp|openai]
+ *
+ * The dialect (src/dialect.h) comes from the model row in DB mode — an
+ * unsupported row backend exits 4 before any HTTP call — and from
+ * --dialect in standalone mode, default llamacpp. --dialect with a
+ * <model-record-id> is rejected: the row decides.
  *
  * Check sequence (all token-free, via backend_preflight):
  *   1. GET /health       — 200 ok; 503 "model still loading";
@@ -74,6 +80,13 @@ static void check_usage(FILE *out)
         "                          <model-record-id>\n"
         "  --timeout <sec>         Backend timeout in seconds (default:\n"
         "                          config file \"timeout\", else 600)\n"
+        "  --dialect <llamacpp|openai>\n"
+        "                          STANDALONE MODE ONLY (with --base-url and\n"
+        "                          --model-identifier): which dialect the\n"
+        "                          server speaks, since a standalone probe\n"
+        "                          has no model row. Default llamacpp. Not\n"
+        "                          accepted with a <model-record-id>: there\n"
+        "                          the dialect comes from the model row.\n"
         "\n"
         "stdout: {\"ok\":true,...,\"max_context\":N} on success, or\n"
         "{\"ok\":false,...,\"verdict\":\"<reason>\"} on failure.\n"
@@ -158,12 +171,52 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         }
     }
 
+    /* --dialect is the standalone-mode escape hatch: a standalone probe
+     * has no model row, so the dialect has nowhere else to come from
+     * (docs/plans/backend_dialects.md §3.2). With a <model-record-id> it
+     * is rejected outright — the row decides, and a flag that silently
+     * changed the probe shape for a stored row is exactly what the
+     * revision design forbids. Validated before the model-row lookup:
+     * `check` never writes to the DB in any mode. */
+    dialect_id_t cli_dialect = DIALECT_UNKNOWN; /* UNKNOWN = not given */
+    if (cmd_args_has_flag(ga, "dialect")) {
+        const char *dval = cmd_args_flag(ga, "dialect", 1);
+        if (!dval || !dval[0]) {
+            VLOG(1, "cmd_check: ERROR --dialect requires a value (%s)",
+                 dialect_expected_names());
+            emit_error("--dialect requires a value");
+            check_usage(stderr);
+            return EXIT_INVALID;
+        }
+        cli_dialect = dialect_from_string(dval);
+        if (cli_dialect == DIALECT_UNKNOWN) {
+            snprintf(msg, sizeof msg, "invalid --dialect '%s' (expected %s)",
+                     dval, dialect_expected_names());
+            VLOG(1, "cmd_check: ERROR %s", msg);
+            emit_error(msg);
+            check_usage(stderr);
+            return EXIT_INVALID;
+        }
+        if (!standalone) {
+            VLOG(1, "cmd_check: ERROR --dialect is standalone-mode only");
+            emit_error("--dialect is only valid with --base-url and "
+                       "--model-identifier: check <model-record-id> takes "
+                       "the dialect from the model row");
+            check_usage(stderr);
+            return EXIT_INVALID;
+        }
+    }
+
     char *base = NULL, *mid = NULL; /* heap copies, freed before every return */
+    char *backend = NULL;           /* DB mode: the row's backend label */
     {
-        const char *base_src, *mid_src;
+        const char *base_src, *mid_src, *backend_src;
+        model_t *m = NULL;
         if (standalone) {
             base_src = cmd_args_flag(ga, "base-url", 1);
             mid_src  = cmd_args_flag(ga, "model-identifier", 1);
+            backend_src = NULL;   /* no row: the dialect comes from
+                                     --dialect (default llamacpp) */
         } else {
             int id = 0;
             if (!parse_positive_id(pos, &id)) {
@@ -179,7 +232,7 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
              * claimed, or logged. Soft-deleted rows are not found
              * (get_live). */
             int err = ACTA_DB_OK;
-            model_t *m = acta_db_model_get_live(db, id, &err);
+            m = acta_db_model_get_live(db, id, &err);
             if (err != ACTA_DB_OK)
                 return finish_op_error(db, err, "model_get_live");
             if (!m) {
@@ -190,6 +243,7 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             if (!m->base_url || m->base_url[0] == '\0' ||
                 !m->model_identifier || m->model_identifier[0] == '\0') {
                 acta_db_model_free(m);
+                m = NULL;
                 snprintf(msg, sizeof msg,
                          "model %d has no base_url or model_identifier", id);
                 VLOG(1, "cmd_check: %s", msg);
@@ -197,22 +251,57 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             }
             base_src = m->base_url;
             mid_src  = m->model_identifier;
-            acta_db_model_free(m);
+            backend_src = m->backend;
         }
+        /* Copy while the row is still alive: base_src/mid_src point into m,
+         * so the model must not be released before these strdup()s. */
         base = strdup(base_src);
         mid  = strdup(mid_src);
-        if (!base || !mid) {
+        backend = backend_src ? strdup(backend_src) : NULL;
+        if (m) acta_db_model_free(m);
+        if (!base || !mid || (!standalone && !backend)) {
             free(base);
             free(mid);
+            free(backend);
             return EXIT_ALLOC;
         }
+    }
+
+    /* The dialect decides how the context ceiling is read out of
+     * /v1/models and /health (backend_preflight). In DB mode it is the
+     * model revision/row property, validated BEFORE any HTTP call: an
+     * unsupported backend exits 4 with an explicit message instead of
+     * probing a server whose dialect is unknown. In standalone mode there
+     * is no row, so --dialect decides — default llamacpp, i.e. the
+     * historical behavior (docs/plans/backend_dialects.md §3.2). */
+    const dialect_t *dialect;
+    if (standalone) {
+        dialect = dialect_get(cli_dialect != DIALECT_UNKNOWN
+                              ? cli_dialect : DIALECT_LLAMACPP);
+        VLOG(2, "cmd_check: dialect=%s (%s)", dialect->name,
+             cli_dialect != DIALECT_UNKNOWN ? "--dialect" : "default");
+    } else {
+        dialect = dialect_get(dialect_from_string(backend));
+        if (!dialect) {
+            char bmsg[256];
+            snprintf(bmsg, sizeof bmsg,
+                     "model %s has unsupported backend '%s' (expected %s)",
+                     pos ? pos : "?", backend, dialect_expected_names());
+            VLOG(1, "cmd_check: %s", bmsg);
+            free(base);
+            free(mid);
+            free(backend);
+            return emit_runner_error(EXIT_INVALID, bmsg);
+        }
+        VLOG(2, "cmd_check: dialect=%s (model backend '%s')",
+             dialect->name, backend);
     }
 
     /* The two token-free calls, keyless by design (the check probes the
      * server surface before any model is registered; no chat call is
      * ever made). */
     backend_preflight_t pf;
-    int prc = backend_preflight(base, mid, NULL, timeout_sec, &pf);
+    int prc = backend_preflight(base, mid, dialect, NULL, timeout_sec, &pf);
 
     /* The prc -> (verdict, exit code) mapping is the shared
      * preflight_verdict() in backend.c — the same classification the run
@@ -222,10 +311,15 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
 
     VLOG(1, "cmd_check: %s (base_url=%s, model=%s)",
          prc == PREFLIGHT_OK ? "ok" : verdict, base, mid);
+    if (prc == PREFLIGHT_OK)
+        VLOG(1, "cmd_check: max_context=%ld (source: %s)",
+             pf.max_context,
+             pf.max_context_source[0] ? pf.max_context_source : "none");
     emit_check_verdict(prc == PREFLIGHT_OK, mid, base, pf.max_context,
                        verdict);
 
     free(base);
     free(mid);
+    free(backend);
     return exit_code;
 }

@@ -4,6 +4,7 @@
 
 #include "runner.h"
 #include "argparse.h"
+#include "dialect.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -44,9 +45,31 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db);
  * context/skill/model revisions, preflight (/health, /v1/models),
  * POST /v1/chat/completions, set_raw_response, optional post-hoc
  * output_schema validation, complete/fail — logging an execution_log
- * row per phase. Returns the process exit code. */
+ * row per phase. Returns the process exit code.
+ *
+ * The backend dialect is resolved from model_revision.backend; the
+ * request shape (response_format envelope, top_k, the catalog audit)
+ * follows that dialect (src/dialect.h, docs/plans/backend_dialects.md). */
 int run_execution(db_t *db, int exec_id, int timeout_sec, long max_chars,
                   const char *api_key);
+
+/*
+ * run_execution with an explicit dialect override (src/run.c).
+ *
+ * DIALECT_UNKNOWN (what run_execution() passes) means "no override": the
+ * dialect comes from model_revision.backend, which is the normal path
+ * and the only one the GUI uses (the GUI has no argv, and one
+ * resolution rule keeps CLI and GUI identical).
+ *
+ * A concrete dialect id means "the caller overrode the row" — the CLI
+ * `run <id> --dialect …` escape hatch. An override never touches the DB:
+ * it is recorded in the llm_request metadata (dialect, dialect_source =
+ * "cli-override", model_backend = the row value) and logged as a `warn`
+ * event when it disagrees with the row.
+ */
+int run_execution_dialect(db_t *db, int exec_id, int timeout_sec,
+                          long max_chars, const char *api_key,
+                          dialect_id_t dialect_override);
 
 /* Parse a positive-integer id ("42") from a CLI argument.
  * Strict: rejects trailing garbage ("42abc"), non-numeric ("abc"),

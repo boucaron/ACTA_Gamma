@@ -19,13 +19,13 @@
 
 #include <cjson/cJSON.h>
 
-/* The timeout CURLcode was renamed in curl 8.8:
- *   CURLE_OPERATION_TIMED (old)  ->  CURLE_OPERATION_TIMEDOUT (new)
- * (Enum values are not preprocessor macros, so select by version.) */
-#if LIBCURL_VERSION_NUM >= 0x080800
+/* The timeout CURLcode (value 28) is CURLE_OPERATION_TIMEDOUT in curl >= 7.50;
+ * older headers spelled the enumerator CURLE_OPERATION_TIMEOUTED. Enum values
+ * are not preprocessor macros, so the choice must be made on the version. */
+#if LIBCURL_VERSION_NUM >= 0x073200 /* 7.50.0 */
 #define ACTA_RUNNER_CURL_TIMED CURLE_OPERATION_TIMEDOUT
 #else
-#define ACTA_RUNNER_CURL_TIMED CURLE_OPERATION_TIMED
+#define ACTA_RUNNER_CURL_TIMED CURLE_OPERATION_TIMEOUTED
 #endif
 
 /*
@@ -248,7 +248,18 @@ static void build_url(char *out, size_t outsz, const char *base, const char *pat
     snprintf(out, outsz, "%.*s%s", (int)n, base ? base : "", path);
 }
 
+/*
+ * The context ceiling is a DIALECT property (dialect_t.max_context_of):
+ * llama.cpp reports it as the entry's top-level max_context, OpenAI-
+ * dialect servers (Strata) as the entry's meta.n_ctx and/or in the
+ * /health body. backend_preflight() supplies the two documents it has -
+ * the matched /v1/models entry and the parsed /health body - and reports
+ * the value plus the field it came from, so the log says WHICH source
+ * produced the ceiling (docs/plans/backend_dialects.md, issue B).
+ */
+
 int backend_preflight(const char *base_url, const char *model_id,
+                      const dialect_t *dialect,
                       const char *api_key,
                       int timeout_sec, backend_preflight_t *out)
 {
@@ -256,11 +267,21 @@ int backend_preflight(const char *base_url, const char *model_id,
         out->brc = 0;
         out->http_status = 0;
         out->max_context = 0;
+        out->max_context_source[0] = '\0';
         out->available_ids[0] = '\0';
     }
+    /* Defensive: every caller resolves the dialect before calling (an
+     * unknown model backend must fail BEFORE any HTTP call). A missing
+     * descriptor falls back to the dialect this code implemented before
+     * dialects existed, rather than guessing a server. */
+    if (!dialect)
+        dialect = dialect_get(DIALECT_LLAMACPP);
 
     char url[1024];
     backend_response_t r;
+    /* The parsed /health body lives until the ceiling is resolved: it is
+     * the dialect's last-resort ceiling source. */
+    cJSON *jh = NULL;
 
     /* ---- GET /health ---- */
     build_url(url, sizeof url, base_url, "/health");
@@ -277,6 +298,11 @@ int backend_preflight(const char *base_url, const char *model_id,
     }
     if (out)
         out->http_status = r.http_status;
+
+    /* Parse the /health body before it is released (200 only): it is the
+     * last-resort ceiling document. A non-JSON body yields no fallback. */
+    if (r.http_status == 200)
+        jh = cJSON_Parse(r.body);
     free(r.body);
     if (r.http_status != 200)
         return PREFLIGHT_HEALTH_NOT_200;
@@ -286,6 +312,7 @@ int backend_preflight(const char *base_url, const char *model_id,
     brc = backend_request("GET", url, NULL, api_key, timeout_sec, &r);
     if (brc != BACKEND_OK) {
         free(r.body);
+        cJSON_Delete(jh);
         if (out)
             out->brc = brc;
         if (brc == BACKEND_ERR_CANCELED)
@@ -298,12 +325,15 @@ int backend_preflight(const char *base_url, const char *model_id,
         out->http_status = r.http_status;
     if (r.http_status != 200) {
         free(r.body);
+        cJSON_Delete(jh);
         return PREFLIGHT_MODELS_NOT_200;
     }
     cJSON *jm = cJSON_Parse(r.body);
     free(r.body);
-    if (!jm)
+    if (!jm) {
+        cJSON_Delete(jh);
         return PREFLIGHT_MODELS_UNPARSEABLE;
+    }
 
     /* The server may serve several models; scan ALL entries for the
      * model_id (not just data[0]). */
@@ -344,12 +374,18 @@ int backend_preflight(const char *base_url, const char *model_id,
             snprintf(out->available_ids, sizeof out->available_ids,
                      "%s", avail);
         cJSON_Delete(jm);
+        cJSON_Delete(jh);
         return PREFLIGHT_MODEL_NOT_SERVED;
     }
-    cJSON *mc = cJSON_GetObjectItem(match, "max_context");
-    if (cJSON_IsNumber(mc))
-        out->max_context = (long)mc->valuedouble;
+    const char *source = NULL;
+    long ceiling = dialect->max_context_of(match, jh, &source);
+    if (out) {
+        out->max_context = ceiling;
+        snprintf(out->max_context_source, sizeof out->max_context_source,
+                 "%s", source ? source : "none");
+    }
     cJSON_Delete(jm);
+    cJSON_Delete(jh);
     return PREFLIGHT_OK;
 }
 

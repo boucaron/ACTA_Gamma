@@ -9,7 +9,13 @@
 #                   (tests/run/test_sweep.c), the soft-delete claim suite
 #                   (tests/run/test_deleted.c), the death-marker suite
 #                   (tests/run/test_deathmark.c) and the token-free
-#                   `check` health suite (tests/check/test_check.c)
+#                   `check` health suite (tests/check/test_check.c),
+#                   plus the pure src/dialect unit suite
+#                   (tests/dialect/test_dialect.c: no HTTP, no DB)
+#                   and the openai-dialect end-to-end suite
+#                   (tests/run/test_openai_dialect.c: the stub server plays
+#                   an openai-dialect server and refuses the wrong
+#                   response_format envelope)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
@@ -30,7 +36,7 @@
 
 CC      ?= cc
 CFLAGS  ?= -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -O2 -g
-CFLAGS  += -Iinclude -I../acta_db/include
+CFLAGS  += -Iinclude -I../acta_db/include -Isrc
 
 ACTA_DB_LIB := ../acta_db/libacta_db.a
 LDLIBS += $(ACTA_DB_LIB) -lsqlite3
@@ -75,13 +81,13 @@ TARGET := acta_runner$(EXEEXT)
 # Links the real src/run.c + src/backend.c (no main.o) with the test
 # harness and the stub server.
 TEST_SRCS  := tests/run/test_run.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c src/deathmark.c
+              src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 TEST_OBJS  := $(patsubst %.c, %.o, $(TEST_SRCS))
 TEST_TARGET := tests/run/test_run$(EXEEXT)
 
 # ---- pending-batch test suite (R3): run --pending loop + --max clamping ----
 PEND_SRCS  := tests/run/test_pending.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c src/deathmark.c
+              src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 PEND_OBJS  := $(patsubst %.c, %.o, $(PEND_SRCS))
 PEND_TARGET := tests/run/test_pending$(EXEEXT)
 
@@ -91,7 +97,7 @@ PEND_TARGET := tests/run/test_pending$(EXEEXT)
 #      writes; healthy -> the run proceeds; the stub's /health and
 #      /v1/models counts pin "once per acta_runner invocation"
 AUTO_SRCS  := tests/run/test_autopreflight.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c src/deathmark.c
+              src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 AUTO_OBJS  := $(patsubst %.c, %.o, $(AUTO_SRCS))
 AUTO_TARGET := tests/run/test_autopreflight$(EXEEXT)
 
@@ -106,7 +112,7 @@ SWEEP_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
 #      against soft-deleted `pending` rows (single-claim guard +
 #      live-only batch claim), via the in-process stub server --------
 DEL_SRCS  := tests/run/test_deleted.c tests/stub_server.c \
-             src/run.c src/backend.c src/argparse.c src/deathmark.c
+             src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 DEL_OBJS  := $(patsubst %.c, %.o, $(DEL_SRCS))
 DEL_TARGET := tests/run/test_deleted$(EXEEXT)
 # DEL_LDLIBS is defined with TEST_LDLIBS below (it must come after
@@ -115,7 +121,7 @@ DEL_TARGET := tests/run/test_deleted$(EXEEXT)
 # ---- API key presence policy test suite: unset -> error, empty ->
 #      warning (docs/runner_contract.md, decision 4)
 KEY_SRCS  := tests/run/test_api_key.c tests/stub_server.c \
-             src/run.c src/backend.c src/argparse.c src/deathmark.c
+             src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 KEY_OBJS  := $(patsubst %.c, %.o, $(KEY_SRCS))
 KEY_TARGET := tests/run/test_api_key$(EXEEXT)
 
@@ -124,14 +130,14 @@ KEY_TARGET := tests/run/test_api_key$(EXEEXT)
 #      max_chars/timeout resolution (docs/runner_contract.md,
 #      decisions 5 and 8)
 CONF_SRCS  := tests/run/test_conf.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c src/deathmark.c
+              src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 CONF_OBJS  := $(patsubst %.c, %.o, $(CONF_SRCS))
 CONF_TARGET := tests/run/test_conf$(EXEEXT)
 
 # ---- shadow-warning suite: a set $OPENAI_API_KEY shadowing the config
 #      file "api_key" warns once per run (runner-ops item 1)
 SHAD_SRCS  := tests/run/test_shadow.c tests/stub_server.c \
-              src/run.c src/backend.c src/argparse.c src/deathmark.c
+              src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
 SHAD_OBJS  := $(patsubst %.c, %.o, $(SHAD_SRCS))
 SHAD_TARGET := tests/run/test_shadow$(EXEEXT)
 
@@ -147,9 +153,19 @@ DMRK_LDLIBS := $(ACTA_DB_LIB) -lsqlite3
 #      (token-free backend check) — the zero
 #      /v1/chat/completions assertion + no-execution-rows checks
 CHK_SRCS  := tests/check/test_check.c tests/stub_server.c \
-             src/check.c src/backend.c src/argparse.c
+             src/check.c src/backend.c src/dialect.c src/argparse.c
 CHK_OBJS  := $(patsubst %.c, %.o, $(CHK_SRCS))
 CHK_TARGET := tests/check/test_check$(EXEEXT)
+
+# ---- openai-dialect end-to-end suite: the stub server is configured with
+#      cfg.dialect ("llamacpp" | "openai") and answers 400 for a request
+#      whose response_format envelope is the other dialect's shape; pins the
+#      openai envelope, the omitted top_k and the skipped GET / catalog call
+#      (docs/plans/backend_dialects.md §2 matrix, §9 decisions 3 and 4)
+OAI_SRCS  := tests/run/test_openai_dialect.c tests/stub_server.c \
+             src/run.c src/backend.c src/dialect.c src/argparse.c src/deathmark.c
+OAI_OBJS  := $(patsubst %.c, %.o, $(OAI_SRCS))
+OAI_TARGET := tests/run/test_openai_dialect$(EXEEXT)
 
 # ---- dead-runner end-to-end suite: SIGKILL a real runner, sweep it ----
 # Spawns real acta_runner child processes (run, then sweep) against the
@@ -164,9 +180,18 @@ AP_SRCS   := tests/argparse/test_argparse.c src/argparse.c
 AP_OBJS   := $(patsubst %.c, %.o, $(AP_SRCS))
 AP_TARGET := tests/argparse/test_argparse$(EXEEXT)
 
+# ---- dialect unit suite: src/dialect.{h,c} in isolation (no HTTP, no
+#      DB, no stub server): name mapping, the capability flags of the
+#      dialect matrix, the two response_format envelopes and the
+#      context-ceiling extraction (docs/plans/backend_dialects.md)
+DIA_SRCS  := tests/dialect/test_dialect.c src/dialect.c
+DIA_OBJS  := $(patsubst %.c, %.o, $(DIA_SRCS))
+DIA_TARGET := tests/dialect/test_dialect$(EXEEXT)
+DIA_LDLIBS := $(CJSON_LIB)
+
 # ---- smoke test: manual check against a LIVE OpenAI-compatible server ----
 # Reuses src/backend.c; no DB needed.
-SMOKE_SRCS  := tests/llama_smoke.c src/backend.c
+SMOKE_SRCS  := tests/llama_smoke.c src/backend.c src/dialect.c
 SMOKE_OBJS  := $(patsubst %.c, %.o, $(SMOKE_SRCS))
 SMOKE_TARGET := tests/llama_smoke$(EXEEXT)
 SMOKE_LDLIBS := $(CJSON_LIB) $(CURL_LIB)
@@ -201,6 +226,9 @@ $(TEST_TARGET): $(TEST_OBJS) $(ACTA_DB_LIB)
 $(AP_TARGET): $(AP_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(AP_OBJS)
 
+$(DIA_TARGET): $(DIA_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(DIA_OBJS) $(DIA_LDLIBS)
+
 $(PEND_TARGET): $(PEND_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(PEND_OBJS) $(TEST_LDLIBS)
 
@@ -228,6 +256,9 @@ $(DMRK_TARGET): $(DMRK_OBJS) $(ACTA_DB_LIB)
 $(CHK_TARGET): $(CHK_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(CHK_OBJS) $(TEST_LDLIBS)
 
+$(OAI_TARGET): $(OAI_OBJS) $(ACTA_DB_LIB)
+	$(CC) $(CFLAGS) -o $@ $(OAI_OBJS) $(TEST_LDLIBS)
+
 $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDLIBS)
 
@@ -238,7 +269,7 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET) $(DIA_TARGET) $(OAI_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
@@ -250,6 +281,8 @@ test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) 
 	$(SPAWN_PATH) $(SHAD_TARGET)
 	$(SPAWN_PATH) $(DMRK_TARGET)
 	$(SPAWN_PATH) $(CHK_TARGET)
+	$(SPAWN_PATH) $(DIA_TARGET)
+	$(SPAWN_PATH) $(OAI_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
 # acta_runner/ (the test spawns ./acta_runner[.exe] as child processes).
@@ -297,7 +330,13 @@ tests/run/test_conf.o: tests/run/test_conf.c tests/stub_server.h
 tests/run/test_shadow.o: tests/run/test_shadow.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
-tests/check/test_check.o: tests/check/test_check.c tests/stub_server.h
+tests/dialect/test_dialect.o: tests/dialect/test_dialect.c src/dialect.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+tests/check/test_check.o: tests/check/test_check.c tests/stub_server.h src/backend.h
+	$(CC) $(CFLAGS) -Itests -c $< -o $@
+
+tests/run/test_openai_dialect.o: tests/run/test_openai_dialect.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
 clean:
@@ -309,4 +348,6 @@ clean:
         $(CONF_TARGET) $(SHAD_OBJS) $(SHAD_TARGET) \
         $(DMRK_OBJS) $(DMRK_TARGET) \
         $(CHK_OBJS) $(CHK_TARGET) \
+        $(DIA_OBJS) $(DIA_TARGET) \
+        $(OAI_OBJS) $(OAI_TARGET) \
         $(SMOKE_OBJS) $(SMOKE_TARGET)
