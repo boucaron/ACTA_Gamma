@@ -154,6 +154,20 @@ bool ModelDialog::validateFields()
             tr("Name, backend and model identifier are required."));
         return false;
     }
+    /* `backend` is a closed vocabulary (runner decision 9, docs/runner_contract.md):
+     * the GUI is a declaration site too, so a typo is rejected here instead of
+     * turning into a failed execution later. Exact and case-sensitive, matching
+     * acta_cli and acta_runner/src/dialect.c — `llama` is not an alias of
+     * `llamacpp`. Rows already in the DB with a legacy value can still be
+     * *viewed*; saving them requires moving them to the canonical vocabulary. */
+    if (backend != QLatin1String("llamacpp") &&
+        backend != QLatin1String("openai")) {
+        QMessageBox::warning(
+            this, title(),
+            tr("Backend must be \"llamacpp\" or \"openai\" (got \"%1\").")
+                .arg(backend));
+        return false;
+    }
     return true;
 }
 

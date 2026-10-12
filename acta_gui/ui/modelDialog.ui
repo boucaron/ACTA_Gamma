@@ -119,13 +119,20 @@
        </item>
        <item row="2" column="0">
         <widget class="QLabel" name="label_9">
+         <property name="toolTip">
+          <string>Backend dialect: llamacpp (a llama.cpp llama-server router) or openai (a strict OpenAI-compatible server). Nothing else is accepted.</string>
+         </property>
          <property name="text">
           <string>Backend:</string>
          </property>
         </widget>
        </item>
        <item row="2" column="1">
-        <widget class="QTextEdit" name="backendTextEdit"/>
+        <widget class="QTextEdit" name="backendTextEdit">
+         <property name="placeholderText">
+          <string>llamacpp or openai</string>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
