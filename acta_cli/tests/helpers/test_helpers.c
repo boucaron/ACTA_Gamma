@@ -177,6 +177,17 @@ global_opts_t gopts_no_nulls(void)
 #define O_BINARY 0
 #endif
 
+/* ./tmp/ holds the scratch copies and is git-ignored, so a fresh checkout has
+ * no such directory and nothing else creates it: copy_file() then fails on the
+ * DESTINATION path while the message names the source, so the failure reads
+ * like a missing fixture. Creating it here (not only in the Makefile) also
+ * covers running a suite binary directly. EEXIST is expected and ignored. */
+#ifdef _WIN32
+#  define TEST_MKDIR(p) mkdir(p)
+#else
+#  define TEST_MKDIR(p) mkdir(p, 0755)
+#endif
+
 static int copy_file(const char *src, const char *dst)
 {
     int fd_in  = open(src, O_RDONLY | O_BINARY);
@@ -209,8 +220,11 @@ void stest_init(stest_ctx_t *ctx, const char *ref_db_path)
     snprintf(ctx->db_path, sizeof ctx->db_path,
              "./tmp/acta_test_%d_%d.db", (int)getpid(), counter++);
 
+    (void)TEST_MKDIR("tmp");
+
     if (copy_file(ref_db_path, ctx->db_path) != 0) {
-        fprintf(stderr, "[stest] FATAL: cannot copy %s → %s (errno=%d)\n",
+        fprintf(stderr, "[stest] FATAL: cannot copy %s → %s (errno=%d) "
+                        "(fixture present? ./tmp writable?)\n",
                 ref_db_path, ctx->db_path, errno);
         exit(1);
     }
