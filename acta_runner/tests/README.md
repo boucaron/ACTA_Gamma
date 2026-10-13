@@ -11,12 +11,20 @@ From `acta_runner/`:
     make test        # builds + runs every default suite (argparse first,
                      # then the pipeline / batch / preflight / sweep /
                      # delete / api-key / conf / shadow / deathmark /
-                     # check / dialect / openai-dialect suites)
+                     # check / dialect / openai-dialect / emitter-contract
+                     # suites)
     make test-e2e    # dead-runner end-to-end suite (real child
                      # acta_runner processes; ~10-15 s)
-    make smoke       # tests/llama_smoke: manual check against a LIVE
-                     # llama-server (tests/llama_smoke <base_url> <api_key>
-                     # [model] [prompt] [timeout_sec])
+    make smoke       # BUILDS ONLY tests/llama_smoke: the live check of
+                     # either dialect (run it yourself:
+                     #   tests/llama_smoke --base-url URL [--key K]
+                     #   [--dialect llamacpp|openai] [--model ID]
+                     #   [--prompt TEXT] [--timeout N]
+                     # or the legacy positional form
+                     #   <base_url> <api_key> [model] [prompt] [timeout_sec])
+    make smoke-live  # builds AND runs it (SMOKE_DIALECT=llamacpp|openai is
+                     # required; SMOKE_BASE / SMOKE_KEY / SMOKE_MODEL /
+                     # SMOKE_PROMPT / SMOKE_TIMEOUT)
     make clean
 
 Run a single built suite from `acta_runner/` (NOT from `tests/run/`):
@@ -232,5 +240,43 @@ elsewhere. On Windows the make targets take **no `.exe` suffix**
   `<model-record-id>` (the row decides in DB mode), and a row
   registered `openai` checked without any flag.
 
-- `tests/llama_smoke.c` — manual smoke check against a LIVE
-  OpenAI-compatible server (`make smoke`), not part of `make test`.
+- `tests/llama_smoke.c` — the **live** check of either dialect against a real
+  server (`make smoke` builds it, `make smoke-live` builds and runs it; the
+  shell counterpart is `scripts/live_backend_check.sh`, wired to
+  `make test-live*`). NOT part of `make test`: it needs a server.
+  It builds its request bodies through `src/dialect.c`, so what it sends is what
+  `run.c` sends — including `top_k` only when the dialect's `sends_top_k` is set.
+  Flags `--base-url URL [--key K] [--dialect llamacpp|openai] [--model ID]
+  [--prompt TEXT] [--timeout N]`, plus the legacy positional form
+  `<base_url> <api_key> [model] [prompt] [timeout_sec]` (flags win; `-` or an
+  empty key means no `Authorization` header). Steps: 1 `GET /health` (hard),
+  2 `GET /v1/models` keeping the entry the runner would match (hard: `--model`
+  not served fails), 3 plain chat (hard), 4 the context ceiling through the
+  dialect's `max_context_of()` with its source label (informational), 5 `GET /`
+  judged by **body shape** (informational — the runner records `"catalog":null`
+  and continues), 6 chat with the **chosen** dialect's `build_response_format()`
+  envelope (hard). Exits **0** usable, **1** on any hard failure, **3** on a
+  usage error or a `--dialect` outside the vocabulary (mirroring the runner's
+  `EXIT_INVALID`). Against a server that speaks the OTHER dialect, step 6 exits 1
+  with "the <dialect> envelope was REFUSED" — that is the correct answer (the
+  model is mis-registered for that server), not a tool bug.
+
+- `tests/util/test_util.c` — the **emitter contract** of
+  `include/runner_util.h` (no HTTP, no DB, no stub server). Every runner
+  diagnostic must be ONE machine-parsable JSON line whose `"code"` equals the
+  exit code the emitter returns:
+  `{"error":"ACTA_RUNNER_ERROR","code":<exit code>,…}` for non-DB failures,
+  `{"error":"ACTA_DB_ERR_<NAME>","code":<rc>,…}` + `map_rc_to_exit` for DB
+  failures (`ACTA_DB_OK` and unknown codes normalize to
+  `ACTA_DB_ERR_INVALID`), the `emit_error` / `emit_not_found` /
+  `finish_op_error` shapes (NULL-safe: `""`, `"entity not found"`,
+  `"<op> failed: (no detail)"`), JSON escaping of the message (`"`, `\`,
+  `\n`, `\t`, `\u0001`) and the `check` verdict line on stdout
+  (`ok`/`max_context`, `ok`/`verdict`). Output is captured at the fd level
+  (`dup` + `dup2` + a temp file, `\r` stripped) and asserted BOTH byte for
+  byte (exactly one line) and as parsed JSON — the suite exists because
+  `emit_runner_error()` printed `{error":"…` (no opening quote, invalid
+  JSON: the format string was `"{"` + `"error\"…"`, two adjacent literals,
+  instead of `"{\"error\"…"`) while the exit code was correct. Its own
+  scenario rejects the pre-fix line, so the harness is proven to catch the
+  defect class.

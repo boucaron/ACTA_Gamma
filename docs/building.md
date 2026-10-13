@@ -95,6 +95,13 @@ automatically and runs from either side.
 - `scripts/wsl_strata_demo.sh` runs the whole flow (init → model → skills →
   context → executions → `check` → `run`) from WSL against a Windows-hosted
   server, and is the quickest way to prove a WSL build + NAT path end to end.
+- `scripts/live_backend_check.sh` is the make-wired version of that proof: it
+  takes `--dialect` explicitly, works from either side (`curl.exe` is used when
+  the distro has no native `curl`, the host IP is derived from `/proc/net/route`),
+  and asserts the audit keys afterwards instead of just printing the rows.
+  `make test-live-openai LIVE_BASE_openai=http://<windows-host-ip>:8080` is the
+  one command that re-proves a WSL build against a Windows-hosted server.
+  All three scripts are listed in the table under **Live backend check**.
 
 ## Build
 
@@ -144,7 +151,89 @@ test` to point at another one); without it the build stops with a named error
 instead of letting all 17 suites fail on a missing file. The CLI suites must run
 with `cwd = acta_cli/` — each one copies the fixture into `acta_cli/tmp/`.
 
-The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and `make smoke` (manual check of `tests/llama_smoke` against a LIVE llama.cpp `llama-server`; `llama_smoke` takes the key as a CLI argument, or `-` for no auth). For real use — `acta_runner run` or the GUI — the API key must come from `$OPENAI_API_KEY` or, when that variable is unset, the `"api_key"` key of the config file (`ACTA_Gamma.conf` in the app-data directory; no key anywhere → hard error, empty key → warning; see the README `# Configuration` section).
+The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and the two **live** targets — `make smoke`, which **builds only** `tests/llama_smoke` (the C live check of either dialect), and `make smoke-live SMOKE_DIALECT=…`, which builds **and runs** it; `make test-live*` runs the same kind of check through `scripts/live_backend_check.sh` and adds the full pipeline. They are never part of `make test`: see **Live backend check** below. For real use — `acta_runner run` or the GUI — the API key must come from `$OPENAI_API_KEY` or, when that variable is unset, the `"api_key"` key of the config file (`ACTA_Gamma.conf` in the app-data directory; no key anywhere → hard error, empty key → warning; see the README `# Configuration` section).
+
+## Live backend check (`make test-live*`, `make smoke-live`)
+
+Nothing in `make test` ever touches a real server — the pipeline suites speak to
+the in-tree stub (`acta_runner/tests/stub_server.c`). The live checks are
+separate targets, and they are **never** part of `make test`.
+
+| Live entry point | What it is | Why it exists |
+|---|---|---|
+| `scripts/live_backend_check.sh` — `make test-live`, `make test-live-llamacpp`, `make test-live-openai` | the generic live check in **either** dialect: probe phase (the HTTP surface the runner uses) + pipeline phase (scratch DB: `db init` → model → 2 skills → context → 2 executions → `check` → `run` ×2 → status, `raw_response` and audit-key assertions) | the make-wired entry point: any `base_url`, either dialect, both platforms |
+| `acta_runner/tests/llama_smoke.c` — `make smoke` (**build only**), `make smoke-live` (build **and** run) | the C live check of one dialect; it builds its request bodies through `src/dialect.c`, so what it sends is what `run.c` sends | the check in the runner's own language, with no CLI and no DB involved |
+| `scripts/probe_strata.sh` | the Strata investigation record (health / models / chat / both envelopes / the WSL cross-side check) | kept untouched: `docs/session_strata_backend.md` §2.5 cites it as a verification record |
+| `scripts/wsl_strata_demo.sh` | the WSL-over-NAT end-to-end demo | kept untouched: cited by the same doc; the quickest proof of a WSL build + NAT path |
+
+### `scripts/live_backend_check.sh`
+
+```sh
+bash scripts/live_backend_check.sh --dialect openai --base-url http://127.0.0.1:8080 \
+    --key - --model <id>
+# the same through make (builds cli + runner first):
+make test-live-openai LIVE_MODEL=<id>
+make test-live-llamacpp LIVE_BASE_llamacpp=http://127.0.0.1:8081 LIVE_MODEL=<id>
+```
+
+Invoke it as `bash scripts/…`: `core.fileMode=false` on this box, so a committed
+script lands `100644` in git (that is already true of `scripts/probe_strata.sh`)
+and is not executable after a fresh clone on Linux.
+
+- `--dialect llamacpp|openai` is **required** — there is deliberately no
+  default: the two dialects expect different servers, and a silent default is how
+  the older live scripts drifted. `--base-url` / `--model` / `--key` /
+  `--timeout` (or the env `ACTA_LIVE_BASE` / `ACTA_LIVE_MODEL` /
+  `ACTA_LIVE_KEY` / `ACTA_LIVE_TIMEOUT`), `--probe-only` / `--pipeline-only` to
+  run one phase, `--keep-db` to keep the scratch DB, `-h` for the full header.
+- **probe phase**: `/health` (one retry — the WSL→Windows NAT cold path drops the
+  first packet) → `/v1/models` (the id must be served) → plain chat →
+  `response_format json_object` (informational) → the **chosen** dialect's
+  `json_schema` envelope (**hard**: a refusal is exactly what blocks a skill with
+  `output_schema`) → the **other** dialect's envelope (informational: a refusal
+  there is issue A, the expected answer from a server that speaks the chosen
+  dialect) → `GET /` (informational, judged by **body shape** — Strata answers
+  HTTP 200 with a non-catalog body, so the status code proves nothing and the
+  runner records `"catalog":null` either way) → the cross-side reachability note
+  (`ACTA_LIVE_CROSS=0` disables it).
+- **pipeline phase**: a scratch DB in `$TMPDIR` / `$TEMP` / `$TMP` (else `/tmp`)
+  named `acta_live_<dialect>.db` — **never** the repo `acta.db`, removed at exit
+  unless `--keep-db`. `db init` → `model create backend=<dialect>` → 2 skills
+  (plain + `output_schema` **as a JSON string**, `docs/cli_spec.md` issue C) →
+  `context create` → 2 `exec create` → `check <model record id>` → `run` ×2 →
+  both rows `completed`, exec 2's `raw_response` parses and satisfies the schema
+  (`label`, `confidence`), and the `execution_log` audit keys name the dialect
+  that produced them: `preflight_passed.max_context > 0` with
+  `max_context_source`, `catalog` (`null` on `openai`), `llm_request.dialect`,
+  `dialect_source == model_revision`, `model_backend == <dialect>`, and
+  `response_format` false on the plain skill / true on the schema skill.
+- **Key policy**: the runner reads the key only from `$OPENAI_API_KEY` (decision
+  4), so the script always exports it — `--key VALUE` sets it, keyless sets it to
+  `""` (the documented keyless-localhost warning). An **unset** variable would be
+  a hard runner error.
+- **Exit codes**: `0` usable as a backend — **or** no server answered at all,
+  which prints `SKIP: no backend at <url>`: a live target must never be red just
+  because a server is switched off. `1` a server answered and a hard step failed.
+  `2` usage or build error (missing `--dialect`, `acta_cli`/`acta_runner` not built).
+- `make test-live` runs **both** dialects, each against its own
+  `LIVE_BASE_llamacpp` / `LIVE_BASE_openai` (two dialects are normally two
+  servers), and is red only when NEITHER is usable. With both bases pointing at
+  the same OpenAI-dialect server — the defaults — the `llamacpp` run exits 1
+  **by design**: the model is mis-registered for that dialect, which is a
+  registration fact, not a tool bug. `make test-live-llamacpp` /
+  `test-live-openai` are the strict per-dialect targets; `LIVE_MODEL` and
+  `LIVE_KEY` are passed through when set.
+- `make smoke-live` needs `SMOKE_DIALECT=llamacpp|openai` for the same reason
+  (`SMOKE_BASE` / `SMOKE_KEY` / `SMOKE_MODEL` / `SMOKE_PROMPT` /
+  `SMOKE_TIMEOUT` otherwise default to localhost, keyless, first id served,
+  "Say hello.", 60 s).
+
+Two output-shape facts the script depends on, worth knowing when writing your
+own check: a successful `acta_runner run` prints **nothing** on stdout (the whole
+audit lives in `execution_log`, and `log list <exec_id>` returns a JSON array
+whose `metadata` is a **string** containing JSON), and a freshly `db init`-ed
+scratch DB prints `[warn] db opened with degraded pragma state…` on **stderr**
+for every call — informational, never a failure, so only stdout is parsed.
 
 ## Build notes
 

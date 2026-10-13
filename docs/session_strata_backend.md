@@ -1,10 +1,12 @@
 # Session notes — Strata backend + WSL (Linux) build
 
 Handoff document. Date: 2026-10-12. Branch state at writing time: **all changes
-uncommitted** (working tree) — **superseded later the same day**: everything is
-now committed, 12 commits `8e06493…88519b0` on `main`, **not pushed** to
-`origin`. Current state of the task list below: **§3.1**. Live re-verification
-against Strata on both platforms: **§2.5**.
+uncommitted** (working tree) — **superseded later**: everything is now committed,
+18 commits `8e06493…` on `main` (18 ahead of `origin/main`), still **not pushed**
+to `origin` — the push stays the owner's
+(`docs/session_dialect_progress.md` §17.1). Current state of the task list
+below: **§3.1**. Live re-verification against Strata on both platforms:
+**§2.5**.
 
 Goal of the work: let `acta_runner` use **Strata** (a local OpenAI-compatible
 llama.cpp/ggml-derived server already installed on this Windows machine) as a
@@ -155,7 +157,7 @@ so the runs used `OPENAI_API_KEY=""` — the documented empty-key localhost case
 | **D** | WSL build docs | **Done** — `docs/building.md` WSL2 section (apt deps, rsync recipe, host-IP rule, cold-path retry, missing `curl`/`ip`/`pkg-config`) + `scripts/wsl_strata_demo.sh` |
 | **E** | Strata backend contract doc | **Done, renamed** — `docs/openai_dialect_contract.md` + README "OpenAI-compatible backends" + `docs/llamacpp_server_contract.md` cross-links. Deliberate: documented as a *strict OpenAI-compatible HTTP dialect*, not a vendor, so no `docs/strata_server_contract.md` exists |
 | **F** | `check <id>` = model record id | **Done** — README, `docs/cli_spec.md`, `docs/runner_contract.md` |
-| **G** | Commit everything | **Done** — 12 commits `8e06493…88519b0` (incl. `scripts/`); **not pushed** to `origin/main` |
+| **G** | Commit everything | **Done** — 18 commits `8e06493…` (incl. `scripts/`); **all local — `git push` to `origin/main` stays the owner's** (`docs/session_dialect_progress.md` §17.1) |
 | **H** | GUI on WSL | **OPEN** — no Qt 6 in `insightcae`. The GUI is built and verified on Windows only (debug + release, zero warnings; see `docs/session_dialect_progress.md` §13) |
 | **I** | Full `make test` in one shot | **Done** — `acta_cli` 17/17 in one shot on both platforms; the 13 runner suites run as 13 binaries (681 Windows / 712 WSL); `acta_db` `make test` → ALL TESTS PASSED, rc 0 |
 | **J** | `backend:"strata"` or `openai`? | **Decided** — `openai` only; closed vocabulary `llamacpp`/`openai`, `llama` is not an alias, validated by `acta_cli` at declaration and re-validated by the runner at run time |
@@ -163,18 +165,31 @@ so the runs used `OPENAI_API_KEY=""` — the documented empty-key localhost case
 **Still open on the Strata side (session 8):**
 
 1. **H** — GUI on WSL (needs Qt 6 installed in the distro).
-2. **Live Strata runs are manual**, not part of `make test`: `scripts/probe_strata.sh`
-   and `scripts/wsl_strata_demo.sh` are ad-hoc; the automated coverage
+2. **Live Strata runs are manual**, not part of `make test`: the automated coverage
    (`make test-e2e`, `tests/run/test_openai_dialect.c`) uses the stub server, so
-   nothing in the test suite ever touches a real OpenAI-compatible server.
-3. **`emit_runner_error()` prints `{error":"…`** (missing opening quote) while
-   `docs/runner_contract.md` documents `{"error":…` — seen live in a real Strata
-   failure line this session. One-character fix in
-   `acta_runner/include/runner_util.h` (`emit_runner_error`), worth pinning with a
-   test. Out of scope until the owner asks.
+   nothing in `make test` ever touches a real OpenAI-compatible server. **Improved
+   2026-10-13**: the live checks are now one aligned pair with make targets of
+   their own — `scripts/live_backend_check.sh` (`make test-live`,
+   `make test-live-llamacpp`, `make test-live-openai`: probe phase + the full
+   pipeline in a scratch DB, `--dialect` required, `SKIP: no backend at <url>` →
+   exit 0 when no server answers) and `acta_runner/tests/llama_smoke.c`
+   (`make smoke` builds it, `make smoke-live` runs it). `scripts/probe_strata.sh`
+   and `scripts/wsl_strata_demo.sh` stay as they are: §2.5 cites them as
+   verification records. Table + usage: `docs/building.md` "Live backend check",
+   record: `docs/session_dialect_progress.md` §16.
+3. **`emit_runner_error()` printed `{error":"…`** (missing opening quote)
+   **— FIXED 2026-10-13** with a pinning test: the one-character fix in
+   `acta_runner/include/runner_util.h` plus the new
+   `acta_runner/tests/util/test_util.c` suite (69 checks, in `make test`)
+   that asserts every `runner_util.h` emitter line as exact bytes AND as
+   parsed JSON. Details: `docs/status.md` ("Done — runner error-line
+   contract fixed and pinned") and `docs/session_dialect_progress.md` §15.
 4. **No catalog audit in `openai` mode** — `"catalog":null` is permanent unless a
    `/props`-like endpoint is adopted (settled non-goal, plan §9 decision 4).
-5. **12 commits are local** — `git push` to `origin/main` not done.
+5. **Commits are still local** — 18 commits, `main` 18 ahead of `origin/main`;
+   `git push` remains the owner's (this agent shell has no GitHub credential).
+   The session-9/10 batch landed as five commits, recorded in
+   [`docs/session_dialect_progress.md`](session_dialect_progress.md) §17.1.
 
 The original task table (with the pre-fix wording and the file/line pointers that
 led to the dialect plan) is kept below as history.

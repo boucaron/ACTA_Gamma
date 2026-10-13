@@ -91,9 +91,22 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   `/v1/chat/completions` request count stays 0 and no execution / 
   execution_log rows exist — the zero-token / no-DB-writes guarantee.
   `tests/argparse/test_argparse.c` (51e375c, since extended): 47
-  pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25):
-  manual smoke test against a LIVE OpenAI-compatible server
-  (`make smoke`).
+  pass-1/pass-2 parsing checks, green. `tests/llama_smoke.c` (0b06b25, rewritten
+  as a two-dialect live check): the LIVE check of either dialect — its request
+  bodies are built through `src/dialect.c`, so it sends exactly what `run.c`
+  sends (`top_k` only when the dialect sends it, `response_format` only through
+  the dialect's builder). `make smoke` builds it, `make smoke-live`
+  (`SMOKE_DIALECT=llamacpp|openai`) builds and runs it; its exit codes are 0
+  usable / 1 hard failure / 3 usage-or-dialect error. Never part of `make test`.
+  The shell counterpart is `scripts/live_backend_check.sh` (`make test-live*`),
+  which adds the full CLI→runner pipeline in a scratch DB and asserts the audit
+  keys above; a live check exits 0 with `SKIP: no backend at <url>` when no
+  server answers at all, so a live target is never red because a server is off
+  (see `building.md`, "Live backend check`).
+  `tests/util/test_util.c`: the emitter contract of `runner_util.h` — every
+  diagnostic is one parseable JSON line and the printed `code` is the exit
+  code the emitter returns (see the error contract above); fd-level capture,
+  no HTTP, no DB.
   `make -C acta_runner test-e2e`: dead-runner end-to-end suite — spawns
   real `acta_runner` processes against the stub server (~10–15 s),
   separate from `make test` (see `building.md`).
@@ -120,7 +133,11 @@ Implementation notes (where the spec left room):
   `{"error":"ACTA_RUNNER_ERROR","code":<exit code>,"message":...}`
   (code always equals the process exit code); DB failures keep the
   `ACTA_DB_ERR_*` contract. Exit codes: 12 for HTTP/preflight failures,
-  13 for timeout, 4 for validation/claim failures.
+  13 for timeout, 4 for validation/claim failures. The line is pinned by
+  `tests/util/test_util.c`, which captures the emitters' output and asserts
+  both the exact bytes and that the line parses as JSON — a malformed line
+  (a missing opening quote) is a contract break even with the right exit
+  code.
 - User message: `user = context.content`, always. The skill's
   `prompt_template` is the only instruction source (it is the `system`
   message); there is no per-execution prompt field. An empty context

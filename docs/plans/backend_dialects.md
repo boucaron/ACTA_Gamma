@@ -7,10 +7,12 @@ Status: **implemented, verified and COMMITTED (2026-10-12)** —
 WSL/Ubuntu (`acta_runner` 13 suites: 681 checks / 0 failures on Windows, 712 / 0
 on WSL; `acta_cli` 17/17 PASS on both; ASAN clean apart from the known libcurl
 global-init leak; acceptance criteria 1–8 verified, including live end-to-end
-against Strata with an `output_schema` skill). Phase 7 (GUI) is written —
-`src.pro` + `modelDialog` — but **not compiled and still uncommitted**, the GUI
-build being deferred by the owner. Progress and gotchas:
-[`docs/session_dialect_progress.md`](../session_dialect_progress.md) (§10–§12).
+against Strata with an `output_schema` skill). Phase 7 (GUI) is written
+(`src.pro` + `modelDialog`), **compiled** (debug + release, zero warnings,
+2026-10-12) and **committed** (`bb05950` + the `dialect.h` include-path fix
+`e6d45ea`); it is still not buildable on WSL — no Qt 6 in `insightcae` — and
+running it there remains the owner's. Progress and gotchas:
+[`docs/session_dialect_progress.md`](../session_dialect_progress.md) (§10–§17).
 Depends on:
 [`docs/session_strata_backend.md`](../session_strata_backend.md) (issues A and B
 are exactly what this plan resolves).
