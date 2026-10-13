@@ -2210,7 +2210,10 @@ shows whole-file diffs).
 
 ### 17.4 Strata is the only live backend on this box (owner's word, 2026-10-13)
 
-`openai` is the only dialect with a real server here, so:
+*(superseded later the same day — the owner started a REAL `llama-server` on
+127.0.0.1:8080; see §17.8)*
+
+`openai` was the only dialect with a real server here, so:
 
 - `make test-live-openai` is the live target that actually runs on this machine
   (Windows `127.0.0.1:8080`, WSL `172.28.160.1:8080`, model
@@ -2247,11 +2250,16 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 3. Out of scope, still open (§15.6 item 3): (b) the `acta_cli` test-harness leak,
    (c) `make -C acta_db libacta_db.a` not regenerating
    `include/{schema,migrations}_sql.h` after `clean`.
-4. No live `llamacpp` server on this box (§17.4).
+4. ~~No live `llamacpp` server on this box.~~ **Resolved by the owner
+   (2026-10-13, later)** — a real `llama-server` is live on
+   `127.0.0.1:8080`; the first live `llamacpp` run is done and found two gaps
+   (check vs key, schema not enforced) that are NOT fixed yet: §17.8.
 5. Ephemeral helper `~/acta_suites.sh` (WSL) still defaults to the **13**-suite
    list — pass `tests/util/test_util` as an argument; not part of the repo.
 
-### 17.7 Resume prompt for the next session (current)
+### 17.7 Resume prompt for the next session
+
+*(superseded by §17.9 — the real `llama-server` went live later the same day)*
 
 > Read **`docs/session_dialect_progress.md` §17 first** (then §16, §15),
 > `docs/plans/backend_dialects.md` (§2 matrix, §3.2, §9 decisions, §10) and
@@ -2306,3 +2314,131 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 > NEITHER dialect is usable", the live checks staying out of `make test`, and the
 > GUI being closed (owner-tested with the Strata changes; the Linux/Qt 6 run is
 > the owner's own test).
+
+### 17.8 SESSION 11 continued (2026-10-13, later) — the real `llama-server` is live: first live `llamacpp` run; two gaps found, NOT fixed
+
+The owner started a real `llama-server` on 127.0.0.1 (Strata is no longer on
+8080). Facts, read from the process command line (PowerShell
+`Get-CimInstance Win32_Process`; `wmic` is broken in this shell):
+
+- `llama-server.exe --models-preset model.ini --host 127.0.0.1 --port 8080
+  --api-key "JB"` — a MULTI-MODEL preset server; `/v1/models` lists 17 ids, the
+  loaded one is `JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`
+  (`meta.n_ctx` 162048). The key is `JB`.
+- `/health` is OPEN (200 `{"status":"ok"}` even without the key);
+  `/v1/models` REQUIRES the key (401 `Invalid API Key` without it).
+- `GET /` → **HTTP 415**, body `Error: gzip is not supported by this browser`
+  (a browser page, never a catalog JSON) → no catalog body; the runner records
+  `"catalog":null`.
+- The server ACCEPTS the llamacpp `json_schema` envelope (HTTP 200) — and also
+  the openai one — but does NOT enforce the schema (unlike Strata
+  `strict:true`).
+
+**What PASSED (first live `llamacpp` run):**
+
+- `make test-live-llamacpp LIVE_BASE_llamacpp=http://127.0.0.1:8080
+  LIVE_KEY=JB LIVE_MODEL=JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`: the PROBE
+  phase is green (`== probe verdict: usable as an acta_runner backend`):
+  `/health` 200, the id is served, plain chat 200 (`Hello!`), the llamacpp
+  envelope 200, the openai envelope 200 (informational — the server accepts
+  both), `GET /` 415 → `catalog-shaped body: no` (informational), cross-side
+  unreachable (the server is bound to 127.0.0.1 — informational only).
+- Manual pipeline (scratch DB `/c/msys64/tmp/acta_live_llamacpp_manual.db`,
+  `OPENAI_API_KEY=JB`): `run 1` (plain) and `run 2` (schema) both
+  **completed**. Audit: `preflight_passed {max_context 162048,
+  max_context_source entry.meta.n_ctx, dialect llamacpp, catalog null}`;
+  `llm_request {response_format false (run 1) / true (run 2), dialect
+  llamacpp, dialect_source model_revision, model_backend llamacpp}`;
+  `llm_response` 200 both.
+
+**Two gaps found, NOT fixed (root-caused; decisions in §17.8.5):**
+
+A. **`check` vs a key-protected server.** `check` is keyless BY DESIGN
+  (`acta_runner/src/check.c` ~line 304: `backend_preflight(base, mid, dialect,
+  NULL, …)`, "the two token-free calls, keyless by design"), but on this
+  server `/v1/models` needs the key → `check 1` →
+  `{"ok":false,…,"verdict":"catalog unreachable"}` → **exit 12**. `run`
+  works because its pre-claim preflight passes the resolved key
+  (`acta_runner/src/run.c` ~line 506). The scripted pipeline requires `check`
+  exit 0, so `make test-live-llamacpp` is red at the `check` step on ANY
+  key-protected server. (The scripted pipeline stopped there:
+  `FAIL: acta_runner check 1 exited 12`, make Error 1.)
+B. **The model did not follow the schema.** `exec 2 raw_response` was
+  `{"sentiment":"positive"}` — the schema requires `label` + `confidence`.
+  The server accepted the envelope but did not enforce it. With a prompt that
+  NAMES the fields, the same model answered `{"label":"positive",
+  "confidence":0.95}` **3/3** — so the script's hard schema assertion is
+  model/prompt-dependent, not backend-dependent (on Strata the server enforced
+  `strict:true`, so it was safe there).
+
+**Decisions needed (owner) before re-running:**
+
+1. Should `check` send the resolved api key (env/config) when one is
+   available? Strictly more functional (keyless servers behave exactly as
+   today, the zero-chat-token / no-DB-writes guarantees are untouched), but it
+   changes the "keyless by design" wording in `check.c` +
+   `docs/runner_contract.md` (+ possibly `tests/check/test_check.c`). Without
+   it, `check` stays broken on every key-protected server.
+2. The pipeline's `raw_response` schema assertion: (a) keep it HARD and make
+   the schema skill's prompt NAME the fields (`label`, `confidence`);
+   (b) make it INFORMATIONAL ("envelope accepted; the model did not comply —
+   the server does not enforce"); or (c) both (a)+(b) with a named field in
+   the prompt.
+
+**Then, after the decisions:** re-run `make test-live-llamacpp` end to end
+(expect exit 0); update `docs/llamacpp_server_contract.md` (envelope accepted
+but not enforced; key-protected server; `GET /` 415), `docs/status.md`
+(llamacpp live Done entry), §17.6 item 4 and this section, and commit (the
+push stays the owner's).
+
+Scratch (ephemeral, outside the repo): `/c/msys64/tmp/acta_live_llamacpp_manual.db`;
+the script's own scratch DB is removed at exit.
+
+### 17.9 Resume prompt for the next session (current)
+
+> Read **`docs/session_dialect_progress.md` §17.8 FIRST** (then §17.1–17.7,
+> §16), `docs/llamacpp_server_contract.md`, and `docs/plans/backend_dialects.md`
+> (§9 decisions) in ACTA Gamma (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
+>
+> **STATE — sessions 9–11 are COMMITTED; tree clean; 19 local commits, NOTHING
+> pushed (the push is the owner's).** A real `llama-server` is now live on
+> `127.0.0.1:8080` (multi-model preset, **key `JB`**, loaded model
+> `JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`, `meta.n_ctx` 162048); Strata is no
+> longer on 8080. First live `llamacpp` run: the PROBE phase is green and BOTH
+> `run`s completed with the full audit (`max_context 162048 source
+> entry.meta.n_ctx`, `dialect llamacpp`, `catalog null`, `response_format true`
+> on the schema run) — but the scripted pipeline stops at `check` (exit 12) and
+> the model did not follow the schema (`{"sentiment":"positive"}` vs
+> `label`/`confidence`). Two gaps, root-caused, NOT fixed (§17.8).
+>
+> **DO NEXT — answer the two decisions listed in §17.8, then implement + verify:**
+> (1) does `check` send the resolved api key when one is available (keyless
+> servers unchanged)? (2) pipeline schema assertion: HARD + prompt that names
+> the fields, INFORMATIONAL, or both? Then re-run
+> `make test-live-llamacpp LIVE_KEY=JB LIVE_MODEL=JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`
+> (expect exit 0), update `docs/llamacpp_server_contract.md` +
+> `docs/status.md` + the session notes, and commit (NO push).
+>
+> **VERIFICATION** — Windows: `export PATH=/c/msys64/mingw64/bin:$PATH
+> TMP='C:/msys64/tmp' TEMP='C:/msys64/tmp'` FIRST, then `mingw32-make all`; 14
+> runner suites via `/c/msys64/tmp/winsuites.sh` (**750 checks**); `acta_db` +
+> `acta_cli` as before. Live: the llama-server needs **`Authorization: Bearer
+> JB`** (its `/v1/models` 401s without the key; `/health` is open);
+> `OPENAI_API_KEY=JB` is what the pipeline exports.
+>
+> **GOTCHAS (new, do not rediscover):** `check` is keyless by design vs
+> `/v1/models` 401 on a key-protected server — the root of gap A (`run`'s
+> preflight DOES pass the key, so `run` works); the llama-server accepts BOTH
+> envelopes but does NOT enforce the schema (Strata enforces `strict:true`) —
+> gap B; a prompt that NAMES `label`/`confidence` makes this model comply (3/3
+> measured); `GET /` → 415 + `Error: gzip is not supported by this browser` is
+> the browser page, NEVER a catalog; the server is bound to 127.0.0.1, so the
+> WSL cross-side probe is unreachable (informational); it is a multi-model
+> preset server — 17 ids listed, only the loaded one answers promptly; read the
+> server's command line with PowerShell `Get-CimInstance Win32_Process`
+> (`wmic` is broken in this shell).
+>
+> **DO NOT REOPEN:** plan §9, the live checks staying out of `make test`,
+> `--dialect` REQUIRED (script + `smoke-live`), the SKIP semantics,
+> `probe_strata.sh` / `wsl_strata_demo.sh` untouched, the GUI closed (owner-
+> tested), and the push being the owner's.
