@@ -9,4 +9,4 @@ directory has open work; the live documents stay in `docs/`.
 
 The 2026-10 session logs (`docs/session_dialect_progress.md`,
 `docs/session_strata_backend.md`) stay in `docs/` while they are the live
-handoff — the current state is `docs/session_dialect_progress.md` §18.
+handoff — the current state is `docs/session_dialect_progress.md` §18–§19.

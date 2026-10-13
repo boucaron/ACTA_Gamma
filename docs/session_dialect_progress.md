@@ -3,14 +3,15 @@
 Handoff document. Date: 2026-10-12 (continuation of
 [`docs/session_strata_backend.md`](session_strata_backend.md)).
 Branch state at the time of writing: **nothing committed** — **superseded
-later**: everything is now committed (`8e06493…` onward, `main` currently 23
-ahead of `origin/main`; the push stays the owner's — §17.1, §18.4).
+later**: everything is now committed (`8e06493…` onward, `main` currently 24
+ahead of `origin/main`; the push stays the owner's — §17.1, §18.4, §19.1).
 
-Read first: **§18** — the current state and the current resume prompt
-(§18.5). §1–§17 are the work record: historical mid-states (several sections
-read "IN FLIGHT" / "NOT BUILT" about phases that later landed; the resume
-prompts of §5, §7, §8.6, §9.5, §10.4, §12.5, §13.8, §14 and §17.7 are
-superseded). Then
+Read first: **§19** (docs stale-content cleanup + the latest green WSL
+re-verification) and **§18** — the current implementation state; its resume
+prompt (§18.5) stays valid. §1–§17 are the work record: historical mid-states
+(several sections read "IN FLIGHT" / "NOT BUILT" about phases that later
+landed; the resume prompts of §5, §7, §8.6, §9.5, §10.4, §12.5, §13.8, §14
+and §17.7 are superseded). Then
 [`docs/plans/backend_dialects.md`](plans/backend_dialects.md)
 (§2 dialect matrix, §3.2 where the dialect comes from, **§9 = the four
 decisions, now answered**), then
@@ -2537,7 +2538,7 @@ test_check.c` · **`scripts:`** `scripts/live_backend_check.sh` · **`docs:`**
 `docs/llamacpp_server_contract.md` + `docs/runner_contract.md` +
 `docs/status.md` + `docs/session_dialect_progress.md`.
 
-### 18.5 Resume prompt
+### 18.5 Resume prompt (superseded by §19.3 — its content stays valid)
 
 > Read **`docs/session_dialect_progress.md` §18 first** (then §17.8 — the
 > discovery record, now superseded by §18 — and §17),
@@ -2577,3 +2578,62 @@ test_check.c` · **`scripts:`** `scripts/live_backend_check.sh` · **`docs:`**
 > `--dialect` REQUIRED (script + `smoke-live`), the SKIP semantics,
 > `probe_strata.sh` / `wsl_strata_demo.sh` untouched, the GUI closed (owner-
 > tested), and the push being the owner's.
+
+---
+
+## 19. SESSION 13 (2026-10-13, later) — docs stale-content cleanup + WSL re-verification (green, live targets untouched)
+
+Docs-cleanup task (owner's ask): a full read of `docs/` against the code and
+the git state found the live docs (`cli_spec.md`, `runner_contract.md`,
+`DBDesign.md`, `building.md`, both dialect contracts, `README.md`,
+`examples/`) **current**; the stale items were the PointOfView backend line,
+the "18 commits" claims, this file's header, and the completed task logs.
+Items 1 (PointOfView) and 2 (commit counts) fixed; item 3 (archive/trim) done
+for `tasks_continuation.md`; `known_issues.md` and
+`docs/plans/backend_dialects.md` deliberately kept in `docs/` — both are
+still cited by the live docs (README / status.md; the dialect matrix §2 and
+decision record §9).
+
+### 19.1 What changed (docs only, commit `b8236ff`; no code touched)
+
+| Item | Fix |
+|---|---|
+| `docs/PointOfView.md` | "llama.cpp is the backend, full stop" → the two-dialect wording: `llamacpp` (a llama.cpp `llama-server`) or `openai` (any strict OpenAI-compatible server, e.g. Strata); the dialect is a property of the model revision; the runner speaks only the HTTP surface |
+| Commit-count claims | `docs/status.md`, this file §17.1 / §17.6 / §17.7, `docs/session_strata_backend.md` header / §3.1-G / item 5: "18 commits" → "18 **at the time of writing** (`main` is now 23 ahead of `origin/main`)" — the historical 18 kept, the live count added |
+| This file's header | "Branch state: **nothing committed**" → superseded note (everything committed; `main` currently 24 ahead); "Read first" now points at §19 / §18 and names the superseded resume prompts; §17.9 relabeled "(superseded by §18.5)" |
+| Archive | `docs/tasks_continuation.md` → `docs/archive/tasks_continuation.md` (git rename + "Archived" banner) and new `docs/archive/README.md` (what is archived; where the live state lives) |
+
+### 19.2 WSL re-verification after the docs batch (2026-10-13)
+
+| Step | Result |
+|---|---|
+| rsync `…/ACTA_Gamma/` → `~/ACTA_Gamma` (`insightcae`, documented exclude list, `--include="acta_test_ref.db"` first) | SYNC_OK |
+| `make clean && make all` | rc 0, **no warnings** — full rebuild from scratch (incl. the generated `schema_sql.h` / `migrations_sql.h` and the `acta_test_ref.db` fixture) |
+| `make test` | rc 0: `acta_db` ALL TESTS PASSED; `acta_cli` **17/17 PASS**; `acta_runner` 14 suites **791 / 0** — identical to the §18.5 record (`test_check` 87 included) |
+| Live targets | **not run, by the owner's instruction**: no `test-live*`, no `smoke-live` — Strata and the preset `llama-server` untouched |
+
+Git state: `main` **24** ahead of `origin/main` (`b8236ff` joined the 23);
+the push stays the owner's.
+
+### 19.3 Resume prompt
+
+> Read **`docs/session_dialect_progress.md` §19 first**, then §18 (the current
+> implementation state — §18.5's content stays valid),
+> `docs/llamacpp_server_contract.md`, and `docs/plans/backend_dialects.md`
+> (§9) in ACTA Gamma (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
+>
+> **STATE — sessions 9–13 COMMITTED, tree clean, NOTHING pushed (`main` 24
+> ahead of `origin/main`; the push is the owner's).** Docs are consistent: the
+> stale items found by the 2026-10-13 docs audit are fixed (`b8236ff`), the
+> completed task logs live in `docs/archive/`, and the WSL re-verification
+> after the batch is green (14 suites 791/0, live targets untouched).
+>
+> **DO NEXT — nothing is required** (§18.5 unchanged): the push (owner's); the
+> two out-of-scope defects (§17.6 item 3: the `acta_cli` test-harness leak;
+> `make -C acta_db libacta_db.a` not regenerating `include/{schema,migrations}_sql.h`
+> after `clean`); optional WSL ASAN on `test_check`.
+>
+> **DO NOT REOPEN:** plan §9, the live checks staying out of `make test`,
+> `--dialect` REQUIRED (script + `smoke-live`), the SKIP semantics,
+> `probe_strata.sh` / `wsl_strata_demo.sh` untouched, the GUI closed (owner-
+> tested), the archived logs staying archived, and the push being the owner's.
