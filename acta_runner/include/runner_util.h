@@ -213,11 +213,14 @@ static inline int emit_not_found(const char *entity)
  * errors, but `code` is the runner exit code, so it always matches the
  * process exit code:
  *   {"error":"ACTA_RUNNER_ERROR","code":<exit_code>,"message":"<msg>"}
+ * The opening quote of the "error" key is an escaped \" INSIDE the first
+ * literal: "{" + "error\"…" concatenates to {error"… (no opening quote,
+ * invalid JSON), which is the defect tests/util/test_util.c pins.
  */
 static inline int emit_runner_error(int exit_code, const char *msg)
 {
     fprintf(stderr,
-        "{""error\":\"ACTA_RUNNER_ERROR\",\"code\":%d,"
+        "{\"error\":\"ACTA_RUNNER_ERROR\",\"code\":%d,"
         "\"message\":",
         exit_code);
     json_str(stderr, msg ? msg : "");

@@ -15,7 +15,9 @@
 #                   and the openai-dialect end-to-end suite
 #                   (tests/run/test_openai_dialect.c: the stub server plays
 #                   an openai-dialect server and refuses the wrong
-#                   response_format envelope)
+#                   response_format envelope), plus the runner_util emitter
+#                   contract suite (tests/util/test_util.c: every diagnostic
+#                   is one parseable JSON line whose "code" is the exit code)
 #   make smoke    → builds tests/llama_smoke (manual check against a LIVE
 #                   llama-server; run: tests/llama_smoke <base_url> <api_key>
 #                   [model] [prompt] [timeout_sec])
@@ -189,6 +191,17 @@ DIA_OBJS  := $(patsubst %.c, %.o, $(DIA_SRCS))
 DIA_TARGET := tests/dialect/test_dialect$(EXEEXT)
 DIA_LDLIBS := $(CJSON_LIB)
 
+# ---- emitter-contract suite: include/runner_util.h (no HTTP, no DB, no
+#      stub server): every diagnostic is ONE machine-parsable JSON line and
+#      the printed "code" equals the exit code the emitter returns. Captures
+#      at the fd level (dup/dup2 + a temp file), asserts the captured bytes
+#      exactly and that the line parses as JSON with the contracted keys
+#      (the ACTA_RUNNER_ERROR opening-quote defect lives here)
+UTIL_SRCS  := tests/util/test_util.c
+UTIL_OBJS  := $(patsubst %.c, %.o, $(UTIL_SRCS))
+UTIL_TARGET := tests/util/test_util$(EXEEXT)
+UTIL_LDLIBS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB)
+
 # ---- smoke test: manual check against a LIVE OpenAI-compatible server ----
 # Reuses src/backend.c; no DB needed.
 SMOKE_SRCS  := tests/llama_smoke.c src/backend.c src/dialect.c
@@ -259,6 +272,9 @@ $(CHK_TARGET): $(CHK_OBJS) $(ACTA_DB_LIB)
 $(OAI_TARGET): $(OAI_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(OAI_OBJS) $(TEST_LDLIBS)
 
+$(UTIL_TARGET): $(UTIL_OBJS) $(ACTA_DB_LIB) include/runner_util.h include/runner.h include/argparse.h src/dialect.h
+	$(CC) $(CFLAGS) -o $@ $(UTIL_OBJS) $(UTIL_LDLIBS)
+
 $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 	$(CC) $(CFLAGS) -o $@ $(DEAD_OBJS) $(TEST_LDLIBS)
 
@@ -269,7 +285,7 @@ $(DEAD_TARGET): $(DEAD_OBJS) $(ACTA_DB_LIB)
 # POSIX where /mingw64/bin does not exist.
 SPAWN_PATH := PATH='/mingw64/bin:$(PATH)'
 
-test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET) $(DIA_TARGET) $(OAI_TARGET)
+test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) $(DEL_TARGET) $(KEY_TARGET) $(CONF_TARGET) $(SHAD_TARGET) $(DMRK_TARGET) $(CHK_TARGET) $(DIA_TARGET) $(OAI_TARGET) $(UTIL_TARGET)
 	$(SPAWN_PATH) $(AP_TARGET)
 	$(SPAWN_PATH) $(TEST_TARGET)
 	$(SPAWN_PATH) $(PEND_TARGET)
@@ -283,6 +299,7 @@ test: $(TEST_TARGET) $(AP_TARGET) $(PEND_TARGET) $(AUTO_TARGET) $(SWEEP_TARGET) 
 	$(SPAWN_PATH) $(CHK_TARGET)
 	$(SPAWN_PATH) $(DIA_TARGET)
 	$(SPAWN_PATH) $(OAI_TARGET)
+	$(SPAWN_PATH) $(UTIL_TARGET)
 
 # End-to-end: build the runner binary first, then run the suite from
 # acta_runner/ (the test spawns ./acta_runner[.exe] as child processes).
@@ -339,6 +356,16 @@ tests/check/test_check.o: tests/check/test_check.c tests/stub_server.h src/backe
 tests/run/test_openai_dialect.o: tests/run/test_openai_dialect.c tests/stub_server.h
 	$(CC) $(CFLAGS) -Itests -c $< -o $@
 
+# The emitter suite asserts the contract of the header-inline emitters, so
+# the header IS its source: without these prerequisites the generic %.o: %.c
+# rule keeps a stale object and the suite silently tests the previous header
+# (verified: breaking the header and rebuilding changed nothing until the
+# object was removed).
+tests/util/test_util.o: tests/util/test_util.c include/runner_util.h \
+                        include/runner.h include/argparse.h src/dialect.h \
+                        ../acta_db/include/db.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET) $(AP_OBJS) \
         $(AP_TARGET) $(PEND_OBJS) $(PEND_TARGET) $(AUTO_OBJS) \
@@ -350,4 +377,5 @@ clean:
         $(CHK_OBJS) $(CHK_TARGET) \
         $(DIA_OBJS) $(DIA_TARGET) \
         $(OAI_OBJS) $(OAI_TARGET) \
+        $(UTIL_OBJS) $(UTIL_TARGET) \
         $(SMOKE_OBJS) $(SMOKE_TARGET)
