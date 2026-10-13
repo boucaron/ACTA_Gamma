@@ -18,9 +18,16 @@
 #                   response_format envelope), plus the runner_util emitter
 #                   contract suite (tests/util/test_util.c: every diagnostic
 #                   is one parseable JSON line whose "code" is the exit code)
-#   make smoke    → builds tests/llama_smoke (manual check against a LIVE
-#                   llama-server; run: tests/llama_smoke <base_url> <api_key>
-#                   [model] [prompt] [timeout_sec])
+#   make smoke    → BUILDS ONLY tests/llama_smoke (the live check against a
+#                   LIVE server; run it yourself:
+#                   tests/llama_smoke --base-url URL [--key K]
+#                   [--dialect llamacpp|openai] [--model ID] [--prompt TEXT]
+#                   [--timeout N], or the legacy positional form
+#                   <base_url> <api_key> [model] [prompt] [timeout_sec])
+#   make smoke-live → builds AND runs it against a live server
+#                   (SMOKE_BASE / SMOKE_KEY / SMOKE_DIALECT / SMOKE_MODEL /
+#                   SMOKE_PROMPT / SMOKE_TIMEOUT) - `smoke:` never runs it, and
+#                   that difference used to read like a bug in the docs
 #   make test-e2e → builds + runs the dead-runner end-to-end suite
 #                   (spawns real acta_runner child processes; ~10-15 s)
 #   make clean    → removes objects + binaries
@@ -221,7 +228,7 @@ TEST_LDLIBS := $(ACTA_DB_LIB) -lsqlite3 $(CJSON_LIB) $(CURL_LIB) \
 # -lws2_32 on Windows via $(SOCK_LIBS)).
 DEL_LDLIBS := $(TEST_LDLIBS)
 
-.PHONY: all clean test test-e2e smoke
+.PHONY: all clean test test-e2e smoke smoke-live
 
 all: $(TARGET)
 
@@ -310,6 +317,39 @@ $(SMOKE_TARGET): $(SMOKE_OBJS)
 	$(CC) $(CFLAGS) -Isrc -o $@ $(SMOKE_OBJS) $(SMOKE_LDLIBS)
 
 smoke: $(SMOKE_TARGET)
+	@echo "built $(SMOKE_TARGET) - this target does NOT run it (it needs a live server)."
+	@echo "run it: $(SMOKE_TARGET) --base-url URL [--key K] [--dialect llamacpp|openai]"
+	@echo "        [--model ID] [--prompt TEXT] [--timeout N]   - or 'make smoke-live'"
+
+# The same check, actually run. SMOKE_DIALECT has NO default on purpose: the
+# two dialects expect different servers, and a silent default is what made the
+# old live scripts drift (tests/llama_smoke itself defaults to llamacpp when
+# the flag is absent, which is exactly the drift this target must not repeat).
+#
+# Deliberately NOT prefixed with $(SPAWN_PATH): that prefix exists for the
+# batched test suites, and on a Windows shell whose PATH is handed to recipes
+# in Windows form it becomes one unusable PATH entry (the known `Error 127`
+# that also kills `make test` here). A live check is run interactively from
+# the same shell that built the tree, whose PATH already resolves
+# libcurl/libcjson - so smoke-live runs the binary directly.
+SMOKE_BASE    ?= http://127.0.0.1:8080
+SMOKE_KEY     ?=
+SMOKE_DIALECT ?=
+SMOKE_MODEL   ?=
+SMOKE_PROMPT  ?=
+SMOKE_TIMEOUT ?= 60
+SMOKE_ARGS = --base-url $(SMOKE_BASE) $(if $(SMOKE_KEY),--key $(SMOKE_KEY),--key -) \
+             --dialect $(SMOKE_DIALECT) \
+             $(if $(SMOKE_MODEL),--model $(SMOKE_MODEL),) \
+             $(if $(SMOKE_PROMPT),--prompt $(SMOKE_PROMPT),) \
+             --timeout $(SMOKE_TIMEOUT)
+
+smoke-live: $(SMOKE_TARGET)
+	@if [ -z "$(SMOKE_DIALECT)" ]; then \
+		echo "ERROR: make smoke-live needs SMOKE_DIALECT=llamacpp|openai (no default: the two dialects expect different servers)"; \
+		exit 2; \
+	fi
+	$(SMOKE_TARGET) $(SMOKE_ARGS)
 
 # ---- pattern rule ----
 %.o: %.c
