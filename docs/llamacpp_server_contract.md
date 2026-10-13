@@ -11,7 +11,7 @@ shared.
 
 Distilled from the llama.cpp server README (the full auto-generated
 server reference in the upstream llama.cpp repository; only the
-runner-relevant subset is kept here). Tested on **llama.cpp 0.5.0** (router mode); compatibility with any other version is not guaranteed — if the router surface changes, the preflight and catalog-fetch steps need re-validation.
+runner-relevant subset is kept here). Tested on **llama.cpp 0.5.0** (router mode) and, on 2026-10-13, on a live multi-model preset server (`--models-preset`, `--api-key`, 17 listed ids, one loaded); compatibility with any other version is not guaranteed — if the router surface changes, the preflight and catalog-fetch steps need re-validation.
 
 ## 1. Server startup (canonical: router mode)
 
@@ -69,6 +69,15 @@ check, not an exact single-id match): a mismatched server config fails
 cleanly instead of producing garbage (the execution fails with the ids
 the server actually serves).
 
+On a **key-protected** server (`--api-key`), this endpoint answers
+**401 `Invalid API Key`** without `Authorization: Bearer <key>` (the
+`/health` check above stays open, no key needed). The runner's `check`
+action therefore sends the resolved key (`$OPENAI_API_KEY` if set, else
+the config file `"api_key"`; keyless when none resolves — see
+docs/runner_contract.md, "check action"): without that, `check` fails
+with `catalog unreachable` on every key-protected server, while
+`run` (which always passed the resolved key) worked fine.
+
 The context ceiling is read from the matched entry, `llamacpp`-first:
 entry `max_context` → entry `meta.n_ctx` → `/health` `max_context`, and the
 field actually used is recorded as `max_context_source` in
@@ -93,6 +102,13 @@ instead). The call itself is a `llamacpp`-dialect property
 (`dialect_t.fetch_catalog`): on the `openai` dialect no `GET /` is made at
 all and `"catalog":null` is recorded without a request.
 
+Observed (2026-10-13) on a `--models-preset` server: `GET /` answers
+**HTTP 415** with the body `Error: gzip is not supported by this
+browser` — a browser page, **never** a catalog JSON. The runner records
+`"catalog":null` and continues, exactly as the best-effort rule above
+prescribes; a live check must judge the catalog by **body shape**, never
+by the status code.
+
 ## 4. The call: `POST /v1/chat/completions`
 
 - Headers: `Content-Type: application/json`,
@@ -114,6 +130,20 @@ all and `"catalog":null` is recorded without a request.
       (`{"type":"json_schema","json_schema":{"name":"acta_output",
       "strict":true,"schema":{…}}}`); each dialect rejects the other's
       shape — see [`openai_dialect_contract.md`](openai_dialect_contract.md) §6.
+
+  **Envelope accepted ≠ schema enforced.** The live preset server
+  (2026-10-13) accepted BOTH the `llamacpp` and the `openai`
+  `json_schema` envelopes (HTTP 200 each) but did NOT enforce the
+  schema: with a prompt that only says "reply with JSON", the model
+  answered `{"sentiment":"positive"}` instead of the required
+  `label` + `confidence`. Strata enforces `strict:true`, so there the
+  schema is guaranteed by the server. On a non-enforcing llama-server,
+  compliance is model- and prompt-driven: a prompt that **names the
+  required fields** made the same model comply **3/3** (measured). The
+  scripted live pipeline (`scripts/live_backend_check.sh`) keeps the
+  schema assertion hard for that reason, and its schema skill's prompt
+  names `label` and `confidence`.
+
 - Response (non-streaming):
   - `choices[0].message.content` — the text (this is the `raw_response`)
   - `usage` — `prompt_tokens`, `completion_tokens`, `total_tokens`

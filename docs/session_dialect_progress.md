@@ -2317,6 +2317,10 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 
 ### 17.8 SESSION 11 continued (2026-10-13, later) — the real `llama-server` is live: first live `llamacpp` run; two gaps found, NOT fixed
 
+> *(The two decisions below were answered and implemented in §18 — the
+> live `llamacpp` pipeline is green end to end. This section is kept as the
+> discovery record.)*
+
 The owner started a real `llama-server` on 127.0.0.1 (Strata is no longer on
 8080). Facts, read from the process command line (PowerShell
 `Get-CimInstance Win32_Process`; `wmic` is broken in this shell):
@@ -2437,6 +2441,132 @@ the script's own scratch DB is removed at exit.
 > preset server — 17 ids listed, only the loaded one answers promptly; read the
 > server's command line with PowerShell `Get-CimInstance Win32_Process`
 > (`wmic` is broken in this shell).
+>
+> **DO NOT REOPEN:** plan §9, the live checks staying out of `make test`,
+> `--dialect` REQUIRED (script + `smoke-live`), the SKIP semantics,
+> `probe_strata.sh` / `wsl_strata_demo.sh` untouched, the GUI closed (owner-
+> tested), and the push being the owner's.
+
+---
+
+## 18. SESSION 12 (2026-10-13, later) — the §17.8 decisions answered; both gaps closed; the live `llamacpp` pipeline is GREEN
+
+### 18.1 Decisions (the two answers of §17.8)
+
+| # | §17.8 question | **Decision** |
+|---|---|---|
+| 1 | Should `check` send the resolved api key when one is available (keyless servers unchanged)? | **Yes.** `cmd_check` resolves the key exactly as `run` does (decision 4) but **permissively**: `$OPENAI_API_KEY` (if set, even empty — it shadows the file key, as in `run`) → config file `"api_key"` → **keyless** when neither resolves. With no key anywhere the calls are keyless exactly as before (keyless servers unchanged, a missing key is NOT a hard error here, unlike `run`), and the zero-chat-token / no-DB-writes guarantees are untouched (the key rides only on the two token-free GETs). Without this, `check` stays broken on EVERY key-protected server (`/v1/models` 401s, `/health` stays open) and the scripted pipeline stops at `check` even though `run` works. |
+| 2 | The pipeline `raw_response` schema assertion: HARD + prompt that names the fields, INFORMATIONAL, or both? | **Both (a)+(c).** The assertion stays **HARD** — the pipeline is the proof that a skill with `output_schema` works end to end, and a non-compliant `raw_response` is functionally significant, so informational-only would paper over a real problem. AND the schema skill's prompt now **names the fields** (`label`, `confidence`) — on this model, naming the fields was measured **3/3** compliant, so on a non-enforcing server compliance is prompt-driven, not backend-driven. The failure message additionally explains that the server accepts the envelope but does NOT enforce it (no `strict:true`, unlike Strata), so a red result reads as model non-compliance, not backend refusal. |
+
+### 18.2 What changed (all in tree; commit split §18.4)
+
+* `acta_runner/src/check.c`:
+  * key resolution `$OPENAI_API_KEY` → config `"api_key"` → NULL (keyless);
+    `backend_preflight(..., api_key, ...)` receives the key;
+  * **deliberate side effect:** the config file is now read in **every** `check`
+    invocation (before: only when `--timeout` was absent) — it is the
+    key fallback. A malformed file is fail-closed (`EXIT_INVALID`) even with
+    `--timeout` given; timeout precedence is unchanged (flag still wins);
+  * file header + `check_usage()` reworded (the "keyless by design" wording
+    is retired; the exit-4 line now says the file is always read, for the
+    api-key fallback).
+* `acta_runner/tests/check/test_check.c`: new scenario **16** (`OPENAI_API_KEY`
+  set → exit 0 and the stub records `Authorization: Bearer TESTKEY` via
+  `stub_server_last_auth()`) and **17** (no key anywhere → exit 0, no header —
+  the keyless behavior is unchanged). New helpers `test_setenv` /
+  `test_unsetenv`: **MinGW has no `setenv`/`unsetenv`**, and a bare
+  `_putenv("NAME")` does NOT unset (it leaves the previous value in place —
+  that is why scenario 17 first failed: it kept `TESTKEY`), so the keyless
+  case sets the variable to the **empty** value (`_putenv("NAME=")`); inside
+  `cmd_check` empty and unset are indistinguishable (both → no key, no
+  header). +10 checks: `test_check` 77 → 87.
+* `scripts/live_backend_check.sh`:
+  * the schema skill's prompt now **names the fields** (`Reply with JSON
+    only: {"label": a string, "confidence": a number between 0 and 1}.`
+    — double-escaped inside the `--json` string); the probe step-5 envelope
+    prompt does the same (the literal backslash-quotes are body escaping, the
+    same class as step 4);
+  * the schema-assertion failure message now explains the server accepts the
+    envelope without enforcing it (model non-compliance, not backend
+    refusal);
+  * header comment updated (hard assertion + named fields + the 3/3
+    measurement).
+* `docs/llamacpp_server_contract.md`: "tested on" line gains the 2026-10-13
+  preset server; §3 — key-protected `/v1/models` 401 without the key and
+  `check` now sends the resolved key; §3a — `GET /` → HTTP 415 `Error: gzip
+  is not supported by this browser` (a browser page, never a catalog; judge
+  by body shape); §4 — **"Envelope accepted ≠ schema enforced"** (the server
+  accepts both envelopes, enforces neither; naming the fields measured 3/3;
+  the pipeline keeps the assertion hard with a field-naming prompt).
+* `docs/runner_contract.md`: check-action **API key** paragraph + the exit-4
+  wording.
+* `docs/status.md`: the Done entry for this work.
+
+### 18.3 Verification (2026-10-13)
+
+| | Result |
+|---|---|
+| `make test-live-llamacpp LIVE_KEY=JB LIVE_MODEL=JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS` | **exit 0.** Probe: `/health` 200, `/v1/models` 200 with `Bearer JB` (17 ids, the model present), plain chat 200 `Hello!`, `json_object` 200 (informational), **llamacpp envelope 200 `{"label":"positive","confidence":0.95}`** (gap B closed by the field-naming prompt), the openai envelope also accepted (informational), `GET /` 415 no catalog body, cross-side unreachable (informational). Pipeline: `check 1` → `{"ok":true,"model":…,"max_context":162048}` **exit 0** (gap A closed), both `run`s exit 0, both rows `completed`, `raw_response` satisfies the schema, audit `preflight_passed max_context=162048 source=entry.meta.n_ctx dialect=llamacpp catalog=null`, `llm_request dialect=llamacpp source=model_revision model_backend=llamacpp response_format=True`, plain skill `response_format=False` |
+| Windows, 14 runner suites | **760 / 0** (`test_check` 87 = old 77 + new 16/17) |
+| WSL `insightcae`, 14 runner suites | **791 / 0** (`test_check` 87; api_key 19, conf 50, shadow 49) — after the §5 rsync and a rebuild of `tests/check/test_check` only (the only suite whose source changed) |
+
+A `make test-live-llamacpp` run **without** `LIVE_KEY`/`LIVE_MODEL` fails
+exactly as the pre-fix design predicts: keyless `/v1/models` → 401 and no
+model id from `/health` (a preset server's `/health` carries no single
+`model` field — the `model=` value printed on the probe's `/health` line is
+the current `--model` value, not a field from the body), so `LIVE_MODEL` is
+**required** on this server, not just `LIVE_KEY`.
+
+**New gotchas (add to the table):**
+
+| Gotcha | Workaround |
+|---|---|
+| MinGW: `setenv`/`unsetenv` do not exist, and a bare `_putenv("NAME")` does NOT unset (leaves the previous value) | set the variable to the **empty** value (`_putenv("NAME=")`) for the keyless case; empty ≡ unset inside `cmd_check` |
+| `~/acta_suites.sh` **replaces** its default list with the arguments (it does not append) | pass **all 14** suite paths to run the full set, not just `tests/util/test_util` |
+| a preset `llama-server`'s `/health` carries no `model` id | the live check needs `--model`/`LIVE_MODEL` (and `--key`/`LIVE_KEY` on a key-protected server), or it cannot resolve the id |
+
+### 18.4 Commit (the push stays the owner's)
+
+Split: **`runner:`** `acta_runner/src/check.c` + `acta_runner/tests/check/
+test_check.c` · **`scripts:`** `scripts/live_backend_check.sh` · **`docs:`**
+`docs/llamacpp_server_contract.md` + `docs/runner_contract.md` +
+`docs/status.md` + `docs/session_dialect_progress.md`.
+
+### 18.5 Resume prompt
+
+> Read **`docs/session_dialect_progress.md` §18 first** (then §17.8 — the
+> discovery record, now superseded by §18 — and §17),
+> `docs/llamacpp_server_contract.md`, and `docs/plans/backend_dialects.md`
+> (§9) in ACTA Gamma (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
+>
+> **STATE — sessions 9–12 are COMMITTED; tree clean; NOTHING pushed (the
+> push is the owner's).** A real multi-model preset `llama-server` is live
+> on `127.0.0.1:8080` (key `JB`, loaded model
+> `JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`, `meta.n_ctx` 162048). Both §17.8
+> gaps are CLOSED: `check` sends the resolved api key (env → config file →
+> keyless; keyless servers unchanged; the config file is now always read —
+> malformed file fail-closed even with `--timeout`), and the pipeline keeps
+> the HARD schema assertion with a field-naming prompt (3/3 measured; the
+> failure message explains the non-enforcing server). `make test-live-
+> llamacpp LIVE_KEY=JB LIVE_MODEL=JBDRAFTBig_…` is **exit 0 end to end**.
+> Regression: Windows 14 suites **760/0**, WSL **791/0** (`test_check` 87 on
+> both).
+>
+> **DO NEXT — nothing is required.** Open items: the push (owner's); the two
+> out-of-scope defects (§17.6 item 3); WSL ASAN on `test_check` was not run
+> (the new `getenv`/`strdup` path is clean by construction — run it per
+> protocol if wanted: `make clean` in `acta_db` **and** `acta_runner`, rebuild
+> with `-fsanitize=address`, `ASAN_OPTIONS=detect_leaks=0`, rebuild plain
+> after).
+>
+> **GOTCHAS (new):** MinGW has no `setenv`/`unsetenv` and a bare
+> `_putenv("NAME")` does not unset (set `"NAME="` for the keyless case);
+> `~/acta_suites.sh` replaces its suite list with the args (pass all 14);
+> a preset server's `/health` carries no `model` id — the live check needs
+> `LIVE_MODEL` as well as `LIVE_KEY`; the cross-side socket probe on this
+> box reported both sides unreachable even though the probe's own `/health`
+> call reached the server from WSL — informational, never a reachability
+> verdict.
 >
 > **DO NOT REOPEN:** plan §9, the live checks staying out of `make test`,
 > `--dialect` REQUIRED (script + `smoke-live`), the SKIP semantics,

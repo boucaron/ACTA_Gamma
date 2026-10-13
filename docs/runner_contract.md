@@ -428,6 +428,17 @@ acta_runner check --base-url <url> --model-identifier <id>     # standalone
    endpoint error / unparseable body → verdict `catalog unreachable`.
    `check` makes no `GET /` catalog call in either dialect.
 
+**API key** (decision 4, extended for `check` 2026-10-13): the two GETs
+send `Authorization: Bearer <key>` when a key resolves from
+`$OPENAI_API_KEY` (if set, even empty) -> the config file `"api_key"`
+(same resolution as `run`; a set env var, even empty, shadows the file
+key). Without that, `check` could never reach a key-protected server — a
+llama-server started with `--api-key` answers 401 on `/v1/models` without
+the key (its `/health` stays open) — and the scripted live pipeline stops
+at the `check` step. With no key anywhere the calls are keyless, exactly
+as before: keyless servers are unchanged, and a missing key is NOT a
+hard error here (unlike `run`, where it exits 4 before the claim).
+
 **Result contract** — one JSON line on stdout (scriptable):
 
 - success: `{"ok":true,"model":"<id>","max_context":<n>,"base_url":"<url>"}`
@@ -438,7 +449,8 @@ acta_runner check --base-url <url> --model-identifier <id>     # standalone
 **Exit codes** (the runner's existing code space, no new numbers):
 `0` all checks passed; `1` unknown `<model-record-id>` (DB mode);
 `4` invalid arguments (flag conflicts, bad `--timeout`, malformed
-config file when it is the timeout source); `12` (`EXIT_HTTP`) `/health`
+config file — the file is always read, for the api-key fallback);
+`12` (`EXIT_HTTP`) `/health`
 non-200, model not in catalog, HTTP-level failure; `13`
 (`EXIT_TIMEOUT`) a check call hit `--timeout`. Timeout resolution is the
 existing one: `--timeout` flag → config file `"timeout"` → built-in
