@@ -158,13 +158,15 @@ so the runs used `OPENAI_API_KEY=""` — the documented empty-key localhost case
 | **E** | Strata backend contract doc | **Done, renamed** — `docs/openai_dialect_contract.md` + README "OpenAI-compatible backends" + `docs/llamacpp_server_contract.md` cross-links. Deliberate: documented as a *strict OpenAI-compatible HTTP dialect*, not a vendor, so no `docs/strata_server_contract.md` exists |
 | **F** | `check <id>` = model record id | **Done** — README, `docs/cli_spec.md`, `docs/runner_contract.md` |
 | **G** | Commit everything | **Done** — 18 commits `8e06493…` (incl. `scripts/`); **all local — `git push` to `origin/main` stays the owner's** (`docs/session_dialect_progress.md` §17.1) |
-| **H** | GUI on WSL | **OPEN** — no Qt 6 in `insightcae`. The GUI is built and verified on Windows only (debug + release, zero warnings; see `docs/session_dialect_progress.md` §13) |
+| **H** | GUI on WSL | **CLOSED by the owner (2026-10-13)** — the UI is tested with the Strata/dialect changes, and the Linux/Qt 6 run is the owner's own test (no Qt 6 in `insightcae` is not a repo problem). Windows build verified debug + release, zero warnings: `docs/session_dialect_progress.md` §13 |
 | **I** | Full `make test` in one shot | **Done** — `acta_cli` 17/17 in one shot on both platforms; the 13 runner suites run as 13 binaries (681 Windows / 712 WSL); `acta_db` `make test` → ALL TESTS PASSED, rc 0 |
 | **J** | `backend:"strata"` or `openai`? | **Decided** — `openai` only; closed vocabulary `llamacpp`/`openai`, `llama` is not an alias, validated by `acta_cli` at declaration and re-validated by the runner at run time |
 
 **Still open on the Strata side (session 8):**
 
-1. **H** — GUI on WSL (needs Qt 6 installed in the distro).
+1. ~~**H** — GUI on WSL (needs Qt 6 installed in the distro).~~ **CLOSED by the
+   owner (2026-10-13)** — the UI is tested with the Strata/dialect changes and
+   the Linux/Qt 6 run is the owner's own test.
 2. **Live Strata runs are manual**, not part of `make test`: the automated coverage
    (`make test-e2e`, `tests/run/test_openai_dialect.c`) uses the stub server, so
    nothing in `make test` ever touches a real OpenAI-compatible server. **Improved

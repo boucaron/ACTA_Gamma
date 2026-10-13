@@ -2239,7 +2239,11 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
    `could not read Username for 'https://github.com'`: no GitHub credential in
    Windows Credential Manager, no SSH key, no `gh`), so it must be run
    interactively by the owner.
-2. GUI on WSL — the owner's (§15.6 item 2, unchanged; needs Qt 6 in `insightcae`).
+2. ~~GUI on WSL~~ — **closed by the owner (2026-10-13)**: the UI is tested with
+   the Strata/dialect changes, and the Linux/Qt 6 run is the owner's own test —
+   the absence of Qt 6 in `insightcae` is not a repo problem. (Fact worth
+   keeping: the GUI still has no test harness in the repo; the only functional
+   check ever written is the ephemeral headless probe of §13.4.)
 3. Out of scope, still open (§15.6 item 3): (b) the `acta_cli` test-harness leak,
    (c) `make -C acta_db libacta_db.a` not regenerating
    `include/{schema,migrations}_sql.h` after `clean`.
@@ -2264,14 +2268,15 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 > double-personality `acta_runner/Makefile` was committed twice; §17.3 is the
 > worktree proof that the intermediate tree built.
 >
-> **DO NEXT — nothing is required.** Only §17.6: GUI-on-WSL (the owner's), the two
-> out-of-scope defects (`acta_cli` test-harness leak; `make -C acta_db
-> libacta_db.a` not regenerating `include/{schema,migrations}_sql.h` after
-> `clean`), and — if the owner ever starts a real `llama-server` —
+> **DO NEXT — nothing is required.** Only §17.6: the two out-of-scope defects
+> (`acta_cli` test-harness leak; `make -C acta_db libacta_db.a` not
+> regenerating `include/{schema,migrations}_sql.h` after `clean`), and — if the
+> owner ever starts a real `llama-server` —
 > `make test-live-llamacpp LIVE_BASE_llamacpp=… LIVE_MODEL=…` as the first live
 > `llamacpp` run. **Strata (`openai`) is the only live backend on this box**
 > (§17.4): `make test-live` there prints `llamacpp exit 1 / openai exit 0` and
-> exits 0 by design.
+> exits 0 by design. The GUI is CLOSED (owner-tested with the Strata changes;
+> the Linux/Qt 6 run is the owner's own test — do not re-open it).
 >
 > **VERIFICATION** — Windows: `export PATH=/c/msys64/mingw64/bin:$PATH
 > TMP='C:/msys64/tmp' TEMP='C:/msys64/tmp'` **first**, then `mingw32-make all`;
@@ -2299,4 +2304,5 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 > `probe_strata.sh` / `wsl_strata_demo.sh` staying untouched, `--dialect` staying
 > REQUIRED (script and `smoke-live`), `make test-live` staying "red only when
 > NEITHER dialect is usable", the live checks staying out of `make test`, and the
-> GUI being the owner's.
+> GUI being closed (owner-tested with the Strata changes; the Linux/Qt 6 run is
+> the owner's own test).

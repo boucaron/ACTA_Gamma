@@ -10,8 +10,9 @@ global-init leak; acceptance criteria 1–8 verified, including live end-to-end
 against Strata with an `output_schema` skill). Phase 7 (GUI) is written
 (`src.pro` + `modelDialog`), **compiled** (debug + release, zero warnings,
 2026-10-12) and **committed** (`bb05950` + the `dialect.h` include-path fix
-`e6d45ea`); it is still not buildable on WSL — no Qt 6 in `insightcae` — and
-running it there remains the owner's. Progress and gotchas:
+`e6d45ea`), and **closed by the owner 2026-10-13**: the UI is tested with the
+Strata/dialect changes and the Linux/Qt 6 run is the owner's own test.
+Progress and gotchas:
 [`docs/session_dialect_progress.md`](../session_dialect_progress.md) (§10–§17).
 Depends on:
 [`docs/session_strata_backend.md`](../session_strata_backend.md) (issues A and B
