@@ -40,7 +40,7 @@
  *   0  — all checks passed
  *   1  — unknown <model-record-id> (DB mode only)
  *   4  — invalid arguments (flag conflicts, bad --timeout, malformed
- *        config file when it is the timeout source)
+ *        config file — the file is always read, for the api-key fallback)
  *   12 — EXIT_HTTP: /health non-200, model not in catalog, HTTP-level
  *        failure
  *   13 — EXIT_TIMEOUT: a check call hit --timeout
@@ -48,6 +48,15 @@
  * No POST /v1/chat/completions — ever. No execution_log rows, no
  * execution state change, no DB writes of any kind. No streaming, no
  * retry loop (consistent with the product decisions).
+ *
+ * The two GETs carry an Authorization header ONLY when a key resolves
+ * from $OPENAI_API_KEY (if set, even empty) -> the config file
+ * "api_key" (docs/runner_contract.md decision 4). That is what makes
+ * `check` work on a key-protected server (llama-server started with
+ * --api-key: its /v1/models answers 401 without the key; /health stays
+ * open). With no key anywhere the calls are keyless, exactly as before:
+ * keyless servers are unchanged, and a missing key is NOT a hard error
+ * here (unlike `run`).
  */
 
 #include "runner.h"
@@ -87,6 +96,9 @@ static void check_usage(FILE *out)
         "                          has no model row. Default llamacpp. Not\n"
         "                          accepted with a <model-record-id>: there\n"
         "                          the dialect comes from the model row.\n"
+        "  Key: $OPENAI_API_KEY (if set), else the config file \"api_key\";\n"
+        "       when none is available the calls are keyless (keyless\n"
+        "       servers are unchanged; a missing key is not an error)\n"
         "\n"
         "stdout: {\"ok\":true,...,\"max_context\":N} on success, or\n"
         "{\"ok\":false,...,\"verdict\":\"<reason>\"} on failure.\n"
@@ -115,30 +127,46 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
         }
     }
 
-    /* Timeout resolution: --timeout flag -> config file "timeout" ->
-     * built-in default (600 s), the existing resolution from
-     * docs/runner_contract.md decision 5. The config file is only read
-     * when the flag is absent (the flag wins outright, so the file
-     * cannot change the result). A readable-but-malformed file is a
-     * hard error, fail-closed, like everywhere else. */
-    int timeout_sec;
-    if (timeout > 0) {
-        timeout_sec = timeout;
-    } else {
-        acta_conf_t conf;
-        int conf_missing = 0;
-        char *conf_err = NULL;
-        if (acta_conf_read(acta_conf_default_path(), &conf, &conf_missing,
-                           &conf_err) != 0) {
-            const char *what = conf_err ? conf_err : "config file is invalid";
-            VLOG(1, "cmd_check: ERROR %s", what);
-            int rc = emit_runner_error(EXIT_INVALID, what);
-            free(conf_err);
-            return rc;
-        }
-        timeout_sec = acta_conf_resolve_timeout(&conf, 0);
-        acta_conf_free(&conf);
+    /* Per-machine settings resolution
+     * (docs/runner_contract.md, decisions 4 and 5). The config file is
+     * read in EVERY case now, not only when --timeout is absent: it is
+     * the fallback source of the api key below. The --timeout flag still
+     * wins outright for the timeout, but a readable-but-malformed file
+     * is a hard error (fail-closed, like everywhere else) even when the
+     * flag is present.
+     *   timeout: --timeout flag -> config file "timeout"
+     *            -> built-in default (600 s);
+     *   api key: $OPENAI_API_KEY (if set, even empty) -> config file
+     *            "api_key" -> keyless. A set env var (even empty)
+     *            always shadows the file key (decision 4). Unlike
+     *            `run`, a missing key is NOT a hard error: the check
+     *            simply stays keyless, so keyless servers are unchanged. */
+    acta_conf_t conf;
+    int conf_missing = 0;
+    char *conf_err = NULL;
+    if (acta_conf_read(acta_conf_default_path(), &conf, &conf_missing,
+                       &conf_err) != 0) {
+        const char *what = conf_err ? conf_err : "config file is invalid";
+        VLOG(1, "cmd_check: ERROR %s", what);
+        int rc = emit_runner_error(EXIT_INVALID, what);
+        free(conf_err);
+        return rc;
     }
+    int timeout_sec = (timeout > 0)
+                        ? timeout
+                        : acta_conf_resolve_timeout(&conf, 0);
+    char *api_key = NULL;
+    {
+        const char *env_key = getenv("OPENAI_API_KEY");
+        const char *file_key = conf.api_key; /* NULL: missing/absent key */
+        const char *src = (env_key != NULL) ? env_key : file_key;
+        if (src && src[0] != '\0')
+            api_key = strdup(src);
+    }
+    acta_conf_free(&conf);
+    VLOG(2, "cmd_check: api_key=%s",
+         api_key ? "present (Authorization header sent)"
+                 : "absent (keyless, no Authorization header)");
 
     const char *pos = cmd_args_next_positional(ga);
     if (standalone && pos) {
@@ -263,6 +291,7 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             free(base);
             free(mid);
             free(backend);
+            free(api_key);
             return EXIT_ALLOC;
         }
     }
@@ -291,17 +320,20 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
             free(base);
             free(mid);
             free(backend);
+            free(api_key);
             return emit_runner_error(EXIT_INVALID, bmsg);
         }
         VLOG(2, "cmd_check: dialect=%s (model backend '%s')",
              dialect->name, backend);
     }
 
-    /* The two token-free calls, keyless by design (the check probes the
-     * server surface before any model is registered; no chat call is
-     * ever made). */
+    /* The two token-free calls. When a key resolved above, the
+     * Authorization header is sent so a key-protected server (whose
+     * /v1/models answers 401 without the key) is checkable; with no key
+     * anywhere this is keyless, exactly as before. No chat call is ever
+     * made, and nothing is written to the DB in either case. */
     backend_preflight_t pf;
-    int prc = backend_preflight(base, mid, dialect, NULL, timeout_sec, &pf);
+    int prc = backend_preflight(base, mid, dialect, api_key, timeout_sec, &pf);
 
     /* The prc -> (verdict, exit code) mapping is the shared
      * preflight_verdict() in backend.c — the same classification the run
@@ -321,5 +353,6 @@ int cmd_check(cmd_args_t *ga, const global_opts_t *gopts, db_t *db)
     free(base);
     free(mid);
     free(backend);
+    free(api_key);
     return exit_code;
 }

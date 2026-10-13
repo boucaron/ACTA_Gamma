@@ -32,6 +32,12 @@
  *  14. --dialect with a              -> EXIT_INVALID: DB mode takes the
  *      <model-record-id>                dialect from the model row
  *  15. DB mode on an `openai` model -> exit 0, row decides the dialect
+ *  16. $OPENAI_API_KEY set              -> exit 0, the Authorization
+ *                                       header IS sent (key-protected
+ *                                       servers: /v1/models 401s without
+ *                                       the key; /health stays open)
+ *  17. no key anywhere                  -> exit 0, keyless exactly as
+ *                                       before (no Authorization header)
  *
  * The plan's defining property is asserted in every scenario: the stub's
  * POST /v1/chat/completions request count stays 0 (zero tokens — the
@@ -211,6 +217,34 @@ static int seed_model(db_t *db, const char *base_url, const char *model_id)
 {
     return seed_model_backend(db, base_url, model_id, "llamacpp");
 }
+
+/* setenv / unsetenv are POSIX; MinGW provides _putenv instead. A value
+ * set to the empty string is indistinguishable from unset inside
+ * cmd_check (both resolve to no key), so this is exact enough for the
+ * keyless scenario. */
+#ifdef _WIN32
+static int test_setenv(const char *name, const char *val)
+{
+    char buf[256];
+    snprintf(buf, sizeof buf, "%s=%s", name, val);
+    return _putenv(buf);
+}
+/* MinGW has no unsetenv, and a bare _putenv("NAME") does NOT unset
+ * (it leaves the previous value in place — that is why the keyless
+ * scenario must set the variable to the EMPTY value explicitly). An
+ * empty value is indistinguishable from unset inside cmd_check (both
+ * resolve to no key, no Authorization header). */
+static int test_unsetenv(const char *name)
+{
+    char buf[256];
+    snprintf(buf, sizeof buf, "%s=", name);
+    return _putenv(buf);
+}
+#else
+static int test_setenv(const char *name, const char *val)
+{ return setenv(name, val, 1); }
+static int test_unsetenv(const char *name) { return unsetenv(name); }
+#endif
 
 /* True when no execution rows exist yet (the "no DB writes" assertion). */
 static int no_execution_rows(db_t *db)
@@ -727,6 +761,74 @@ int main(void)
         check(strstr(out, "\"ok\":true") != NULL, "stdout carries ok:true");
         check(strstr(out, "\"max_context\":204800") != NULL,
               "the row dialect decides the ceiling order (meta.n_ctx)");
+        check(stub_server_chat_requests() == 0,
+              "zero /v1/chat/completions requests (token-free)");
+        check(no_execution_rows(db), "no execution rows (no DB writes)");
+        stub_server_stop();
+    }
+
+    /* 16. $OPENAI_API_KEY set: the check succeeds AND the Authorization
+     *     header is really sent — a key-protected server (llama-server
+     *     started with --api-key) answers 401 on /v1/models without the
+     *     key, which is exactly what broke `check` there (session
+     *     notes §17.8 gap A). */
+    {
+        printf("== check: resolved api key is sent\n");
+        int mid = seed_model(db, STUB_BASE_URL, "stub-model");
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.max_context = 162000;
+        if (mid < 0 || stub_server_start(&cfg) != 0) {
+            check(0, "setup");
+            return 1;
+        }
+        test_setenv("OPENAI_API_KEY", "TESTKEY");
+        char out[512];
+        char idbuf[16]; snprintf(idbuf, sizeof idbuf, "%d", mid);
+        char *argv[] = { idbuf, "--timeout", "30" };
+        int rc = run_check_capture((const char *const *)argv, 3, db, out,
+                                  sizeof out, &gopts);
+        check(rc == EXIT_OK, "exit 0");
+        check(strstr(out, "\"ok\":true") != NULL, "stdout carries ok:true");
+        const char *auth = stub_server_last_auth();
+        check(auth != NULL && strcmp(auth, "Bearer TESTKEY") == 0,
+              "Authorization: Bearer TESTKEY was sent");
+        check(stub_server_chat_requests() == 0,
+              "zero /v1/chat/completions requests (token-free)");
+        check(no_execution_rows(db), "no execution rows (no DB writes)");
+        stub_server_stop();
+    }
+
+    /* 17. No key anywhere (env unset, or empty — cmd_check cannot
+     *     tell the two apart): keyless exactly as before, no
+     *     Authorization header — the key resolution must not change
+     *     the keyless-server behavior. */
+    {
+        printf("== check: keyless without a key anywhere\n");
+        int mid = seed_model(db, STUB_BASE_URL, "stub-model");
+        stub_config_t cfg;
+        memset(&cfg, 0, sizeof cfg);
+        cfg.port = STUB_PORT;
+        cfg.health_status = 200;
+        cfg.model_id = "stub-model";
+        cfg.max_context = 162000;
+        if (mid < 0 || stub_server_start(&cfg) != 0) {
+            check(0, "setup");
+            return 1;
+        }
+        test_unsetenv("OPENAI_API_KEY");
+        char out[512];
+        char idbuf[16]; snprintf(idbuf, sizeof idbuf, "%d", mid);
+        char *argv[] = { idbuf, "--timeout", "30" };
+        int rc = run_check_capture((const char *const *)argv, 3, db, out,
+                                  sizeof out, &gopts);
+        check(rc == EXIT_OK, "exit 0");
+        check(strstr(out, "\"ok\":true") != NULL, "stdout carries ok:true");
+        check(stub_server_last_auth() == NULL,
+              "no Authorization header (keyless, unchanged)");
         check(stub_server_chat_requests() == 0,
               "zero /v1/chat/completions requests (token-free)");
         check(no_execution_rows(db), "no execution rows (no DB writes)");
