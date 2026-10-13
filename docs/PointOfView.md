@@ -133,7 +133,7 @@ The model is another independent dimension of an execution.
 Context × Skill Revision × Model
 ```
 
-The backend is llama.cpp, accessed through the OpenAI-compatible API it exposes; the runner contains no llama.cpp code and speaks only that HTTP surface. That is the extent of the backend story: llama.cpp is the backend, full stop.
+The backend is a local inference server speaking one of the two OpenAI-compatible dialects ACTA supports: `llamacpp` (a llama.cpp `llama-server`) or `openai` (any strict OpenAI-compatible server, e.g. Strata). The dialect is a property of the model revision, not a CLI flag, and the runner contains no backend code — it speaks only that HTTP surface. That is the extent of the backend story: two dialects over one HTTP surface, full stop.
 
 A local model can be replaced by another local model without changing the skill system.
 

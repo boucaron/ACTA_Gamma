@@ -2,13 +2,18 @@
 
 Handoff document. Date: 2026-10-12 (continuation of
 [`docs/session_strata_backend.md`](session_strata_backend.md)).
-Branch state: **nothing committed** — the whole working tree is uncommitted
-(10 portability/memory fixes from the previous session + Phases 1–3 of
-[`docs/plans/backend_dialects.md`](plans/backend_dialects.md)).
+Branch state at the time of writing: **nothing committed** — **superseded
+later**: everything is now committed (`8e06493…` onward, `main` currently 23
+ahead of `origin/main`; the push stays the owner's — §17.1, §18.4).
 
-Read first: [`docs/plans/backend_dialects.md`](plans/backend_dialects.md)
+Read first: **§18** — the current state and the current resume prompt
+(§18.5). §1–§17 are the work record: historical mid-states (several sections
+read "IN FLIGHT" / "NOT BUILT" about phases that later landed; the resume
+prompts of §5, §7, §8.6, §9.5, §10.4, §12.5, §13.8, §14 and §17.7 are
+superseded). Then
+[`docs/plans/backend_dialects.md`](plans/backend_dialects.md)
 (§2 dialect matrix, §3.2 where the dialect comes from, **§9 = the four
-decisions, now answered**), then this file, then
+decisions, now answered**), then
 [`docs/session_strata_backend.md`](session_strata_backend.md) §4 "Known
 gotchas".
 
@@ -2165,7 +2170,7 @@ works for the test** (§17.4). Nothing was implemented in this session — it
 re-verified §16.5 on both platforms and committed the batch in the proposed
 split.
 
-### 17.1 What is in git now (18 local commits; `main` is 18 ahead of `origin/main`)
+### 17.1 What is in git now (18 local commits at the time of writing; `main` is currently 23 ahead of `origin/main`)
 
 | Commit | Contents |
 |---|---|
@@ -2237,7 +2242,7 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 
 ### 17.6 REMAINING
 
-1. `git push` — **the owner's, unchanged** (§15.6 item 1). 18 commits are local;
+1. `git push` — **the owner's, unchanged** (§15.6 item 1). 18 commits were local at the time of writing (`main` is now 23 ahead of `origin/main`);
    this shell cannot authenticate (`git push` → `User cancelled dialog` /
    `could not read Username for 'https://github.com'`: no GitHub credential in
    Windows Credential Manager, no SSH key, no `gh`), so it must be run
@@ -2267,7 +2272,7 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 > (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
 >
 > **STATE — everything is COMMITTED, `git status` is clean, and NOTHING is
-> pushed**: 18 local commits, `main` 18 ahead of `origin/main` — the push is the
+> pushed**: 18 local commits at the time of writing (`main` is now 23 ahead of `origin/main`) — the push is the
 > owner's (§17.6 item 1). The session-9/10 batch landed as five:
 > `c312a31` (emitter fix + `tests/util/test_util.c` + the Makefile rules that
 > pin it) · `0218fb2` (`llama_smoke` two-dialect rewrite + `smoke`/`smoke-live`)
@@ -2398,7 +2403,7 @@ push stays the owner's).
 Scratch (ephemeral, outside the repo): `/c/msys64/tmp/acta_live_llamacpp_manual.db`;
 the script's own scratch DB is removed at exit.
 
-### 17.9 Resume prompt for the next session (current)
+### 17.9 Resume prompt for the next session (superseded by §18.5)
 
 > Read **`docs/session_dialect_progress.md` §17.8 FIRST** (then §17.1–17.7,
 > §16), `docs/llamacpp_server_contract.md`, and `docs/plans/backend_dialects.md`

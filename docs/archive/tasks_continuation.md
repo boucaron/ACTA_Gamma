@@ -1,5 +1,8 @@
 # Task continuation: remove `db exec` / add `db init`
 
+> **Archived** (see [`docs/archive/README.md`](README.md)) — every session
+> below is done and verified; nothing here is open work.
+
 Status: **done.** All code and doc edits are complete (sessions 1-6) and
 the user verified the full build + test run green
 (`make all`, `make test` — every suite PASS; `make gui` +
