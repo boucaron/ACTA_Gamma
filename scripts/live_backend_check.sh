@@ -38,12 +38,18 @@
 #
 #   pipeline — the real pipeline, in a scratch DB (NEVER the repo acta.db):
 #     db init -> model create backend=<dialect> -> 2 skills (plain +
-#     output_schema AS A JSON STRING, docs/cli_spec.md issue C) -> context create
+#     output_schema AS A JSON STRING, docs/cli_spec.md issue C, with a
+#     prompt that NAMES the required fields) -> context create
 #     -> 2 exec create -> check <model record id> -> run <e1> -> run <e2> ->
 #     both completed, exec 2 raw_response parses and satisfies the schema
-#     (label, confidence), and the execution_log audit keys name the dialect
-#     that produced them (preflight_passed.max_context / max_context_source /
-#     catalog, llm_request.dialect / dialect_source / model_backend).
+#     (label, confidence) — a HARD assertion: a schema-constrained server
+#     (Strata, strict:true) guarantees it, but a plain llama-server accepts
+#     the envelope without enforcing it, so the prompt must name the
+#     fields for the model to comply (measured 3/3 on
+#     JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS). The execution_log audit keys
+#     name the dialect that produced them (preflight_passed.max_context /
+#     max_context_source / catalog, llm_request.dialect / dialect_source /
+#     model_backend).
 #
 # Usage:
 #   scripts/live_backend_check.sh --dialect llamacpp|openai   (REQUIRED, no default)
@@ -308,9 +314,14 @@ if [ "$PROBE" = 1 ]; then
     say "4 json_object" "HTTP $R_CODE $(printf '%s' "$R_BODY" | jget choices.0.message.content | tr -d '\n' | cut -c1-60) [finish=$(printf '%s' "$R_BODY" | jget choices.0.finish_reason)] (informational)"
 
     # ---- 5. the CHOSEN dialect's envelope (HARD) ----
+    # The prompt names the required fields (as the pipeline's schema skill
+    # does): acceptance is what this step proves, and on a server that does
+    # not enforce the schema the named fields are what make the model
+    # comply. The literal backslash-quotes are the body escaping (same
+    # class as step 4).
     RF=$(env_rf "$DIALECT")
     say "5 envelope $DIALECT" "sends: $RF"
-    BODY=$(chat_json "$MODEL" "Classify the sentiment of the input. Reply with JSON only." "The food was excellent." "$RF")
+    BODY=$(chat_json "$MODEL" 'Classify the sentiment of the input. Reply with JSON only: {\"label\": a string, \"confidence\": a number between 0 and 1}.' "The food was excellent." "$RF")
     if http POST "$BASE/v1/chat/completions" "$BODY" && [ "$R_CODE" = 200 ]; then
         say "5 envelope $DIALECT" "HTTP 200 $(printf '%s' "$R_BODY" | jget choices.0.message.content | tr -d '\n' | cut -c1-60)"
     else
@@ -416,7 +427,11 @@ if [ "$PIPELINE" = 1 ]; then
 
     MID=$(echo "$("$CLI" model create --id_only --json "{\"name\":\"live-check-$DIALECT\",\"backend\":\"$DIALECT\",\"base_url\":\"$BASE\",\"model_identifier\":\"$MODEL\"}" 2>/dev/null)" | tr -d '[:space:]')
     S1=$(echo "$("$CLI" skill create --id_only --json '{"name":"summarize","prompt_template":"Summarize the input in one short sentence."}' 2>/dev/null)" | tr -d '[:space:]')
-    S2=$(echo "$("$CLI" skill create --id_only --json "{\"name\":\"sentiment\",\"prompt_template\":\"Classify the sentiment of the input. Reply with JSON only.\",\"output_schema\":\"$SCHEMA_ESC\"}" 2>/dev/null)" | tr -d '[:space:]')
+    # The schema skill's prompt NAMES the required fields: the pipeline's
+    # hard schema assertion only holds when the model complies, and on a
+    # server that does not enforce the envelope that is prompt-driven
+    # (session notes §17.8, gap B: unnamed fields -> {"sentiment":...}).
+    S2=$(echo "$("$CLI" skill create --id_only --json "{\"name\":\"sentiment\",\"prompt_template\":\"Classify the sentiment of the input. Reply with JSON only: {\\\"label\\\": a string, \\\"confidence\\\": a number between 0 and 1}.\",\"output_schema\":\"$SCHEMA_ESC\"}" 2>/dev/null)" | tr -d '[:space:]')
     CID=$(echo "$("$CLI" context create --id_only --json '{"type":"text","content":"The build system shipped on time and the release went smoothly."}' 2>/dev/null)" | tr -d '[:space:]')
     say "model/skill/context ids" "model=$MID skills=$S1,$S2 context=$CID"
     isint "$MID" && isint "$S1" && isint "$S2" && isint "$CID" || { echo "FAIL: create did not return ids (stdout only, stderr carries the pragma warn)" >&2; exit 1; }
@@ -465,7 +480,12 @@ if miss: print("  FAIL: raw_response misses %s" % ",".join(miss)); sys.exit(1)
 if not isinstance(d["label"],str): print("  FAIL: label is not a string: %r" % (d["label"],)); sys.exit(1)
 if isinstance(d["confidence"],bool) or not isinstance(d["confidence"],(int,float)): print("  FAIL: confidence is not a number: %r" % (d["confidence"],)); sys.exit(1)
 print("  raw_response satisfies the output_schema: %s" % json.dumps(d)[:160])
-' || { echo "FAIL: exec $E2 raw_response does not satisfy the schema" >&2; exit 1; }
+' || { echo "FAIL: exec $E2 raw_response does not satisfy the schema" >&2
+          echo "   This server accepts the $DIALECT envelope but does NOT enforce the schema" >&2
+          echo "   (no strict:true, unlike Strata): the model's reply deviated even though" >&2
+          echo "   the skill prompt names the required fields. Model non-compliance," >&2
+          echo "   not a backend refusal — re-run or register a stricter server." >&2
+          exit 1; }
 
     # ---- the audit trail: which dialect produced these rows ----
     "$CLI" log list "$E2" 2>/dev/null > "$LOGF"
