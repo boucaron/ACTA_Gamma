@@ -3,8 +3,13 @@
 Handoff document. Date: 2026-10-12 (continuation of
 [`docs/session_strata_backend.md`](session_strata_backend.md)).
 Branch state at the time of writing: **nothing committed** — **superseded
-later**: everything is now committed (`8e06493…` onward, `main` currently 24
-ahead of `origin/main`; the push stays the owner's — §17.1, §18.4, §19.1).
+later**: everything is committed (`8e06493…` onward). **Superseded again:
+the push has since happened — as verified on 2026-10-13 `main` and `origin/main`
+were in sync** (`git rev-list --count origin/main..main` = 0, clean tree; later
+commits re-open the gap as usual, and the push stays the owner's). Every "N commits
+local / N ahead of `origin/main` / not pushed" line in this file and in
+`docs/session_strata_backend.md` is a historical snapshot of the moment it was
+written (§17.1, §18.4, §19.1).
 
 Read first: **§19** (docs stale-content cleanup + the latest green WSL
 re-verification) and **§18** — the current implementation state; its resume
@@ -2171,7 +2176,7 @@ works for the test** (§17.4). Nothing was implemented in this session — it
 re-verified §16.5 on both platforms and committed the batch in the proposed
 split.
 
-### 17.1 What is in git now (18 local commits at the time of writing; `main` is currently 23 ahead of `origin/main`)
+### 17.1 What is in git now (18 local commits at the time of writing; `main` was then 23 ahead of `origin/main`, since pushed)
 
 | Commit | Contents |
 |---|---|
@@ -2243,7 +2248,7 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 
 ### 17.6 REMAINING
 
-1. `git push` — **the owner's, unchanged** (§15.6 item 1). 18 commits were local at the time of writing (`main` is now 23 ahead of `origin/main`);
+1. `git push` — **the owner's at the time of writing** (§15.6 item 1). 18 commits were local (`main` was then 23 ahead of `origin/main`, **since pushed** — see the header);
    this shell cannot authenticate (`git push` → `User cancelled dialog` /
    `could not read Username for 'https://github.com'`: no GitHub credential in
    Windows Credential Manager, no SSH key, no `gh`), so it must be run
@@ -2273,7 +2278,7 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
 > (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
 >
 > **STATE — everything is COMMITTED, `git status` is clean, and NOTHING is
-> pushed**: 18 local commits at the time of writing (`main` is now 23 ahead of `origin/main`) — the push is the
+> pushed**: 18 local commits at the time of writing (`main` was then 23 ahead of `origin/main`, **since pushed** — see the header) — the push was the
 > owner's (§17.6 item 1). The session-9/10 batch landed as five:
 > `c312a31` (emitter fix + `tests/util/test_util.c` + the Makefile rules that
 > pin it) · `0218fb2` (`llama_smoke` two-dialect rewrite + `smoke`/`smoke-live`)

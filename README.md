@@ -108,7 +108,11 @@ Executions move through states such as:
 ```text
 pending → running → completed
                   ↘ failed
+                  ↘ cancelled
 ```
+
+`cancelled` comes from `acta_cli exec cancel` or the GUI **Cancel** button; a
+`failed` execution goes back to `pending` through `exec reset`.
 
 They can be replayed by creating another execution with the same inputs.
 
@@ -137,7 +141,9 @@ For the design rationale and non-goals, see [`docs/PointOfView.md`](docs/PointOf
 
 ## 1. Build
 
-Install the required dependencies for your platform, then:
+The C targets build with plain `make` on **Windows (MinGW/MSYS2)**, **Linux
+(gcc/clang)** and **macOS (Xcode clang)**; the Qt 6 GUI additionally needs
+`qmake6`. Install the required dependencies for your platform, then:
 
 ```bash
 make all
@@ -183,11 +189,16 @@ http://127.0.0.1:8080
 A small example model can be downloaded with:
 
 ```bash
-huggingface-cli download \
+hf download \
   Qwen/Qwen2.5-0.5B-Instruct-GGUF \
   --include "*q4_k_m.gguf" \
   --local-dir models/
 ```
+
+In router mode each served model's `id` is the **basename of its GGUF file**,
+so the file above is registered as `qwen2.5-0.5b-instruct-q4_k_m` — that is the
+value `model_identifier` must carry (see
+[`docs/llamacpp_server_contract.md`](docs/llamacpp_server_contract.md) §1).
 
 The `-c` value is the backend's token context window; adjust it for your model.
 
@@ -210,7 +221,7 @@ acta_cli model create --json \
   "name": "llama-local",
   "backend": "llamacpp",
   "base_url": "http://127.0.0.1:8080",
-  "model_identifier": "qwen3-8b"
+  "model_identifier": "qwen2.5-0.5b-instruct-q4_k_m"
 }'
 ```
 
@@ -226,7 +237,6 @@ acta_cli skill create \
 `output_schema` is stored as text, so it must arrive as a **string containing
 JSON** — passing a JSON object inside `--json` stores `null` (the schema is
 silently dropped). See [`docs/cli_spec.md`](docs/cli_spec.md).
-```
 
 Create an immutable context:
 
@@ -249,11 +259,10 @@ acta_cli exec create --json \
 }'
 ```
 
-For a keyless local `llama-server`:
-
-```bash
-export OPENAI_API_KEY=""
-```
+The runner needs an API key before it will start. Export `OPENAI_API_KEY` —
+set it to `""` for a keyless local `llama-server`. If the variable is **unset**
+and the config file has no `"api_key"`, `run` refuses to start (exit 4) before
+claiming anything. See [Configuration](#configuration).
 
 Optionally check the backend without making an LLM call:
 
@@ -392,13 +401,16 @@ The main commands are:
 | `acta_cli exec create`                | Create an execution                |
 | `acta_runner check <model-record-id>` | Check backend/model availability   |
 | `acta_runner run <id>`                | Execute one run                    |
-| `acta_runner run --pending`           | Run pending executions             |
+| `acta_runner run --pending [--max N]` | Run pending executions (capped)  |
+| `acta_cli model/skill update`         | Revise → new immutable revision  |
+| `acta_cli exec cancel <id>`           | Cancel a pending/running execution |
+| `acta_cli db version`                 | Report the SQLite version          |
 | `acta_cli exec reset <id>`            | Reset a failed execution           |
 | `acta_runner sweep --stale-seconds N` | Recover stale executions           |
 | `acta_cli exec get <id>`              | Inspect an execution               |
 | `acta_cli log list <id>`              | Inspect its execution log          |
 
-All binaries support:
+The two CLI binaries (`acta_cli`, `acta_runner`) support:
 
 ```bash
 --help
@@ -430,6 +442,15 @@ Result + Log
 ```
 
 The GUI is intended as a convenience layer. Scripted and programmatic use should use `acta_cli` and `acta_runner`.
+
+The **Run** button is not a shell-out to `acta_runner`: the GUI executes the
+same pipeline **in-process** on a worker thread, compiling the runner's own
+source files (`run.c`, `backend.c`, `dialect.c`, `argparse.c`, `deathmark.c`)
+— one pipeline codebase, no second copy — on its own database connection.
+While a run is in flight the button toggles to **Cancel** (the row becomes
+`cancelled`), and a `failed` row can be retried with **Retry** (`failed →
+pending`, the same transition as `acta_cli exec reset`). See
+[`docs/building.md`](docs/building.md), "GUI–runner source coupling".
 
 Build it with:
 
@@ -539,8 +560,9 @@ In particular:
 * it does **not** automatically retry failed executions
 * it does **not** stream model responses
 * it does **not** manage the llama.cpp server
-* the two supported backend dialects are a local llama.cpp `llama-server`
-  (`llamacpp`) and any strict OpenAI-compatible server (`openai`)
+* the backend dialect is a **declared**, closed two-value vocabulary
+  (`llamacpp` / `openai`) on the model revision — there is no plugin mechanism
+  and no runtime dialect detection
 * the SQLite design is intended for a private local database, not a multi-user server
 
 The context is passed to the model as input; applications handling untrusted data are responsible for deciding how that data should be treated.
@@ -586,10 +608,15 @@ The core pipeline is implemented:
 * soft delete / restore
 * stale execution recovery
 * schema migrations (`db migrate`)
-* token-free backend health check (`acta_runner check`)
+* backend health check (`acta_runner check`) — no completion tokens, no DB writes
 * auto preflight before a run is claimed
 * death marker for clean process exits mid-run
 * database backup
+* two backend dialects (`llamacpp` / `openai`) carried by the model revision
+* live backend checks (`make test-live*`), never part of `make test`
+* per-machine config file (`ACTA_Gamma.conf`)
+* 5 s `busy_timeout` over a single-writer SQLite file
+* in-app Run / Cancel / Retry in the GUI
 
 The project is still at an early productization stage.
 

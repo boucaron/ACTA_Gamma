@@ -226,7 +226,7 @@ elsewhere. On Windows the make targets take **no `.exe` suffix**
   the exact stale error. ~10-15 s, so it is deliberately NOT in the
   default `test` target: `make test-e2e`.
 
-- `tests/check/test_check.c` — the token-free `check` action: every
+- `tests/check/test_check.c` — the `check` action (no completion tokens, no DB writes): every
   scenario leaves `stub_server_chat_requests() == 0` and creates no
   execution rows; the stdout verdict JSON shape, `--base-url` +
   `--model-identifier` standalone mode, DB mode by **model record id**,

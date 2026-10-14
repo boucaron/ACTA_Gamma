@@ -151,8 +151,9 @@ by the status code.
     `predicted_per_second`, `cache_n`, ...
   - `reasoning_content` — reasoning trace, if the template/model produces
     one
-- Non-streaming is fully supported; streaming (SSE) is also supported but
-  the runner does not need it in phase 2.
+- Non-streaming is fully supported; streaming (SSE) is also supported by the
+  server but the runner never uses it: an execution is one non-interactive
+  call (owner decision, `docs/status.md`).
 
 ## 5. Errors
 

@@ -6,7 +6,7 @@ skill + model + context, calls the OpenAI-compatible backend, and records
 the outcome (raw response, result, error, phase logs) back into the
 database.
 
-## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` token-free health action shipped, run auto preflight shipped, backend dialects shipped
+## Status: phase 2 shipped, in-app Run shipped, R8 shipped, max_chars size check shipped, `check` health action shipped (no completion tokens, no DB writes), run auto preflight shipped, backend dialects shipped
 
 Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
 
@@ -23,7 +23,7 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   with one `execution_log` row per phase and JSON metadata
   (http status, latency, token usage, …). Every post-claim failure
   funnels through `fail_execution()` so a row never stays stuck in
-  `running`. In addition, `cmd_run` (`run <id>` and `run --pending`) runs the auto preflight **before the claim**: the same two token-free GETs `check` uses (via `backend_preflight()`), once per `acta_runner` invocation — for the execution the claim is about (in a `--pending` batch, the first pending row); dead/unreachable backend or model not served → exit with the `check` verdict code (12/13), the same JSON verdict line, nothing claimed, no DB writes.
+  `running`. In addition, `cmd_run` (`run <id>` and `run --pending`) runs the auto preflight **before the claim**: the same two preflight GETs `check` uses (via `backend_preflight()`), once per `acta_runner` invocation — for the execution the claim is about (in a `--pending` batch, the first pending row); dead/unreachable backend or model not served → exit with the `check` verdict code (12/13), the same JSON verdict line, nothing claimed, no DB writes.
 - R8 (commit 2f8085e): preflight catalog logging — after the
   `/v1/models` id match, the runner fetches the llama.cpp model catalog
   (`GET /`) and logs a `preflight_passed` event with the matched entry's
@@ -33,11 +33,12 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   stub server serves `GET /` with a canned catalog
   (`catalog_status`), and `test_run.c` scenario 10 covers the missing-
   catalog path. Tests green, no regressions.
-- `src/check.c` — the token-free `check` action: `acta_runner check
+- `src/check.c` — the `check` action (no completion tokens, no DB writes):
+  `acta_runner check
   <model-record-id>` (DB mode: the model row is read read-only for
-  `base_url` + `model_identifier`; no execution is created, claimed, or
+  `base_url` + `model_identifier` + `backend`; no execution is created, claimed, or
   logged) or `acta_runner check --base-url <url> --model-identifier <id>`
-  (standalone: no DB lookup at all). Two token-free GETs — `GET /health`
+  (standalone: no DB lookup at all). Two GETs — `GET /health`
   (200 ok; 503 `model still loading`; unreachable `server unreachable`)
   then `GET /v1/models` (id present → ok with the catalog entry's
   `max_context`; absent → `model not served`; endpoint error →
@@ -329,7 +330,7 @@ Implementation notes (where the spec left room):
 ## Phase 2 pipeline (spec for `run_execution`)
 
 **Pre-claim auto preflight (cmd_run level, before step 1)** — `run <id>`
-and `run --pending` call the same two token-free GETs `check` uses (via
+and `run --pending` call the same two preflight GETs `check` uses (via
 `backend_preflight()`), once per `acta_runner` invocation — for the
 execution the claim is about (in a `--pending` batch, the first pending
 row). Dead/unreachable backend or model not served → exit with the
@@ -382,7 +383,7 @@ per-execution step-3 preflight below still runs, after the claim.
    (0 = no limit); the batch continues past a failure and returns the
    worst exit code seen.
 
-## check action (token-free backend health check)
+## check action (backend health check — no completion tokens, no DB writes)
 
 The only way to find out whether the backend is usable used to be
 starting a real execution — which claims the row (`pending →
@@ -414,7 +415,9 @@ acta_runner check --base-url <url> --model-identifier <id>     # standalone
   `--base-url`+`--model-identifier`, or combined with a positional id, is
   rejected with `EXIT_INVALID` (4).
 
-**Check sequence** (both calls token-free, via the shared
+**Check sequence** (neither call asks for a completion and neither writes to
+the DB; both send `Authorization: Bearer <key>` only when a key resolves — see
+the API-key paragraph below and decision 4; they go through the shared
 `backend_preflight()` in `src/backend.c`):
 
 1. `GET /health` — `200` ok; `503` → verdict `model still loading`

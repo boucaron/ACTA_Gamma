@@ -70,9 +70,15 @@ A model record is what the runner needs to make its call: `backend`,
 `base_url`, `model_identifier`, plus an optional JSON `configuration`
 (`temperature`, `max_tokens`, `top_k`, `supports_response_format`).
 `model_revision list 12` / `get-latest 12` work the same way as
-`skill_revision`. (The stored `backend` label — here `"llamacpp"`, while
-the README's example registers new models with `"openai"` — is informational
-in either case: the runner only uses `base_url` to make its HTTP call.)
+`skill_revision`. `backend` is **not** a decorative label: it selects the HTTP
+**dialect** the runner speaks to `base_url` — the `response_format` envelope, whether
+`top_k` is sent, whether the `GET /` catalog audit happens, and where the context
+ceiling is read (`entry.max_context` vs `entry.meta.n_ctx`). Both examples here use
+`"llamacpp"`, which is also what the README's main quick start registers; the
+README's [`openai` example](../../README.md#openai-compatible-backends) is the
+other dialect. See
+[`../openai_dialect_contract.md`](../openai_dialect_contract.md) and
+[`../llamacpp_server_contract.md`](../llamacpp_server_contract.md).
 
 ## Contexts
 
