@@ -220,8 +220,19 @@ int parse_globals(int argc, char **argv, global_opts_t *g) {
      * so main() can just return the code).  --help is exempt: the P0
      * help router accepts bare `--help`, `entity --help`, and
      * `entity action --help`. */
-    if (rest_n < 2 && !g->show_help)
+    if (rest_n < 2 && !g->show_help) {
+        /* The compaction buffer was published just above, but a caller that
+         * gets a non-zero rc never touches g->argv (cli_main and the test
+         * harness both return immediately), so unpublish it and free it here:
+         * this rejection path leaked the buffer — 8-16 B per rejected
+         * invocation, found by the 2026-10-14 WSL LeakSanitizer pass
+         * (tests/gparse test_rejections: the only ACTA-code leak left in the
+         * 17 acta_cli suites). Every in-loop rejection already frees rest. */
+        free(rest);
+        g->argv = NULL;
+        g->argc = 0;
         return emit_cli_error("missing entity and/or action. See --help.");
+    }
     return 0;
 }
 

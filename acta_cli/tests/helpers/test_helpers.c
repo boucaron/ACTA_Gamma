@@ -21,6 +21,103 @@
 #define MAX_POS     8
 #define MAX_LEN     256
 
+/* ════════════════════════════════════════════════════════════════
+ *  Harness allocation registry — the acta_cli test-harness leak fix
+ *
+ *  targs_new() mallocs the cmd_args_t argv array and gopts_default()
+ *  and friends malloc the global_opts_t one; the targs_* helpers then
+ *  strdup every token into both. None of it was ever released — the
+ *  2026-10-13 WSL ASAN run reported 68886 B / 517 allocations in
+ *  test_model alone, 509 leaks, every leak stack inside the harness
+ *  (targs_new / gopts_*), none in acta_cli or acta_db.
+ *
+ *  "Just free opts in targs_free" is wrong: several suites (db,
+ *  exec, model_folder, model_revision, context, …) reuse ONE
+ *  global_opts_t across two or three targs_new/targs_free pairs
+ *  (tests/db/db_test.c: 23 gopts helper calls against 35 targs_free), so the
+ *  harness cannot treat opts as owned by the last builder.
+ *
+ *  So every allocation the helpers make is recorded here, keyed by the
+ *  array it belongs to, and released by targs_free() (the builder's own
+ *  array), gopts_free() (explicit), or the exit sweep for anything a
+ *  suite never frees. The sweep is installed with atexit() from helper
+ *  code, i.e. AFTER ASan installs its own exit hook at library-init
+ *  time — atexit handlers run LIFO, so the sweep lands before
+ *  LeakSanitizer looks. targs_harness_sweep() is public so a suite can
+ *  call it explicitly; it is idempotent.
+ *  ════════════════════════════════════════════════════════════════ */
+
+typedef struct {
+    char  **arr;      /* the argv array this record owns the tokens of */
+    char  **toks;     /* strings strdup'd into it by the targs_* helpers */
+    size_t  n, cap;
+    int     owns_arr; /* 1 = the array itself was malloc'd by these helpers */
+} halloc_rec_t;
+
+static halloc_rec_t *hrecs;
+static size_t hrec_n, hrec_cap;
+static int    hrec_atexit;
+
+static halloc_rec_t *hrec_find(char **arr)
+{
+    if (!arr) return NULL;
+    for (size_t i = 0; i < hrec_n; i++)
+        if (hrecs[i].arr == arr) return &hrecs[i];
+    return NULL;
+}
+
+/* find-or-record; owns_arr applies only when the record is created */
+static halloc_rec_t *hrec_track(char **arr, int owns_arr)
+{
+    halloc_rec_t *r = hrec_find(arr);
+    if (r) return r;
+
+    if (!hrec_atexit) { hrec_atexit = 1; atexit(targs_harness_sweep); }
+
+    if (hrec_n == hrec_cap) {
+        size_t want = hrec_cap ? hrec_cap * 2 : 32;
+        halloc_rec_t *p = realloc(hrecs, want * sizeof *p);
+        if (!p) return NULL;
+        hrecs = p; hrec_cap = want;
+    }
+    r = &hrecs[hrec_n++];
+    r->arr = arr; r->toks = NULL; r->n = 0; r->cap = 0; r->owns_arr = owns_arr;
+    return r;
+}
+
+static void hrec_tok(halloc_rec_t *r, char *tok)
+{
+    if (!r || !tok) return;
+    if (r->n == r->cap) {
+        size_t want = r->cap ? r->cap * 2 : 16;
+        char **p = realloc(r->toks, want * sizeof *p);
+        if (!p) return;               /* OOM in a test harness: nothing left to do */
+        r->toks = p; r->cap = want;
+    }
+    r->toks[r->n++] = tok;
+}
+
+/* free the recorded tokens, the array when it is ours, and drop the record
+ * (the last record fills the hole, so hrecs stays packed) */
+static void hrec_drop(halloc_rec_t *r)
+{
+    if (!r) return;
+    for (size_t i = 0; i < r->n; i++) free(r->toks[i]);
+    free(r->toks);
+    if (r->owns_arr) free(r->arr);
+    size_t idx = (size_t)(r - hrecs);
+    hrecs[idx] = hrecs[hrec_n - 1];
+    hrec_n--;
+}
+
+void targs_harness_sweep(void)
+{
+    while (hrec_n) hrec_drop(&hrecs[0]);
+    free(hrecs);
+    hrecs = NULL; hrec_n = 0; hrec_cap = 0;
+    hrec_atexit = 0;   /* a later gopts helper call re-installs the hook if needed */
+}
+
 typedef struct {
     cmd_args_t raw;
     char       names[MAX_FLAGS][MAX_LEN];
@@ -46,8 +143,26 @@ cmd_args_t *targs_new()
 
     t->raw.argc = 0;
     t->raw.argv = malloc(sizeof(char *) * TARGS_MAX_TOK);
+    if (!t->raw.argv) { free(t); return NULL; }
+    hrec_track(t->raw.argv, 1);
 
     return &t->raw;
+}
+
+/* Push one token into one of the two arrays a scenario builds (the
+ * cmd_args_t's own and the global_opts_t the handler is called with),
+ * recording it in that array's registry entry. Bounds-guarded: the arrays
+ * are TARGS_MAX_TOK wide and an overrun used to be a silent smash. */
+static void hpush(cmd_args_t *a, global_opts_t *opts, const char *tok)
+{
+    if (a && a->argv && a->argc < TARGS_MAX_TOK) {
+        char *dup = strdup(tok ? tok : "");
+        if (dup) { a->argv[a->argc++] = dup; hrec_tok(hrec_track(a->argv, 1), dup); }
+    }
+    if (opts && opts->argv && opts->argc < TARGS_MAX_TOK) {
+        char *dup = strdup(tok ? tok : "");
+        if (dup) { opts->argv[opts->argc++] = dup; hrec_tok(hrec_track(opts->argv, 0), dup); }
+    }
 }
 
 void targs_flag(cmd_args_t *a, const char *name, const char *value, global_opts_t *opts)
@@ -60,18 +175,10 @@ void targs_flag(cmd_args_t *a, const char *name, const char *value, global_opts_
     t->n_flags++;
     /* ADAPT: store into cmd_args_t internal representation */
 
-
     char buf[64];
     snprintf(buf, sizeof buf, "--%s", name);
-    opts->argv[opts->argc++] = strdup(buf);
-    if (value)
-        opts->argv[opts->argc++] = strdup(value);    
-    a->argv[a->argc] = strdup(buf);
-    a->argc++;
-    a->argv[a->argc] = strdup(value);
-    a->argc++;
-
-
+    hpush(a, opts, buf);
+    hpush(a, opts, value ? value : "");
 }
 
 void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts)
@@ -86,11 +193,7 @@ void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts)
 
     char buf[64];
     snprintf(buf, sizeof buf, "--%s", name);
-    opts->argv[opts->argc++] = strdup(buf);
-   //  opts->argv[opts->argc++] = strdup(value);
-    a->argv[a->argc] = strdup(buf);
-    a->argc++;
-
+    hpush(a, opts, buf);
 }
 
 void targs_pos(cmd_args_t *a, const char *value, global_opts_t *opts)
@@ -101,19 +204,28 @@ void targs_pos(cmd_args_t *a, const char *value, global_opts_t *opts)
     t->n_pos++;
     /* ADAPT */
 
-    opts->argv[opts->argc++] = strdup(value);
-
-    a->argv[a->argc] = strdup(value);
-    a->argc++;
+    hpush(a, opts, value);
 }
 
 void targs_free(cmd_args_t *a, global_opts_t *opts)
 {
+    if (!a) return;
     targs_internal_t *t = (targs_internal_t *)a;  /* ADAPT */
-    if (t && t->owned) free(t);
 
-    // memleak in opts... not a big deal
+    /* the builder's own array and every token it holds (recorded since
+     * targs_new), then the record goes away */
+    if (t->raw.argv) {
+        hrec_drop(hrec_find(t->raw.argv));
+        t->raw.argv = NULL;
+    }
+    t->raw.argc = 0;
+
+    /* opts is deliberately NOT freed here: the same global_opts_t is
+     * routinely reused by the next scenario in the same file. Release it
+     * with gopts_free() or let the exit sweep do it. */
     (void)opts;
+
+    if (t->owned) free(t);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -131,6 +243,7 @@ global_opts_t gopts_default(void)
     g.json_input = 0;
     g.argc = 0;
     g.argv = malloc(sizeof(char *) * TARGS_MAX_TOK);
+    if (g.argv) hrec_track(g.argv, 1);
     return g;
 }
 
@@ -167,6 +280,19 @@ global_opts_t gopts_no_nulls(void)
     global_opts_t g = gopts_default();
     g.no_nulls = 1;
     return g;
+}
+
+/* Release a harness-built global_opts_t (its tokens and its argv array).
+ * An array these helpers did not malloc is left alone: the registry is the
+ * only authority on who owns it, and a foreign array belongs to its own
+ * code path (e.g. parse_globals' compaction array, freed by its caller). */
+void gopts_free(global_opts_t *g)
+{
+    if (!g) return;
+    halloc_rec_t *r = hrec_find(g->argv);
+    if (r) hrec_drop(r);
+    g->argv = NULL;
+    g->argc = 0;
 }
 
 /* ══════════════════════════════════════════════════════════════════

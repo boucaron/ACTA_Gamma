@@ -341,6 +341,10 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
     if (strcmp(action, "create") == 0) {
         context_t ctx = {0};
         int json_owned = 0;
+        /* The derived default hash is the ONE string the flag path owns
+         * (strdup below); every other ctx field comes from the parser and is
+         * borrowed. Freed at cleanup_create — see hash_owned there. */
+        int hash_owned = 0;
         int ret = EXIT_OK;
 
         /* ── populate ctx ── */
@@ -441,6 +445,7 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
                 ret = EXIT_ALLOC;
                 goto cleanup_create;
             }
+            hash_owned = 1;
             VLOG(2, "  hash not supplied → derived SHA-256: %s",
                  ctx.content_hash);
         }
@@ -491,6 +496,13 @@ int cmd_context(const char *action, cmd_args_t *ga, const global_opts_t *gopts,
             free(ctx.content_hash);
             free(ctx.metadata);
             free(ctx.created_at);
+        } else if (hash_owned) {
+            /* Only the derived hash is owned here: with --hash (or the JSON
+             * key) content_hash is a borrowed parser string. Before this it
+             * leaked — 65 B per `context create` with no hash, reported by the
+             * 2026-10-14 WSL ASAN/LeakSanitizer pass (3 sites: the two
+             * context create scenarios and the tools cross-check). */
+            free(ctx.content_hash);
         }
         return ret;
     }

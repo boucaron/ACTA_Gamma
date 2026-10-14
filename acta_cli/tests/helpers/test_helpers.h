@@ -94,6 +94,10 @@ void targs_flag(cmd_args_t *a, const char *name, const char *value, global_opts_
 void targs_flag_bool(cmd_args_t *a, const char *name, global_opts_t *opts);
 void targs_pos(cmd_args_t *a, const char *value, global_opts_t *opts);
 void targs_free(cmd_args_t *a, global_opts_t *opts);
+/* Frees the builder plus the argv array and tokens IT owns. The
+ * global_opts_t is deliberately left alone: suites routinely reuse one
+ * across several scenarios (see tests/helpers/test_helpers.c, "Harness
+ * allocation registry"). */
 
 /* ── global_opts convenience ──────────────────────────────────────── */
 global_opts_t gopts_default(void);
@@ -102,6 +106,16 @@ global_opts_t gopts_id_only(void);
 global_opts_t gopts_table(void);
 global_opts_t gopts_fields(const char *csv);
 global_opts_t gopts_no_nulls(void);
+/* Release a harness-built global_opts_t (its strdup'd tokens and its argv
+ * array). An array the helpers did not malloc is left to its own owner. */
+void gopts_free(global_opts_t *g);
+/* Release everything the harness still owns — every global_opts array and
+ * its tokens, plus any builder whose targs_free was never called. Installed
+ * with atexit() on the first tracked allocation; public and idempotent for
+ * a suite that wants to call it directly. With it in place LeakSanitizer
+ * (WSL) reports no harness leaks at all — the 2026-10-13 run saw 68886 B /
+ * 517 allocations in test_model, every leak stack inside the harness. */
+void targs_harness_sweep(void);
 
 /* ── seed helpers (operate on the live test DB) ───────────────────── */
 int stest_seed_skill(stest_ctx_t *ctx, int folder_id,
