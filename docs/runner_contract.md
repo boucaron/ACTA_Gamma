@@ -307,7 +307,7 @@ Implementation notes (where the spec left room):
      openai)`); the runner re-validates at run time as defense for rows written
      by another tool. Matching is exact and case-sensitive: `llama` is **not**
      an alias of `llamacpp`, `OpenAI` is not `openai`.
-   - **What actually differs** (matrix: `docs/plans/backend_dialects.md` §2):
+   - **What actually differs** (matrix: `docs/archive/backend_dialects.md` §2):
      the `response_format` envelope (decision 3), `top_k` (sent by `llamacpp`,
      omitted by `openai` — `model.configuration.top_k` is still *validated* in
      both dialects, a bad value still fails the execution), the `GET /` catalog

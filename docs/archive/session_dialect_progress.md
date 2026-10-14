@@ -17,7 +17,7 @@ prompt (§18.5) stays valid. §1–§17 are the work record: historical mid-stat
 (several sections read "IN FLIGHT" / "NOT BUILT" about phases that later
 landed; the resume prompts of §5, §7, §8.6, §9.5, §10.4, §12.5, §13.8, §14
 and §17.7 are superseded). Then
-[`docs/plans/backend_dialects.md`](plans/backend_dialects.md)
+[`docs/plans/backend_dialects.md`](backend_dialects.md)
 (§2 dialect matrix, §3.2 where the dialect comes from, **§9 = the four
 decisions, now answered**), then
 [`docs/session_strata_backend.md`](session_strata_backend.md) §4 "Known

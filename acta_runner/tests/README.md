@@ -73,7 +73,7 @@ elsewhere. On Windows the make targets take **no `.exe` suffix**
   sent**: which `response_format` envelope, and whether a parameter such
   as `top_k` was sent at all. **A dialect change must not add a request:**
   the openai dialect skips the `GET /` catalog call entirely
-  (`docs/plans/backend_dialects.md` §9 decision 4), which
+  (`docs/archive/backend_dialects.md` §9 decision 4), which
   `stub_server_catalog_requests() == 0` proves.
 
   When `cfg->dialect` is set, a request whose `response_format` envelope is
@@ -82,7 +82,7 @@ elsewhere. On Windows the make targets take **no `.exe` suffix**
 
   | stub dialect | refused envelope | message |
   |---|---|---|
-  | `openai` | llama.cpp `{"type":"json_schema","schema":…}` | `response_format.json_schema needs a schema object` (Strata's real message, `docs/session_strata_backend.md` issue A) |
+  | `openai` | llama.cpp `{"type":"json_schema","schema":…}` | `response_format.json_schema needs a schema object` (Strata's real message, `docs/archive/session_strata_backend.md` issue A) |
   | `llamacpp` | OpenAI `{"type":"json_schema","json_schema":{…}}` | `response_format.schema is required for type json_schema` (the stub's mirror-image invention; llama.cpp's actual wording is not pinned by any test) |
 
   Detection is textual and safe because `cJSON_PrintUnformatted` emits no

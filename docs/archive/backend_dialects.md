@@ -13,9 +13,9 @@ against Strata with an `output_schema` skill). Phase 7 (GUI) is written
 `e6d45ea`), and **closed by the owner 2026-10-13**: the UI is tested with the
 Strata/dialect changes and the Linux/Qt 6 run is the owner's own test.
 Progress and gotchas:
-[`docs/session_dialect_progress.md`](../session_dialect_progress.md) (§10–§17).
+[`docs/session_dialect_progress.md`](session_dialect_progress.md) (§10–§17).
 Depends on:
-[`docs/session_strata_backend.md`](../session_strata_backend.md) (issues A and B
+[`docs/session_strata_backend.md`](session_strata_backend.md) (issues A and B
 are exactly what this plan resolves).
 
 > **Decision record (2026-10-12):** the dialect is a property of the **model

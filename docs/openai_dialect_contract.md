@@ -5,7 +5,7 @@ The contract of the runner's second backend dialect: a server that speaks the
 from the model revision's `backend` value `openai` (runner decision 9 in
 [`runner_contract.md`](runner_contract.md); module
 `acta_runner/src/dialect.{h,c}`; matrix in
-[`plans/backend_dialects.md`](plans/backend_dialects.md) §2).
+[`archive/backend_dialects.md`](archive/backend_dialects.md) §2).
 
 > **`openai` names a dialect, not a vendor.** It means "strict
 > OpenAI-compatible HTTP dialect" — Strata, vLLM, and any other

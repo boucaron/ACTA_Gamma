@@ -563,7 +563,10 @@ In particular:
 * the backend dialect is a **declared**, closed two-value vocabulary
   (`llamacpp` / `openai`) on the model revision — there is no plugin mechanism
   and no runtime dialect detection
-* the SQLite design is intended for a private local database, not a multi-user server
+* the SQLite design is intended for a private local database, not a multi-user
+  server: one connection per binary, single-writer by design, with a 5 s
+  `busy_timeout` absorbing transient contention and a wrapped `SQLITE_BUSY`
+  diagnostic when the wait fails (`docs/DBDesign.md`)
 
 The context is passed to the model as input; applications handling untrusted data are responsible for deciding how that data should be treated.
 
@@ -587,6 +590,9 @@ The README intentionally stays high-level. The detailed contracts live here:
 | [`docs/status.md`](docs/status.md)                                     | Current project status and product decisions       |
 | [`docs/known_issues.md`](docs/known_issues.md)                         | Known issues                                       |
 | [`docs/examples/`](docs/examples/)                                     | Worked examples and tutorials                      |
+| [`docs/examples/README.md`](docs/examples/README.md)                   | The four tutorials in order + the shared working-copy convention |
+| [`docs/archive/`](docs/archive/)                                       | Completed plans and session records (no open work) |
+| [`docs/archive/backend_dialects.md`](docs/archive/backend_dialects.md) | The dialect matrix (§2), where the dialect comes from (§3.2), the four decisions (§9) |
 
 ---
 

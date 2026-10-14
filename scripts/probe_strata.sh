@@ -135,18 +135,18 @@ S=$("$CURL" -sS -m "$TMO" -H "Content-Type: application/json" "${AUTH[@]}" \
 say "4 response_format json_object" "$(printf '%s' "$S" | jget choices.0.message.content | tr -d '\n' | cut -c1-60) [finish=$(printf '%s' "$S" | jget choices.0.finish_reason)]"
 
 # --- 4b. response_format json_schema — the envelope acta_runner sends ----
-# The dialect decides the shape (docs/plans/backend_dialects.md §2):
+# The dialect decides the shape (docs/archive/backend_dialects.md §2):
 #   openai    {"type":"json_schema","json_schema":{"name":"acta_output",
 #              "strict":true,"schema":{…}}}   <- what a strict OpenAI-compatible
 #                                              server (Strata) requires
 #   llamacpp  {"type":"json_schema","schema":{…}}  <- what acta_runner used to
 #              send unconditionally, and what an OpenAI-dialect server refuses
 #              with "response_format.json_schema needs a schema object"
-#              (docs/session_strata_backend.md issue A)
+#              (docs/archive/session_strata_backend.md issue A)
 # A refusal of the llama.cpp shape is therefore the EXPECTED answer on an
 # openai-dialect server: reported, not counted as a probe failure. A refusal
 # of the --dialect envelope IS a failure — it is exactly what blocks a skill
-# with output_schema (docs/plans/backend_dialects.md §6 criterion 2).
+# with output_schema (docs/archive/backend_dialects.md §6 criterion 2).
 SCHEMA='{"type":"object","required":["label","confidence"],"properties":{"label":{"type":"string"},"confidence":{"type":"number"}}}'
 if [ "$DIALECT" = openai ]; then
     RF='{"type":"json_schema","json_schema":{"name":"acta_output","strict":true,"schema":'"$SCHEMA"'}}'

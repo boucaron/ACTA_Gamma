@@ -205,10 +205,10 @@ led to the dialect plan) is kept below as history.
 > WSL. See [`docs/session_dialect_progress.md`](session_dialect_progress.md)
 > for the state, the remaining Phase 3 asserts, and the next resume prompt.
 > The four open decisions below (§3 A/B, J) were answered in
-> [`docs/plans/backend_dialects.md`](plans/backend_dialects.md) §9.
+> [`docs/plans/backend_dialects.md`](backend_dialects.md) §9.
 
 > The design for issues A and B is now planned in
-> [`docs/plans/backend_dialects.md`](plans/backend_dialects.md) — read it before
+> [`docs/plans/backend_dialects.md`](backend_dialects.md) — read it before
 > touching A/B. Decision already taken there (§3.2): the dialect comes from
 > `model_revision.backend`; `--dialect` is only a `check`-standalone option and
 > a logged `run <id>` override.

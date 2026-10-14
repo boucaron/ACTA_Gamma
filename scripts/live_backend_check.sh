@@ -8,7 +8,7 @@
 #   scripts/live_backend_check.sh  <- THIS ONE: generic (any base_url, either
 #                                    dialect), make-wired, probe + full pipeline
 #   scripts/probe_strata.sh        <- the Strata investigation record cited by
-#                                    docs/session_strata_backend.md (kept as is)
+#                                    docs/archive/session_strata_backend.md (kept as is)
 #   scripts/wsl_strata_demo.sh     <- the WSL-over-NAT demo cited by the same doc
 #
 # Two phases:

@@ -124,7 +124,7 @@ frozen at `0.1`, so the column stays `TEXT NOT NULL` and a legacy value can
 exist in a row — it simply fails the run before any HTTP call. Single source of
 the vocabulary and of the two request shapes: `acta_runner/src/dialect.{h,c}`.
 Decision record: [`runner_contract.md`](runner_contract.md) decision 9; matrix:
-[`plans/backend_dialects.md`](plans/backend_dialects.md) §2.
+[`archive/backend_dialects.md`](archive/backend_dialects.md) §2.
 
 `configuration` is the **capability** layer, identical in both dialects: it
 carries backend-specific JSON without forcing those details into the core

@@ -163,7 +163,7 @@ separate targets, and they are **never** part of `make test`.
 |---|---|---|
 | `scripts/live_backend_check.sh` — `make test-live`, `make test-live-llamacpp`, `make test-live-openai` | the generic live check in **either** dialect: probe phase (the HTTP surface the runner uses) + pipeline phase (scratch DB: `db init` → model → 2 skills → context → 2 executions → `check` → `run` ×2 → status, `raw_response` and audit-key assertions) | the make-wired entry point: any `base_url`, either dialect, both platforms |
 | `acta_runner/tests/llama_smoke.c` — `make smoke` (**build only**), `make smoke-live` (build **and** run) | the C live check of one dialect; it builds its request bodies through `src/dialect.c`, so what it sends is what `run.c` sends | the check in the runner's own language, with no CLI and no DB involved |
-| `scripts/probe_strata.sh` | the Strata investigation record (health / models / chat / both envelopes / the WSL cross-side check) | kept untouched: `docs/session_strata_backend.md` §2.5 cites it as a verification record |
+| `scripts/probe_strata.sh` | the Strata investigation record (health / models / chat / both envelopes / the WSL cross-side check) | kept untouched: `docs/archive/session_strata_backend.md` §2.5 cites it as a verification record |
 | `scripts/wsl_strata_demo.sh` | the WSL-over-NAT end-to-end demo | kept untouched: cited by the same doc; the quickest proof of a WSL build + NAT path |
 
 ### `scripts/live_backend_check.sh`
