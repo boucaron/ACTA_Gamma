@@ -632,7 +632,9 @@ See [`docs/status.md`](docs/status.md) for the current status and deliberate pro
 
 # License
 
-BSD Zero Clause License (BSD-0-Clause).
+BSD Zero Clause License (BSD-0-Clause) — the full text is in
+[`LICENSE`](LICENSE), which also carries `SPDX-License-Identifier: 0BSD` so
+license tooling reports the same license the README names.
 
 ---
 

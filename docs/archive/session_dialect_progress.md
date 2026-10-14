@@ -2749,14 +2749,15 @@ ASAN on `test_check`.
 > written here (push = the owner's).**
 > Review tables 1–3 and A–B are done; C and D remain. Nothing was re-verified
 > since: use the §20.1 "verified clean" table instead of re-discovering.
-> **C1–C3 and D have since landed — read §20.7 before touching any of them.**
+> **C1–C3, C6 and D have since landed — read §20.7 before touching any of them.**
 >
 > **DO NEXT — item C as its own commit** (`.gitattributes` `* text=auto eol=lf`;
 > `.gitignore` `!Makefile` / `!acta_db/Makefile` / `!acta_runner/Makefile` and
 > `models/`; `docs/examples/acta.db` provenance → a tracked seed `.sql` + a
 > Makefile rule that rebuilds the `.db` (the `acta_cli/acta_test_ref.sql` →
 > `.db` pattern), **or** a provenance paragraph naming the private model ids a
-> reader has to change; `SPDX-License-Identifier: 0BSD` in `LICENSE`; "verified
+> reader has to change; `SPDX-License-Identifier: 0BSD` in `LICENSE` — **LANDED
+> 2026-10-14, see §20.7: do not re-do it**; "verified
 > on <date>" on the C5 version pins). C1 lands **with** a renormalize pass
 > (`git add --renormalize .`): 58 tracked files are `i/crlf` in the index
 > today, the whole-file diffs are normalization not content, and afterwards
@@ -2780,9 +2781,10 @@ ASAN on `test_check`.
 | **C2** Makefile negations | `a2f7f8b` | **root-anchored**: `!/Makefile`, `!/acta_db/Makefile`, `!/acta_runner/Makefile`, `!/acta_cli/Makefile`. The shape sketched above (`!Makefile`, no slash) matches at any depth and had un-ignored the qmake-generated `acta_gui/Makefile` + `acta_gui/src/Makefile` — caught in `git status` before the commit, fixed; the negated set matches exactly the four tracked Makefiles |
 | **C3** `models/` ignored | `a2f7f8b` | the README quick-start `hf download --local-dir models/` directory (only `models.json` was ignored before) |
 | **D** | docs-only (the commit carrying this §20.7) | see §20.3 |
+| **C6** `LICENSE` SPDX line | docs+license (the commit carrying this row) | `SPDX-License-Identifier: 0BSD` as the first line of `LICENSE`, above the existing `Copyright (c) 2026–present Julien Boucaron` — the body was already the unmodified BSD-0 text (§20.1), only its name was missing; the README `# License` section now names the identifier too, so README and tooling agree. Text-only change: no build, no test run, no license-body change, no relicense |
 
 Still open: **C4** (`docs/examples/acta.db` provenance), **C5** (dated version
-pins), **C6** (`LICENSE` SPDX line), the optional `status.md` dated-body tidy,
+pins), the optional `status.md` dated-body tidy (~~**C6**~~ landed above),
 §20.4 **item (c)** and the ASAN-on-`test_check` option (item (b) closed the same
 day — §20.8 below), and the push (`git status -sb` is the authority — the gap is
 the owner's to close).
