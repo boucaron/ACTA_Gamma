@@ -1,0 +1,22 @@
+# Line-ending policy: text files are stored LF in the index and checked out LF.
+# This file is the single source of truth and overrides core.autocrlf on checkout
+# (the author's box has core.autocrlf=true, which had left 58 tracked blobs stored
+# as CRLF). Added with the `git add --renormalize .` pass that normalized them -
+# those whole-file diffs are normalization, not content.
+* text=auto eol=lf
+
+# Binary payloads: never touched by the text rules
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.db-journal binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.o binary
+*.a binary
+*.so binary

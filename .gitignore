@@ -34,7 +34,14 @@ build/
 debug/
 release/
 **/Makefile
-!acta_cli/Makefile
+# The Makefiles that ARE repo content are listed explicitly (root-anchored: a
+# pattern without a slash would match at any depth and un-ignore everything the
+# rule above just ignored). The three tracked ones predate the rule, so without
+# these lines any new Makefile would be silently untracked.
+!/Makefile
+!/acta_db/Makefile
+!/acta_runner/Makefile
+!/acta_cli/Makefile
 Makefile.Debug
 Makefile.Release
 *.qmake.stash
@@ -42,6 +49,9 @@ acta_db/test/
 out
 acta_db_out
 models.json
+# The GGUF model directory the README quick start creates (`hf download --local-dir
+# models/`) - multi-GB weights must never land untracked-dirty in the repo.
+models/
 
 
 # IDE
