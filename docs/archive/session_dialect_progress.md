@@ -11,12 +11,13 @@ local / N ahead of `origin/main` / not pushed" line in this file and in
 `docs/session_strata_backend.md` is a historical snapshot of the moment it was
 written (§17.1, §18.4, §19.1).
 
-Read first: **§19** (docs stale-content cleanup + the latest green WSL
-re-verification) and **§18** — the current implementation state; its resume
-prompt (§18.5) stays valid. §1–§17 are the work record: historical mid-states
-(several sections read "IN FLIGHT" / "NOT BUILT" about phases that later
-landed; the resume prompts of §5, §7, §8.6, §9.5, §10.4, §12.5, §13.8, §14
-and §17.7 are superseded). Then
+Read first: **§20** (what is verified clean — do not re-discover it — and the
+remaining items C and D) then **§19** (docs stale-content cleanup + the latest
+green WSL re-verification) and **§18** — the current implementation state; its
+resume prompt (§18.5) stays valid. §1–§17 are the work record: historical
+mid-states (several sections read "IN FLIGHT" / "NOT BUILT" about phases that
+later landed; the resume prompts of §5, §7, §8.6, §9.5, §10.4, §12.5, §13.8,
+§14, §17.7 and §19.3 are superseded). Then
 [`docs/plans/backend_dialects.md`](backend_dialects.md)
 (§2 dialect matrix, §3.2 where the dialect comes from, **§9 = the four
 decisions, now answered**), then
@@ -2620,7 +2621,7 @@ decision record §9).
 Git state: `main` **24** ahead of `origin/main` (`b8236ff` joined the 23);
 the push stays the owner's.
 
-### 19.3 Resume prompt
+### 19.3 Resume prompt (superseded by §20.6 — its content stays valid)
 
 > Read **`docs/session_dialect_progress.md` §19 first**, then §18 (the current
 > implementation state — §18.5's content stays valid),
@@ -2642,3 +2643,112 @@ the push stays the owner's.
 > `--dialect` REQUIRED (script + `smoke-live`), the SKIP semantics,
 > `probe_strata.sh` / `wsl_strata_demo.sh` untouched, the GUI closed (owner-
 > tested), the archived logs staying archived, and the push being the owner's.
+
+---
+
+## 20. SESSION 14 (2026-10-13, later) — docs consistency review round 2 (README + docs vs code): contradictions fixed, records archived, ledger reconciled
+
+Two commits, **not pushed** (`main` **2** ahead of `origin/main` at the time of
+writing — `git status -sb`; the push stays the owner's). No code was touched;
+no build/test run was needed or done. This §20 record itself lands as the
+**third** docs-only commit of the round (unlike §19, which names its own hash,
+this record is carried by the commit it describes — `git log --oneline` shows
+it).
+
+| Commit | What it carries |
+|---|---|
+| `4e5b64b` | Review tables 1–3: contradictions (`docs/examples/playground.md` "backend is informational"; `check` "token-free"; the commit-count claims; `acta_db_exec` callers vs the removed `db exec`; `known_issues.md` row 5 repro; "phase 2" leftover), README gaps (stray fence, `cancelled` state, CLI-table rows, GUI in-process Run/Cancel/Retry, platforms line, Done list), quick-start coherence (`hf download`, GGUF-basename `model_identifier`, one API-key paragraph) |
+| `5a0fc77` | Review tables A + B: `docs/plans/backend_dialects.md` and the two session logs moved to `docs/archive/` (`docs/plans/` gone), `docs/archive/README.md` rewritten as a real index + move note, every live and internal link rewritten, README docs table +3 rows; the status.md ↔ known_issues.md ledger reconciled (12 rows, #12 = `d6d2eaf` + `ec670b8`, pinned by `acta_cli/tests/dbpath`; the "75 entries" line dated; "no open issues remain"; the busy_timeout claim matched to a README bullet that now exists) |
+
+### 20.1 Verified clean — do NOT re-verify in the next session
+
+| Claim | Where it was checked |
+|---|---|
+| The README dialect table matches the code (ceiling order `entry.max_context` vs `entry.meta.n_ctx`, `top_k` sent/omitted, `catalog:null` on `openai`) | `acta_runner/src/dialect.c` (`max_context_llamacpp` / `max_context_openai`, `sends_top_k`, `fetch_catalog`) |
+| Config keys and built-in defaults (`api_key`, `db`, `max_chars` 100000, `timeout` 600) | `acta_db/src/conf.c` `known_keys`, `ACTA_CONF_DEFAULT_*` in `conf.h` |
+| README CLI-table rows all exist (`exec cancel`, `model/skill update`, `db version`, `run --pending [--max N]`) | `acta_cli/src/tools.c` (`exec.cancel`, `model.update`, `skill.update`, `db.version`), `acta_runner/src/argparse.c` `{ "max", 1 }` |
+| `--help`/`--version` belong to the two CLI binaries only | `acta_cli/src/argparse.c`, `acta_runner/src/argparse.c` (the GUI has no flags) |
+| Makefile targets (`all`, `gui`, `test`, `test-live*`, `clean`) match `docs/building.md` | top-level `Makefile` |
+| LICENSE body is the BSD-0/ISC text | `LICENSE` vs README "BSD Zero Clause License" |
+| Moved files kept their content: **2–4 changed lines each** (link rewrites only) | `diff` of the CR-stripped blobs, `HEAD~1:old` vs `HEAD:new` |
+| Whole-tree markdown link audit: **0 real broken links** | the only leftovers are two code-span quotes of old links in §11.1a |
+| Fence balance in every touched `.md` | `grep -c '^```'` — even in all of them |
+
+### 20.2 REMAINING — item C (repo housekeeping; needs its own, non-docs commit)
+
+| # | Fix | Detail already established |
+|---|---|---|
+| C1 | Add `.gitattributes` (`* text=auto eol=lf`) | `core.autocrlf=true`, no `.gitattributes` exists. `docs/archive/tasks_continuation.md` landed as **716/716 lines changed with zero content change** — it was the last CRLF-holding blob, normalized by autocrlf. Expect a one-off whole-file diff on any remaining CRLF file when this lands; that is normalization, not content. Verify after: `git ls-files --eol` |
+| C2 | `.gitignore`: un-ignore the tracked Makefiles explicitly | The rule is `**/Makefile` + `!acta_cli/Makefile` only; `Makefile`, `acta_db/Makefile`, `acta_runner/Makefile` are tracked **only because they predate the rule** — a new Makefile would be silently untracked. Add `!Makefile`, `!acta_db/Makefile`, `!acta_runner/Makefile` |
+| C3 | `.gitignore`: add `models/` | README quick start says `hf download … --local-dir models/` and "Place your GGUF models in `models/`"; only `models.json` is ignored today, so a multi-GB GGUF lands untracked-dirty in the repo |
+| C4 | `docs/examples/acta.db` provenance (3 MB, tracked via `!docs/examples/acta.db`) | `docs/examples/README.md` calls it "a snapshot of `acta_gui/src/release/acta.db`" — a **git-ignored build directory**, so there is no regeneration path; it carries the author's private model ids (`JBDRAFTBig_Qwen3.8-27B-GSQ-RCO-IQ3_XXS`, `JBMT2P_…`, `JBTEST1`). Option (a): ship `docs/examples/acta_seed.sql` + a Makefile rule that rebuilds the `.db`, mirroring the `acta_cli/acta_test_ref.sql` → `.db` pattern; option (b): document provenance + how to adapt the ids. The examples already tell the reader to copy it to `acta_runner/MYTEST/acta.db` |
+| C5 | Date the version pins | `docs/llamacpp_server_contract.md` §intro pins **llama.cpp 0.5.0** + the 2026-10-13 live preset server; `docs/building.md` WSL2 section pins `insightcae`, Ubuntu 22.04, gcc 11.4, cJSON 1.7.15, curl 7.81, sqlite 3.37.2 — add "verified on <date>", or one tested-versions table in `building.md` |
+| C6 | `LICENSE`: add an SPDX line | The body is the BSD-0/ISC text but names no license; README says "BSD Zero Clause License (BSD-0-Clause)". `SPDX-License-Identifier: 0BSD` makes tooling agree |
+
+### 20.3 REMAINING — item D (one-line docs, no build needed)
+
+- `docs/runner_contract.md`, `src/check.c` "What landed" bullet: reads "exit
+  0/1/12/13" → **0/1/4/12/13**. `acta_runner/src/check.c` returns
+  `EXIT_INVALID` (4) in many places (126, 177, 185, 192, 198, 217, 226, 234,
+  257 — e.g. `--dialect` without `--base-url`+`--model-identifier`).
+  `docs/status.md` already states 0/1/4/12/13, so the two surfaces disagree today.
+- Optional tidy (dated text, only if the owner wants dated Done bullets normalized):
+  the `docs/status.md` check bullet body still says "Two token-free GETs" and reads
+  the model row for "`base_url` + `model_identifier`" (no `backend`) — its **head**
+  now carries the terminology note added in `4e5b64b`, the body is the dated
+  2026-09-26 text.
+
+### 20.4 Still open from earlier sessions (untouched here, unchanged)
+
+§17.6 item 3 out-of-scope defects: the `acta_cli` test-harness leak;
+`make -C acta_db libacta_db.a` not regenerating `include/{schema,migrations}_sql.h`
+after `clean`. Optional: WSL ASAN on `test_check`.
+
+### 20.5 DO NOT REOPEN
+
+- **Do not rewrite historical sentences** inside `docs/archive/*` that name
+  `docs/plans/backend_dialects.md` or `docs/session_*.md` — they record where the
+  files were; only the links resolve (move note in `docs/archive/README.md`).
+- `docs/plans/` is gone for good; the dialect matrix is
+  `docs/archive/backend_dialects.md` §2 / §3.2 / §9.
+- "token-free" is retired in live docs → "no completion tokens, no DB writes";
+  `check` **does** send the resolved key (`$OPENAI_API_KEY`, else config
+  `"api_key"`, else keyless; a missing key is not an error for `check`, unlike `run`).
+- README quick start facts: `model_identifier` = the GGUF basename
+  (`qwen2.5-0.5b-instruct-q4_k_m`), `hf download` (not `huggingface-cli`), one
+  API-key paragraph (unset key → exit 4 before the claim), states incl. `cancelled`.
+- Unchanged owner decisions: plan §9 answers, live checks never in `make test`,
+  `--dialect` REQUIRED (`live_backend_check.sh`, `smoke-live`), the SKIP semantics,
+  `probe_strata.sh` / `wsl_strata_demo.sh` untouched, GUI closed (owner-tested),
+  archived logs staying archived, and the push being the owner's.
+
+### 20.6 Resume prompt
+
+> Read **`docs/archive/session_dialect_progress.md` §20 first**, then
+> `docs/status.md` and `docs/known_issues.md`, in ACTA Gamma
+> (`C:/msys64/home/admin/github/boucaron/ACTA_Gamma`).
+>
+> **STATE — docs review round 2 COMMITTED (`4e5b64b`, `5a0fc77`), tree clean,
+> `main` 2 ahead of `origin/main` at the time of writing; the §20 record adds a
+> third docs commit — re-read `git status -sb` rather than trusting any count
+> written here (push = the owner's).**
+> Review tables 1–3 and A–B are done; C and D remain. Nothing was re-verified
+> since: use the §20.1 "verified clean" table instead of re-discovering.
+>
+> **DO NEXT — item C as its own commit** (`.gitattributes` `* text=auto eol=lf`;
+> `.gitignore` `!Makefile` / `!acta_db/Makefile` / `!acta_runner/Makefile` and
+> `models/`; `docs/examples/acta.db` provenance → a tracked seed `.sql` + a
+> Makefile rule that rebuilds the `.db` (the `acta_cli/acta_test_ref.sql` →
+> `.db` pattern), **or** a provenance paragraph naming the private model ids a
+> reader has to change; `SPDX-License-Identifier: 0BSD` in `LICENSE`; "verified
+> on <date>" on the C5 version pins). C1 lands **with** a renormalize pass
+> (`git add --renormalize .`): 58 tracked files are `i/crlf` in the index
+> today, the whole-file diffs are normalization not content, and afterwards
+> `git ls-files --eol | grep crlf` must be empty. **Then item D** (one docs
+> line: `docs/runner_contract.md` check exits `0/1/4/12/13`). Neither C nor D
+> touches code — no build, no test run, no live target.
+>
+> **STILL OPEN from earlier sessions** (unchanged, §17.6 item 3): the `acta_cli`
+> test-harness leak; `make -C acta_db libacta_db.a` not regenerating
+> `include/{schema,migrations}_sql.h` after `clean`; optional WSL ASAN on
+> `test_check` (§18.5 protocol). The push stays the owner's.

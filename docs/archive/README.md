@@ -1,13 +1,15 @@
 # Archive
 
 Completed work logs, kept as the record — not live state. Nothing in this
-directory has open work; the live documents stay in `docs/`.
+directory has open work; the live documents stay in `docs/`. (Exception in
+spirit: `session_dialect_progress.md` §20 is the current handoff — the items
+it lists as remaining are live repo work, tracked there and in `docs/status.md`.)
 
 | File | What it is | State |
 |---|---|---|
 | `tasks_continuation.md` | Task continuations: `db exec` → `db init`, the `acta_runner check` health action, `db migrate` migrations, and the 2026-09-26 docs consistency audit | Every session **done and verified green** (`make all` / `make test` / `make gui`); the audit's 10 fixes were all applied |
 | `backend_dialects.md` | The backend-dialect **plan** (`llamacpp` / `openai`): §2 dialect matrix, §3.2 where the dialect comes from, §9 the four decisions, §10 phase list | **Implemented, verified and committed (2026-10-12)** — phases 0–6 and 8 in git, phase 7 (GUI) compiled and **closed by the owner 2026-10-13**. Still cited as the dialect matrix by `docs/DBDesign.md`, `docs/openai_dialect_contract.md` and `docs/runner_contract.md` |
-| `session_dialect_progress.md` | The dialect implementation record, §1–§19 (§1–§17 are the historical work record, several sections read "IN FLIGHT" about phases that later landed) | Done and green. Read **§18** (first live `llama-server` run: `check` sends the resolved api key; the schema prompt names `label`/`confidence`) and **§19** (docs stale-content cleanup + the green WSL re-verification: clean rebuild, 14 runner suites 791 checks / 0 failures) |
+| `session_dialect_progress.md` | The dialect implementation record, §1–§20 (§1–§17 are the historical work record, several sections read "IN FLIGHT" about phases that later landed) | Done and green. Read **§20** first (the §20.1 verified-clean table + the remaining repo-housekeeping items C and D), then **§18** (first live `llama-server` run: `check` sends the resolved api key; the schema prompt names `label`/`confidence`) and **§19** (docs stale-content cleanup + the green WSL re-verification: clean rebuild, 14 runner suites 791 checks / 0 failures) |
 | `session_strata_backend.md` | The Strata + WSL-over-NAT investigation that produced **issue A** (the two `response_format` envelopes) and **issue B** — exactly what `backend_dialects.md` resolves | Done. Task list state: §3.1; live re-verification on both platforms: §2.5 |
 
 ## Move note (2026-10-13)
