@@ -2685,7 +2685,7 @@ it).
 | C5 | Date the version pins | `docs/llamacpp_server_contract.md` §intro pins **llama.cpp 0.5.0** + the 2026-10-13 live preset server; `docs/building.md` WSL2 section pins `insightcae`, Ubuntu 22.04, gcc 11.4, cJSON 1.7.15, curl 7.81, sqlite 3.37.2 — add "verified on <date>", or one tested-versions table in `building.md` |
 | C6 | `LICENSE`: add an SPDX line | The body is the BSD-0/ISC text but names no license; README says "BSD Zero Clause License (BSD-0-Clause)". `SPDX-License-Identifier: 0BSD` makes tooling agree |
 
-### 20.3 REMAINING — item D (one-line docs, no build needed)
+### 20.3 REMAINING — item D (one-line docs, no build needed) — **LANDED 2026-10-14** (§20.7)
 
 - `docs/runner_contract.md`, `src/check.c` "What landed" bullet: reads "exit
   0/1/12/13" → **0/1/4/12/13**. `acta_runner/src/check.c` returns
@@ -2697,6 +2697,20 @@ it).
   the model row for "`base_url` + `model_identifier`" (no `backend`) — its **head**
   now carries the terminology note added in `4e5b64b`, the body is the dated
   2026-09-26 text.
+
+**Item D landed 2026-10-14** (docs-only commit, the one this record is carried
+in — `git log --oneline` is the authority, no build/test run was needed): the
+`docs/runner_contract.md` check bullet reads **0/1/4/12/13** with the
+`EXIT_INVALID` family named — `--timeout` not a positive integer; `--base-url`
+without `--model-identifier` (or those flags together with a
+`<model-record-id>` positional); a missing `<model-record-id>`; `--dialect`
+given with a `<model-record-id>` or with an empty/unknown value; a
+readable-but-malformed config file (read in every `check` invocation for the
+api-key fallback, so it fails closed even with `--timeout` given) — matching
+`src/check.c`'s own header comment and `docs/status.md`. A whole-tree grep for
+the old string now hits `docs/archive/` only (historical text — leave it).
+**Do not re-fix.** Only the optional `status.md` dated-body tidy above stays
+open.
 
 ### 20.4 Still open from earlier sessions (untouched here, unchanged)
 
@@ -2734,6 +2748,7 @@ after `clean`. Optional: WSL ASAN on `test_check`.
 > written here (push = the owner's).**
 > Review tables 1–3 and A–B are done; C and D remain. Nothing was re-verified
 > since: use the §20.1 "verified clean" table instead of re-discovering.
+> **C1–C3 and D have since landed — read §20.7 before touching any of them.**
 >
 > **DO NEXT — item C as its own commit** (`.gitattributes` `* text=auto eol=lf`;
 > `.gitignore` `!Makefile` / `!acta_db/Makefile` / `!acta_runner/Makefile` and
@@ -2745,10 +2760,26 @@ after `clean`. Optional: WSL ASAN on `test_check`.
 > (`git add --renormalize .`): 58 tracked files are `i/crlf` in the index
 > today, the whole-file diffs are normalization not content, and afterwards
 > `git ls-files --eol | grep crlf` must be empty. **Then item D** (one docs
-> line: `docs/runner_contract.md` check exits `0/1/4/12/13`). Neither C nor D
+> line: `docs/runner_contract.md` check exits `0/1/4/12/13`) — **LANDED
+> 2026-10-14, see §20.3: do not re-do it.** Neither C nor D
 > touches code — no build, no test run, no live target.
 >
 > **STILL OPEN from earlier sessions** (unchanged, §17.6 item 3): the `acta_cli`
 > test-harness leak; `make -C acta_db libacta_db.a` not regenerating
 > `include/{schema,migrations}_sql.h` after `clean`; optional WSL ASAN on
 > `test_check` (§18.5 protocol). The push stays the owner's.
+
+### 20.7 What landed after §20 was written (2026-10-14, the following session)
+
+| Item | Landed in | Notes |
+|---|---|---|
+| This §20 record + its cross-refs | `945bb13` (docs-only) | §20.6 finished; header read-first now §20 → §19/§18, §19.3 marked superseded, `docs/archive/README.md` row §1–§20 |
+| **C1** `.gitattributes` | `a2f7f8b` | `* text=auto eol=lf` + explicit `binary` rules (`*.db *.sqlite *.sqlite3 *.db-journal *.jpg *.jpeg *.png *.gif *.ico *.exe *.dll *.o *.a *.so`), landed **with** the `git add --renormalize .` pass: 57 stored-CRLF blobs normalized, each verified byte-identical to `HEAD` after CR strip; `git ls-files --eol` now 274 `i/lf` + 3 `i/-text`, **0 `i/crlf`**; a scratch worktree at `HEAD` checks out LF everywhere. Whole-file diffs, zero content change; no build needed (`make all` = "nothing to be done" — the working copies were not rewritten, only the blobs; they turn LF when git next touches them) |
+| **C2** Makefile negations | `a2f7f8b` | **root-anchored**: `!/Makefile`, `!/acta_db/Makefile`, `!/acta_runner/Makefile`, `!/acta_cli/Makefile`. The shape sketched above (`!Makefile`, no slash) matches at any depth and had un-ignored the qmake-generated `acta_gui/Makefile` + `acta_gui/src/Makefile` — caught in `git status` before the commit, fixed; the negated set matches exactly the four tracked Makefiles |
+| **C3** `models/` ignored | `a2f7f8b` | the README quick-start `hf download --local-dir models/` directory (only `models.json` was ignored before) |
+| **D** | docs-only (the commit carrying this §20.7) | see §20.3 |
+
+Still open: **C4** (`docs/examples/acta.db` provenance), **C5** (dated version
+pins), **C6** (`LICENSE` SPDX line), the optional `status.md` dated-body tidy,
+everything in §20.4, and the push (`git status -sb` is the authority — the
+gap is the owner's to close).

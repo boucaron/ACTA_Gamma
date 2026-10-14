@@ -44,7 +44,14 @@ Phase 2 is implemented in `acta_runner/` (commit d142a8e). What landed:
   `max_context`; absent → `model not served`; endpoint error →
   `catalog unreachable`). One JSON verdict line on stdout
   (`{"ok":true,...}` / `{"ok":false,...,"verdict":"..."}`); exit
-  0/1/12/13 from the existing code space. The shared `/health` +
+  0/1/4/12/13 from the existing code space — `4` (`EXIT_INVALID`) is the
+  usage/argument family: `--timeout` not a positive integer, `--base-url`
+  without `--model-identifier` (or those flags together with a
+  `<model-record-id>` positional), a missing `<model-record-id>`, `--dialect`
+  given with a `<model-record-id>` (the row decides the dialect) or with an
+  empty/unknown value, and a readable-but-malformed config file — read in
+  every `check` invocation for the api-key fallback, so it fails closed even
+  when `--timeout` is given. The shared `/health` +
   catalog request/response path is factored into
   `backend_preflight()` in `src/backend.c` — the `run` pipeline's
   preflight and `check` call the same function, so the two cannot drift.
