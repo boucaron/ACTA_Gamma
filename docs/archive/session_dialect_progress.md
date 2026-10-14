@@ -2259,9 +2259,9 @@ still not buildable on WSL (no Qt 6 in `insightcae`).
    the absence of Qt 6 in `insightcae` is not a repo problem. (Fact worth
    keeping: the GUI still has no test harness in the repo; the only functional
    check ever written is the ephemeral headless probe of §13.4.)
-3. Out of scope, still open (§15.6 item 3): (b) the `acta_cli` test-harness leak,
-   (c) `make -C acta_db libacta_db.a` not regenerating
-   `include/{schema,migrations}_sql.h` after `clean`.
+3. Out of scope, still open (§15.6 item 3): (b) ~~the `acta_cli` test-harness leak~~
+   — **CLOSED 2026-10-14, see §20.8**; (c) `make -C acta_db libacta_db.a` not
+   regenerating `include/{schema,migrations}_sql.h` after `clean`.
 4. ~~No live `llamacpp` server on this box.~~ **Resolved by the owner
    (2026-10-13, later)** — a real `llama-server` is live on
    `127.0.0.1:8080`; the first live `llamacpp` run is done and found two gaps
@@ -2714,9 +2714,10 @@ open.
 
 ### 20.4 Still open from earlier sessions (untouched here, unchanged)
 
-§17.6 item 3 out-of-scope defects: the `acta_cli` test-harness leak;
-`make -C acta_db libacta_db.a` not regenerating `include/{schema,migrations}_sql.h`
-after `clean`. Optional: WSL ASAN on `test_check`.
+§17.6 item 3 out-of-scope defects: (b) the `acta_cli` test-harness leak —
+**closed 2026-10-14 (`6cf364f`), see §20.8**; (c) `make -C acta_db libacta_db.a` not
+regenerating `include/{schema,migrations}_sql.h` after `clean`. Optional: WSL
+ASAN on `test_check`.
 
 ### 20.5 DO NOT REOPEN
 
@@ -2764,10 +2765,11 @@ after `clean`. Optional: WSL ASAN on `test_check`.
 > 2026-10-14, see §20.3: do not re-do it.** Neither C nor D
 > touches code — no build, no test run, no live target.
 >
-> **STILL OPEN from earlier sessions** (unchanged, §17.6 item 3): the `acta_cli`
-> test-harness leak; `make -C acta_db libacta_db.a` not regenerating
-> `include/{schema,migrations}_sql.h` after `clean`; optional WSL ASAN on
-> `test_check` (§18.5 protocol). The push stays the owner's.
+> **STILL OPEN from earlier sessions** (§17.6 item 3): ~~the `acta_cli`
+> test-harness leak~~ — **closed 2026-10-14 (`6cf364f`), §20.8**; `make -C acta_db
+> libacta_db.a` not regenerating `include/{schema,migrations}_sql.h` after
+> `clean`; optional WSL ASAN on `test_check` (§18.5 protocol). The push stays
+> the owner's.
 
 ### 20.7 What landed after §20 was written (2026-10-14, the following session)
 
@@ -2781,5 +2783,20 @@ after `clean`. Optional: WSL ASAN on `test_check`.
 
 Still open: **C4** (`docs/examples/acta.db` provenance), **C5** (dated version
 pins), **C6** (`LICENSE` SPDX line), the optional `status.md` dated-body tidy,
-everything in §20.4, and the push (`git status -sb` is the authority — the
-gap is the owner's to close).
+§20.4 **item (c)** and the ASAN-on-`test_check` option (item (b) closed the same
+day — §20.8 below), and the push (`git status -sb` is the authority — the gap is
+the owner's to close).
+
+### 20.8 §17.6 item 3(b) CLOSED — the `acta_cli` test-harness leak, and the two product leaks it exposed (2026-10-14; code + tests in `6cf364f`, this record in the docs commit that follows)
+
+| | |
+|---|---|
+| The leak | `targs_new` mallocs the builder's `cmd_args_t` argv array and `gopts_default()` (plus `gopts_json/table/id_only/fields/no_nulls`) mallocs the `global_opts_t` one; `targs_flag` / `targs_flag_bool` / `targs_pos` `strdup` every token into **both**; `targs_free` freed only the small internal struct, next to a comment reading `// memleak in opts… not a big deal`. Measured before: `test_model` **68886 B / 517 allocations / 509 leaks**, 1532 report frames naming harness or CLI code — the same number §9.1 flagged on 2026-10-12 and left unfixed |
+| Why "just free `opts` in `targs_free`" is wrong | suites reuse one `global_opts_t` across several `targs_new`/`targs_free` pairs (`tests/db/db_test.c`: 23 `gopts_*` calls against 35 `targs_free`), so freeing the options array with the builder would double free. Ownership is therefore **recorded per array** |
+| The fix | `acta_cli/tests/helpers/test_helpers.{c,h}`: an allocation registry keyed by the argv array (`owns_arr` separates a harness-malloc'd array from a foreign one such as `parse_globals`'), `hrec_tok` recording each token, `targs_free` freeing its own builder's array + tokens, a new **`gopts_free(global_opts_t *)`** for an options set the caller owns, and **`targs_harness_sweep()`** — installed once with `atexit`, public and idempotent — releasing whatever a suite never freed. ASan installs its exit hook at library-init time, so an `atexit` handler registered from helper code runs **before** LeakSanitizer looks. Also bounds-guarded token pushes (`TARGS_MAX_TOK`: an overrun used to be a silent smash of a 64-slot array) and no more `strdup(NULL)` from `targs_flag(…, NULL, …)` |
+| Product leak #1 → `docs/known_issues.md` **#13** | `src/commands/context.c`: the derived default hash `strdup(sha256_hex(…))` was freed only under `json_owned`, so a `context create` **without** `--hash` leaked 65 B (3 leak sites: `context_test_create.c`, `context_test_misc.c`, the `tools` cross-check). Fixed with a `hash_owned` flag and an `else if (hash_owned) free(...)` arm in `cleanup_create`; with `--hash` or a JSON `hash` the string stays borrowed |
+| Product leak #2 → **#14** | `src/argparse.c`: the `missing entity and/or action` rejection returned **after** `g->argv = rest`, and no caller frees `g->argv` on a non-zero rc (`cli_main.c` returns the code immediately, so does `stest_run_main_path`). Every *in-loop* rejection already freed `rest`; this one did not. Fixed: `free(rest)`, `g->argv = NULL`, `g->argc = 0` before returning |
+| Method (new `docs/building.md` section "Optional memory pass") | two passes per suite: `ASAN_OPTIONS=detect_leaks=0` (trustworthy `PASS:` lines + real use-after-free/buffer errors), then `detect_leaks=1:log_path=/tmp/lk_<suite>` for the report. **No `stdbuf`/`LD_PRELOAD`** — `ASan runtime does not come first in initial library list`. LeakSanitizer reports at exit **without flushing stdio**, which is what an older session logged as `test_model` "hanging": the final `PASS:` line never reached the pipe |
+| After (WSL `insightcae`, gcc 11.4) | 17/17 `acta_cli` suites PASS under ASan, **0 AddressSanitizer errors, 0 leak frames in ACTA code**; residue 2712 B / 89 allocations, every one inside `libsqlite3` (16 B per opened database; `test_db` 1688 B / 25 — it opens the most). Tree then left plain and re-verified plain: `make all` clean, `acta_cli` 17/17 |
+| After (Windows MinGW) | `make clean && make all` clean, no warnings; `make test`: `acta_db` ALL TESTS PASSED, `acta_cli` 17/17, `acta_runner` 14 suites **760 checks / 0**. Trap found on the way: `acta_runner`'s `SOCK_LIBS := -lws2_32` is guarded by `ifeq ($(OS),Windows_NT)`, so in a shell without `OS` the stub-server suites fail to link (`undefined reference to __imp_send / __imp_closesocket / __imp_WSAStartup`) — set `OS=Windows_NT`; recorded in `docs/building.md` "Build notes" |
+| Still open from §17.6 item 3 | (c) `make -C acta_db libacta_db.a` not regenerating `include/{schema,migrations}_sql.h` after `clean`. Optional: WSL ASAN on `test_check` — `acta_runner` was not rebuilt sanitized here, its sources were untouched |

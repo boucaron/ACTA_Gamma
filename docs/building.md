@@ -153,6 +153,37 @@ with `cwd = acta_cli/` — each one copies the fixture into `acta_cli/tmp/`.
 
 The runner also offers `make test-e2e` (dead-runner end-to-end suite, spawns real `acta_runner` child processes, ~10-15 s) and the two **live** targets — `make smoke`, which **builds only** `tests/llama_smoke` (the C live check of either dialect), and `make smoke-live SMOKE_DIALECT=…`, which builds **and runs** it; `make test-live*` runs the same kind of check through `scripts/live_backend_check.sh` and adds the full pipeline. They are never part of `make test`: see **Live backend check** below. For real use — `acta_runner run` or the GUI — the API key must come from `$OPENAI_API_KEY` or, when that variable is unset, the `"api_key"` key of the config file (`ACTA_Gamma.conf` in the app-data directory; no key anywhere → hard error, empty key → warning; see the README `# Configuration` section).
 
+### Optional memory pass (AddressSanitizer + LeakSanitizer)
+
+`make test` never sanitizes anything. The memory pass is a manual Linux-side
+run (LeakSanitizer is not supported by the MinGW build, so on Windows the
+check runs in WSL):
+
+```sh
+A="gcc -fsanitize=address -fno-omit-frame-pointer -g"
+make -C acta_db clean && make -C acta_cli clean
+make -C acta_db all  CC="$A"
+make -C acta_cli     CC="$A" && ( cd acta_cli && make test CC="$A" )
+# leave the tree plain again, and re-run the plain tests
+make -C acta_db clean && make -C acta_cli clean && make all && ( cd acta_cli && make test )
+```
+
+Three gotchas, measured on WSL `insightcae` (gcc 11.4) on 2026-10-14:
+
+| Gotcha | What it looks like | What to do |
+|---|---|---|
+| `stdbuf` or any other `LD_PRELOAD` | `ASan runtime does not come first in initial library list`, the suite exits 1 printing nothing | never wrap a suite in `stdbuf` — solve the flush problem below instead |
+| LeakSanitizer reports **at exit** without flushing stdio | on a suite that leaks, its final `PASS:` line simply disappears from a redirected pipe (an older session logged this as a “`test_model` hangs”) | run each suite TWICE: first `ASAN_OPTIONS=detect_leaks=0` (trustworthy `PASS` lines, real use-after-free/buffer errors), then `detect_leaks=1` for the leak report itself |
+| where the leak report lands | the exit code becomes leak-driven, not suite-driven | `ASAN_OPTIONS=detect_leaks=1:log_path=/tmp/lk_<suite>` — one file per suite, parse `SUMMARY: AddressSanitizer: N byte(s) in M allocation(s)` from it |
+
+Baseline after the 2026-10-14 fixes (17 `acta_cli` suites): **17/17 pass, 0
+AddressSanitizer errors, 0 leak frames in ACTA code**. What remains is inside
+libsqlite3 — 16 B per opened database, 2712 B / 89 allocations summed over the
+17 suites (`test_db` carries 1688 B of it because it opens the most). Before
+the fix the harness alone accounted for 68886 B / 517 allocations in
+`test_model`. `targs_free` / `gopts_free` / `targs_harness_sweep` in
+`acta_cli/tests/helpers/test_helpers.h` are the harness's own allocation API.
+
 ## Live backend check (`make test-live*`, `make smoke-live`)
 
 Nothing in `make test` ever touches a real server — the pipeline suites speak to
@@ -240,6 +271,7 @@ for every call — informational, never a failure, so only stdout is parsed.
 - `CC ?= cc` picks up gcc/clang unchanged on Linux and Xcode clang on macOS; `EXEEXT` is empty under POSIX make and `.exe` under Windows (mingw) make, so the same Makefiles build on both.
 - The Makefiles link `-lsqlite3`, `-lcjson`, and `-lcurl` straight from the system packages above.
 - If a dependency lives elsewhere, override the paths: `make CJSON_DIR=/opt/cjson/include CJSON_LIB=/opt/cjson/lib/libcjson.a` (CLI/runner), `make CURL_INC=... CURL_LIB=...` (runner).
+- **`OS` must be set in the environment when building `acta_runner` on Windows.** Its socket-test link line adds `-lws2_32` through `SOCK_LIBS := …` under `ifeq ($(OS),Windows_NT)` (`acta_runner/Makefile`); from an environment without `OS` the rule is skipped and `tests/stub_server.c` fails to link with `undefined reference to __imp_send / __imp_closesocket / __imp_WSAStartup`. `OS=Windows_NT make -C acta_runner test` (measured 2026-10-14).
 
 ## GUI–runner source coupling (hard constraint)
 
